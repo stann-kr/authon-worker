@@ -1,0 +1,31 @@
+name = "authon-worker"
+main = ".open-next/worker.js"
+compatibility_date = "2025-04-01"
+compatibility_flags = ["nodejs_compat_v2"]
+
+[observability]
+enabled = true
+head_sampling_rate = 1
+
+[observability.logs]
+enabled = true
+head_sampling_rate = 1
+invocation_logs = true
+
+[assets]
+directory = ".open-next/assets"
+binding = "ASSETS"
+
+# D1 데이터베이스 바인딩
+# wrangler d1 create authon-db 실행 후 생성된 database_id를 입력할 것
+[[d1_databases]]
+binding = "DB"
+database_name = "authon-db"
+database_id = "<your-authon-d1-id>"
+migrations_dir = "migrations"
+
+# KV 바인딩 (세션 저장소)
+# wrangler kv:namespace create SESSIONS 실행 후 생성된 id를 입력할 것
+[[kv_namespaces]]
+binding = "SESSIONS"
+id = "<your-authon-kv-id>"

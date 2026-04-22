@@ -1,0 +1,332 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="x-apple-disable-message-reformatting" />
+    <title>Authon — Invitation</title>
+  </head>
+  <body style="margin: 0; padding: 0; background-color: #000000">
+    <div
+      style="
+        display: none;
+        max-height: 0;
+        overflow: hidden;
+        opacity: 0;
+        mso-hide: all;
+        color: transparent;
+      "
+    >
+      You have been invited to Authon.
+    </div>
+
+    <table
+      role="presentation"
+      width="100%"
+      cellpadding="0"
+      cellspacing="0"
+      border="0"
+      style="background-color: #000000"
+    >
+      <tr>
+        <td align="center" style="padding: 40px 16px">
+          <table
+            role="presentation"
+            width="100%"
+            cellpadding="0"
+            cellspacing="0"
+            border="0"
+            style="
+              max-width: 480px;
+              background-color: #111827;
+              border: 1px solid #1f2937;
+            "
+          >
+            <tr>
+              <td
+                align="center"
+                style="
+                  padding: 40px 32px 20px 32px;
+                  font-family: &quot;Courier New&quot;, Courier, monospace;
+                  color: #ffffff;
+                "
+              >
+                <table
+                  role="presentation"
+                  cellpadding="0"
+                  cellspacing="0"
+                  border="0"
+                >
+                  <tr>
+                    <td
+                      width="8"
+                      height="8"
+                      style="background-color: #ffffff"
+                    ></td>
+                    <td width="8"></td>
+                    <td
+                      width="8"
+                      height="8"
+                      style="background-color: #ffffff"
+                    ></td>
+                    <td width="8"></td>
+                    <td
+                      width="8"
+                      height="8"
+                      style="background-color: #ffffff"
+                    ></td>
+                  </tr>
+                </table>
+                <p
+                  style="
+                    margin: 16px 0 8px 0;
+                    font-size: 24px;
+                    letter-spacing: 4px;
+                    text-transform: uppercase;
+                    color: #ffffff;
+                  "
+                >
+                  Authon
+                </p>
+                <p
+                  style="
+                    margin: 0;
+                    font-size: 11px;
+                    letter-spacing: 3px;
+                    text-transform: uppercase;
+                    color: #9ca3af;
+                  "
+                >
+                  Invitation
+                </p>
+              </td>
+            </tr>
+
+            <tr>
+              <td align="center" style="padding: 0 32px 24px 32px">
+                <table
+                  role="presentation"
+                  cellpadding="0"
+                  cellspacing="0"
+                  border="0"
+                  width="56"
+                  height="56"
+                  style="border: 2px solid #4b5563"
+                >
+                  <tr>
+                    <td
+                      align="center"
+                      valign="middle"
+                      style="
+                        font-family:
+                          &quot;Courier New&quot;, Courier, monospace;
+                        font-size: 24px;
+                        color: #9ca3af;
+                        line-height: 24px;
+                      "
+                    >
+                      ✉
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+
+            <tr>
+              <td
+                style="
+                  padding: 0 32px 32px 32px;
+                  font-family: &quot;Courier New&quot;, Courier, monospace;
+                "
+              >
+                <p
+                  style="
+                    margin: 0 0 16px 0;
+                    font-size: 13px;
+                    letter-spacing: 1px;
+                    color: #d1d5db;
+                    line-height: 1.8;
+                    text-align: center;
+                  "
+                >
+                  You have been invited to join Authon.<br />
+                  Click the button below to set up your account.
+                </p>
+
+                <table
+                  role="presentation"
+                  width="100%"
+                  cellpadding="0"
+                  cellspacing="0"
+                  border="0"
+                  style="
+                    margin-bottom: 24px;
+                    background-color: #1f2937;
+                    border: 1px solid #374151;
+                  "
+                >
+                  <tr>
+                    <td style="padding: 16px">
+                      <p
+                        style="
+                          margin: 0 0 4px 0;
+                          font-size: 10px;
+                          letter-spacing: 2px;
+                          color: #9ca3af;
+                          text-transform: uppercase;
+                        "
+                      >
+                        Email
+                      </p>
+                      <p
+                        style="
+                          margin: 0;
+                          font-size: 13px;
+                          letter-spacing: 1px;
+                          color: #ffffff;
+                          word-break: break-all;
+                        "
+                      >
+                        {{ .Email }}
+                      </p>
+                    </td>
+                  </tr>
+                </table>
+
+                <table
+                  role="presentation"
+                  width="100%"
+                  cellpadding="0"
+                  cellspacing="0"
+                  border="0"
+                >
+                  <tr>
+                    <td align="center" bgcolor="#ffffff" style="padding: 0">
+                      <a
+                        href="{{ .SiteURL }}/auth/reset-password?token_hash={{ .TokenHash }}&type=invite"
+                        style="
+                          display: block;
+                          padding: 16px 0;
+                          font-family:
+                            &quot;Courier New&quot;, Courier, monospace;
+                          font-size: 13px;
+                          letter-spacing: 3px;
+                          color: #000000;
+                          text-decoration: none;
+                          text-transform: uppercase;
+                        "
+                      >
+                        Accept Invitation
+                      </a>
+                    </td>
+                  </tr>
+                </table>
+                <p
+                  style="
+                    margin: 16px 0 0 0;
+                    font-size: 10px;
+                    letter-spacing: 2px;
+                    color: #9ca3af;
+                    text-align: center;
+                    text-transform: uppercase;
+                  "
+                >
+                  This link is valid for 24 hours.
+                </p>
+              </td>
+            </tr>
+
+            <tr>
+              <td style="padding: 0 32px">
+                <table
+                  role="presentation"
+                  width="100%"
+                  cellpadding="0"
+                  cellspacing="0"
+                  border="0"
+                >
+                  <tr>
+                    <td height="1" style="background-color: #1f2937"></td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+
+            <tr>
+              <td
+                style="
+                  padding: 24px 32px;
+                  font-family: &quot;Courier New&quot;, Courier, monospace;
+                  text-align: center;
+                "
+              >
+                <p
+                  style="
+                    margin: 0 0 8px 0;
+                    font-size: 10px;
+                    letter-spacing: 2px;
+                    color: #9ca3af;
+                    text-transform: uppercase;
+                  "
+                >
+                  Notice
+                </p>
+                <p
+                  style="
+                    margin: 0;
+                    font-size: 11px;
+                    letter-spacing: 1px;
+                    color: #6b7280;
+                    line-height: 1.8;
+                  "
+                >
+                  If you did not request this invitation,<br />
+                  you can safely ignore this email.<br /><br />
+                  If your link has expired, please ask the administrator to
+                  resend the invitation.
+                </p>
+              </td>
+            </tr>
+
+            <tr>
+              <td style="padding: 0 32px">
+                <table
+                  role="presentation"
+                  width="100%"
+                  cellpadding="0"
+                  cellspacing="0"
+                  border="0"
+                >
+                  <tr>
+                    <td height="1" style="background-color: #1f2937"></td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+
+            <tr>
+              <td
+                align="center"
+                style="
+                  padding: 20px 32px 28px 32px;
+                  font-family: &quot;Courier New&quot;, Courier, monospace;
+                "
+              >
+                <p
+                  style="
+                    margin: 0;
+                    font-size: 10px;
+                    letter-spacing: 2px;
+                    color: #6b7280;
+                  "
+                >
+                  © 2026 Authon by Stann
+                </p>
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>
