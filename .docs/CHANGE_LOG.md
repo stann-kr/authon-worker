@@ -4,6 +4,38 @@
 
 ---
 
+## 2026-04-22
+
+### Cloudflare Workers 기반 신규 아키텍처로 마이그레이션 (`authon-worker`)
+
+기존 정적 배포(Static Export) + Supabase 기반 구조에서 OpenNext + Cloudflare Workers 기반 구조로 전면 개편했습니다.
+
+1. **프로젝트 환경 설정 및 기반 마련 (Phase 1)**
+   - `@opennextjs/cloudflare`를 사용한 SSR 빌드 체계 도입
+   - `wrangler.toml`에 D1 Database, KV Namespace 바인딩 구성
+   - 정적 내보내기 설정(`output: "export"`) 제거 및 SSR 활성화
+   - 기존 `authon` 프로젝트의 UI 에셋(app, components 등) 일괄 이관
+
+2. **D1 데이터베이스 스키마 구성 (Phase 2)**
+   - Supabase PostgreSQL 스키마를 Cloudflare D1(SQLite) 형식으로 마이그레이션
+   - `drizzle-orm`을 활용한 서버사이드 데이터 조작 스키마(`lib/db/schema.ts`) 작성
+
+3. **자체 JWT / KV 인증 시스템 구축 (Phase 3)**
+   - Supabase Auth를 대체하는 자체 로그인 엔드포인트(`app/api/auth/login/route.ts`) 구현
+   - `bcryptjs` 비밀번호 해싱 및 `jose` 라이브러리를 통한 JWT 발급
+   - Cloudflare KV를 통한 세션 관리
+   - Next.js 미들웨어(`middleware.ts`)에서 JWT 검증 및 경로 기반 접근 제어(RBAC) 통합
+
+4. **데이터 페칭 로직 Server Actions 전환 (Phase 4)**
+   - 기존 Supabase SDK를 직접 호출하던 `lib/api/guests.ts`의 로직 전면 폐기
+   - `"use server"` 지시어 및 `@opennextjs/cloudflare`의 `getRequestContext()`를 활용해 `drizzle-orm`으로 D1에 직접 접근하도록 재구현
+
+5. **Service Binding 수신 라우트 추가 (Phase 5)**
+   - `terminal-2` 앱과 백그라운드에서 직접 통신하기 위한 `/api/internal/sync-guest` 라우트 구축
+   - 터미널 게스트 등록 요청 시 D1에 즉각 레코드 삽입(`INSERT`) 되도록 구현
+
+---
+
 ## 2026-03-17
 
 ### 게스트 이름 검색 기능 추가
