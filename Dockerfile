@@ -13,11 +13,7 @@ ENV NEXT_TELEMETRY_DISABLED=1
 COPY package.json package-lock.json* ./
 # 볼륨 마운트 시 발생할 수 있는 이슈 방지를 위해, 
 # docker-compose에서 별도 처리하기도 하지만 기본 설치를 진행합니다.
-RUN npm install && \
-    sed -i 's/nodeRef\.current\.innerHTML = result;/nodeRef.current.textContent = result;/g' node_modules/use-scramble/dist/use-scramble.esm.js && \
-    sed -i 's/nodeRef\.current\.innerHTML = result;/nodeRef.current.textContent = result;/g' node_modules/use-scramble/dist/use-scramble.cjs.development.js && \
-    sed -i 's/O\.current\.innerHTML=r,/O.current.textContent=r,/g' node_modules/use-scramble/dist/use-scramble.cjs.production.min.js
-
+RUN npm install --legacy-peer-deps
 # Copy application source
 COPY . .
 

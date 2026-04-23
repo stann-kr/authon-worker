@@ -1,10 +1,10 @@
-import { getRequestContext } from "@opennextjs/cloudflare";
+import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { drizzle } from "drizzle-orm/d1";
 import { guests } from "@/lib/db/schema";
 
 export async function POST(request: Request) {
   try {
-    const { env } = getRequestContext() as unknown as { env: { DB: D1Database; TERMINAL_VENUE_ID: string } };
+    const { env } = getCloudflareContext() as unknown as { env: { DB: D1Database; TERMINAL_VENUE_ID: string } };
     const db = drizzle(env.DB);
     const data = await request.json();
 

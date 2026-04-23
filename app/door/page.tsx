@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback } from "react";
-import { useLocalStorage } from "../../lib/hooks";
+import { useLocalStorage, useGuestPolling } from "../../lib/hooks";
 import AdminHeader from "../admin/components/AdminHeader";
 import AuthGuard from "../../components/AuthGuard";
 import Footer from "../../components/Footer";
@@ -92,8 +92,8 @@ function DoorPageContent() {
       if (guestRes.data) setGuests(guestRes.data);
       if (userRes.data) setUsers(userRes.data);
       if (linkRes.data) setExternalLinks(linkRes.data);
-    } catch (err) {
-      console.error("Failed to load data:", err);
+    } catch (_err) {
+      console.error("Failed to load data:", _err);
     } finally {
       setIsFetching(false);
     }
@@ -103,19 +103,12 @@ function DoorPageContent() {
     loadData();
   }, [loadData]);
 
-  // Polling for real-time updates (every 15 seconds)
-  useEffect(() => {
+  // 주기적으로 데이터 갱신 (15초)
+  useGuestPolling(async () => {
     if (!venueId) return;
-    const interval = setInterval(async () => {
-      try {
-        const { data } = await fetchGuestsByDate(selectedDate, venueId);
-        if (data) setGuests(data);
-      } catch (err) {
-        // Silent fail for polling
-      }
-    }, 15000);
-    return () => clearInterval(interval);
-  }, [selectedDate, venueId]);
+    const { data } = await fetchGuestsByDate(selectedDate, venueId);
+    if (data) setGuests(data);
+  }, 15000, !!venueId);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -269,9 +262,9 @@ function DoorPageContent() {
 
           <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 lg:gap-6 lg:flex-1 lg:min-h-0">
             <div className="lg:col-span-1 space-y-4 lg:overflow-y-auto">
-              <div className="bg-gray-900 border border-gray-700 p-4 sm:p-5">
+              <div className="bg-surface border border-border-subtle p-4 sm:p-5">
                 <div className="mb-4">
-                  <h3 className="font-mono text-xs sm:text-sm tracking-wider text-gray-400 uppercase mb-3">
+                  <h3 className="font-mono text-xs sm:text-sm tracking-wider text-text-muted uppercase mb-3">
                     SELECT USER
                   </h3>
                   <div className="space-y-2">
@@ -280,7 +273,7 @@ function DoorPageContent() {
                       className={`w-full p-3 font-mono text-xs tracking-wider uppercase transition-colors ${
                         selectedDJ === "all"
                           ? "bg-white text-black"
-                          : "bg-gray-800 text-gray-400 hover:text-white border border-gray-700"
+                          : "bg-surface-hover text-text-muted hover:text-white border border-border-subtle"
                       }`}
                     >
                       ALL USERS
@@ -289,8 +282,8 @@ function DoorPageContent() {
                     <div className="relative" ref={dropdownRef}>
                       <button
                         onClick={() => setIsDJDropdownOpen(!isDJDropdownOpen)}
-                        className={`w-full bg-gray-800 border border-gray-700 px-4 py-3 font-mono text-xs tracking-wider uppercase focus:outline-none focus:border-white flex items-center justify-between gap-3 transition-colors ${
-                          selectedDJ !== "all" ? "text-white" : "text-gray-400"
+                        className={`w-full bg-surface-hover border border-border-subtle px-4 py-3 font-mono text-xs tracking-wider uppercase focus:outline-none focus:border-border-focus flex items-center justify-between gap-3 transition-colors ${
+                          selectedDJ !== "all" ? "text-white" : "text-text-muted"
                         }`}
                       >
                         <span className="break-words">
@@ -302,7 +295,7 @@ function DoorPageContent() {
                       </button>
 
                       {isDJDropdownOpen && (
-                        <div className="absolute top-full left-0 right-0 mt-1 bg-gray-900 border border-gray-700 z-50 max-h-60 overflow-y-auto">
+                        <div className="absolute top-full left-0 right-0 mt-1 bg-surface border border-border-subtle z-50 max-h-60 overflow-y-auto">
                           {filteredUsers.map((u) => (
                             <button
                               key={u.id}
@@ -313,7 +306,7 @@ function DoorPageContent() {
                               className={`w-full p-3 font-mono text-xs tracking-wider uppercase text-left transition-colors ${
                                 selectedDJ === u.id
                                   ? "bg-white text-black"
-                                  : "text-gray-400 hover:bg-gray-800 hover:text-white"
+                                  : "text-text-muted hover:bg-surface-hover hover:text-white"
                               }`}
                             >
                               {u.name}
@@ -329,7 +322,7 @@ function DoorPageContent() {
                               className={`w-full p-3 font-mono text-xs tracking-wider uppercase text-left transition-colors ${
                                 selectedDJ === `ext:${link.id}`
                                   ? "bg-white text-black"
-                                  : "text-gray-400 hover:bg-gray-800 hover:text-white"
+                                  : "text-text-muted hover:bg-surface-hover hover:text-white"
                               }`}
                             >
                               {link.djName} (EXT)
@@ -342,15 +335,15 @@ function DoorPageContent() {
                 </div>
               </div>
 
-              <div className="bg-gray-900 border border-gray-700 p-4 sm:p-5">
+              <div className="bg-surface border border-border-subtle p-4 sm:p-5">
                 <div className="mb-4">
                   <h2 className="font-mono text-base sm:text-lg tracking-wider text-white uppercase mb-1 break-words">
                     {selectedDJInfo.name}
                   </h2>
-                  <p className="text-gray-400 font-mono text-xs tracking-wider mb-1 break-words">
+                  <p className="text-text-muted font-mono text-xs tracking-wider mb-1 break-words">
                     {selectedDJInfo.event}
                   </p>
-                  <p className="text-gray-400 font-mono text-xs tracking-wider break-words">
+                  <p className="text-text-muted font-mono text-xs tracking-wider break-words">
                     {formatDateDisplay(selectedDate)}
                   </p>
                 </div>
@@ -358,7 +351,7 @@ function DoorPageContent() {
                   <div className="text-white font-mono text-3xl sm:text-4xl tracking-wider">
                     {pendingGuests.length + checkedGuests.length}
                   </div>
-                  <div className="text-cyan-300 text-xs font-mono tracking-wider uppercase">
+                  <div className="text-brand-cyan text-xs font-mono tracking-wider uppercase">
                     TOTAL GUESTS
                   </div>
                 </div>
@@ -409,7 +402,7 @@ function DoorPageContent() {
                   />
                 ) : (
                   <div
-                    className={`divide-y divide-gray-700 lg:overflow-y-auto transition-opacity duration-200 ${isFetching ? "opacity-50 pointer-events-none" : ""}`}
+                    className={`divide-y divide-border-subtle lg:overflow-y-auto transition-opacity duration-200 ${isFetching ? "opacity-50 pointer-events-none" : ""}`}
                   >
                     {displayGuests.map((guest, index) => {
                       return (

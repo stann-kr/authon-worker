@@ -4,6 +4,48 @@
 
 ---
 
+## 6. Miniflare 빌드 에러 (SQLITE_BUSY) 및 캐시 충돌 해결
+
+### 발생 상황 및 에러 로그
+- **상황**: 로컬 개발 서버(`npm run dev`) 또는 워커 빌드 시 D1 데이터베이스 락 에러 발생.
+- **에러 로그**: `SQLITE_BUSY: database is locked`
+
+### 원인 분석
+- 로컬 `.wrangler/` 캐시 폴더에 여러 프로세스가 동시에 접근하거나 Docker 볼륨 동기화 문제로 인해 SQLite DB 파일에 락이 해제되지 않은 상태로 남음.
+
+### 해결 방안
+- `package.json`의 스크립트(`dev`, `build:worker`, `cf:preview`) 실행 전 `rm -rf .wrangler &&`를 추가하여 빌드/실행 시마다 락이 걸린 캐시를 초기화하도록 개선함.
+
+---
+
+## 7. aws4fetch 설치 중 피어 의존성 (ERESOLVE) 충돌
+
+### 발생 상황 및 에러 로그
+- **상황**: AWS SES 연동을 위한 `aws4fetch` 라이브러리 설치 시 충돌 발생 (`docker compose run --rm web npm install aws4fetch`).
+- **에러 로그**: `ERESOLVE could not resolve`, `Conflicting peer dependency: next@16.2.4`
+
+### 원인 분석
+- `@opennextjs/cloudflare` 및 관련 AWS 패키지들이 Next.js 특정 버전(15.5.15 이상 또는 16)을 요구하지만, 프로젝트는 Next.js `15.3.2`를 사용 중임.
+
+### 해결 방안
+- `npm install aws4fetch --legacy-peer-deps` 명령어를 실행하여 강제로 기존 피어 의존성 규칙을 무시하고 패키지를 성공적으로 설치함.
+
+---
+
+## 8. drizzle-kit generate 실행 에러 (Config 누락)
+
+### 발생 상황 및 에러 로그
+- **상황**: 새 테이블(`password_reset_tokens`) 마이그레이션 파일 생성 시 에러 발생 (`npm run db:generate`).
+- **에러 로그**: `No config path provided, using default 'drizzle.config.json'` 및 `file does not exist`
+
+### 원인 분석
+- 프로젝트에 `drizzle.config.ts` 파일이 누락되어 있어 `drizzle-kit`이 스키마 파일 위치를 찾지 못함.
+
+### 해결 방안
+- 프로젝트 루트에 `drizzle.config.ts`를 신규 생성하고 `schema`, `out`, `dialect` 속성을 명시적으로 지정하여 정상적으로 D1용 마이그레이션 파일 생성에 성공함.
+
+---
+
 ## 1. Chrome 브라우저 날짜 선택기(input[type="date"]) 렌더링 오류
 
 ### 발생 상황 및 에러 로그

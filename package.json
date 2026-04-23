@@ -3,17 +3,18 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "cross-env NODE_ENV=development next dev -H 0.0.0.0 -p 3000",
-    "build": "cross-env NODE_ENV=production next build",
-    "build:worker": "opennextjs-cloudflare build",
+    "dev": "rm -rf .wrangler && cross-env NODE_ENV=development next dev -H 0.0.0.0 -p 3000",
+    "build": "rm -rf .wrangler && cross-env NODE_ENV=production next build",
+    "build:worker": "rm -rf .wrangler && opennextjs-cloudflare build",
     "deploy": "opennextjs-cloudflare deploy",
-    "cf:preview": "opennextjs-cloudflare preview",
+    "cf:preview": "rm -rf .wrangler && opennextjs-cloudflare preview",
     "lint": "next lint",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "wrangler d1 execute authon-db --local --file=migrations/0001_init.sql"
   },
   "dependencies": {
     "@opennextjs/cloudflare": "^1.18.1",
+    "aws4fetch": "^1.0.20",
     "bcryptjs": "^2.4.3",
     "drizzle-orm": "^0.45.2",
     "jose": "^5.9.6",

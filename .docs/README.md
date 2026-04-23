@@ -154,6 +154,11 @@ docker compose up
 | `TERMINAL_VENUE_ID`             | terminal-2 앱과 연동될 타겟 베뉴 ID (필수)       |
 | `NEXT_PUBLIC_BRAND_NAME`        | 서비스 이름 (예: `Authon`, `Faust Guest System`) |
 | `NEXT_PUBLIC_BRAND_FOOTER`      | 하단 푸터 문구                                   |
+| `AWS_SES_ACCESS_KEY`            | AWS SES 발송을 위한 IAM 액세스 키                |
+| `AWS_SES_SECRET_KEY`            | AWS SES 발송을 위한 IAM 시크릿 키                |
+| `AWS_SES_REGION`                | AWS SES 리전 (예: `ap-northeast-2`)              |
+| `AWS_SES_FROM_EMAIL`            | 발신자 이메일 주소 (SES에 인증된 주소)           |
+| `NEXT_PUBLIC_APP_URL`           | 이메일 내 비밀번호 재설정 링크용 기본 URL        |
 
 ---
 

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getRequestContext } from "@opennextjs/cloudflare";
+import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { drizzle } from "drizzle-orm/d1";
 import { eq } from "drizzle-orm";
 import { SignJWT } from "jose";
@@ -14,7 +14,7 @@ interface Env {
 
 export async function POST(request: Request) {
   try {
-    const { env } = getRequestContext() as unknown as { env: Env };
+    const { env } = getCloudflareContext() as unknown as { env: Env };
     const { email, password } = await request.json();
 
     if (!email || !password) {

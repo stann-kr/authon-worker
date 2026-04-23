@@ -81,7 +81,7 @@ export default function InviteUser() {
     }
 
     try {
-      const { data, error: createError } = await createUserViaEdge({
+      const { error: createError } = await createUserViaEdge({
         email: formData.email,
         name: formData.name,
         role: formData.role,

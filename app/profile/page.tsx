@@ -8,7 +8,6 @@ import Spinner from "@/components/Spinner";
 import Alert from "@/components/Alert";
 import RoleLabel from "@/components/RoleLabel";
 import { getUser, User } from "@/lib/auth";
-import { createClient } from "@/lib/supabase/client";
 import { updateUserProfile } from "@/lib/api/guests";
 
 export default function ProfilePage() {
@@ -20,13 +19,9 @@ export default function ProfilePage() {
 
   const [formData, setFormData] = useState({
     name: "",
-    currentPassword: "",
-    newPassword: "",
-    confirmPassword: "",
   });
 
   const router = useRouter();
-  const supabase = createClient();
 
   useEffect(() => {
     const currentUser = getUser();
@@ -35,7 +30,7 @@ export default function ProfilePage() {
       return;
     }
     setUser(currentUser);
-    setFormData((prev) => ({ ...prev, name: currentUser.name }));
+    setFormData({ name: currentUser.name });
     setIsLoading(false);
   }, [router]);
 
@@ -44,52 +39,7 @@ export default function ProfilePage() {
     setError("");
     setIsSaving(true);
 
-    if (formData.newPassword) {
-      if (formData.newPassword.length < 6) {
-        setError("New password must be at least 6 characters.");
-        setIsSaving(false);
-        return;
-      }
-      if (formData.newPassword !== formData.confirmPassword) {
-        setError("New passwords do not match.");
-        setIsSaving(false);
-        return;
-      }
-      if (!formData.currentPassword) {
-        setError("Please enter your current password.");
-        setIsSaving(false);
-        return;
-      }
-    }
-
     try {
-      // 1. 비밀번호 변경이 요청된 경우 현재 비밀번호 검증 후 변경
-      if (formData.newPassword) {
-        // 현재 비밀번호로 재인증
-        const { error: signInError } = await supabase.auth.signInWithPassword({
-          email: user!.email,
-          password: formData.currentPassword,
-        });
-
-        if (signInError) {
-          setError("Current password is incorrect.");
-          setIsSaving(false);
-          return;
-        }
-
-        // 새 비밀번호로 업데이트
-        const { error: updateError } = await supabase.auth.updateUser({
-          password: formData.newPassword,
-        });
-
-        if (updateError) {
-          setError("Failed to change password: " + updateError.message);
-          setIsSaving(false);
-          return;
-        }
-      }
-
-      // 2. 이름 변경 — DB에 저장
       if (user && formData.name !== user.name) {
         const { error: nameError } = await updateUserProfile(user.id, {
           name: formData.name,
@@ -111,15 +61,8 @@ export default function ProfilePage() {
       setUser(updatedUser as User);
 
       setShowSuccess(true);
-      setFormData((prev) => ({
-        ...prev,
-        currentPassword: "",
-        newPassword: "",
-        confirmPassword: "",
-      }));
-
       setTimeout(() => setShowSuccess(false), 3000);
-    } catch (err) {
+    } catch (_err) {
       setError("An error occurred while saving.");
     } finally {
       setIsSaving(false);
@@ -255,66 +198,11 @@ export default function ProfilePage() {
 
                   <div className="border-t border-gray-700 pt-6">
                     <p className="text-xs sm:text-sm text-gray-400 font-mono tracking-wider uppercase mb-4">
-                      CHANGE PASSWORD (OPTIONAL)
+                      PASSWORD CHANGE IS TEMPORARILY UNAVAILABLE
                     </p>
-
-                    <div className="space-y-4">
-                      <div>
-                        <label className="block text-xs sm:text-sm text-gray-400 font-mono tracking-wider uppercase mb-2">
-                          CURRENT PASSWORD
-                        </label>
-                        <input
-                          type="password"
-                          value={formData.currentPassword}
-                          onChange={(e) =>
-                            setFormData({
-                              ...formData,
-                              currentPassword: e.target.value,
-                            })
-                          }
-                          className="w-full bg-black border border-gray-600 px-4 py-3 text-white font-mono text-sm tracking-wider focus:outline-none focus:border-white transition-colors"
-                          placeholder="••••••••"
-                        />
-                      </div>
-
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <div>
-                          <label className="block text-xs sm:text-sm text-gray-400 font-mono tracking-wider uppercase mb-2">
-                            NEW PASSWORD
-                          </label>
-                          <input
-                            type="password"
-                            value={formData.newPassword}
-                            onChange={(e) =>
-                              setFormData({
-                                ...formData,
-                                newPassword: e.target.value,
-                              })
-                            }
-                            className="w-full bg-black border border-gray-600 px-4 py-3 text-white font-mono text-sm tracking-wider focus:outline-none focus:border-white transition-colors"
-                            placeholder="••••••••"
-                          />
-                        </div>
-
-                        <div>
-                          <label className="block text-xs sm:text-sm text-gray-400 font-mono tracking-wider uppercase mb-2">
-                            CONFIRM PASSWORD
-                          </label>
-                          <input
-                            type="password"
-                            value={formData.confirmPassword}
-                            onChange={(e) =>
-                              setFormData({
-                                ...formData,
-                                confirmPassword: e.target.value,
-                              })
-                            }
-                            className="w-full bg-black border border-gray-600 px-4 py-3 text-white font-mono text-sm tracking-wider focus:outline-none focus:border-white transition-colors"
-                            placeholder="••••••••"
-                          />
-                        </div>
-                      </div>
-                    </div>
+                    <p className="text-xs text-gray-500 font-mono tracking-wider">
+                      Please contact your system administrator to change your password.
+                    </p>
                   </div>
 
                   <button

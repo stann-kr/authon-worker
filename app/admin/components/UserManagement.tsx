@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { useLocalStorage } from "../../../lib/hooks";
 import InviteUser from "./InviteUser";
+import LegacyUserMigration from "./LegacyUserMigration";
 import VenueSelector, {
   useVenueSelector,
 } from "../../../components/VenueSelector";
@@ -19,7 +20,7 @@ import {
 } from "../../../lib/api/guests";
 
 export default function UserManagement() {
-  const [activeTab, setActiveTab] = useLocalStorage<"create" | "users">(
+  const [activeTab, setActiveTab] = useLocalStorage<"create" | "users" | "migrate">(
     "usermgmt:activeTab",
     "create",
   );
@@ -27,7 +28,6 @@ export default function UserManagement() {
   const [isLoading, setIsLoading] = useState(false);
 
   const {
-    venueId,
     venues,
     selectedVenueId,
     setSelectedVenueId,
@@ -111,6 +111,8 @@ export default function UserManagement() {
         };
       case "users":
         return { title: "USER LIST", description: "Manage existing users" };
+      case "migrate":
+        return { title: "MIGRATION", description: "Legacy user data import" };
       default:
         return { title: "", description: "" };
     }
@@ -157,6 +159,17 @@ export default function UserManagement() {
               >
                 <i className="ri-user-line mr-2"></i>
                 USERS
+              </button>
+              <button
+                onClick={() => setActiveTab("migrate")}
+                className={`w-full p-3 font-mono text-xs tracking-wider uppercase transition-colors text-left ${
+                  activeTab === "migrate"
+                    ? "bg-white text-black"
+                    : "bg-gray-800 text-gray-400 hover:text-white border border-gray-700"
+                }`}
+              >
+                <i className="ri-database-2-line mr-2"></i>
+                MIGRATE
               </button>
             </div>
           </div>
@@ -211,6 +224,7 @@ export default function UserManagement() {
 
       <div className="lg:col-span-3">
         {activeTab === "create" && <InviteUser />}
+        {activeTab === "migrate" && <LegacyUserMigration />}
 
         {activeTab === "users" && (
           <div className="bg-gray-900 border border-gray-700">

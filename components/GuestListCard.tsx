@@ -1,4 +1,5 @@
 import React from "react";
+import Button from "./Button";
 
 export interface Guest {
   id: string;
@@ -44,14 +45,14 @@ const GuestListCard: React.FC<GuestListCardProps> = ({
 
   return (
     <div
-      className={`p-4 overflow-hidden ${index % 2 === 1 ? "bg-gray-800/30" : ""} ${guest.status === "checked" ? "opacity-50" : ""}`}
+      className={`p-4 overflow-hidden ${index % 2 === 1 ? "bg-surface-hover/30" : ""} ${guest.status === "checked" ? "opacity-50" : ""}`}
     >
       <div className="flex items-start justify-between gap-2">
         <div className="flex items-start gap-3 sm:gap-4 min-w-0 flex-1">
           <div
-            className={`w-8 h-8 sm:w-10 sm:h-10 border flex items-center justify-center shrink-0 mt-0.5 ${guest.status === "checked" ? "border-green-600/50" : "border-gray-600"}`}
+            className={`w-8 h-8 sm:w-10 sm:h-10 border flex items-center justify-center shrink-0 mt-0.5 ${guest.status === "checked" ? "border-brand-green/50" : "border-border-default"}`}
           >
-            <span className="text-xs sm:text-sm font-mono text-gray-400">
+            <span className="text-xs sm:text-sm font-mono text-text-muted">
               {String(index + 1).padStart(2, "0")}
             </span>
           </div>
@@ -62,17 +63,17 @@ const GuestListCard: React.FC<GuestListCardProps> = ({
             {(djName || guest.checkInTime || guest.createdAt) && (
               <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 mt-0.5">
                 {djName && (
-                  <span className="text-xs font-mono text-gray-400">
+                  <span className="text-xs font-mono text-text-muted">
                     BY: {djName}
                   </span>
                 )}
                 {guest.createdAt && (
-                  <span className="text-xs font-mono text-gray-500">
+                  <span className="text-xs font-mono text-text-dim">
                     {formatTime(guest.createdAt)}
                   </span>
                 )}
                 {guest.checkInTime && (
-                  <span className="text-xs font-mono text-green-400">
+                  <span className="text-xs font-mono text-brand-green">
                     IN: {formatTime(guest.checkInTime)}
                   </span>
                 )}
@@ -85,78 +86,63 @@ const GuestListCard: React.FC<GuestListCardProps> = ({
           {guest.status === "pending" && (
             <>
               {variant === "admin" && onCheck && (
-                <button
+                <Button
                   onClick={handleCheck}
-                  disabled={isCheckLoading}
-                  className="px-4 sm:px-6 py-2 sm:py-3 border border-gray-500 text-gray-300 font-mono text-xs tracking-wider uppercase hover:border-white hover:text-white transition-colors disabled:opacity-50"
+                  isLoading={isCheckLoading}
+                  variant="outline"
+                  size="md"
+                  className="px-4 sm:px-6"
                 >
-                  {isCheckLoading ? (
-                    <div className="flex items-center justify-center">
-                      <div className="w-3 h-3 border border-black border-t-transparent rounded-full animate-spin"></div>
-                    </div>
-                  ) : (
-                    "CHECK"
-                  )}
-                </button>
+                  CHECK
+                </Button>
               )}
 
               {variant === "user" && onDelete && (
-                <button
+                <Button
                   onClick={onDelete}
-                  disabled={isDeleteLoading}
-                  className="px-3 sm:px-4 py-2 sm:py-3 bg-red-600 text-white font-mono text-xs tracking-wider uppercase hover:bg-red-700 transition-colors disabled:opacity-50"
+                  isLoading={isDeleteLoading}
+                  variant="danger"
+                  className="bg-red-600 text-white border-none hover:bg-red-700 px-3 sm:px-4"
                 >
-                  {isDeleteLoading ? (
-                    <div className="flex items-center justify-center">
-                      <div className="w-3 h-3 border border-white border-t-transparent rounded-full animate-spin"></div>
-                    </div>
-                  ) : (
-                    "DELETE"
-                  )}
-                </button>
+                  DELETE
+                </Button>
               )}
 
               {variant === "admin" && onDelete && (
-                <button
+                <Button
                   onClick={onDelete}
-                  disabled={isDeleteLoading}
-                  className="px-3 sm:px-4 py-2 sm:py-3 border border-gray-600 text-gray-400 font-mono text-xs tracking-wider uppercase hover:bg-gray-800 transition-colors disabled:opacity-50"
+                  isLoading={isDeleteLoading}
+                  variant="ghost"
+                  className="px-3 sm:px-4 border border-border-default text-text-muted"
+                  aria-label="Delete Guest"
                 >
-                  {isDeleteLoading ? (
-                    <div className="flex items-center justify-center">
-                      <div className="w-3 h-3 border border-gray-400 border-t-transparent rounded-full animate-spin"></div>
-                    </div>
-                  ) : (
-                    <i className="ri-close-line"></i>
-                  )}
-                </button>
+                  <i className="ri-close-line" aria-hidden="true"></i>
+                </Button>
               )}
             </>
           )}
 
           {guest.status === "checked" && (
             <div className="flex items-center gap-2">
-              <span className="px-4 sm:px-6 py-2 sm:py-3 bg-green-600/20 border border-green-600 text-green-400 font-mono text-xs tracking-wider uppercase">
+              <span className="px-4 sm:px-6 py-2 sm:py-3 bg-brand-green/20 border border-brand-green text-brand-green font-mono text-xs tracking-wider uppercase">
                 ACTIVE
               </span>
               {variant === "admin" && onDelete && (
-                <button
+                <Button
                   onClick={onDelete}
-                  disabled={isDeleteLoading}
-                  className="w-8 h-8 sm:w-10 sm:h-10 border border-gray-600 flex items-center justify-center text-gray-400 hover:bg-gray-800 transition-colors disabled:opacity-50"
+                  isLoading={isDeleteLoading}
+                  variant="ghost"
+                  className="w-8 h-8 sm:w-10 sm:h-10 p-0 border border-border-default text-text-muted"
+                  aria-label="Remove Guest"
                 >
-                  {isDeleteLoading ? (
-                    <div className="w-3 h-3 border border-gray-400 border-t-transparent rounded-full animate-spin"></div>
-                  ) : (
-                    <i className="ri-close-line text-sm"></i>
-                  )}
-                </button>
+                  <i className="ri-close-line text-sm" aria-hidden="true"></i>
+                </Button>
               )}
             </div>
           )}
 
           {guest.status === "deleted" && (
-            <span className="px-4 sm:px-6 py-2 sm:py-3 bg-gray-800 text-gray-500 font-mono text-xs tracking-wider uppercase">
+            <span className="px-4 sm:px-6 py-2 sm:py-3 bg-surface-hover text-text-dim font-mono text-xs tracking-wider uppercase">
               REMOVED
             </span>
           )}

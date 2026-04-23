@@ -1,5 +1,3 @@
-import { createClient } from "./supabase/client";
-
 export interface User {
   id: string;
   auth_user_id: string | null;
@@ -10,73 +8,32 @@ export interface User {
   guest_limit: number;
 }
 
-// lib/auth.ts에서는 필요한 곳에서만 supabase를 초기화하여 사용합니다.
-
 export const login = async (
   email: string,
   password: string,
 ): Promise<{ success: boolean; message?: string }> => {
-  const supabase = createClient();
   try {
-    const {
-      data: { user },
-      error: signInError,
-    } = await supabase.auth.signInWithPassword({
-      email,
-      password,
+    const res = await fetch("/api/auth/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, password }),
     });
 
-    if (signInError) {
-      console.error("Sign in error:", signInError);
-      return { success: false, message: "Invalid email or password." };
+    if (!res.ok) {
+      const errorData = await res.json().catch(() => ({}));
+      return { success: false, message: errorData.error || "Login failed." };
     }
 
-    if (!user) {
-      return {
-        success: false,
-        message: "Login failed: unable to load user information.",
-      };
-    }
+    const { user } = await res.json();
 
-    // 사용자 상세 정보 조회 (public.users 테이블)
-    const { data: userData, error: userError } = await supabase
-      .from("users")
-      .select("*")
-      .eq("auth_user_id", user.id)
-      .single();
-
-    if (userError || !userData) {
-      console.error("User data fetch error:", userError);
-      // Auth에는 있지만 public.users에 없는 경우 로그아웃 처리
-      await supabase.auth.signOut();
-      return { success: false, message: "User profile could not be found." };
-    }
-
-    // 타입 단언 사용 (userData가 any로 추론되지 않도록)
-    const activeUser = userData as any;
-
-    if (!activeUser.active) {
-      await supabase.auth.signOut();
-      return { success: false, message: "This account is inactive." };
-    }
-
-    // [호환성 유지] 기존 앱 로직이 localStorage 'user' 키를 동기적으로 참조하는 경우가 많으므로
-    // Supabase 세션 외에도 편의상 캐싱해둘 수 있지만,
-    // 원칙적으로는 Supabase Session을 사용하는 것이 맞음.
-    // 하지만 리팩토링 범위를 줄이기 위해 localStorage에도 저장합니다.
     const userInfo: User = {
-      id: activeUser.id,
-      auth_user_id: activeUser.auth_user_id,
-      venue_id: activeUser.venue_id,
-      email: activeUser.email,
-      name: activeUser.name,
-      role: activeUser.role as
-        | "super_admin"
-        | "venue_admin"
-        | "door_staff"
-        | "staff"
-        | "dj",
-      guest_limit: activeUser.guest_limit,
+      id: user.id,
+      auth_user_id: user.id, // For compatibility
+      venue_id: user.venueId || undefined,
+      email: user.email,
+      name: user.name,
+      role: user.role,
+      guest_limit: user.guestLimit || 0,
     };
 
     localStorage.setItem("user", JSON.stringify(userInfo));
@@ -89,20 +46,17 @@ export const login = async (
 };
 
 export const logout = async () => {
-  const supabase = createClient();
-  await supabase.auth.signOut();
-  if (typeof window !== "undefined") {
-    localStorage.removeItem("user");
-  }
-  if (typeof window !== "undefined") {
-    window.location.href = "/auth/login";
+  try {
+    // 만약 /api/auth/logout 엔드포인트가 있다면 호출하여 HTTP-Only 쿠키도 삭제
+    await fetch("/api/auth/logout", { method: "POST" }).catch(() => {});
+  } finally {
+    if (typeof window !== "undefined") {
+      localStorage.removeItem("user");
+      window.location.href = "/auth/login";
+    }
   }
 };
 
-/**
- * @deprecated Use useAuth hook or supabase.auth.getUser() instead for source of truth.
- * This function relies on localStorage which might be out of sync.
- */
 export const getUser = (): User | null => {
   if (typeof window === "undefined") return null;
 

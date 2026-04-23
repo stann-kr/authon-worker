@@ -4,6 +4,52 @@
 
 ---
 
+## 2026-04-23
+
+### UI/UX 및 아키텍처 고도화 (Phase 8)
+
+1. **시맨틱 컬러 시스템 (Design Tokens) 도입**
+   - `tailwind.config.js`에 `surface`, `border`, `brand`, `text` 등 의미 기반 컬러 토큰 정의
+   - 하드코딩된 색상 값을 시맨틱 클래스로 대체하여 일관성 및 유지보수성 향상
+
+2. **통합 `Button` 컴포넌트 구축 및 적용**
+   - `components/Button.tsx` 신규 생성으로 파편화된 버튼 스타일 통합
+   - **Touch Feedback:** 모바일 탭 시 스케일 변화(`active:scale-[0.98]`) 및 투명도 조절 내장
+   - 로그인, 게스트 등록, 리스트 액션 등 주요 화면 버튼 일괄 교체
+
+3. **컴포넌트 코드 스플리팅 및 최적화**
+   - 비대했던 `app/guest/page.tsx`를 `AuthenticatedGuestView`와 `ExternalDJGuestView`로 분리하여 모듈화
+   - **커스텀 훅 도입:** `lib/hooks.ts`에 `useGuestPolling` 훅을 추가하여 데이터 갱신 로직 추상화 및 중복 제거
+
+4. **UX 및 접근성 (A11y) 개선**
+   - **명도 대비 최적화:** 어두운 배경에서 시인성이 낮은 텍스트 밝기 조정 (WCAG AA 기준 준수)
+   - **스크린 리더 지원:** 아이콘 버튼 `aria-label` 추가 및 장식용 아이콘 `aria-hidden="true"` 부여
+
+### Authon 포스트 마이그레이션 과제 및 AWS SES 통합 완료 (Phase 7)
+...
+1. **Miniflare 빌드 에러(SQLITE_BUSY) 해결**
+   - `package.json`의 개발 및 빌드 스크립트에 `rm -rf .wrangler &&`를 추가하여 캐시 충돌로 인한 데이터베이스 락(Lock) 이슈 수정
+
+2. **메일링 시스템 구축 (AWS SES 직접 연동)**
+   - `aws4fetch` 패키지 설치 (`--legacy-peer-deps` 활용하여 Next.js 피어 의존성 충돌 해결)
+   - Edge 런타임 호환되는 `lib/api/email.ts` 유틸리티 구현 및 AWS SES v2 API 호출 통합
+
+3. **자체 비밀번호 재설정 흐름 구축**
+   - `lib/db/schema.ts`에 `password_reset_tokens` 테이블 추가 및 Drizzle 마이그레이션 적용 (`migrations/0002_password_reset.sql`)
+   - `app/api/auth/reset-password/route.ts` API 신설 (요청 및 실행)
+   - `app/auth/reset-password/page.tsx` UI를 요청/초기화 모드로 구현
+
+4. **D1 데이터베이스 타입 안정성 점검**
+   - `schema.ts` 내 모든 `active` 및 `used` 컬럼을 `integer({ mode: 'boolean' })`으로 변경
+   - `lib/api/guests.ts`의 모든 쿼리에서 `active: 1`을 `active: true`로, `active: 0`을 `active: false`로 사용하는 방식으로 타입 안정성 전수 개선
+
+5. **유저 마이그레이션 전략 확립 (Admin UI 방식)**
+   - 관리자 페이지(`app/admin`)에 `MIGRATE` 탭 추가
+   - `LegacyUserMigration` 컴포넌트 신설 및 `public/local-users.json` 데이터 기반 API 연동
+   - 데이터 이관 시 강제 비밀번호 변경을 위한 재설정 메일 발송 로직 워크플로우 통합
+
+---
+
 ## 2026-04-22
 
 ### Cloudflare Workers 기반 신규 아키텍처로 마이그레이션 (`authon-worker`)

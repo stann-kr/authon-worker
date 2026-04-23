@@ -78,7 +78,7 @@ export default function GuestList({ selectedDate }: GuestListProps) {
       if (guestRes.data) setGuests(guestRes.data);
       if (userRes.data) setUsers(userRes.data);
       if (linkRes.data) setExternalLinks(linkRes.data);
-    } catch (err) {
+    } catch (_err) {
       console.error("Failed to load data:", err);
     } finally {
       setIsFetching(false);
@@ -96,7 +96,7 @@ export default function GuestList({ selectedDate }: GuestListProps) {
       try {
         const { data } = await fetchGuestsByDate(selectedDate, venueId);
         if (data) setGuests(data);
-      } catch (err) {
+      } catch (_err) {
         // Silent fail for polling
       }
     }, 15000);

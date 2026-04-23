@@ -7,40 +7,23 @@ import { getUser, logout, hasAccess, User } from "../lib/auth";
 import Footer from "@/components/Footer";
 import Spinner from "@/components/Spinner";
 import RoleLabel from "@/components/RoleLabel";
+import Button from "@/components/Button";
 import { BRAND_NAME, BRAND_TAGLINE } from "@/lib/brand";
-import { createClient } from "@/lib/supabase/client";
 
 export default function Home() {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const router = useRouter();
-  const supabase = createClient();
 
   useEffect(() => {
-    const checkAuth = async () => {
-      // 1. 서버 측 실제 세션 확인
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
+    const currentUser = getUser();
+    if (!currentUser) {
+      logout();
+      return;
+    }
 
-      if (!session) {
-        // 세션이 만료되었거나 없다면 로컬 저장소를 비우고 로그인 페이지로 이동
-        await logout();
-        return;
-      }
-
-      // 2. 세션이 유효하다면 로컬 스토리지 정보 연동 (빠른 렌더링용)
-      const currentUser = getUser();
-      if (!currentUser) {
-        await logout();
-        return;
-      }
-
-      setUser(currentUser);
-      setIsLoading(false);
-    };
-
-    checkAuth();
+    setUser(currentUser);
+    setIsLoading(false);
   }, [router]);
 
   if (isLoading) {
@@ -107,30 +90,35 @@ export default function Home() {
               </p>
             </div>
 
-            <button
+            <Button
               onClick={logout}
-              className="w-8 h-8 sm:w-10 sm:h-10 border border-gray-600 bg-black hover:bg-gray-900 transition-colors flex items-center justify-center ml-4"
+              variant="ghost"
+              className="w-8 h-8 sm:w-10 sm:h-10 p-0 border border-border-default text-text-muted hover:bg-surface-hover"
+              aria-label="Logout"
             >
-              <i className="ri-logout-box-line text-gray-400 text-sm sm:text-base"></i>
-            </button>
+              <i className="ri-logout-box-line text-sm sm:text-base" aria-hidden="true"></i>
+            </Button>
           </div>
 
-          <div className="bg-gray-900 border border-gray-700 p-4 lg:p-6">
+          <div className="bg-surface border border-border-subtle p-4 lg:p-6">
             <div className="flex items-center justify-between">
               <div>
                 <p className="font-mono text-sm sm:text-base lg:text-lg tracking-wider text-white uppercase">
                   {user.name}
                 </p>
-                <p className="text-xs sm:text-sm text-gray-400 font-mono tracking-wider">
+                <p className="text-xs sm:text-sm text-text-muted font-mono tracking-wider">
                   ROLE: <RoleLabel role={user.role} /> • LIMIT:{" "}
                   {user.guest_limit}
                 </p>
               </div>
-              <Link
-                href="/profile"
-                className="w-8 h-8 sm:w-10 sm:h-10 border border-gray-600 bg-black hover:bg-gray-900 hover:border-white transition-colors flex items-center justify-center"
-              >
-                <i className="ri-user-settings-line text-gray-400 text-sm sm:text-base"></i>
+              <Link href="/profile" passHref>
+                <Button
+                  variant="ghost"
+                  className="w-8 h-8 sm:w-10 sm:h-10 p-0 border border-border-default text-text-muted hover:bg-surface-hover"
+                  aria-label="Edit Profile"
+                >
+                  <i className="ri-user-settings-line text-sm sm:text-base" aria-hidden="true"></i>
+                </Button>
               </Link>
             </div>
           </div>
@@ -139,30 +127,31 @@ export default function Home() {
         <div className="flex-1 px-4 sm:px-6 lg:px-8 flex flex-col">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 lg:gap-6 flex-1 content-start">
             {accessibleMenus.map((item, index) => (
-              <Link key={item.id} href={item.href} className="block">
+              <Link key={item.id} href={item.href} className="block group">
                 <div
-                  className={`bg-gradient-to-br ${item.bgColor} border border-gray-700 p-5 sm:p-6 hover:border-white transition-all duration-300 group h-full flex flex-col justify-between min-h-[180px] lg:min-h-[200px]`}
+                  className={`bg-gradient-to-br ${item.bgColor} border border-border-subtle p-5 sm:p-6 group-hover:border-border-focus transition-all duration-300 h-full flex flex-col justify-between min-h-[180px] lg:min-h-[200px] active:scale-[0.99]`}
                 >
                   <div className="flex items-center justify-between mb-4">
                     <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 sm:w-12 sm:h-12 border border-gray-600 bg-black/50 flex items-center justify-center group-hover:border-white transition-colors">
+                      <div className="w-10 h-10 sm:w-12 sm:h-12 border border-border-default bg-surface-black/50 flex items-center justify-center group-hover:border-border-focus transition-colors">
                         <i
                           className={`${item.icon} text-white text-base sm:text-lg`}
+                          aria-hidden="true"
                         ></i>
                       </div>
                       <div>
                         <h2 className="font-mono text-base sm:text-lg tracking-wider text-white uppercase mb-1">
                           {item.title}
                         </h2>
-                        <p className="text-gray-300 font-mono text-xs tracking-wider uppercase">
+                        <p className="text-text-body font-mono text-xs tracking-wider uppercase">
                           {item.subtitle}
                         </p>
                       </div>
                     </div>
 
                     <div className="text-right">
-                      <div className="w-6 h-6 border border-gray-600 flex items-center justify-center group-hover:border-white transition-colors">
-                        <span className="text-xs font-mono text-gray-400 group-hover:text-white">
+                      <div className="w-6 h-6 border border-border-default flex items-center justify-center group-hover:border-border-focus transition-colors">
+                        <span className="text-xs font-mono text-text-muted group-hover:text-white">
                           {String(index + 1).padStart(2, "0")}
                         </span>
                       </div>
@@ -170,23 +159,23 @@ export default function Home() {
                   </div>
 
                   <div className="mb-4">
-                    <p className="text-gray-400 font-mono text-xs sm:text-sm tracking-wider uppercase">
+                    <p className="text-text-muted font-mono text-xs sm:text-sm tracking-wider uppercase">
                       {item.description}
                     </p>
                   </div>
 
                   <div className="flex items-center justify-between">
                     <div className="flex gap-2">
-                      <div className="w-1 h-1 bg-gray-600 group-hover:bg-white transition-colors"></div>
-                      <div className="w-1 h-1 bg-gray-600 group-hover:bg-white transition-colors"></div>
-                      <div className="w-1 h-1 bg-gray-600 group-hover:bg-white transition-colors"></div>
+                      <div className="w-1 h-1 bg-border-subtle group-hover:bg-white transition-colors"></div>
+                      <div className="w-1 h-1 bg-border-subtle group-hover:bg-white transition-colors"></div>
+                      <div className="w-1 h-1 bg-border-subtle group-hover:bg-white transition-colors"></div>
                     </div>
 
                     <div className="flex items-center gap-2">
-                      <span className="font-mono text-xs tracking-wider text-gray-400 uppercase group-hover:text-white transition-colors">
+                      <span className="font-mono text-xs tracking-wider text-text-muted group-hover:text-white transition-colors">
                         ACCESS
                       </span>
-                      <i className="ri-arrow-right-line text-gray-400 text-sm group-hover:text-white transition-colors"></i>
+                      <i className="ri-arrow-right-line text-text-muted text-sm group-hover:text-white transition-colors" aria-hidden="true"></i>
                     </div>
                   </div>
                 </div>

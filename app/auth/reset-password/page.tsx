@@ -1,218 +1,83 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import Footer from "@/components/Footer";
+import { BRAND_NAME } from "@/lib/brand";
 import Spinner from "@/components/Spinner";
 import Alert from "@/components/Alert";
-import { BRAND_NAME } from "@/lib/brand";
-import { createClient } from "@/lib/supabase/client";
-import { activateUserByAuthId } from "@/lib/api/guests";
 
 export default function ResetPasswordPage() {
-  // ... (omitted for brevity in replacement chunk, but I'll make sure to replace the right block)
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const token = searchParams.get("token");
 
+  const [email, setEmail] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
-  const [isValidating, setIsValidating] = useState(true);
-  const [isValid, setIsValid] = useState(false);
-  const [isInvite, setIsInvite] = useState(false);
-  const [error, setError] = useState("");
-  const [success, setSuccess] = useState(false);
-
-  const [authCode, setAuthCode] = useState<string | null>(null);
-  const [tokenHash, setTokenHash] = useState<string | null>(null);
-  const [flowType, setFlowType] = useState<string | null>(null);
-
-  const router = useRouter();
-  const supabase = createClient();
+  const [loading, setLoading] = useState(false);
+  const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const [step, setStep] = useState<"request" | "reset" | "completed">("request");
 
   useEffect(() => {
-    const parseUrl = async () => {
-      setError("");
+    if (token) {
+      setStep("reset");
+    }
+  }, [token]);
 
-      try {
-        const hashParams = new URLSearchParams(
-          window.location.hash.replace(/^#/, ""),
-        );
-        const queryParams = new URLSearchParams(window.location.search);
-
-        const type = hashParams.get("type") || queryParams.get("type");
-        const code = queryParams.get("code");
-        const hash =
-          hashParams.get("token_hash") || queryParams.get("token_hash");
-        const errorMsg =
-          hashParams.get("error_description") ||
-          hashParams.get("error") ||
-          queryParams.get("error_description") ||
-          queryParams.get("error");
-
-        setFlowType(type);
-        setAuthCode(code);
-        setTokenHash(hash);
-        setIsInvite(type === "invite");
-
-        if (errorMsg) {
-          console.warn("Auth URL error:", errorMsg);
-          setError(decodeURIComponent(errorMsg));
-          setIsValid(false);
-          return;
-        }
-
-        // If we have any valid verification method in URL or an existing session, show the form
-        if (code || hash) {
-          setIsValid(true);
-        } else {
-          const {
-            data: { session },
-          } = await supabase.auth.getSession();
-          setIsValid(!!session);
-        }
-      } catch (err) {
-        console.error("Failed to parse URL:", err);
-        setError("Invalid link. Please request a new one.");
-        setIsValid(false);
-      } finally {
-        setIsValidating(false);
-      }
-    };
-
-    parseUrl();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleRequest = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError("");
-
-    if (newPassword.length < 6) {
-      setError("Password must be at least 6 characters.");
-      return;
-    }
-
-    if (newPassword !== confirmPassword) {
-      setError("Passwords do not match.");
-      return;
-    }
-
-    setIsLoading(true);
+    setLoading(true);
+    setMessage(null);
 
     try {
-      // 1. URL 토큰(초대/재설정 링크)을 기존 세션보다 우선 처리
-      // 기존 로그인된 관리자가 초대 링크를 눌렀을 때 관리자 비번이 바뀌는 충돌 방지
-      if (authCode) {
-        // PKCE Flow
-        const { error: codeError } =
-          await supabase.auth.exchangeCodeForSession(authCode);
-        if (codeError) throw codeError;
-
-        // 중복 교환 시도 방지
-        setAuthCode(null);
-      } else if (tokenHash && flowType) {
-        // OTP / Magic Link Flow
-        const { error: otpError } = await supabase.auth.verifyOtp({
-          token_hash: tokenHash,
-          type: flowType as any,
-        });
-        if (otpError) throw otpError;
-
-        // 중복 교환 시도 방지
-        setTokenHash(null);
-      } else {
-        // URL에 토큰이 없다면 기존 세션 유무만 확인
-        const {
-          data: { session: existingSession },
-        } = await supabase.auth.getSession();
-
-        if (!existingSession) {
-          throw new Error(
-            "No active session or valid token found. Please use the original link from your email.",
-          );
-        }
-      }
-
-      // 2. Update password
-      const { error: updateError } = await supabase.auth.updateUser({
-        password: newPassword,
+      const res = await fetch("/api/auth/reset-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email }),
       });
 
-      if (updateError) {
-        throw updateError;
-      }
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "요청 중 오류가 발생했습니다.");
 
-      // Activate user account after successful password setup
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (user) {
-        const { error: activeErr } = await activateUserByAuthId(user.id);
-
-        if (activeErr) {
-          console.error("Activation error:", activeErr);
-        }
-      }
-
-      // Sign out after password change for clean state
-      await supabase.auth.signOut();
-      setSuccess(true);
-      setTimeout(() => {
-        router.push("/auth/login");
-      }, 3000);
+      setMessage({ type: "success", text: "재설정 링크가 이메일로 발송되었습니다." });
+      setStep("completed");
     } catch (err: any) {
-      console.error("Password update error:", err);
-      setError(err.message || "An unexpected error occurred.");
+      setMessage({ type: "error", text: err.message });
     } finally {
-      setIsLoading(false);
+      setLoading(false);
     }
   };
 
-  if (isValidating) {
-    return <Spinner mode="fullscreen" text="VERIFYING..." />;
-  }
+  const handleReset = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (newPassword !== confirmPassword) {
+      setMessage({ type: "error", text: "비밀번호가 일치하지 않습니다." });
+      return;
+    }
 
-  if (success) {
-    return (
-      <div className="min-h-screen bg-black flex items-center justify-center px-4">
-        <div className="w-full max-w-sm text-center">
-          <div className="w-16 h-16 border border-green-500 flex items-center justify-center mx-auto mb-6">
-            <i className="ri-check-line text-green-500 text-3xl"></i>
-          </div>
-          <h2 className="font-mono text-xl tracking-wider text-white uppercase mb-2">
-            PASSWORD CHANGED
-          </h2>
-          <p className="text-gray-400 font-mono text-xs tracking-wider mb-6">
-            Your password has been changed. Redirecting to login...
-          </p>
-        </div>
-      </div>
-    );
-  }
+    setLoading(true);
+    setMessage(null);
 
-  if (!isValid) {
-    return (
-      <div className="min-h-screen bg-black flex items-center justify-center px-4">
-        <div className="w-full max-w-sm text-center">
-          <div className="w-16 h-16 border border-red-500 flex items-center justify-center mx-auto mb-6">
-            <i className="ri-close-line text-red-500 text-3xl"></i>
-          </div>
-          <h2 className="font-mono text-xl tracking-wider text-white uppercase mb-2">
-            INVALID LINK
-          </h2>
-          <p className="text-gray-400 font-mono text-xs tracking-wider mb-6">
-            {error ||
-              "This link is invalid or expired. Please request password reset again."}
-          </p>
-          <button
-            onClick={() => router.push("/auth/login")}
-            className="bg-white text-black px-6 py-3 font-mono text-xs tracking-wider uppercase hover:bg-gray-200 transition-colors"
-          >
-            GO TO LOGIN
-          </button>
-        </div>
-      </div>
-    );
-  }
+    try {
+      const res = await fetch("/api/auth/reset-password", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token, newPassword }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "비밀번호 변경 중 오류가 발생했습니다.");
+
+      setMessage({ type: "success", text: "비밀번호가 성공적으로 변경되었습니다." });
+      setStep("completed");
+      setTimeout(() => router.push("/auth/login"), 3000);
+    } catch (err: any) {
+      setMessage({ type: "error", text: err.message });
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-black flex items-center justify-center px-4 sm:px-6 lg:px-8">
@@ -228,58 +93,109 @@ export default function ResetPasswordPage() {
               {BRAND_NAME}
             </h1>
             <p className="text-xs sm:text-sm text-gray-400 tracking-widest font-mono uppercase">
-              {isInvite ? "SET YOUR PASSWORD" : "SET NEW PASSWORD"}
+              PASSWORD RESET
             </p>
           </div>
 
-          <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-5">
-            <div>
-              <label className="block text-gray-400 font-mono text-xs sm:text-sm tracking-wider uppercase mb-2">
-                NEW PASSWORD
-              </label>
-              <input
-                type="password"
-                value={newPassword}
-                onChange={(e) => setNewPassword(e.target.value)}
-                className="w-full bg-gray-900 border border-gray-700 px-4 py-3 sm:py-4 text-white font-mono text-sm tracking-wider focus:outline-none focus:border-white transition-colors"
-                placeholder="Minimum 6 characters"
-                required
-                minLength={6}
-              />
+          {message && (
+            <div className="mb-6">
+              <Alert type={message.type} message={message.text} />
             </div>
+          )}
 
-            <div>
-              <label className="block text-gray-400 font-mono text-xs sm:text-sm tracking-wider uppercase mb-2">
-                CONFIRM PASSWORD
-              </label>
-              <input
-                type="password"
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-                className="w-full bg-gray-900 border border-gray-700 px-4 py-3 sm:py-4 text-white font-mono text-sm tracking-wider focus:outline-none focus:border-white transition-colors"
-                placeholder="Confirm your password"
-                required
-                minLength={6}
-              />
+          {step === "request" && (
+            <form onSubmit={handleRequest} className="space-y-6">
+              <div>
+                <label className="block text-gray-400 font-mono text-[10px] tracking-widest uppercase mb-2">
+                  EMAIL ADDRESS
+                </label>
+                <input
+                  type="email"
+                  required
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="w-full bg-black border border-gray-800 text-white p-3 font-mono text-sm focus:outline-none focus:border-white transition-colors"
+                  placeholder="ID@AUTHON.PRO"
+                />
+              </div>
+
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full bg-white text-black py-3 sm:py-4 font-mono text-sm tracking-wider uppercase hover:bg-gray-200 transition-colors disabled:bg-gray-600 flex items-center justify-center gap-2"
+              >
+                {loading ? <Spinner size="sm" /> : "SEND RESET LINK"}
+              </button>
+            </form>
+          )}
+
+          {step === "reset" && (
+            <form onSubmit={handleReset} className="space-y-6">
+              <div>
+                <label className="block text-gray-400 font-mono text-[10px] tracking-widest uppercase mb-2">
+                  NEW PASSWORD
+                </label>
+                <input
+                  type="password"
+                  required
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  className="w-full bg-black border border-gray-800 text-white p-3 font-mono text-sm focus:outline-none focus:border-white transition-colors"
+                />
+              </div>
+
+              <div>
+                <label className="block text-gray-400 font-mono text-[10px] tracking-widest uppercase mb-2">
+                  CONFIRM PASSWORD
+                </label>
+                <input
+                  type="password"
+                  required
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  className="w-full bg-black border border-gray-800 text-white p-3 font-mono text-sm focus:outline-none focus:border-white transition-colors"
+                />
+              </div>
+
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full bg-white text-black py-3 sm:py-4 font-mono text-sm tracking-wider uppercase hover:bg-gray-200 transition-colors disabled:bg-gray-600 flex items-center justify-center gap-2"
+              >
+                {loading ? <Spinner size="sm" /> : "UPDATE PASSWORD"}
+              </button>
+            </form>
+          )}
+
+          {step === "completed" && (
+            <div className="text-center space-y-6">
+              <div className="w-16 h-16 border border-green-500 flex items-center justify-center mx-auto">
+                <i className="ri-check-line text-green-500 text-3xl"></i>
+              </div>
+              
+              <p className="text-gray-400 font-mono text-xs tracking-wider leading-relaxed">
+                {message?.type === "success" 
+                  ? "요청이 정상적으로 처리되었습니다. 잠시 후 로그인 페이지로 이동합니다."
+                  : "요청 처리 중 문제가 발생했습니다."}
+              </p>
+
+              <button
+                onClick={() => router.push("/auth/login")}
+                className="w-full bg-white text-black py-3 sm:py-4 font-mono text-sm tracking-wider uppercase hover:bg-gray-200 transition-colors"
+              >
+                RETURN TO LOGIN
+              </button>
             </div>
+          )}
 
-            {error && <Alert type="error" message={error} />}
-
+          <div className="mt-8 text-center">
             <button
-              type="submit"
-              disabled={isLoading}
-              className="w-full bg-white text-black py-3 sm:py-4 font-mono text-sm tracking-wider uppercase hover:bg-gray-200 transition-colors disabled:opacity-50"
+              onClick={() => router.push("/auth/login")}
+              className="text-gray-500 font-mono text-[10px] tracking-widest uppercase hover:text-white transition-colors"
             >
-              {isLoading ? (
-                <div className="flex items-center justify-center gap-2">
-                  <div className="w-4 h-4 border border-black border-t-transparent rounded-full animate-spin"></div>
-                  <span>CHANGING...</span>
-                </div>
-              ) : (
-                "CHANGE PASSWORD"
-              )}
+              BACK TO LOGIN
             </button>
-          </form>
+          </div>
 
           <Footer compact />
         </div>
@@ -287,3 +203,4 @@ export default function ResetPasswordPage() {
     </div>
   );
 }
+

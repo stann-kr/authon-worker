@@ -30,3 +30,20 @@ export function useLocalStorage<T>(key: string, initialValue: T) {
 
   return [storedValue, setValue] as const;
 }
+
+/**
+ * 주기적으로 게스트 목록을 갱신하는 폴링 훅
+ */
+export function useGuestPolling(fetchFn: () => Promise<void>, intervalMs: number = 15000, active: boolean = true) {
+  useEffect(() => {
+    if (!active) return;
+    const interval = setInterval(async () => {
+      try {
+        await fetchFn();
+      } catch (_err) {
+        // Silent fail for polling
+      }
+    }, intervalMs);
+    return () => clearInterval(interval);
+  }, [fetchFn, intervalMs, active]);
+}
