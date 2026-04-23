@@ -51,6 +51,7 @@ export const guests = sqliteTable('guests', {
   instagram: text('instagram'),
   djId: text('dj_id').references(() => djs.id),
   externalLinkId: text('external_link_id').references(() => externalDjLinks.id),
+  createdByUserId: text('created_by_user_id').references(() => users.id),
   terminalRequestId: text('terminal_request_id'),
   source: text('source').notNull().default('authon'), // 'authon' or 'terminal'
   status: text('status').notNull().default('pending'), // 'pending', 'checked', 'deleted'

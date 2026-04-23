@@ -9,10 +9,12 @@ import { sendEmail } from "@/lib/api/email";
 interface Env {
   DB: D1Database;
   NEXT_PUBLIC_APP_URL: string;
+  JWT_SECRET: string;
 }
 
 /**
- * 레거시 유저 마이그레이션 API
+ * 레거시 유저 마이그레이션 API (super_admin 전용)
+ * - JWT 쿠키에서 역할 검증 후 실행
  * - 유저 데이터 삽입
  * - 비밀번호 재설정 토큰 생성 및 메일 발송
  */
@@ -20,6 +22,27 @@ interface Env {
 export async function POST(request: Request) {
   try {
     const { env } = getCloudflareContext() as unknown as { env: Env };
+
+    // ─── super_admin 역할 검증 ────────────────────────────────
+    const cookieHeader = request.headers.get("cookie") || "";
+    const tokenMatch = cookieHeader.match(/(?:^|;\s*)token=([^;]+)/);
+    const jwtToken = tokenMatch?.[1];
+
+    if (!jwtToken || !env.JWT_SECRET) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    try {
+      const { payload } = await import("jose").then(({ jwtVerify }) =>
+        jwtVerify(jwtToken, new TextEncoder().encode(env.JWT_SECRET))
+      );
+      if (payload.role !== "super_admin") {
+        return NextResponse.json({ error: "Forbidden: super_admin only" }, { status: 403 });
+      }
+    } catch {
+      return NextResponse.json({ error: "Invalid or expired token" }, { status: 401 });
+    }
+
     const { users: legacyUsers } = await request.json();
 
     if (!legacyUsers || !Array.isArray(legacyUsers)) {

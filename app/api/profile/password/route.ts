@@ -29,7 +29,10 @@ export async function PUT(request: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const secret = new TextEncoder().encode(env.JWT_SECRET || "default_secret_for_local_dev");
+    if (!env.JWT_SECRET) {
+      return NextResponse.json({ error: "Server configuration error." }, { status: 500 });
+    }
+    const secret = new TextEncoder().encode(env.JWT_SECRET);
     const { payload } = await jwtVerify(token, secret);
     const userId = payload.sub;
 

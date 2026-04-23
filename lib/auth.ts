@@ -1,13 +1,24 @@
+/**
+ * lib/auth.ts — 클라이언트 사이드 인증 유틸리티
+ *
+ * JWT 검증 및 세션 관리는 서버(middleware.ts, API routes)에서 수행.
+ * 이 파일은 클라이언트(localStorage) 기반 유저 정보 접근 및 로그인/로그아웃 유틸리티 제공.
+ */
+
 export interface User {
   id: string;
-  auth_user_id: string | null;
-  venue_id?: string;
+  venue_id?: string | null;
   email: string;
   name: string;
   role: "super_admin" | "venue_admin" | "door_staff" | "staff" | "dj";
   guest_limit: number;
 }
 
+/**
+ * 이메일/비밀번호로 로그인 요청
+ * - 성공 시 서버가 HTTP-Only JWT 쿠키 발급
+ * - 클라이언트는 유저 프로필만 localStorage에 저장
+ */
 export const login = async (
   email: string,
   password: string,
@@ -28,8 +39,7 @@ export const login = async (
 
     const userInfo: User = {
       id: user.id,
-      auth_user_id: user.id, // For compatibility
-      venue_id: user.venueId || undefined,
+      venue_id: user.venueId || null,
       email: user.email,
       name: user.name,
       role: user.role,
@@ -45,9 +55,13 @@ export const login = async (
   }
 };
 
+/**
+ * 로그아웃
+ * - 서버에 로그아웃 요청하여 HTTP-Only 쿠키 삭제
+ * - 클라이언트 localStorage 정리
+ */
 export const logout = async () => {
   try {
-    // 만약 /api/auth/logout 엔드포인트가 있다면 호출하여 HTTP-Only 쿠키도 삭제
     await fetch("/api/auth/logout", { method: "POST" }).catch(() => {});
   } finally {
     if (typeof window !== "undefined") {
@@ -57,6 +71,10 @@ export const logout = async () => {
   }
 };
 
+/**
+ * localStorage에서 현재 로그인한 유저 정보 반환
+ * @returns User 객체 또는 null
+ */
 export const getUser = (): User | null => {
   if (typeof window === "undefined") return null;
 
@@ -71,6 +89,11 @@ export const getUser = (): User | null => {
   }
 };
 
+/**
+ * 유저 역할이 필요한 접근 스코프를 가지고 있는지 확인
+ * @param userRole - 유저의 역할
+ * @param requiredAccess - 필요한 접근 스코프 배열
+ */
 export const hasAccess = (
   userRole: string,
   requiredAccess: string[],

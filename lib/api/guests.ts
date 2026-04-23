@@ -22,8 +22,9 @@ async function getCurrentUser() {
   const token = cookieStore.get("token")?.value;
   if (!token) return null;
   try {
-    const secret = new TextEncoder().encode(process.env.JWT_SECRET || "default_secret_for_local_dev");
-    const { payload } = await jwtVerify(token, secret);
+    const secret = process.env.JWT_SECRET;
+    if (!secret) throw new Error("JWT_SECRET is not configured");
+    const { payload } = await jwtVerify(token, new TextEncoder().encode(secret));
     return payload as { sub: string; email: string; role: string; venueId: string | null };
   } catch {
     return null;
@@ -60,6 +61,7 @@ export interface Guest {
   instagram?: string | null;
   djId?: string | null;
   externalLinkId?: string | null;
+  createdByUserId?: string | null;
   status: "pending" | "checked" | "deleted";
   checkInTime?: string | null;
   date: string;
@@ -303,11 +305,13 @@ export async function fetchGuestsByDate(date: string, venueId?: string): Promise
 export async function fetchAllGuests(venueId?: string): Promise<{ data: Guest[] | null; error: any }> {
   try {
     const db = await getDb();
-    let query = db.select().from(guests);
-    if (venueId) {
-      query.where(eq(guests.venueId, venueId));
-    }
-    const result = await query.orderBy(desc(guests.date), desc(guests.createdAt));
+    // Drizzle 쿼리 빌더는 불변(immutable) 체이닝 방식이므로 반환값 반드시 재할당
+    const baseQuery = db.select().from(guests);
+    const result = await (
+      venueId
+        ? baseQuery.where(eq(guests.venueId, venueId))
+        : baseQuery
+    ).orderBy(desc(guests.date), desc(guests.createdAt));
     return { data: result.map(g => ({ ...g, status: g.status as any })), error: null };
   } catch (error: any) {
     return { data: null, error: { message: error.message } };
@@ -349,6 +353,7 @@ export async function createGuest(guest: {
       name: guest.name,
       djId: guest.djId || null,
       externalLinkId: guest.externalLinkId || null,
+      createdByUserId: guest.createdByUserId || null,
       date: guest.date,
       status: guest.status || "pending",
       createdAt: now,

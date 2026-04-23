@@ -28,3 +28,11 @@ migrations_dir = "migrations"
 binding = "SESSIONS"
 id = "c29d9d86856b41458a8112fb620ae874"
 preview_id = "3c3c403d6dbb4aa7b0e8920041b12622"
+
+# 비시크릿 환경 변수 (시크릿은 .dev.vars 또는 Cloudflare Dashboard에서 관리)
+# JWT_SECRET, AWS_SES_* 등 시크릿은 .dev.vars에 설정 (절대 여기에 입력 금지)
+[vars]
+NEXT_PUBLIC_APP_URL = "http://localhost:3000"
+# 운영 배포 시 Cloudflare Dashboard에서 환경별로 오버라이드:
+#   NEXT_PUBLIC_APP_URL = "https://authon.yourdomain.com"
+#   TERMINAL_VENUE_ID   = "<실제 베뉴 UUID>"

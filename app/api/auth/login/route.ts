@@ -44,7 +44,11 @@ export async function POST(request: Request) {
     }
 
     // JWT 생성
-    const secret = new TextEncoder().encode(env.JWT_SECRET || "default_secret_for_local_dev");
+    if (!env.JWT_SECRET) {
+      console.error("JWT_SECRET is not configured");
+      return NextResponse.json({ error: "Server configuration error." }, { status: 500 });
+    }
+    const secret = new TextEncoder().encode(env.JWT_SECRET);
     const token = await new SignJWT({
       sub: user.id,
       email: user.email,

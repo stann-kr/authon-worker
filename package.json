@@ -10,7 +10,8 @@
     "cf:preview": "rm -rf .wrangler && opennextjs-cloudflare preview",
     "lint": "next lint",
     "db:generate": "drizzle-kit generate",
-    "db:migrate": "wrangler d1 execute authon-db --local --file=migrations/0001_init.sql"
+    "db:migrate:local": "wrangler d1 migrations apply authon-db --local",
+    "db:migrate:remote": "wrangler d1 migrations apply authon-db --remote"
   },
   "dependencies": {
     "@opennextjs/cloudflare": "^1.18.1",
