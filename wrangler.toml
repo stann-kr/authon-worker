@@ -17,15 +17,14 @@ directory = ".open-next/assets"
 binding = "ASSETS"
 
 # D1 데이터베이스 바인딩
-# wrangler d1 create authon-db 실행 후 생성된 database_id를 입력할 것
 [[d1_databases]]
 binding = "DB"
 database_name = "authon-db"
-database_id = "<your-authon-d1-id>"
+database_id = "b849dd4e-533e-477d-9ef8-cc2e4a00df1f"
 migrations_dir = "migrations"
 
-# KV 바인딩 (세션 저장소)
-# wrangler kv:namespace create SESSIONS 실행 후 생성된 id를 입력할 것
+# KV 바인딩 - 세션 저장소
 [[kv_namespaces]]
 binding = "SESSIONS"
-id = "<your-authon-kv-id>"
+id = "c29d9d86856b41458a8112fb620ae874"
+preview_id = "3c3c403d6dbb4aa7b0e8920041b12622"

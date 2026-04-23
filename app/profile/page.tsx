@@ -62,7 +62,7 @@ export default function ProfilePage() {
 
       setShowSuccess(true);
       setTimeout(() => setShowSuccess(false), 3000);
-    } catch (_err) {
+    } catch {
       setError("An error occurred while saving.");
     } finally {
       setIsSaving(false);
@@ -196,15 +196,6 @@ export default function ProfilePage() {
                     />
                   </div>
 
-                  <div className="border-t border-gray-700 pt-6">
-                    <p className="text-xs sm:text-sm text-gray-400 font-mono tracking-wider uppercase mb-4">
-                      PASSWORD CHANGE IS TEMPORARILY UNAVAILABLE
-                    </p>
-                    <p className="text-xs text-gray-500 font-mono tracking-wider">
-                      Please contact your system administrator to change your password.
-                    </p>
-                  </div>
-
                   <button
                     type="submit"
                     disabled={isSaving}
@@ -224,11 +215,130 @@ export default function ProfilePage() {
                   </button>
                 </form>
               </div>
+
+              {/* Password Change Section */}
+              <div className="bg-gray-900 border border-gray-700 mt-6">
+                <div className="border-b border-gray-700 p-4">
+                  <h3 className="font-mono text-xs sm:text-sm tracking-wider text-white uppercase">
+                    CHANGE PASSWORD
+                  </h3>
+                </div>
+                <PasswordChangeForm />
+              </div>
             </div>
           </div>
         </div>
         <Footer />
       </div>
     </div>
+  );
+}
+
+function PasswordChangeForm() {
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [isUpdating, setIsUpdating] = useState(false);
+  const [passwordError, setPasswordError] = useState("");
+  const [passwordSuccess, setPasswordSuccess] = useState("");
+
+  const handlePasswordChange = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setPasswordError("");
+    setPasswordSuccess("");
+
+    if (newPassword !== confirmPassword) {
+      setPasswordError("New passwords do not match.");
+      return;
+    }
+
+    if (newPassword.length < 6) {
+      setPasswordError("Password must be at least 6 characters.");
+      return;
+    }
+
+    setIsUpdating(true);
+    try {
+      const res = await fetch("/api/profile/password", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ currentPassword, newPassword }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to update password");
+      }
+
+      setPasswordSuccess("Password updated successfully.");
+      setCurrentPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
+    } catch (err: any) {
+      setPasswordError(err.message || "An error occurred.");
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
+  return (
+    <form onSubmit={handlePasswordChange} className="p-4 sm:p-6 space-y-4">
+      {passwordError && <Alert type="error" message={passwordError} className="mb-4" />}
+      {passwordSuccess && <Alert type="success" message={passwordSuccess} className="mb-4" />}
+      
+      <div>
+        <label className="block text-xs sm:text-sm text-gray-400 font-mono tracking-wider uppercase mb-2">
+          CURRENT PASSWORD
+        </label>
+        <input
+          type="password"
+          value={currentPassword}
+          onChange={(e) => setCurrentPassword(e.target.value)}
+          className="w-full bg-black border border-gray-600 px-4 py-3 text-white font-mono text-sm tracking-wider focus:outline-none focus:border-white transition-colors"
+          required
+        />
+      </div>
+      <div>
+        <label className="block text-xs sm:text-sm text-gray-400 font-mono tracking-wider uppercase mb-2">
+          NEW PASSWORD
+        </label>
+        <input
+          type="password"
+          value={newPassword}
+          onChange={(e) => setNewPassword(e.target.value)}
+          className="w-full bg-black border border-gray-600 px-4 py-3 text-white font-mono text-sm tracking-wider focus:outline-none focus:border-white transition-colors"
+          required
+        />
+      </div>
+      <div>
+        <label className="block text-xs sm:text-sm text-gray-400 font-mono tracking-wider uppercase mb-2">
+          CONFIRM NEW PASSWORD
+        </label>
+        <input
+          type="password"
+          value={confirmPassword}
+          onChange={(e) => setConfirmPassword(e.target.value)}
+          className="w-full bg-black border border-gray-600 px-4 py-3 text-white font-mono text-sm tracking-wider focus:outline-none focus:border-white transition-colors"
+          required
+        />
+      </div>
+      <button
+        type="submit"
+        disabled={isUpdating}
+        className="w-full bg-white text-black font-mono text-sm tracking-wider uppercase py-3 sm:py-4 hover:bg-gray-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+      >
+        {isUpdating ? (
+          <>
+            <div className="w-4 h-4 border-2 border-black border-t-transparent rounded-full animate-spin"></div>
+            UPDATING...
+          </>
+        ) : (
+          <>
+            <i className="ri-key-line"></i>
+            UPDATE PASSWORD
+          </>
+        )}
+      </button>
+    </form>
   );
 }

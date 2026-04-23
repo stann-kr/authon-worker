@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import { useLocalStorage } from "@/lib/hooks";
 import Footer from "@/components/Footer";
 import StatGrid from "@/components/StatGrid";
@@ -129,8 +129,47 @@ export default function ExternalDJGuestView({ token }: ExternalDJGuestViewProps)
     });
   };
 
+  const externalHeader = (
+    <div className="fixed top-0 left-0 right-0 z-50 bg-black border-b border-border-subtle">
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-10 py-3 flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <div className="w-2 h-2 bg-white"></div>
+          <span className="font-mono text-sm tracking-wider text-white uppercase">
+            {BRAND_NAME}
+          </span>
+        </div>
+        <span className="font-mono text-xs tracking-wider text-text-muted uppercase">
+          GUEST ACCESS
+        </span>
+      </div>
+    </div>
+  );
+
   if (isValidating) {
-    return <Spinner mode="fullscreen" text="VALIDATING LINK..." />;
+    return (
+      <div className="min-h-screen bg-black flex flex-col">
+        {externalHeader}
+        <div className="flex-1 overflow-x-hidden pt-16 sm:pt-20 flex flex-col">
+          <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-10 w-full lg:flex-1 lg:min-h-0 flex flex-col">
+            <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 lg:gap-6 lg:flex-1 lg:min-h-0">
+              <div className="lg:col-span-1 space-y-4">
+                <div className="bg-surface border border-border-subtle p-4 sm:p-5 min-h-[200px]">
+                  <Spinner mode="inline" text="LOADING..." />
+                </div>
+              </div>
+              <div className="lg:col-span-3 flex flex-col lg:min-h-0">
+                <div className="main-content-panel lg:min-h-0 lg:max-h-full">
+                  <PanelHeader title="GUEST LIST" count={0} sortMode={sortMode} onSortToggle={() => {}} />
+                  <GuestSearchInput value={searchQuery} onChange={setSearchQuery} />
+                  <Spinner mode="inline" text="VALIDATING LINK..." />
+                </div>
+              </div>
+            </div>
+          </div>
+          <Footer />
+        </div>
+      </div>
+    );
   }
 
   if (validationError) {

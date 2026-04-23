@@ -1,0 +1,36 @@
+# Cloudflare Workers 로컬 개발 환경 시크릿 (Miniflare 바인딩용)
+# 이 파일은 .gitignore에 포함되어 있으므로 절대 커밋하지 말 것
+# wrangler.toml의 [[vars]] 섹션이 아닌 이 파일에서 시크릿 관리
+
+# ─── 인증 ────────────────────────────────────────────────────
+# JWT 서명 시크릿. 충분히 긴 랜덤 문자열 사용 (32자 이상 권장)
+# 생성 방법: openssl rand -base64 32
+JWT_SECRET="your-strong-random-jwt-secret-here"
+
+# ─── 이메일 (AWS SES) ────────────────────────────────────────
+AWS_SES_ACCESS_KEY="AKIA..."
+AWS_SES_SECRET_KEY="your-ses-secret-key-here"
+AWS_SES_REGION="ap-northeast-2"
+AWS_SES_FROM_EMAIL="noreply@yourdomain.com"
+
+# ─── 앱 URL ──────────────────────────────────────────────────
+# 이메일 내 비밀번호 재설정 링크 기본 URL
+# 로컬: http://localhost:3000
+# 운영: https://authon.yourdomain.com
+NEXT_PUBLIC_APP_URL="http://localhost:3000"
+
+# ─── Terminal 연동 ────────────────────────────────────────────
+# terminal-2 앱과 Service Binding으로 연결될 베뉴 ID
+# 베뉴 생성 후 해당 베뉴의 UUID를 입력
+TERMINAL_VENUE_ID="your-venue-uuid-here"
+
+# ─── 내부 API 인증 ────────────────────────────────────────────
+# /api/internal/sync-guest 엔드포인트 보호용 Shared Secret
+# terminal-2 워커의 환경변수와 동일한 값으로 설정
+INTERNAL_API_SECRET="your-strong-shared-secret-here"
+
+# ─── 브랜드 설정 (선택) ──────────────────────────────────────
+NEXT_PUBLIC_BRAND_NAME="Authon"
+NEXT_PUBLIC_BRAND_TAGLINE="Guest Management System"
+NEXT_PUBLIC_BRAND_DESCRIPTION="Authon Guest Management System"
+# NEXT_PUBLIC_BRAND_FOOTER="© 2026 Authon By Stann"

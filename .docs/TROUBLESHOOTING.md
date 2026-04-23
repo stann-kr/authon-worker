@@ -1,136 +1,167 @@
 # 트러블슈팅 이력 (Troubleshooting Log)
 
-이 문서는 프로젝트 개발 중 발생한 주요 기술적 문제와 해결 과정을 기록합니다.
+프로젝트 개발 중 발생한 주요 기술 문제와 해결 과정 기록.
+최신순 정렬. 구 Supabase 아키텍처 관련 이슈는 하단 아카이브 참고.
 
 ---
 
-## 6. Miniflare 빌드 에러 (SQLITE_BUSY) 및 캐시 충돌 해결
+## [Workers] 코드베이스 감사 발견 이슈 (2026-04-23)
 
-### 발생 상황 및 에러 로그
-- **상황**: 로컬 개발 서버(`npm run dev`) 또는 워커 빌드 시 D1 데이터베이스 락 에러 발생.
-- **에러 로그**: `SQLITE_BUSY: database is locked`
+### 이슈 1: `no such table: users` — D1 마이그레이션 미적용
 
-### 원인 분석
-- 로컬 `.wrangler/` 캐시 폴더에 여러 프로세스가 동시에 접근하거나 Docker 볼륨 동기화 문제로 인해 SQLite DB 파일에 락이 해제되지 않은 상태로 남음.
+**발생 상황:** `wrangler d1 execute authon-db --local` 명령으로 Super Admin INSERT 시 에러 발생.
 
-### 해결 방안
-- `package.json`의 스크립트(`dev`, `build:worker`, `cf:preview`) 실행 전 `rm -rf .wrangler &&`를 추가하여 빌드/실행 시마다 락이 걸린 캐시를 초기화하도록 개선함.
+**원인 분석:**
+- `package.json`의 `db:migrate` 스크립트가 `--file=migrations/0001_init.sql` 단일 파일만 실행
+- Wrangler D1 Migrations(`migrations apply`) 방식이 아닌 수동 실행으로 `0002_password_reset.sql` 누락
+- 로컬 `.wrangler/state/v3/d1`에 스키마가 전혀 적용되지 않은 상태였음
 
----
-
-## 7. aws4fetch 설치 중 피어 의존성 (ERESOLVE) 충돌
-
-### 발생 상황 및 에러 로그
-- **상황**: AWS SES 연동을 위한 `aws4fetch` 라이브러리 설치 시 충돌 발생 (`docker compose run --rm web npm install aws4fetch`).
-- **에러 로그**: `ERESOLVE could not resolve`, `Conflicting peer dependency: next@16.2.4`
-
-### 원인 분석
-- `@opennextjs/cloudflare` 및 관련 AWS 패키지들이 Next.js 특정 버전(15.5.15 이상 또는 16)을 요구하지만, 프로젝트는 Next.js `15.3.2`를 사용 중임.
-
-### 해결 방안
-- `npm install aws4fetch --legacy-peer-deps` 명령어를 실행하여 강제로 기존 피어 의존성 규칙을 무시하고 패키지를 성공적으로 설치함.
+**해결 방안:**
+```bash
+# db:migrate 스크립트를 wrangler d1 migrations apply 방식으로 교체
+docker compose run --rm web npm run db:migrate:local
+```
+- `package.json` 스크립트 `db:migrate:local` / `db:migrate:remote` 추가
+- 이후 모든 마이그레이션 파일은 `migrations/` 디렉토리에 번호 순으로 관리
 
 ---
 
-## 8. drizzle-kit generate 실행 에러 (Config 누락)
+### 이슈 2: `createdByUserId` — DB 스키마 컬럼 누락
 
-### 발생 상황 및 에러 로그
-- **상황**: 새 테이블(`password_reset_tokens`) 마이그레이션 파일 생성 시 에러 발생 (`npm run db:generate`).
-- **에러 로그**: `No config path provided, using default 'drizzle.config.json'` 및 `file does not exist`
+**발생 상황:** 게스트 등록/필터링 시 `createdByUserId`가 항상 `undefined` 반환.
 
-### 원인 분석
-- 프로젝트에 `drizzle.config.ts` 파일이 누락되어 있어 `drizzle-kit`이 스키마 파일 위치를 찾지 못함.
+**원인 분석:**
+- `lib/api/guests.ts`의 `createGuest()` 함수가 `createdByUserId` 파라미터를 받지만 DB INSERT에 포함하지 않음
+- `guests` 테이블 스키마에 `created_by_user_id` 컬럼 자체가 없었음
+- Door/Admin 페이지의 DJ별 필터 기능이 이로 인해 전혀 작동하지 않는 상태
 
-### 해결 방안
-- 프로젝트 루트에 `drizzle.config.ts`를 신규 생성하고 `schema`, `out`, `dialect` 속성을 명시적으로 지정하여 정상적으로 D1용 마이그레이션 파일 생성에 성공함.
-
----
-
-## 1. Chrome 브라우저 날짜 선택기(input[type="date"]) 렌더링 오류
-
-### 발생 상황 및 에러 로그
-
-- **상황**: 다크 모드 배경에서 날짜 인풋의 기본 달력 아이콘이 보이지 않거나, 클릭해도 반응이 없는 것처럼 느껴짐.
-- **에러 로그**: 별도 에러 로그는 없으나 시각적으로 아이콘 부재 확인.
-
-### 원인 분석
-
-- `globals.css`에서 `appearance: none`이 적용되어 브라우저 기본 UI 스타일이 제거됨.
-- 다크 배경에서 기본 아이콘 색상이 검은색으로 유지되어 식별이 불가능함.
-
-### 해결 방안
-
-- `app/globals.css`에서 `input[type="date"]`의 `appearance: none` 제거.
-- `color-scheme: dark` 속성을 추가하여 브라우저 기본 아이콘이 흰색으로 렌더링되도록 유도.
+**해결 방안:**
+- `migrations/0003_add_created_by_user.sql` 신규 마이그레이션 작성
+- `lib/db/schema.ts`에 `createdByUserId` 필드 추가
+- `createGuest()` INSERT 쿼리에 해당 컬럼 포함
 
 ---
 
-## 2. 날짜 인풋 요일 표시 및 클릭 편의성 개선 (Mirroring UI)
+### 이슈 3: `fetchAllGuests()` Drizzle `.where()` 체이닝 버그
 
-### 발생 상황 및 에러 로그
+**발생 상황:** `venueId` 파라미터를 전달해도 전체 게스트가 조회됨.
 
-- **상황**: 인풋 박스 내부에 요일(`YYYY.MM.DD (FRI)`)을 표시하고자 했으나, 브라우저 표준 인풋 포맷(`YYYY-MM-DD`) 제약으로 인해 직접 수정이 불가능함.
-- **시행착오**: 초기 오버레이 방식 사용 시 인풋 포커스 방해 및 디자인 깨짐(Black Box) 발생.
+**원인 분석:**
+```typescript
+// 버그: query에 재할당 없이 .where() 결과 버림
+let query = db.select().from(guests);
+if (venueId) {
+  query.where(eq(guests.venueId, venueId)); // 반환값 미사용!
+}
+```
+Drizzle 쿼리 빌더는 불변(immutable) 체이닝 방식으로, 반환값을 재할당해야 조건이 적용됨.
 
-### 원인 분석
-
-- 브라우저의 `input[type="date"]`는 내부 텍스트 렌더링을 쉐도우 DOM으로 관리하여 외부에서 요일을 강제로 삽입하기 어려움.
-
-### 해결 방안
-
-- **Mirroring UI 기법 적용**:
-  - 실제 인풋(`input`)은 `absolute inset-0 opacity-0`으로 설정하여 기능(클릭 시 달력 팝업)만 유지.
-  - 그 뒤에 커스텀 레이어(`div`)를 배치하여 `formatDateDisplay` 함수로 요일이 포함된 텍스트를 렌더링.
-  - `showPicker()` API를 호출하여 인풋 영역 어디를 클릭해도 즉시 달력이 열리도록 구현.
-
----
-
-## 3. 정적 빌드(Next.js Export) 시 JSON.parse 에러
-
-### 발생 상황 및 에러 로그
-
-- **상황**: `docker compose run --rm web npm run build` 실행 시 특정 페이지(`/_not-found`, `/guest` 등)에서 빌드 실패.
-- **에러 로그**: `Unexpected token 'u', "undefined" is not valid JSON at JSON.parse (<anonymous>)`
-
-### 원인 분석
-
-- `lib/auth.ts`의 `getUser()` 함수가 빌드 시점(SSR)에서 `localStorage`를 참조할 때, `localStorage.getItem("user")`가 `undefined`를 반환하거나 문자열 `"undefined"`가 저장된 상태로 파싱을 시도함.
-- Supabase 클라이언트가 빌드 시 세션을 확인하는 과정에서 브라우저 환경 전용 객체에 접근하려 함.
-
-### 해결 방안
-
-- **방어 로직 추가**: `getUser()` 내에 `userStr === "undefined"` 체크 및 `try-catch` 블록 강화.
-- **SSR Mocking**: `lib/supabase/client.ts`에서 `typeof window === "undefined"`일 경우 Proxy를 이용한 Mock Supabase 객체를 반환하여 빌드 시점의 부작용 차단.
+**해결 방안:**
+```typescript
+let query = db.select().from(guests).where(ne(guests.status, 'deleted'));
+if (venueId) {
+  query = query.where(and(eq(guests.venueId, venueId), ne(guests.status, 'deleted'))) as typeof query;
+}
+```
 
 ---
 
-## 4. AuthGuard TypeScript 'never' 타입 에러
+### 이슈 4: 외부 DJ 토큰 링크 middleware 차단
 
-### 발생 상황 및 에러 로그
+**발생 상황:** `/guest?token=abc123` 접속 시 `/auth/login`으로 리다이렉트됨.
 
-- **상황**: 빌드 중 `AuthGuard.tsx`에서 에러 발생.
-- **에러 로그**: `Property 'active' does not exist on type 'never'.`
+**원인 분석:**
+- `middleware.ts`가 JWT 쿠키 부재 시 모든 `/guest` 경로를 로그인 페이지로 보냄
+- 외부 DJ는 계정이 없으므로 JWT 쿠키가 존재하지 않음
 
-### 원인 분석
-
-- Supabase `.select().single()`의 반환 타입이 복잡할 때, TypeScript가 이를 제대로 추론하지 못해 `userData`를 `never` 타입으로 간주함.
-
-### 해결 방안
-
-- **명시적 타입 캐스팅**: `userData as { active: boolean; ... }` 또는 `as any`를 사용하여 타입 안정성 확보 및 빌드 에러 해결. (최종적으로는 인터페이스 정의를 통한 캐스팅 적용)
+**해결 방안:**
+```typescript
+// middleware.ts에 예외 처리 추가
+const url = request.nextUrl;
+if (url.pathname === '/guest' && url.searchParams.has('token')) {
+  return NextResponse.next();
+}
+```
 
 ---
 
-## 5. 게스트 제한(Guest Limit) 변경 미반영 문제
+### 이슈 5: JWT_SECRET 소스 불일치 (process.env vs env 바인딩)
 
-### 발생 상황 및 에러 로그
+**발생 상황:** `middleware.ts`에서 JWT 검증 실패 가능성 (로컬에서 간헐적 인증 오류).
 
-- **상황**: 관리자가 사용자의 게스트 제한 숫자를 수정해도 해당 유저가 재로그인 전까지 변경 사항이 UI에 반영되지 않음.
+**원인 분석:**
+- `middleware.ts`: `process.env.JWT_SECRET` 사용
+- API 라우트들: `env.JWT_SECRET` (Cloudflare 바인딩) 사용
+- Miniflare 개발 환경에서 두 소스의 값이 다를 수 있음
 
-### 원인 분석
+**해결 방안:**
+- `middleware.ts`도 `@opennextjs/cloudflare`의 `getCloudflareContext()` 사용 (엣지 런타임 한계로 불가 시 `.dev.vars` 동기화로 해결)
+- 폴백값 `"default_secret_for_local_dev"` 제거 → 시크릿 미설정 시 즉시 에러 throw
 
-- 실시간 게스트 제한 체크 로직이 `localStorage`에 저장된 초기 로그인 시점의 유저 정보에 의존함.
+---
 
-### 해결 방안
+## [Workers] Miniflare SQLITE_BUSY 에러 (2026-04-23)
 
-- `components/AuthGuard.tsx`의 `useEffect` 내에서 페이지 로드 시 Supabase DB로부터 최신 유저 프로필(`guest_limit`, `active`, `role`)을 가져와 `localStorage`와 상태를 동기화하도록 로직 추가.
+**발생 상황:** 로컬 개발 서버 재시작 또는 빌드 시 D1 DB 락 에러.
+
+**에러:** `SQLITE_BUSY: database is locked`
+
+**원인 분석:** `.wrangler/` 캐시 디렉토리에 이전 프로세스의 SQLite 락 파일 잔류.
+
+**해결 방안:** `package.json` 스크립트에 `rm -rf .wrangler &&` 사전 정리 명령 추가.
+
+---
+
+## [Workers] aws4fetch 피어 의존성 충돌 (2026-04-23)
+
+**발생 상황:** `npm install aws4fetch` 실행 시 `ERESOLVE` 오류.
+
+**에러:** `Conflicting peer dependency: next@16.x`
+
+**원인 분석:** `@opennextjs/cloudflare` 관련 패키지가 Next.js 15 이외 버전을 요구.
+
+**해결 방안:** `npm install aws4fetch --legacy-peer-deps` 사용.
+
+---
+
+## [Workers] drizzle-kit generate Config 누락 에러 (2026-04-23)
+
+**발생 상황:** `npm run db:generate` 실행 시 설정 파일 없음 에러.
+
+**원인 분석:** `drizzle.config.ts` 파일 부재.
+
+**해결 방안:** 프로젝트 루트에 `drizzle.config.ts` 신규 생성 (schema, out, dialect 명시).
+
+---
+
+---
+
+## 아카이브 — 구 Supabase/Pages 아키텍처 이슈
+
+> 아래는 구 `authon` (Supabase + Cloudflare Pages 정적 배포) 시절 이슈로,
+> `authon-worker` 전환 후 해당 없음. 참고 목적으로 보존.
+
+### [레거시] Chrome 날짜 선택기 렌더링 오류
+
+- `input[type="date"]`에 `appearance: none` 적용으로 아이콘 소실
+- `color-scheme: dark` 추가 및 Mirroring UI 기법으로 해결
+
+### [레거시] 정적 빌드 JSON.parse 에러
+
+- 빌드 시점에 `localStorage` 접근 시 `undefined` 반환 → `JSON.parse` 실패
+- `getUser()`에 방어 로직 추가 및 SSR Mock Proxy로 해결
+
+### [레거시] AuthGuard TypeScript 'never' 타입 에러
+
+- Supabase `.select().single()` 반환 타입 추론 실패
+- 명시적 타입 캐스팅으로 해결
+
+### [레거시] 게스트 제한(Guest Limit) 변경 미반영
+
+- `localStorage` 기반 유저 정보 캐시로 인해 실시간 반영 안 됨
+- `AuthGuard` 마운트 시 DB에서 최신 프로필 재조회로 해결
+
+### [레거시] used_guests 이중 증가 버그
+
+- DB 트리거 + Edge Function 수동 increment 중복 실행
+- Edge Function의 수동 increment 제거로 해결

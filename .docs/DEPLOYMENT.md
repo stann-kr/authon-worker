@@ -1,256 +1,195 @@
-# 배포 가이드 — Cloudflare Pages
+# 배포 가이드 — Cloudflare Workers (OpenNext)
 
-## 브랜딩 작동 원리
+> **이전 문서 안내:** 구 Supabase + Cloudflare Pages 기반 배포 가이드는 `.docs/private/` 하위에 아카이브됨.
+> 본 문서는 `authon-worker` (OpenNext + D1 + KV) 기준 최신 배포 절차임.
 
-`NEXT_PUBLIC_*` 변수는 **빌드 시점**에 JS 번들에 직접 삽입됩니다.  
-런타임에 읽는 것이 아니므로, Cloudflare Pages 프로젝트마다 환경변수를 다르게 설정하면 각자 다른 브랜드로 빌드됩니다.
+---
 
+## 사전 준비 체크리스트
+
+- [ ] Cloudflare 계정 및 API 토큰 준비 (`Edit: Workers, D1, KV` 권한)
+- [ ] D1 데이터베이스 생성 완료 (`authon-db`)
+- [ ] KV 네임스페이스 생성 완료 (`SESSIONS`)
+- [ ] `wrangler.toml`에 D1 `database_id` 및 KV `id` / `preview_id` 입력 완료
+- [ ] AWS SES 발신자 이메일 인증 완료 (이메일 발송 기능 사용 시)
+
+---
+
+## 1. 로컬 Cloudflare 리소스 생성 (최초 1회)
+
+모든 명령은 Docker 컨테이너 내부에서 실행.
+
+### D1 데이터베이스 생성
+
+```bash
+docker compose run --rm web npx wrangler d1 create authon-db
 ```
-GitHub (stann-kr/Authon) ──push──► main 브랜치
-        │
-        ├──► [CF Pages A: authon-web]   BRAND_NAME=Authon         → authon.yourdomain.com
-        └──► [CF Pages B: faust-web]    BRAND_NAME=Faust Guest System → guest.faustclub.com
+
+출력된 `database_id`를 `wrangler.toml` → `[[d1_databases]]` → `database_id`에 기입.
+
+### KV 네임스페이스 생성
+
+```bash
+docker compose run --rm web npx wrangler kv namespace create SESSIONS
+docker compose run --rm web npx wrangler kv namespace create SESSIONS --preview
+```
+
+출력된 `id` 값을 `wrangler.toml` → `[[kv_namespaces]]` → `id` / `preview_id`에 기입.
+
+---
+
+## 2. D1 마이그레이션 적용
+
+### 로컬 D1 (개발 테스트용)
+
+```bash
+docker compose run --rm web npm run db:migrate:local
+```
+
+### 운영 D1 (Cloudflare 실제 DB)
+
+```bash
+docker compose run --rm web npm run db:migrate:remote
+```
+
+마이그레이션 파일은 `migrations/` 디렉토리에서 번호 순으로 자동 적용됨.
+현재 마이그레이션 목록:
+
+| 파일                          | 내용                           |
+| ----------------------------- | ------------------------------ |
+| `0001_init.sql`               | 기본 스키마 (venues, users, djs, external_dj_links, guests, check_ins) |
+| `0002_password_reset.sql`     | password_reset_tokens 테이블   |
+| `0003_add_created_by_user.sql`| guests.created_by_user_id 컬럼 추가 |
+
+---
+
+## 3. Super Admin 부트스트랩 (최초 1회)
+
+DB가 비어있으므로 최초 `super_admin` 계정을 직접 생성해야 함.
+자세한 SQL 및 bcrypt 해시 값은 `.docs/private/` 문서 참고.
+
+```bash
+# 로컬 D1에 관리자 생성
+docker compose run --rm web npx wrangler d1 execute authon-db --local \
+  --command="INSERT INTO users (id, email, password_hash, name, role, guest_limit, active, created_at) \
+  VALUES ('<uuid>', '<email>', '<bcrypt_hash>', '<name>', 'super_admin', 999, 1, datetime('now'));"
+
+# 운영 D1에 관리자 생성 (--remote 플래그)
+docker compose run --rm web npx wrangler d1 execute authon-db --remote \
+  --command="INSERT INTO users ..."
 ```
 
 ---
 
-## 사전 확인
+## 4. 환경 변수 설정
 
-- [ ] `main` 브랜치에 운영 코드 머지 완료
-- [ ] `docker compose run --rm -e NODE_ENV=production web sh -c "rm -rf .next && npx next build"` 빌드 통과 확인
-- [ ] Supabase Dashboard → Auth → URL Configuration 설정 완료 (아래 참조)
+### 로컬 개발 (`.dev.vars`)
+
+```env
+JWT_SECRET="your-strong-random-secret-here"
+TERMINAL_VENUE_ID="venue-uuid-here"
+NEXT_PUBLIC_APP_URL="http://localhost:3000"
+AWS_SES_ACCESS_KEY="AKIA..."
+AWS_SES_SECRET_KEY="..."
+AWS_SES_REGION="ap-northeast-2"
+AWS_SES_FROM_EMAIL="noreply@yourdomain.com"
+NEXT_PUBLIC_BRAND_NAME="Authon"
+NEXT_PUBLIC_BRAND_TAGLINE="Guest Management System"
+```
+
+### 운영 환경 (Cloudflare Dashboard)
+
+Cloudflare Dashboard → Workers → `authon-worker` → Settings → Variables
+
+| 변수                     | 타입      | 비고                             |
+| ------------------------ | --------- | -------------------------------- |
+| `JWT_SECRET`             | Secret    | 암호화 저장 필수                 |
+| `TERMINAL_VENUE_ID`      | Plain     | terminal-2 연동 베뉴 ID          |
+| `NEXT_PUBLIC_APP_URL`    | Plain     | 운영 도메인 (예: `https://authon.yourdomain.com`) |
+| `AWS_SES_ACCESS_KEY`     | Secret    | 암호화 저장                      |
+| `AWS_SES_SECRET_KEY`     | Secret    | 암호화 저장                      |
+| `AWS_SES_REGION`         | Plain     | `ap-northeast-2`                 |
+| `AWS_SES_FROM_EMAIL`     | Plain     | SES 인증된 이메일 주소           |
+| `NEXT_PUBLIC_BRAND_NAME` | Plain     | 브랜드명                         |
 
 ---
 
-## Cloudflare Pages 프로젝트 생성
+## 5. 워커 빌드 및 배포
 
-### 공통 빌드 설정 (두 프로젝트 동일)
+### 빌드 테스트
 
-| 항목                   | 값                           |
-| ---------------------- | ---------------------------- |
-| Framework preset       | None (또는 Next.js / Static) |
-| Build command          | `npm run build`              |
-| Build output directory | `out`                        |
-| Root directory         | `/`                          |
-| Node.js version        | `20`                         |
+```bash
+docker compose run --rm web npm run build:worker
+```
+
+### 배포
+
+```bash
+docker compose run --rm web npm run deploy
+```
+
+### 로컬 Preview (Cloudflare 환경 에뮬레이션)
+
+```bash
+docker compose run --rm web npm run cf:preview
+```
 
 ---
 
-## 프로젝트 A — Authon (퍼블릭 서비스)
+## 6. 도메인 연결
 
-### Cloudflare Pages 설정
+Cloudflare Dashboard → Workers → `authon-worker` → Triggers → Custom Domains
 
-| 항목          | 값                |
-| ------------- | ----------------- |
-| 프로젝트 이름 | `authon-web`      |
-| 연결 저장소   | `stann-kr/Authon` |
-| 운영 브랜치   | `main`            |
-| 프리뷰 브랜치 | `dev`             |
-
-### 환경 변수 (Settings → Environment Variables)
-
-| 변수                            | 값                                                        |
-| ------------------------------- | --------------------------------------------------------- |
-| `NEXT_PUBLIC_SUPABASE_URL`      | `https://vcssypfihgpmkpsgderv.supabase.co`                |
-| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase 대시보드 → Settings → API → anon key             |
-| `NEXT_PUBLIC_BRAND_NAME`        | `Authon`                                                  |
-| `NEXT_PUBLIC_BRAND_TAGLINE`     | `Guest Management System`                                 |
-| `NEXT_PUBLIC_BRAND_DESCRIPTION` | `Authon Guest Management System`                          |
-| `NEXT_PUBLIC_BRAND_FOOTER`      | (선택) 미설정 시 `© {현재연도} Authon By Stann` 자동 생성 |
-
-### 도메인 연결 (Settings → Custom Domains)
-
-1. `+ Add custom domain` 클릭
-2. 도메인 입력 (예: `app.yourdomain.com`)
-3. Cloudflare DNS에서 자동 CNAME 추가 (같은 Cloudflare 계정이면 1클릭)
+1. `+ Add Custom Domain` 클릭
+2. 도메인 입력 (예: `authon.yourdomain.com`)
+3. Cloudflare DNS CNAME 자동 설정
 4. SSL 자동 적용 확인
 
 ---
 
-## 프로젝트 B — Faust Guest System (클럽 내부)
+## 7. 유저 마이그레이션 (구 시스템 이관)
 
-### Cloudflare Pages 설정
+구 Supabase 기반 사용자를 Worker 기반으로 이관하는 두 가지 방법:
 
-| 항목          | 값                |
-| ------------- | ----------------- |
-| 프로젝트 이름 | `faust-web`       |
-| 연결 저장소   | `stann-kr/Authon` |
-| 운영 브랜치   | `main`            |
-| 프리뷰 브랜치 | `dev`             |
+### 방법 A: Admin UI MIGRATE 탭
 
-### 환경 변수
+1. Super Admin으로 로그인 → `/admin` → `MIGRATE` 탭
+2. `LegacyUserMigration` 컴포넌트를 통해 JSON 배열로 유저 일괄 이관
+3. 이관 시 자동으로 비밀번호 재설정 링크 이메일 발송 (AWS SES)
 
-| 변수                            | 값                                                                    |
-| ------------------------------- | --------------------------------------------------------------------- |
-| `NEXT_PUBLIC_SUPABASE_URL`      | `https://vcssypfihgpmkpsgderv.supabase.co`                            |
-| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase 대시보드 → Settings → API → anon key                         |
-| `NEXT_PUBLIC_BRAND_NAME`        | `Faust Guest System`                                                  |
-| `NEXT_PUBLIC_BRAND_TAGLINE`     | `Guest Management System`                                             |
-| `NEXT_PUBLIC_BRAND_DESCRIPTION` | `Faust Guest System`                                                  |
-| `NEXT_PUBLIC_BRAND_FOOTER`      | (선택) 미설정 시 `© {현재연도} Faust Guest System By Stann` 자동 생성 |
-
-### 도메인 연결
-
-1. `+ Add custom domain` 클릭
-2. 도메인 입력 (예: `guest.faustclub.com`)
-3. Cloudflare DNS CNAME 연결
-
----
-
-## Supabase Auth URL 설정 (⚠️ 필수)
-
-> **이 설정이 빠지면 비밀번호 재설정/초대 링크가 작동하지 않습니다.**  
-> `@supabase/ssr`는 기본적으로 **PKCE 인증 플로우**를 사용합니다.  
-> 이메일 링크 클릭 시 Supabase가 앱으로 `?code=…`를 리다이렉트하며,  
-> 앱은 이 코드를 세션으로 교환합니다. 이 리다이렉트가 허용되지 않으면 링크가 만료/무효 처리됩니다.
-
-Supabase Dashboard → **Authentication → URL Configuration**
-
-### Site URL
-
-운영 메인 도메인을 설정:
-
-```
-https://guest.faustseoul.kr
-```
-
-### Redirect URLs (모든 도메인을 허용 목록에 추가)
-
-```
-https://guest.faustseoul.kr/**
-http://localhost:3000/**
-```
-
-> `/**` 와일드카드를 사용하면 `/auth/reset-password`, `/` 등 모든 경로 허용됨  
-> 향후 추가 브랜드 도메인이 있다면 각각 `https://도메인/**` 형태로 추가
-
-### 이메일 발송 한도 확인
-
-Supabase 무료 티어는 **시간당 이메일 3건** 제한이 있습니다.  
-초대/재설정 이메일이 전송되지 않는다면:
-
-1. Supabase Dashboard → **Authentication → Rate Limits** 확인
-2. Custom SMTP 설정 권장: **Project Settings → Authentication → SMTP Settings**
-3. 발송 로그: **Authentication → Logs** 에서 이메일 전송 상태를 확인할 수 있습니다
-
----
-
-## Supabase Edge Function 배포
-
-배포 시마다 아래 명령어 실행 (로컬 Docker 환경에서):
+### 방법 B: `/api/admin/migrate` API 직접 호출 (super_admin 전용)
 
 ```bash
-docker compose run --rm supabase functions deploy create-user \
-  --project-ref vcssypfihgpmkpsgderv \
-  --no-verify-jwt
+curl -X POST https://authon.yourdomain.com/api/admin/migrate \
+  -H "Cookie: token=<JWT>" \
+  -H "Content-Type: application/json" \
+  -d '{"users": [{"email": "...", "name": "...", "role": "dj", "guest_limit": 10}]}'
 ```
 
-> `--no-verify-jwt` 필수 — Edge Runtime 내장 JWT 검증 비활성화 (함수 내부에서 수동 검증)
-
 ---
 
-## 이메일 템플릿 적용
+## 8. 배포 후 검증 체크리스트
 
-Supabase Dashboard → **Authentication → Email Templates**
-
-| 템플릿         | 파일                                            |
-| -------------- | ----------------------------------------------- |
-| Invite User    | `.docs/email/invite.html` 내용 붙여넣기         |
-| Reset Password | `.docs/email/reset-password.html` 내용 붙여넣기 |
-| Confirm Signup | `.docs/email/confirm-signup.html` 내용 붙여넣기 |
-
-> 두 브랜드가 같은 Supabase 프로젝트를 사용한다면 이메일 템플릿은 공용입니다.  
-> 브랜드별 이메일이 필요하다면 Supabase 프로젝트를 분리해야 합니다.
-
----
-
-## 배포 후 검증 체크리스트
-
-- [ ] 로그인 페이지 정상 진입
-- [ ] 로그인 성공 및 역할별 리다이렉트
+- [ ] 로그인 페이지 정상 진입 (`/auth/login`)
+- [ ] 로그인 성공 및 대시보드 이동 (`/`)
+- [ ] 역할별 메뉴 접근 제어 확인
+- [ ] 게스트 등록/체크인 E2E 흐름 확인
+- [ ] 외부 DJ 토큰 링크 접근 (`/guest?token=xxx`)
+- [ ] 비밀번호 변경 (`/profile`)
 - [ ] 비밀번호 재설정 이메일 수신 및 링크 정상 작동
-- [ ] 사용자 초대 (EMAIL INVITE 모드) 이메일 수신
-- [ ] 사용자 생성 (TEMP PASSWORD 모드) 정상 작동
-- [ ] 게스트 등록/체크인 흐름
-- [ ] 외부 DJ 토큰 링크 접근
+- [ ] 로그아웃 후 쿠키 삭제 확인 (브라우저 DevTools → Application → Cookies)
+- [ ] `terminal-2` Service Binding 게스트 동기화 확인
 
 ---
 
-## 향후 고려 사항
+## 멀티 브랜드 배포
 
-- 두 브랜드가 **완전히 독립된 데이터**가 필요하다면 → Supabase 프로젝트 분리
-- 같은 데이터(같은 베뉴) 공유라면 → 현재 구조(단일 Supabase, venue_id 기반 분리)로 충분
-- 관리자 접근 통제: Faust 전용 `venue_id` 생성 후 해당 유저만 접근 허용
+단일 코드베이스로 다중 브랜드 배포 가능 (Worker 이름 및 환경변수 분리).
 
-Authon 프로젝트용
-
-NEXT_PUBLIC_SUPABASE_URL = https://vcssypfihgpmkpsgderv.supabase.co
-NEXT_PUBLIC_SUPABASE_ANON_KEY = 여기에\_anon_key
-NEXT_PUBLIC_BRAND_NAME = Authon
-NEXT_PUBLIC_BRAND_TAGLINE = Guest Management System
-NEXT_PUBLIC_BRAND_DESCRIPTION = Authon Guest Management System
-
-# NEXT_PUBLIC_BRAND_FOOTER = (선택) 미설정 시 자동으로 현재 연도 포함됨
-
-Faust 프로젝트용
-
-NEXT_PUBLIC_SUPABASE_URL = https://vcssypfihgpmkpsgderv.supabase.co
-NEXT_PUBLIC_SUPABASE_ANON_KEY = 여기에\_anon_key
-NEXT_PUBLIC_BRAND_NAME = Faust Guest System
-NEXT_PUBLIC_BRAND_TAGLINE = Guest Management System
-NEXT_PUBLIC_BRAND_DESCRIPTION = Faust Guest System
-
-# NEXT_PUBLIC_BRAND_FOOTER = (선택) 미설정 시 자동으로 현재 연도 포함됨
-
----
-
-## 💻 로컬 개발 환경 셋업 가이드 (Local Supabase)
-
-실제 서비스 데이터(Production) 손상을 방지하기 위해, 개발 시에는 **로컬 전용 Supabase**를 사용하는 것을 강력히 권장합니다.
-
-### 1단계: 로컬 DB 실행
-
-프로젝트 루트에서 다음 명령어를 실행하면, 로컬에 필요한 완벽한 분리된 Supabase 도커 컨테이너 세트가 백그라운드에서 구동됩니다.
-
-```bash
-docker compose run --rm supabase start
+```
+GitHub (stann-kr/authon-worker)
+├── Worker A: authon-worker          BRAND_NAME=Authon         → authon.yourdomain.com
+└── Worker B: faust-guest-worker     BRAND_NAME=Faust Guest    → guest.faustclub.com
 ```
 
-> 최초 실행 시 도커 이미지를 다운로드 하느라 시간이 다소 걸릴 수 있으며, 완료 후 터미널에 **아래와 같은 Studio URL 및 API 키 화면**이 출력됩니다.
-> `Studio URL: http://127.0.0.1:54323` (이 주소에서 로컬 데이터베이스를 관리할 수 있습니다.)
-
-### 2단계: 환경 변수 세팅
-
-기존의 `.env` 파일은 실제 서비스 연결용이므로 `.env.production` 으로 리네임해 보관하고, 아래와 같이 템플릿을 복사해 로컬 환경 변수 파일을 만듭니다.
-
-```bash
-cp .env.example .env.local
-```
-
-### 3단계: Next.js 서버 구동
-
-로컬 DB가 떠 있는 상태에서, 터미널(또는 `docker-compose`)로 프론트엔드 서버를 띄웁니다.
-
-```bash
-npm run dev
-# 또는
-docker compose up
-```
-
-이제 코드를 고치거나 게스트 테이블에 데이터를 넣을 때 **운영 서버가 아닌 내 PC의 로컬 DB (localhost:54321)** 에 데이터가 쌓이게 됩니다.
-
-### 개발 환경 종료하기
-
-도커 리소스 절약을 위해 개발이 끝나면 반드시 컨테이너들을 종료해주세요.
-
-```bash
-docker compose run --rm supabase stop
-```
-
-### DB 초기화가 필요하다면 (DB Reset)
-
-스키마(`schema.sql`)를 고치거나 테이블 상태를 맨 처음 백지상태로 돌리려면 다음 명령어를 사용하세요.
-
-```bash
-docker compose run --rm supabase db reset
-```
+`NEXT_PUBLIC_*` 변수는 빌드 시점에 번들에 삽입되므로, 브랜드별로 별도 배포 필요.

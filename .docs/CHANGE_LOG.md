@@ -4,6 +4,38 @@
 
 ---
 
+## 2026-04-23 (2차)
+
+### 코드베이스 감사 및 문서 전면 현행화
+
+**감사 결과 발견 이슈 및 수정 계획 수립**
+
+1. **코드베이스 전체 감사 완료**
+   - Cloudflare Workers 마이그레이션 이후 첫 전체 코드 리뷰 수행
+   - 긴급/스키마/보안/환경변수/코드품질 5개 카테고리 이슈 도출
+
+2. **주요 발견 이슈 (수정 예정)**
+   - D1 마이그레이션 미적용 → `users` 테이블 부재 (Super Admin 삽입 실패 원인)
+   - `guests.created_by_user_id` DB 컬럼 누락 → DJ별 필터 동작 불가
+   - 외부 DJ 토큰 링크(`/guest?token=xxx`) middleware에서 차단
+   - JWT_SECRET 폴백값 `"default_secret_for_local_dev"` 4곳에 잔존
+   - `/api/internal/sync-guest` 엔드포인트 인증 없이 공개 노출
+   - `fetchAllGuests()` Drizzle `.where()` 체이닝 버그
+
+3. **문서 전면 현행화 (Supabase → Workers)**
+   - `.docs/README.md` 재작성 (Supabase 아키텍처 내용 제거)
+   - `.docs/DEPLOYMENT.md` 재작성 (Workers/D1 배포 절차)
+   - `.docs/TROUBLESHOOTING.md` 현행화 (신규 이슈 추가, 구 이슈 아카이브)
+   - `.docs/DEV_NOTE.md` 현행화 (수정 대기 항목 정리)
+   - `.docs/MIGRATION_TODO.md` 현행화 (완료/미완료 재분류)
+   - `.docs/private/ARCHIVE_DEPLOYMENT_SUPABASE.md` 구 배포 가이드 아카이브
+
+4. **환경변수 예제 파일 신규 생성**
+   - `.env.example` — Cloudflare API 토큰 플레이스홀더
+   - `.dev.vars.example` — 시크릿 및 바인딩 변수 플레이스홀더
+
+---
+
 ## 2026-04-23
 
 ### UI/UX 및 아키텍처 고도화 (Phase 8)
