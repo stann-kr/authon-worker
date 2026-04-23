@@ -14,14 +14,12 @@ import VenueSelector, {
 import { formatDateDisplay } from "../../../lib/date";
 import {
   fetchGuestsByDate,
-  fetchUsersByVenue,
-  fetchExternalLinksByDate,
   updateGuestStatus,
   deleteGuest,
-  type Guest,
-  type User,
-  type ExternalDJLink,
 } from "../../../lib/api/guests";
+import { fetchUsersByVenue } from "../../../lib/api/users";
+import { fetchExternalLinksByDate } from "../../../lib/api/external-links";
+import type { Guest, User, ExternalDJLink } from "../../../lib/api/types";
 
 interface GuestListProps {
   selectedDate: string;
@@ -78,7 +76,7 @@ export default function GuestList({ selectedDate }: GuestListProps) {
       if (guestRes.data) setGuests(guestRes.data);
       if (userRes.data) setUsers(userRes.data);
       if (linkRes.data) setExternalLinks(linkRes.data);
-    } catch (_err) {
+    } catch (err) {
       console.error("Failed to load data:", err);
     } finally {
       setIsFetching(false);

@@ -16,8 +16,8 @@ import {
   updateUserProfile,
   deleteUserViaEdge,
   resendInvitationViaEdge,
-  type User,
-} from "../../../lib/api/guests";
+} from "../../../lib/api/users";
+import type { User } from "../../../lib/api/types";
 
 export default function UserManagement() {
   const [activeTab, setActiveTab] = useLocalStorage<"create" | "users" | "migrate">(
@@ -68,7 +68,7 @@ export default function UserManagement() {
     userId: string,
     updates: {
       name?: string;
-      guestLimit?: number;
+      guestLimit?: number | null;
       active?: boolean;
       role?: string;
     },
@@ -92,13 +92,13 @@ export default function UserManagement() {
       const { error } = await deleteUserViaEdge(userId);
       if (error) {
         console.error("Failed to delete user:", error);
-        alert(error.message || "Failed to delete user.");
+        alert(error || "Failed to delete user.");
       } else {
         await loadUsers();
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Failed to delete user:", error);
-      alert(error?.message || "Failed to delete user.");
+      alert(error instanceof Error ? error.message : "Failed to delete user.");
     }
   };
 
@@ -275,7 +275,7 @@ function UserCard({
     id: string,
     updates: {
       name?: string;
-      guestLimit?: number;
+      guestLimit?: number | null;
       active?: boolean;
       role?: string;
     },
@@ -295,12 +295,12 @@ function UserCard({
     try {
       const { error } = await resendInvitationViaEdge(user.id);
       if (error) {
-        alert(error.message || "Failed to resend invitation.");
+        alert(error || "Failed to resend invitation.");
       } else {
         alert("Invitation resent successfully!");
       }
-    } catch (e: any) {
-      alert(e?.message || "Failed to resend invitation.");
+    } catch (e: unknown) {
+      alert(e instanceof Error ? e.message : "Failed to resend invitation.");
     } finally {
       setIsResending(false);
     }
@@ -393,7 +393,7 @@ function UserCard({
                 <button
                   key={role}
                   onClick={() =>
-                    setEditData({ ...editData, role: role as any })
+                    setEditData({ ...editData, role: role as User["role"] })
                   }
                   className={`p-2 sm:p-3 border font-mono text-xs tracking-wider uppercase transition-colors ${
                     editData.role === role
@@ -413,11 +413,11 @@ function UserCard({
             </label>
             <input
               type="number"
-              value={editData.guestLimit}
+              value={editData.guestLimit || ""}
               onChange={(e) =>
                 setEditData({
                   ...editData,
-                  guestLimit: parseInt(e.target.value) || 0,
+                  guestLimit: e.target.value ? parseInt(e.target.value) : null,
                 })
               }
               className="w-full bg-gray-800 border border-gray-600 px-3 py-2 sm:py-3 text-white font-mono text-sm focus:outline-none focus:border-white"

@@ -8,7 +8,7 @@ import Spinner from "@/components/Spinner";
 import Alert from "@/components/Alert";
 import RoleLabel from "@/components/RoleLabel";
 import { getUser, User } from "@/lib/auth";
-import { updateUserProfile } from "@/lib/api/guests";
+import { updateUserProfile } from "@/lib/api/users";
 
 export default function ProfilePage() {
   const [user, setUser] = useState<User | null>(null);
@@ -46,7 +46,7 @@ export default function ProfilePage() {
         });
 
         if (nameError) {
-          setError("Failed to update name: " + nameError.message);
+          setError("Failed to update name: " + nameError);
           setIsSaving(false);
           return;
         }

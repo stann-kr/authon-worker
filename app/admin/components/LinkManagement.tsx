@@ -16,8 +16,8 @@ import {
   deleteExternalLink,
   deactivateExternalLink,
   activateExternalLink,
-  type ExternalDJLink,
-} from "../../../lib/api/guests";
+} from "../../../lib/api/external-links";
+import type { ExternalDJLink } from "../../../lib/api/types";
 
 interface LinkManagementProps {
   selectedDate: string;
@@ -337,7 +337,7 @@ export default function LinkManagement({ selectedDate }: LinkManagementProps) {
                         onChange={(e) =>
                           setFormData({ ...formData, date: e.target.value })
                         }
-                        onClick={(e) => (e.target as any).showPicker?.()}
+                        onClick={(e) => (e.target as HTMLInputElement).showPicker?.()}
                         className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10 [color-scheme:dark]"
                         required
                       />

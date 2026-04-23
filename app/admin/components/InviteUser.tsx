@@ -2,11 +2,9 @@
 
 import { useState, useEffect } from "react";
 import { getUser } from "../../../lib/auth";
-import {
-  createUserViaEdge,
-  fetchVenues,
-  type Venue,
-} from "../../../lib/api/guests";
+import { createUserViaEdge } from "../../../lib/api/users";
+import { fetchVenues } from "../../../lib/api/venues";
+import type { Venue } from "../../../lib/api/types";
 
 export default function InviteUser() {
   const [createMode, setCreateMode] = useState<"invite" | "password">("invite");
@@ -96,7 +94,7 @@ export default function InviteUser() {
       });
 
       if (createError) {
-        setError(createError.message || "Failed to create user.");
+        setError(createError || "Failed to create user.");
       } else {
         const msg =
           createMode === "password"
@@ -112,8 +110,8 @@ export default function InviteUser() {
           password: "",
         }));
       }
-    } catch (err: any) {
-      setError(err.message || "An error occurred while creating the user.");
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "An error occurred while creating the user.");
     } finally {
       setIsLoading(false);
     }

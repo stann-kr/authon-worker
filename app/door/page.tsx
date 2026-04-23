@@ -18,14 +18,12 @@ import EmptyState from "../../components/EmptyState";
 import { getBusinessDate, formatDateDisplay } from "../../lib/date";
 import {
   fetchGuestsByDate,
-  fetchUsersByVenue,
-  fetchExternalLinksByDate,
   updateGuestStatus,
   deleteGuest,
-  type Guest,
-  type User,
-  type ExternalDJLink,
 } from "../../lib/api/guests";
+import { fetchUsersByVenue } from "../../lib/api/users";
+import { fetchExternalLinksByDate } from "../../lib/api/external-links";
+import type { Guest, User, ExternalDJLink } from "../../lib/api/types";
 
 export default function DoorPage() {
   return (

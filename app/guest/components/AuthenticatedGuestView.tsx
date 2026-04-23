@@ -19,11 +19,12 @@ import {
   fetchGuestsByDate,
   createGuest,
   deleteGuest,
-  type Guest,
 } from "@/lib/api/guests";
+import type { Guest } from "@/lib/api/types";
+import { type User as AuthUser } from "@/lib/auth";
 
 interface AuthenticatedGuestViewProps {
-  user: any; // Using any for simplicity as per existing code
+  user: AuthUser | null;
 }
 
 export default function AuthenticatedGuestView({ user }: AuthenticatedGuestViewProps) {

@@ -17,10 +17,8 @@ import {
   validateExternalToken,
   createGuestViaExternalLink,
   deleteGuestViaExternalLink,
-  type Guest,
-  type ExternalDJLink,
-  type Venue,
-} from "@/lib/api/guests";
+} from "@/lib/api/external-links";
+import type { Guest, ExternalDJLink, Venue } from "@/lib/api/types";
 
 interface ExternalDJGuestViewProps {
   token: string;
@@ -47,9 +45,7 @@ export default function ExternalDJGuestView({ token }: ExternalDJGuestViewProps)
       setIsValidating(true);
       const { data, error } = await validateExternalToken(token);
       if (error) {
-        setValidationError(
-          typeof error === "string" ? error : error.message || "Invalid link.",
-        );
+        setValidationError(error || "Invalid link.");
       } else if (data) {
         setLinkInfo(data.link);
         setVenueInfo(data.venue);
@@ -70,15 +66,11 @@ export default function ExternalDJGuestView({ token }: ExternalDJGuestViewProps)
     const { data, error: createError } = await createGuestViaExternalLink({
       token,
       guestName: guestName.trim().toUpperCase(),
-      date: linkInfo.date,
+      date: linkInfo.date || "",
     });
 
     if (createError) {
-      setError(
-        typeof createError === "string"
-          ? createError
-          : createError.message || "Failed to register guest.",
-      );
+      setError(createError || "Failed to register guest.");
     } else if (data) {
       setGuests((prev) => [...prev, data]);
       setGuestName("");
@@ -99,11 +91,7 @@ export default function ExternalDJGuestView({ token }: ExternalDJGuestViewProps)
     });
 
     if (deleteError) {
-      setError(
-        typeof deleteError === "string"
-          ? deleteError
-          : deleteError.message || "Failed to delete guest.",
-      );
+      setError(deleteError || "Failed to delete guest.");
     } else {
       setGuests((prev) => prev.filter((g) => g.id !== guestId));
       setLinkInfo((prev) =>
@@ -224,7 +212,7 @@ export default function ExternalDJGuestView({ token }: ExternalDJGuestViewProps)
                     </p>
                   )}
                   <p className="text-text-muted font-mono text-xs tracking-wider break-words">
-                    {linkInfo ? formatDateDisplay(linkInfo.date) : ""}
+                    {linkInfo ? formatDateDisplay(linkInfo.date || "") : ""}
                   </p>
                 </div>
                 <div className="text-center mb-4">

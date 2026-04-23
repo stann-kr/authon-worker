@@ -5,8 +5,8 @@ import {
   fetchVenues,
   createVenue,
   updateVenue,
-  type Venue,
-} from "../../../lib/api/guests";
+} from "../../../lib/api/venues";
+import type { Venue } from "../../../lib/api/types";
 import StatGrid from "../../../components/StatGrid";
 import PanelHeader from "../../../components/PanelHeader";
 import Spinner from "../../../components/Spinner";
@@ -68,7 +68,7 @@ export default function VenueManagement() {
     });
 
     if (error) {
-      setFormError(error.message || "Failed to create venue.");
+      setFormError(error || "Failed to create venue.");
     } else if (data) {
       setFormSuccess(`Venue "${data.name}" has been created.`);
       setFormData({ name: "", type: "club", address: "", description: "" });
@@ -332,7 +332,7 @@ function VenueCard({
   onSave: (
     id: string,
     updates: Partial<Pick<Venue, "name" | "type" | "address" | "description">>,
-  ) => Promise<any>;
+  ) => Promise<string | null>;
 }) {
   const [isEditing, setIsEditing] = useState(false);
   const [editData, setEditData] = useState({

@@ -2,7 +2,8 @@
 
 import { useState, useEffect } from "react";
 import { useLocalStorage } from "@/lib/hooks";
-import { fetchVenues, type Venue } from "@/lib/api/guests";
+import { fetchVenues } from "@/lib/api/venues";
+import type { Venue } from "@/lib/api/types";
 import { getUser } from "@/lib/auth";
 
 /**

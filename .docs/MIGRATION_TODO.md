@@ -14,6 +14,9 @@
 - [x] 비밀번호 재설정 플로우 구현 (`password_reset_tokens` 테이블 + API)
 - [x] 유저 마이그레이션 UI (`LegacyUserMigration` 컴포넌트)
 - [x] 코드베이스 전체 감사 (2026-04-23)
+- [x] API 도메인 모듈화 (Phase 5)
+- [x] 전역 any 타입 제거 및 strict lint 설정
+- [x] 컴포넌트 임포트 경로 전면 수정
 
 ---
 
@@ -43,7 +46,11 @@
 - [ ] `wrangler.toml` — `[vars]` 섹션에 `TERMINAL_VENUE_ID`, `NEXT_PUBLIC_APP_URL` 추가
 - [ ] `lib/api/email.ts` — `process.env.*` → Cloudflare `env` 바인딩 방식으로 전환
 - [ ] `lib/auth.ts` — `auth_user_id` 레거시 필드 제거, `User` 인터페이스 현행화
-
+### Phase 5: 코드 품질 개선 (완료)
+- [x] `lib/api/guests.ts` 도메인별 분리 (`users`, `venues`, `djs`, `external-links`)
+- [x] any 타입 제거 및 명시적 타입 정의 적용
+- [x] `eslint.config.mjs`에 `@typescript-eslint/no-explicit-any: "error"` 규칙 추가
+- [x] unknown 에러 핸들링 패턴 적용
 ---
 
 ## 📋 검증 포인트

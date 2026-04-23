@@ -43,8 +43,8 @@ Host (macOS / Apple Silicon)
 ```
 
 ### 데이터 흐름 (Server Actions)
-
-- 클라이언트 → `lib/api/guests.ts` Server Actions → Drizzle ORM → D1
+- 클라이언트 → `lib/api/` (도메인별 분리된 API) → Drizzle ORM → D1
+  - `guests.ts`, `users.ts`, `venues.ts`, `djs.ts`, `external-links.ts`
 - 인증: `app/api/auth/login/route.ts` → JWT 발급 → HTTP-Only 쿠키
 - 세션: KV에 `session:{sessionId}` 저장 (24h TTL)
 - 미들웨어: `middleware.ts` → JWT 검증 → 경로별 RBAC
