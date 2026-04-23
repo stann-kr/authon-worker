@@ -1,13 +1,14 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { Suspense, useState, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Footer from "@/components/Footer";
 import { BRAND_NAME } from "@/lib/brand";
 import Spinner from "@/components/Spinner";
 import Alert from "@/components/Alert";
 
-export default function ResetPasswordPage() {
+// useSearchParams()를 사용하는 내부 컴포넌트 — Suspense로 감싸야 함
+function ResetPasswordContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const token = searchParams.get("token");
@@ -204,3 +205,17 @@ export default function ResetPasswordPage() {
   );
 }
 
+// 페이지 컴포넌트: useSearchParams()를 사용하는 컴포넌트를 Suspense로 감쌈
+export default function ResetPasswordPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen bg-black flex items-center justify-center">
+          <Spinner mode="inline" text="LOADING..." />
+        </div>
+      }
+    >
+      <ResetPasswordContent />
+    </Suspense>
+  );
+}

@@ -203,22 +203,6 @@ export default function ExternalDJGuestView({ token }: ExternalDJGuestViewProps)
       )
     : sortedGuests;
 
-  const externalHeader = (
-    <div className="fixed top-0 left-0 right-0 z-50 bg-black border-b border-border-subtle">
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-10 py-3 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <div className="w-2 h-2 bg-white"></div>
-          <span className="font-mono text-sm tracking-wider text-white uppercase">
-            {BRAND_NAME}
-          </span>
-        </div>
-        <span className="font-mono text-xs tracking-wider text-text-muted uppercase">
-          GUEST ACCESS
-        </span>
-      </div>
-    </div>
-  );
-
   return (
     <div className="min-h-screen bg-black flex flex-col">
       {externalHeader}
