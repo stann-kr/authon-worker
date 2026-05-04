@@ -94,7 +94,7 @@ export default function GuestList({ selectedDate }: GuestListProps) {
       try {
         const { data } = await fetchGuestsByDate(selectedDate, venueId);
         if (data) setGuests(data);
-      } catch (_err) {
+      } catch {
         // Silent fail for polling
       }
     }, 15000);
@@ -329,7 +329,6 @@ export default function GuestList({ selectedDate }: GuestListProps) {
                       status: guest.status,
                       checkInTime: guest.checkInTime || undefined,
                       createdAt: guest.createdAt || undefined,
-                      djId: guest.djId || undefined,
                     }}
                     index={index}
                     variant="admin"
