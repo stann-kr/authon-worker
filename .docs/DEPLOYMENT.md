@@ -1,25 +1,35 @@
-# 배포 가이드 — Cloudflare Workers (OpenNext)
+---
+title: DEPLOYMENT - [[Cloudflare Workers]]
+date: 2026-04-24
+tags:
+  - docs
+  - deployment
+  - cloudflare
+---
 
-> **이전 문서 안내:** 구 Supabase + Cloudflare Pages 기반 배포 가이드는 `.docs/private/` 하위에 아카이브됨.
-> 본 문서는 `authon-worker` (OpenNext + D1 + KV) 기준 최신 배포 절차임.
+# 배포 가이드 — [[Cloudflare Workers]] ([[OpenNext]])
+
+> [!info] 이전 문서 안내
+> 구 [[Supabase]] + [[Cloudflare]] Pages 기반 배포 가이드는 `[[private/ARCHIVE_DEPLOYMENT_SUPABASE]]` 에 아카이브됨.
+> 본 문서는 `authon-worker` ([[OpenNext]] + [[D1]] + KV) 기준 최신 배포 절차임.
 
 ---
 
 ## 사전 준비 체크리스트
 
-- [ ] Cloudflare 계정 및 API 토큰 준비 (`Edit: Workers, D1, KV` 권한)
-- [ ] D1 데이터베이스 생성 완료 (`authon-db`)
+- [ ] [[Cloudflare]] 계정 및 API 토큰 준비 (`Edit: Workers, D1, KV` 권한)
+- [ ] [[D1]] 데이터베이스 생성 완료 (`authon-db`)
 - [ ] KV 네임스페이스 생성 완료 (`SESSIONS`)
-- [ ] `wrangler.toml`에 D1 `database_id` 및 KV `id` / `preview_id` 입력 완료
+- [ ] `wrangler.toml`에 [[D1]] `database_id` 및 KV `id` / `preview_id` 입력 완료
 - [ ] AWS SES 발신자 이메일 인증 완료 (이메일 발송 기능 사용 시)
 
 ---
 
-## 1. 로컬 Cloudflare 리소스 생성 (최초 1회)
+## 1. 로컬 [[Cloudflare]] 리소스 생성 (최초 1회)
 
-모든 명령은 Docker 컨테이너 내부에서 실행.
+모든 명령은 [[Docker]] 컨테이너 내부에서 실행.
 
-### D1 데이터베이스 생성
+### [[D1]] 데이터베이스 생성
 
 ```bash
 docker compose run --rm web npx wrangler d1 create authon-db
@@ -38,15 +48,15 @@ docker compose run --rm web npx wrangler kv namespace create SESSIONS --preview
 
 ---
 
-## 2. D1 마이그레이션 적용
+## 2. [[D1]] 마이그레이션 적용
 
-### 로컬 D1 (개발 테스트용)
+### 로컬 [[D1]] (개발 테스트용)
 
 ```bash
 docker compose run --rm web npm run db:migrate:local
 ```
 
-### 운영 D1 (Cloudflare 실제 DB)
+### 운영 [[D1]] ([[Cloudflare]] 실제 DB)
 
 ```bash
 docker compose run --rm web npm run db:migrate:remote
@@ -66,7 +76,7 @@ docker compose run --rm web npm run db:migrate:remote
 ## 3. Super Admin 부트스트랩 (최초 1회)
 
 DB가 비어있으므로 최초 `super_admin` 계정을 직접 생성해야 함.
-자세한 SQL 및 bcrypt 해시 값은 `.docs/private/` 문서 참고.
+bcrypt 해시 생성 방법: `docker compose run --rm web node -e "const b=require('bcryptjs'); b.hash('password',10).then(h=>console.log(h));"`
 
 ```bash
 # 로컬 D1에 관리자 생성
@@ -97,9 +107,9 @@ NEXT_PUBLIC_BRAND_NAME="Authon"
 NEXT_PUBLIC_BRAND_TAGLINE="Guest Management System"
 ```
 
-### 운영 환경 (Cloudflare Dashboard)
+### 운영 환경 ([[Cloudflare]] Dashboard)
 
-Cloudflare Dashboard → Workers → `authon-worker` → Settings → Variables
+[[Cloudflare]] Dashboard → Workers → `authon-worker` → Settings → Variables
 
 | 변수                     | 타입      | 비고                             |
 | ------------------------ | --------- | -------------------------------- |
@@ -128,7 +138,7 @@ docker compose run --rm web npm run build:worker
 docker compose run --rm web npm run deploy
 ```
 
-### 로컬 Preview (Cloudflare 환경 에뮬레이션)
+### 로컬 Preview ([[Cloudflare]] 환경 에뮬레이션)
 
 ```bash
 docker compose run --rm web npm run cf:preview
@@ -138,18 +148,18 @@ docker compose run --rm web npm run cf:preview
 
 ## 6. 도메인 연결
 
-Cloudflare Dashboard → Workers → `authon-worker` → Triggers → Custom Domains
+[[Cloudflare]] Dashboard → Workers → `authon-worker` → Triggers → Custom Domains
 
 1. `+ Add Custom Domain` 클릭
 2. 도메인 입력 (예: `authon.yourdomain.com`)
-3. Cloudflare DNS CNAME 자동 설정
+3. [[Cloudflare]] DNS CNAME 자동 설정
 4. SSL 자동 적용 확인
 
 ---
 
 ## 7. 유저 마이그레이션 (구 시스템 이관)
 
-구 Supabase 기반 사용자를 Worker 기반으로 이관하는 두 가지 방법:
+구 [[Supabase]] 기반 사용자를 Worker 기반으로 이관하는 두 가지 방법:
 
 ### 방법 A: Admin UI MIGRATE 탭
 

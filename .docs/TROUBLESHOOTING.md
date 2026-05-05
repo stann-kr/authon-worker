@@ -1,19 +1,28 @@
-# 트러블슈팅 이력 (Troubleshooting Log)
+---
+title: TROUBLESHOOTING
+date: 2026-04-24
+tags:
+  - docs
+  - troubleshooting
+  - logs
+---
+
+# 트러블슈팅 이력 (Troubleshooting)
 
 프로젝트 개발 중 발생한 주요 기술 문제와 해결 과정 기록.
-최신순 정렬. 구 Supabase 아키텍처 관련 이슈는 하단 아카이브 참고.
+최신순 정렬. 구 [[Supabase]] 아키텍처 관련 이슈는 하단 아카이브 참고.
 
 ---
 
-## [Workers] 코드베이스 감사 발견 이슈 (2026-04-23)
+## [Workers] 코드베이스 감사 발견 이슈 (2026-04-23) — ✅ 전체 해결 완료 (2026-04-23)
 
-### 이슈 1: `no such table: users` — D1 마이그레이션 미적용
+### 이슈 1: `no such table: users` — [[D1]] 마이그레이션 미적용
 
 **발생 상황:** `wrangler d1 execute authon-db --local` 명령으로 Super Admin INSERT 시 에러 발생.
 
 **원인 분석:**
 - `package.json`의 `db:migrate` 스크립트가 `--file=migrations/0001_init.sql` 단일 파일만 실행
-- Wrangler D1 Migrations(`migrations apply`) 방식이 아닌 수동 실행으로 `0002_password_reset.sql` 누락
+- Wrangler [[D1]] Migrations(`migrations apply`) 방식이 아닌 수동 실행으로 `0002_password_reset.sql` 누락
 - 로컬 `.wrangler/state/v3/d1`에 스키마가 전혀 적용되지 않은 상태였음
 
 **해결 방안:**
@@ -91,7 +100,7 @@ if (url.pathname === '/guest' && url.searchParams.has('token')) {
 
 **원인 분석:**
 - `middleware.ts`: `process.env.JWT_SECRET` 사용
-- API 라우트들: `env.JWT_SECRET` (Cloudflare 바인딩) 사용
+- API 라우트들: `env.JWT_SECRET` ([[Cloudflare]] 바인딩) 사용
 - Miniflare 개발 환경에서 두 소스의 값이 다를 수 있음
 
 **해결 방안:**
@@ -102,7 +111,7 @@ if (url.pathname === '/guest' && url.searchParams.has('token')) {
 
 ## [Workers] Miniflare SQLITE_BUSY 에러 (2026-04-23)
 
-**발생 상황:** 로컬 개발 서버 재시작 또는 빌드 시 D1 DB 락 에러.
+**발생 상황:** 로컬 개발 서버 재시작 또는 빌드 시 [[D1]] DB 락 에러.
 
 **에러:** `SQLITE_BUSY: database is locked`
 
@@ -118,7 +127,7 @@ if (url.pathname === '/guest' && url.searchParams.has('token')) {
 
 **에러:** `Conflicting peer dependency: next@16.x`
 
-**원인 분석:** `@opennextjs/cloudflare` 관련 패키지가 Next.js 15 이외 버전을 요구.
+**원인 분석:** `@opennextjs/cloudflare` 관련 패키지가 [[Next.js]] 15 이외 버전을 요구.
 
 **해결 방안:** `npm install aws4fetch --legacy-peer-deps` 사용.
 
@@ -134,11 +143,8 @@ if (url.pathname === '/guest' && url.searchParams.has('token')) {
 
 ---
 
----
-
-## 아카이브 — 구 Supabase/Pages 아키텍처 이슈
-
-> 아래는 구 `authon` (Supabase + Cloudflare Pages 정적 배포) 시절 이슈로,
+> [!archive] 레거시 아카이브 — 구 [[Supabase]]/Pages 아키텍처 이슈
+> 아래는 구 `authon` ([[Supabase]] + [[Cloudflare]] Pages 정적 배포) 시절 이슈로,
 > `authon-worker` 전환 후 해당 없음. 참고 목적으로 보존.
 
 ### [레거시] Chrome 날짜 선택기 렌더링 오류
@@ -151,9 +157,9 @@ if (url.pathname === '/guest' && url.searchParams.has('token')) {
 - 빌드 시점에 `localStorage` 접근 시 `undefined` 반환 → `JSON.parse` 실패
 - `getUser()`에 방어 로직 추가 및 SSR Mock Proxy로 해결
 
-### [레거시] AuthGuard TypeScript 'never' 타입 에러
+### [레거시] AuthGuard [[TypeScript]] 'never' 타입 에러
 
-- Supabase `.select().single()` 반환 타입 추론 실패
+- [[Supabase]] `.select().single()` 반환 타입 추론 실패
 - 명시적 타입 캐스팅으로 해결
 
 ### [레거시] 게스트 제한(Guest Limit) 변경 미반영

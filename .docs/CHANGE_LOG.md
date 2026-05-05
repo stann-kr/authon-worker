@@ -1,6 +1,49 @@
-# Change Log
+---
+title: Change Log
+date: 2026-04-24
+tags:
+  - docs
+  - changelog
+---
 
-모든 변경 사항은 최신순으로 기록됩니다.
+# 변경 이력 (Change Log)
+
+모든 변경 사항은 최신순으로 기록됨.
+
+---
+
+## 2026-05-04 — Cloudflare 마이그레이션 공식 종료 및 코드베이스 정비
+
+### Phase A. 빌드 복구
+- `app/admin/components/GuestList.tsx` 빌드 에러 2건 수정
+  - `catch` 블록 변수명 누락 (`err` 미선언 후 참조) 수정
+  - 파일 끝 손상된 JSX 태그 (`/div>`) 제거
+
+### Phase B. DJ 도메인 제거 완결
+- `migrations/0004_drop_djs.sql` 신규 작성: `guests.dj_id` 컬럼 드롭 + `djs` 테이블 드롭
+- `lib/api/djs.ts` 삭제 (데드코드)
+- `lib/api/types.ts`, `lib/api/guests.ts`, `app/door/page.tsx`, `components/GuestListCard.tsx`에서 DJ 관련 필드 제거 완료
+
+### Phase C. 타입 안전성 정비
+- `worker-configuration.d.ts` 신규 생성: 글로벌 `CloudflareEnv` 인터페이스 augmentation (D1Database, KVNamespace, 환경변수)
+- `tsconfig.json` — `worker-configuration.d.ts` include 추가
+- `next.config.ts` — `ignoreBuildErrors: true` 제거
+- `lib/api/{guests,users,venues,external-links}.ts` 전체 `any` 캐스트 제거 (`getCloudflareContext()` 직접 사용)
+- `app/api/internal/sync-guest/route.ts` — 로컬 `interface Env` 중복 선언 제거
+
+### Phase D. Docker 환경 재정비
+- `Dockerfile` — wrangler 미리보기 포트(8787) 추가, `curl` 설치
+- `docker-compose.yml` — 포트 8787 매핑, 워크플로 명령어 주석 추가, `.open-next` 볼륨 격리
+
+### Phase E. 문서 전면 재구성
+- `README.md` (루트) 신규 작성
+- `.docs/MIGRATION_TODO.md` → 마이그레이션 완료 보고서로 리브랜딩 (Phase 1~4 체크박스 현행화)
+- `.docs/TROUBLESHOOTING.md` — Workers 감사 이슈 5건 "✅ 해결 완료" 마킹
+- `.docs/TECH_SPEC.md` — frontmatter title 수정, 스키마에서 djs 테이블 제거, 깨진 wikilink 수정
+- `.docs/DEPLOYMENT.md` — 모호한 `[[private]]` 참조 명확화
+- `.docs/DEV_NOTE.md` 삭제 (MIGRATION_TODO와 중복)
+- `.docs/email/*.html` → `.docs/private/archive/email/` 이동 (구 Supabase Auth 템플릿, 미사용)
+- `.docs/private/plans/{migration-completion, phase1-4-completion, phase-5-api-refactoring, remove-djs}.md` → `archive/` 이동
 
 ---
 
@@ -38,34 +81,34 @@
 **감사 결과 발견 이슈 및 수정 계획 수립**
 
 1. **코드베이스 전체 감사 완료**
-   - Cloudflare Workers 마이그레이션 이후 첫 전체 코드 리뷰 수행
+   - [[Cloudflare Workers]] 마이그레이션 이후 첫 전체 코드 리뷰 수행
    - 긴급/스키마/보안/환경변수/코드품질 5개 카테고리 이슈 도출
 
 2. **주요 발견 이슈 (수정 예정)**
-   - D1 마이그레이션 미적용 → `users` 테이블 부재 (Super Admin 삽입 실패 원인)
+   - [[D1]] 마이그레이션 미적용 → `users` 테이블 부재 (Super Admin 삽입 실패 원인)
    - `guests.created_by_user_id` DB 컬럼 누락 → DJ별 필터 동작 불가
    - 외부 DJ 토큰 링크(`/guest?token=xxx`) middleware에서 차단
    - JWT_SECRET 폴백값 `"default_secret_for_local_dev"` 4곳에 잔존
    - `/api/internal/sync-guest` 엔드포인트 인증 없이 공개 노출
    - `fetchAllGuests()` Drizzle `.where()` 체이닝 버그
 
-3. **문서 전면 현행화 (Supabase → Workers)**
-   - `.docs/README.md` 재작성 (Supabase 아키텍처 내용 제거)
-   - `.docs/DEPLOYMENT.md` 재작성 (Workers/D1 배포 절차)
+3. **문서 전면 현행화 ([[Supabase]] → Workers)**
+   - `.docs/README.md` 재작성 ([[Supabase]] 아키텍처 내용 제거)
+   - `.docs/DEPLOYMENT.md` 재작성 (Workers/[[D1]] 배포 절차)
    - `.docs/TROUBLESHOOTING.md` 현행화 (신규 이슈 추가, 구 이슈 아카이브)
    - `.docs/DEV_NOTE.md` 현행화 (수정 대기 항목 정리)
    - `.docs/MIGRATION_TODO.md` 현행화 (완료/미완료 재분류)
    - `.docs/private/ARCHIVE_DEPLOYMENT_SUPABASE.md` 구 배포 가이드 아카이브
 
 4. **환경변수 예제 파일 신규 생성**
-   - `.env.example` — Cloudflare API 토큰 플레이스홀더
+   - `.env.example` — [[Cloudflare]] API 토큰 플레이스홀더
    - `.dev.vars.example` — 시크릿 및 바인딩 변수 플레이스홀더
 
 ---
 
 ## 2026-04-23
 
-### UI/UX 및 아키텍처 고도화 (Phase 8)
+### [[UI-UX|UI/UX]] 및 아키텍처 고도화 (Phase 8)
 
 1. **시맨틱 컬러 시스템 (Design Tokens) 도입**
    - `tailwind.config.js`에 `surface`, `border`, `brand`, `text` 등 의미 기반 컬러 토큰 정의
@@ -90,7 +133,7 @@
    - `package.json`의 개발 및 빌드 스크립트에 `rm -rf .wrangler &&`를 추가하여 캐시 충돌로 인한 데이터베이스 락(Lock) 이슈 수정
 
 2. **메일링 시스템 구축 (AWS SES 직접 연동)**
-   - `aws4fetch` 패키지 설치 (`--legacy-peer-deps` 활용하여 Next.js 피어 의존성 충돌 해결)
+   - `aws4fetch` 패키지 설치 (`--legacy-peer-deps` 활용하여 [[Next.js]] 피어 의존성 충돌 해결)
    - Edge 런타임 호환되는 `lib/api/email.ts` 유틸리티 구현 및 AWS SES v2 API 호출 통합
 
 3. **자체 비밀번호 재설정 흐름 구축**
@@ -98,7 +141,7 @@
    - `app/api/auth/reset-password/route.ts` API 신설 (요청 및 실행)
    - `app/auth/reset-password/page.tsx` UI를 요청/초기화 모드로 구현
 
-4. **D1 데이터베이스 타입 안정성 점검**
+4. **[[D1]] 데이터베이스 타입 안정성 점검**
    - `schema.ts` 내 모든 `active` 및 `used` 컬럼을 `integer({ mode: 'boolean' })`으로 변경
    - `lib/api/guests.ts`의 모든 쿼리에서 `active: 1`을 `active: true`로, `active: 0`을 `active: false`로 사용하는 방식으로 타입 안정성 전수 개선
 
@@ -111,33 +154,33 @@
 
 ## 2026-04-22
 
-### Cloudflare Workers 기반 신규 아키텍처로 마이그레이션 (`authon-worker`)
+### [[Cloudflare Workers]] 기반 신규 아키텍처로 마이그레이션 (`authon-worker`)
 
-기존 정적 배포(Static Export) + Supabase 기반 구조에서 OpenNext + Cloudflare Workers 기반 구조로 전면 개편했습니다.
+기존 정적 배포(Static Export) + [[Supabase]] 기반 구조에서 [[OpenNext]] + [[Cloudflare Workers]] 기반 구조로 전면 개편했음.
 
 1. **프로젝트 환경 설정 및 기반 마련 (Phase 1)**
    - `@opennextjs/cloudflare`를 사용한 SSR 빌드 체계 도입
-   - `wrangler.toml`에 D1 Database, KV Namespace 바인딩 구성
+   - `wrangler.toml`에 [[D1]] Database, KV Namespace 바인딩 구성
    - 정적 내보내기 설정(`output: "export"`) 제거 및 SSR 활성화
    - 기존 `authon` 프로젝트의 UI 에셋(app, components 등) 일괄 이관
 
-2. **D1 데이터베이스 스키마 구성 (Phase 2)**
-   - Supabase PostgreSQL 스키마를 Cloudflare D1(SQLite) 형식으로 마이그레이션
+2. **[[D1]] 데이터베이스 스키마 구성 (Phase 2)**
+   - [[Supabase]] PostgreSQL 스키마를 [[Cloudflare]] [[D1]](SQLite) 형식으로 마이그레이션
    - `drizzle-orm`을 활용한 서버사이드 데이터 조작 스키마(`lib/db/schema.ts`) 작성
 
 3. **자체 JWT / KV 인증 시스템 구축 (Phase 3)**
-   - Supabase Auth를 대체하는 자체 로그인 엔드포인트(`app/api/auth/login/route.ts`) 구현
+   - [[Supabase]] Auth를 대체하는 자체 로그인 엔드포인트(`app/api/auth/login/route.ts`) 구현
    - `bcryptjs` 비밀번호 해싱 및 `jose` 라이브러리를 통한 JWT 발급
-   - Cloudflare KV를 통한 세션 관리
-   - Next.js 미들웨어(`middleware.ts`)에서 JWT 검증 및 경로 기반 접근 제어(RBAC) 통합
+   - [[Cloudflare]] KV를 통한 세션 관리
+   - [[Next.js]] 미들웨어(`middleware.ts`)에서 JWT 검증 및 경로 기반 접근 제어(RBAC) 통합
 
 4. **데이터 페칭 로직 Server Actions 전환 (Phase 4)**
-   - 기존 Supabase SDK를 직접 호출하던 `lib/api/guests.ts`의 로직 전면 폐기
-   - `"use server"` 지시어 및 `@opennextjs/cloudflare`의 `getRequestContext()`를 활용해 `drizzle-orm`으로 D1에 직접 접근하도록 재구현
+   - 기존 [[Supabase]] SDK를 직접 호출하던 `lib/api/guests.ts`의 로직 전면 폐기
+   - `"use server"` 지시어 및 `@opennextjs/cloudflare`의 `getRequestContext()`를 활용해 `drizzle-orm`으로 [[D1]]에 직접 접근하도록 재구현
 
 5. **Service Binding 수신 라우트 추가 (Phase 5)**
    - `terminal-2` 앱과 백그라운드에서 직접 통신하기 위한 `/api/internal/sync-guest` 라우트 구축
-   - 터미널 게스트 등록 요청 시 D1에 즉각 레코드 삽입(`INSERT`) 되도록 구현
+   - 터미널 게스트 등록 요청 시 [[D1]]에 즉각 레코드 삽입(`INSERT`) 되도록 구현
 
 ---
 
@@ -162,7 +205,7 @@
 
 ## 2026-03-06
 
-### Chrome 달력 렌더링 이슈 수정 및 UI/UX 개선 (Mirroring UI)
+### Chrome 달력 렌더링 이슈 수정 및 [[UI-UX|UI/UX]] 개선 (Mirroring UI)
 
 1. **날짜 인풋 내부 요일 표시 (Mirroring UI)** — `components/DatePicker.tsx`, `app/admin/page.tsx`, `LinkManagement.tsx`
    - 실제 인풋을 투명하게 숨기고 그 위에 요일이 포함된 커스텀 레이어를 보여주는 기법 적용
@@ -171,7 +214,7 @@
 
 2. **정적 빌드(Static Export) 안정화** — `lib/auth.ts`, `lib/supabase/client.ts`
    - 빌드 시점(SSR)에서 `localStorage` 및 `JSON.parse` 관련 런타임 에러 방지용 가드 추가
-   - SSR 환경용 Supabase Mock Proxy를 구현하여 빌드 중 발생하는 부작용 차단 및 안정적 빌드 완료 기반 마련
+   - SSR 환경용 [[Supabase]] Mock Proxy를 구현하여 빌드 중 발생하는 부작용 차단 및 안정적 빌드 완료 기반 마련
 
 3. **사용자 게스트 제한(Guest Limit) 실시간 동기화** — `components/AuthGuard.tsx`
    - 페이지 로딩/전환 시 백그라운드 데이터 동기화 로직 추가로 재로그인 없는 권한 반영 구현
@@ -290,13 +333,13 @@
    - `@supabase/ssr`의 기본 PKCE 인증 플로우에 대응하여 `?code=` 쿼리 파라미터 교환 로직 추가
    - `signOut({ scope: 'local' })`이 PKCE code-verifier 쿠키까지 삭제하여 code exchange 실패하는 버그 수정
    - `signOut`을 PKCE code exchange 이후로 이동 (non-PKCE fallback 전 단계로 변경)
-   - Supabase 에러 리다이렉트(`#error=`, `#error_description=`) 처리 추가
+   - [[Supabase]] 에러 리다이렉트(`#error=`, `#error_description=`) 처리 추가
    - 기존 implicit flow(hash fragment)와 magic-link(token_hash) 는 그대로 유지 (하위 호환)
 
-10. **배포 가이드 Supabase Auth URL 설정 업데이트** — `.docs/DEPLOYMENT.md`
+10. **배포 가이드 [[Supabase]] Auth URL 설정 업데이트** — `.docs/DEPLOYMENT.md`
     - SITE_URL 및 Redirect URLs에 실제 운영 도메인(`guest.faustseoul.kr`) 반영
     - PKCE 플로우 필수 설정 안내 추가
-    - Supabase 무료 티어 이메일 발송 한도(시간당 3건) 안내 추가
+    - [[Supabase]] 무료 티어 이메일 발송 한도(시간당 3건) 안내 추가
 
 ### MVP 마무리 UI/권한 정리
 
@@ -468,7 +511,7 @@
    - `components/PageLayout.tsx` 파일 제거
 
 7. **검증 완료**
-   - Docker 환경에서 프로덕션 빌드 성공 확인
+   - [[Docker]] 환경에서 프로덕션 빌드 성공 확인
 
 ---
 
@@ -505,7 +548,7 @@
    - StatGrid: `labelClassName` prop으로 라벨 텍스트 크기 커스터마이즈 지원
 
 4. **검증 완료**
-   - Docker 환경에서 프로덕션 빌드 성공 확인 (정적 내보내기 11페이지)
+   - [[Docker]] 환경에서 프로덕션 빌드 성공 확인 (정적 내보내기 11페이지)
 
 ---
 
@@ -524,10 +567,10 @@
    - 이로 인해 비밀번호 변경 시 잘못된 사용자 세션으로 처리되던 문제 해결
 
 3. **오류 메시지 정리** — `app/auth/reset-password/page.tsx`
-   - invite 충돌 시 우회 문구 대신 Supabase 원본 오류를 그대로 표시하여 진단 가능성 향상
+   - invite 충돌 시 우회 문구 대신 [[Supabase]] 원본 오류를 그대로 표시하여 진단 가능성 향상
 
 4. **검증 완료**
-   - Docker 환경에서 프로덕션 빌드 성공 확인
+   - [[Docker]] 환경에서 프로덕션 빌드 성공 확인
    - `create-user` Edge Function 재배포 완료
 
 ### UI 통일성 개선 + Footer/콘텐츠 높이 정리
@@ -585,19 +628,19 @@
    - `users` 테이블 `venue_id`를 `string | null`로 변경 (super_admin은 NULL 허용)
 
 4. **middleware.ts 및 server.ts 제거**
-   - `output: "export"` (static export) 환경에서 Next.js 미들웨어는 실행되지 않음
-   - 서버 전용 Supabase 클라이언트(`lib/supabase/server.ts`)도 사용처 없으므로 삭제
+   - `output: "export"` (static export) 환경에서 [[Next.js]] 미들웨어는 실행되지 않음
+   - 서버 전용 [[Supabase]] 클라이언트(`lib/supabase/server.ts`)도 사용처 없으므로 삭제
    - 인증은 클라이언트 측 `AuthGuard`에서 전적으로 처리
 
 #### HIGH 수정
 
 5. **깨진 초대 페이지 제거** — `app/auth/invite/[id]`
-   - localStorage 기반 초대 흐름이 Supabase Auth 전환 이후 완전히 작동 불가
-   - Supabase `inviteUserByEmail()`은 `/auth/reset-password`로 리다이렉트하므로 별도 초대 페이지 불필요
+   - localStorage 기반 초대 흐름이 [[Supabase]] Auth 전환 이후 완전히 작동 불가
+   - [[Supabase]] `inviteUserByEmail()`은 `/auth/reset-password`로 리다이렉트하므로 별도 초대 페이지 불필요
    - `app/auth/invite` 디렉토리 전체 삭제
 
 6. **프로필 이름 변경 DB 저장 추가** — `app/profile/page.tsx`
-   - 이름 변경 시 localStorage만 업데이트하고 Supabase DB에 반영하지 않던 문제
+   - 이름 변경 시 localStorage만 업데이트하고 [[Supabase]] DB에 반영하지 않던 문제
    - `updateUserProfile()` API 호출 추가
 
 7. **door_staff 권한 정리** — `lib/auth.ts`
@@ -613,7 +656,7 @@
 12. **html lang 속성 `en` → `ko` 변경** — `app/layout.tsx`
 13. **404 페이지 앱 다크 테마 적용** — `app/not-found.tsx`
 14. **미사용 Pacifico 폰트 제거** — `app/layout.tsx`
-15. **Dockerfile에 package-lock.json 포함** — 결정적 빌드 지원
+15. **[[Docker]]file에 package-lock.json 포함** — 결정적 빌드 지원
 
 ---
 
@@ -634,7 +677,7 @@
 
 #### 3. 배포 전략 반영
 
-- 단일 코드베이스로 다중 브랜드 배포 가능 (Cloudflare Pages 프로젝트별 환경변수 분리)
+- 단일 코드베이스로 다중 브랜드 배포 가능 ([[Cloudflare]] Pages 프로젝트별 환경변수 분리)
 
 ---
 
@@ -670,7 +713,7 @@
 
 #### 1. 프로필 비밀번호 변경 수정 — `app/profile/page.tsx`
 
-- 기존: localStorage에만 저장 (Supabase Auth 미연동)
+- 기존: localStorage에만 저장 ([[Supabase]] Auth 미연동)
 - 변경: `signInWithPassword()`로 현재 비밀번호 검증 + `updateUser({ password })`로 실제 비밀번호 변경
 
 #### 2. 비밀번호 찾기 기능 추가 — `app/auth/login/page.tsx`
@@ -682,7 +725,7 @@
 #### 3. 비밀번호 재설정 페이지 신규 — `app/auth/reset-password/page.tsx`
 
 - 이메일 링크 클릭 시 새 비밀번호 설정 페이지
-- Supabase URL hash fragment(`#access_token=...`) 자동 처리
+- [[Supabase]] URL hash fragment(`#access_token=...`) 자동 처리
 - `PASSWORD_RECOVERY` 이벤트 감지 → 새 비밀번호 입력 → `updateUser()` 호출
 - 유효하지 않은 링크 / 성공 / 로딩 상태별 UI 분기
 
@@ -824,14 +867,14 @@
 ### Phase 3 — VenueManagement & Edge Functions (5157b62)
 
 - `VenueManagement` 컴포넌트 신규 구현 (super_admin 전용)
-- `create-user` Edge Function 구현 — Supabase Auth 계정 + public 프로필 동시 생성, `app_metadata` 동기화
+- `create-user` Edge Function 구현 — [[Supabase]] Auth 계정 + public 프로필 동시 생성, `app_metadata` 동기화
 - `external-dj-links` Edge Function 구현 — validate / create-guest / delete-guest 액션
-- Docker 기반 Supabase CLI 서비스 추가 (`Dockerfile.supabase`)
+- [[Docker]] 기반 [[Supabase]] CLI 서비스 추가 (`Dockerfile.supabase`)
 
-### Phase 2 — Supabase 연동 고도화 (29b62df)
+### Phase 2 — [[Supabase]] 연동 고도화 (29b62df)
 
-- localStorage 기반 UI를 Supabase 실시간 연동으로 전환 (guests, users, external_dj_links)
-- `lib/api/guests.ts` 신규 — Supabase Client 기반 CRUD 함수 계층
+- localStorage 기반 UI를 [[Supabase]] 실시간 연동으로 전환 (guests, users, external_dj_links)
+- `lib/api/guests.ts` 신규 — [[Supabase]] Client 기반 CRUD 함수 계층
 - super_admin의 venue 독립성 확보 (venue_id NULL 허용)
 - RLS 정책을 JWT `app_metadata` 기반으로 전면 재작성 — 재귀 쿼리 제거
 - `GuestListCard` 공용 컴포넌트 — 등록 시각, BY 라벨 표시
@@ -840,20 +883,20 @@
 
 - 역할 체계 재설계: `super_admin` / `venue_admin` / `door` / `dj` 4단계
 - `auth_user_id` 기반 로그인 흐름으로 전환
-- 스키마 RLS 정책/트리거와 TypeScript 타입 정의 정합성 정리
+- 스키마 RLS 정책/트리거와 [[TypeScript]] 타입 정의 정합성 정리
 - `handle_new_user()` 트리거 — 회원가입 시 프로필 자동 생성
 
-### Phase 0 — Supabase 초기 설정 (1ec5af5 ~ 0904d60)
+### Phase 0 — [[Supabase]] 초기 설정 (1ec5af5 ~ 0904d60)
 
-- Supabase 프로젝트 초기화 및 SSR 클라이언트 설정
-- Docker 기반 개발 환경 구축 (web + supabase 서비스)
+- [[Supabase]] 프로젝트 초기화 및 SSR 클라이언트 설정
+- [[Docker]] 기반 개발 환경 구축 (web + supabase 서비스)
 - 스키마 설계 (venues, users, djs, external_dj_links, guests)
 - Middleware 세션 리프레시 설정
 
 ### Foundation — 프로젝트 초기 구축 (6d2a56c ~ 21cd885)
 
-- Next.js 15 App Router 프로젝트 초기화
-- Readdy AI 기반 UI/UX 디자인 적용
+- [[Next.js]] 15 App Router 프로젝트 초기화
+- Readdy AI 기반 [[UI-UX|UI/UX]] 디자인 적용
 - 인증 페이지 (login, register, invite) 구현
 - Admin 대시보드 탭 구조 (guests, links, users)
 - Door 체크인 페이지 구현

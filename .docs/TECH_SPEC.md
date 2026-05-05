@@ -1,10 +1,21 @@
-# Authon — Venue Guest Management System (Worker)
+---
+title: TECH SPEC - Authon Worker
+date: 2026-05-04
+tags:
+  - docs
+  - tech-spec
+  - overview
+aliases:
+  - Authon Overview
+---
+
+# 기술 명세서 (Technical Specification)
 
 클럽/바/라운지 등 베뉴의 게스트 리스트를 관리하는 풀스택 웹 애플리케이션.
 DJ가 게스트를 등록하고, Door 스태프가 체크인하며, Admin이 전체를 관리함.
 
-본 프로젝트(`authon-worker`)는 기존 정적 배포(Supabase 기반)를 대체하는
-**Cloudflare Workers (OpenNext) 기반 SSR 애플리케이션**임.
+본 프로젝트(`authon-worker`)는 기존 정적 배포([[Supabase]] 기반)를 대체하는
+**[[Cloudflare Workers]] ([[OpenNext]]) 기반 SSR 애플리케이션**임.
 
 ---
 
@@ -12,15 +23,15 @@ DJ가 게스트를 등록하고, Door 스태프가 체크인하며, Admin이 전
 
 | 구분         | 기술                                           |
 | ------------ | ---------------------------------------------- |
-| 프레임워크   | Next.js 15 (App Router, SSR)                   |
+| 프레임워크   | [[Next.js]] 15 (App Router, SSR)                   |
 | 배포 어댑터  | `@opennextjs/cloudflare`                       |
-| 언어         | TypeScript                                     |
-| 스타일링     | Tailwind CSS v3                                |
-| 데이터베이스 | Cloudflare D1 (SQLite) + Drizzle ORM           |
-| 세션/캐시    | Cloudflare KV                                  |
+| 언어         | [[TypeScript]]                                     |
+| 스타일링     | [[Tailwind CSS]] v3                                |
+| 데이터베이스 | [[Cloudflare]] [[D1]] (SQLite) + [[Drizzle ORM]]           |
+| 세션/캐시    | [[Cloudflare]] KV                                  |
 | 인증         | 자체 JWT (`jose`) + 비밀번호 해싱 (`bcryptjs`) |
 | 이메일       | AWS SES v2 (`aws4fetch`)                       |
-| 개발 환경    | Docker Compose (로컬 런타임 없음)              |
+| 개발 환경    | [[Docker]] Compose (로컬 런타임 없음)              |
 
 ---
 
@@ -43,8 +54,8 @@ Host (macOS / Apple Silicon)
 ```
 
 ### 데이터 흐름 (Server Actions)
-- 클라이언트 → `lib/api/` (도메인별 분리된 API) → Drizzle ORM → D1
-  - `guests.ts`, `users.ts`, `venues.ts`, `djs.ts`, `external-links.ts`
+- 클라이언트 → `lib/api/` (도메인별 분리된 API) → [[Drizzle ORM]] → [[D1]]
+  - `guests.ts`, `users.ts`, `venues.ts`, `external-links.ts`
 - 인증: `app/api/auth/login/route.ts` → JWT 발급 → HTTP-Only 쿠키
 - 세션: KV에 `session:{sessionId}` 저장 (24h TTL)
 - 미들웨어: `middleware.ts` → JWT 검증 → 경로별 RBAC
@@ -86,19 +97,18 @@ Host (macOS / Apple Silicon)
 
 ---
 
-## 데이터베이스 스키마 (D1 / SQLite)
+## 데이터베이스 스키마 ([[D1]] / SQLite)
 
 | 테이블                | 주요 컬럼                                                                    |
 | --------------------- | ---------------------------------------------------------------------------- |
 | `venues`              | id, name, type, address, active                                              |
 | `users`               | id, email, password_hash, name, role, venue_id, guest_limit, active          |
-| `djs`                 | id, venue_id, user_id, name, event, active                                   |
 | `external_dj_links`   | id, venue_id, token, dj_name, date, max_guests, used_guests, active          |
-| `guests`              | id, venue_id, name, status, date, dj_id, external_link_id, created_by_user_id, source, terminal_request_id |
+| `guests`              | id, venue_id, name, status, date, external_link_id, created_by_user_id, source, terminal_request_id |
 | `check_ins`           | id, guest_id, checked_by, checked_at                                         |
 | `password_reset_tokens` | id, user_id, token, expires_at, used                                       |
 
-마이그레이션 파일: `migrations/` 디렉토리 (Wrangler D1 Migrations 관리)
+마이그레이션 파일: `migrations/` 디렉토리 (Wrangler [[D1]] Migrations 관리)
 
 ---
 
@@ -106,9 +116,10 @@ Host (macOS / Apple Silicon)
 
 ### 사전 요구 사항
 
-- Docker Desktop (Apple Silicon 호환)
+- [[Docker]] Desktop (Apple Silicon 호환)
 
-> **주의:** 로컬에 Node.js 런타임 없음. 모든 명령어는 Docker 컨테이너를 통해 실행.
+> [!warning] 주의
+> 로컬에 Node.js 런타임 없음. 모든 명령어는 [[Docker]] 컨테이너를 통해 실행.
 
 ### 시작하기
 
@@ -123,7 +134,7 @@ docker compose up
 # 3. 최초 1회: DB 마이그레이션 적용
 docker compose run --rm web npm run db:migrate:local
 
-# 4. 최초 1회: Super Admin 부트스트랩 (private 문서 참고)
+# 4. 최초 1회: Super Admin 부트스트랩 ([[private/ARCHIVE_DEPLOYMENT_SUPABASE|배포 아카이브]] 참고)
 # http://localhost:3000 접속
 ```
 
@@ -145,8 +156,8 @@ docker compose run --rm web npm run db:migrate:local
 
 ## 환경 변수
 
-`.dev.vars` (로컬 Miniflare 바인딩용) 및 `.env` (Docker Compose 주입용)에 설정.
-운영 환경은 Cloudflare Dashboard → Worker → Settings → Variables에 암호화 저장.
+`.dev.vars` (로컬 Miniflare 바인딩용) 및 `.env` ([[Docker]] Compose 주입용)에 설정.
+운영 환경은 [[Cloudflare]] Dashboard → Worker → Settings → Variables에 암호화 저장.
 
 | 변수                       | 위치            | 설명                                      |
 | -------------------------- | --------------- | ----------------------------------------- |
@@ -158,7 +169,7 @@ docker compose run --rm web npm run db:migrate:local
 | `AWS_SES_REGION`           | `.dev.vars`     | AWS SES 리전 (예: `ap-northeast-2`)       |
 | `AWS_SES_FROM_EMAIL`       | `.dev.vars`     | SES 발신자 이메일 (SES 인증된 주소)       |
 | `CLOUDFLARE_API_TOKEN`     | `.env`          | Wrangler CLI 인증용 API 토큰              |
-| `CLOUDFLARE_ACCOUNT_ID`    | `.env`          | Cloudflare 계정 ID                        |
+| `CLOUDFLARE_ACCOUNT_ID`    | `.env`          | [[Cloudflare]] 계정 ID                        |
 | `NEXT_PUBLIC_BRAND_NAME`   | `.dev.vars`     | 서비스 브랜드명 (예: `Authon`)            |
 | `NEXT_PUBLIC_BRAND_TAGLINE`| `.dev.vars`     | 브랜드 서브타이틀                         |
 | `NEXT_PUBLIC_BRAND_FOOTER` | `.dev.vars`     | 푸터 문구                                 |
