@@ -9,7 +9,7 @@ import { type Guest, type ApiResponse } from "./types";
 
 // Helper to get Drizzle instance
 async function getDb() {
-  const { env } = getCloudflareContext() as unknown as { env: { DB: any } };
+  const { env } = getCloudflareContext();
   return drizzle(env.DB, { schema });
 }
 
@@ -45,26 +45,9 @@ export async function fetchAllGuests(venueId?: string): Promise<ApiResponse<Gues
   }
 }
 
-export async function fetchGuestsByDJ(djId: string, date?: string): Promise<ApiResponse<Guest[]>> {
-  try {
-    const db = await getDb();
-    const conditions = [eq(guests.djId, djId), ne(guests.status, "deleted")];
-    if (date) conditions.push(eq(guests.date, date));
-    
-    const result = await db.select().from(guests)
-      .where(and(...conditions))
-      .orderBy(desc(guests.createdAt));
-      
-    return { data: result.map(g => ({ ...g, status: g.status as Guest["status"] })), error: null };
-  } catch (error: unknown) {
-    return { data: null, error: error instanceof Error ? error.message : "Failed to fetch guests by DJ" };
-  }
-}
-
 export async function createGuest(guest: {
   venueId: string;
   name: string;
-  djId?: string | null;
   externalLinkId?: string | null;
   createdByUserId?: string | null;
   date: string;
@@ -78,7 +61,6 @@ export async function createGuest(guest: {
       id,
       venueId: guest.venueId,
       name: guest.name,
-      djId: guest.djId || null,
       externalLinkId: guest.externalLinkId || null,
       createdByUserId: guest.createdByUserId || null,
       date: guest.date,
@@ -149,7 +131,6 @@ export async function updateGuest(
   guestId: string,
   updates: {
     name?: string;
-    djId?: string | null;
     date?: string;
     venueId?: string;
   },
@@ -159,7 +140,6 @@ export async function updateGuest(
     const updateData: Partial<typeof guests.$inferInsert> = { updatedAt: new Date().toISOString() };
     
     if (updates.name !== undefined) updateData.name = updates.name;
-    if (updates.djId !== undefined) updateData.djId = updates.djId;
     if (updates.date !== undefined) updateData.date = updates.date;
     if (updates.venueId !== undefined) updateData.venueId = updates.venueId;
 

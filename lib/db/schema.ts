@@ -20,15 +20,6 @@ export const users = sqliteTable('users', {
   createdAt: text('created_at').notNull(),
 });
 
-export const djs = sqliteTable('djs', {
-  id: text('id').primaryKey(),
-  venueId: text('venue_id').notNull().references(() => venues.id),
-  userId: text('user_id').references(() => users.id),
-  name: text('name').notNull(),
-  event: text('event'),
-  active: integer('active', { mode: 'boolean' }).notNull().default(true),
-});
-
 export const externalDjLinks = sqliteTable('external_dj_links', {
   id: text('id').primaryKey(),
   venueId: text('venue_id').notNull().references(() => venues.id),
@@ -49,7 +40,6 @@ export const guests = sqliteTable('guests', {
   name: text('name').notNull(),
   email: text('email'),
   instagram: text('instagram'),
-  djId: text('dj_id').references(() => djs.id),
   externalLinkId: text('external_link_id').references(() => externalDjLinks.id),
   createdByUserId: text('created_by_user_id').references(() => users.id),
   terminalRequestId: text('terminal_request_id'),

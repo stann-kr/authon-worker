@@ -412,7 +412,6 @@ function DoorPageContent() {
                             status: guest.status,
                             checkInTime: guest.checkInTime || undefined,
                             createdAt: guest.createdAt || undefined,
-                            djId: guest.djId || undefined,
                           }}
                           index={index}
                           variant="admin"

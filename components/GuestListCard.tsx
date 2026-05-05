@@ -7,7 +7,6 @@ export interface Guest {
   status: "pending" | "checked" | "deleted";
   checkInTime?: string | null;
   createdAt?: string | null;
-  djId?: string | null;
   date?: string | null;
 }
 

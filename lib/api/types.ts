@@ -28,7 +28,6 @@ export interface Guest {
   name: string;
   email?: string | null;
   instagram?: string | null;
-  djId?: string | null;
   externalLinkId?: string | null;
   createdByUserId?: string | null;
   status: "pending" | "checked" | "deleted";
@@ -36,15 +35,6 @@ export interface Guest {
   date: string;
   createdAt: string;
   updatedAt: string;
-}
-
-export interface DJ {
-  id: string;
-  venueId: string;
-  userId?: string | null;
-  name: string;
-  event: string | null;
-  active: boolean;
 }
 
 export interface ExternalDJLink {
