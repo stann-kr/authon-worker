@@ -1,13 +1,9 @@
 import { NextResponse } from "next/server";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 
-interface Env {
-  SESSIONS: KVNamespace;
-}
-
 export async function POST(request: Request) {
   try {
-    const { env } = getCloudflareContext() as unknown as { env: Env };
+    const { env } = getCloudflareContext();
 
     // Parse cookies from request header
     const cookieHeader = request.headers.get("cookie") || "";

@@ -11,7 +11,7 @@ import { sendEmail } from "./email";
 
 // Helper to get Drizzle instance
 async function getDb() {
-  const { env } = getCloudflareContext() as unknown as { env: { DB: any } };
+  const { env } = getCloudflareContext();
   return drizzle(env.DB, { schema });
 }
 
@@ -102,7 +102,7 @@ export async function deleteUserViaEdge(userId: string): Promise<{ error: string
 
 export async function resendInvitationViaEdge(userId: string): Promise<{ error: string | null }> {
   try {
-    const { env } = getCloudflareContext() as unknown as { env: { DB: any, NEXT_PUBLIC_APP_URL: string } };
+    const { env } = getCloudflareContext();
     const db = await getDb();
     
     const userResult = await db.select().from(users).where(eq(users.id, userId)).limit(1);

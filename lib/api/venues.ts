@@ -9,7 +9,7 @@ import { type Venue, type ApiResponse } from "./types";
 
 // Helper to get Drizzle instance
 async function getDb() {
-  const { env } = getCloudflareContext() as unknown as { env: { DB: any } };
+  const { env } = getCloudflareContext();
   return drizzle(env.DB, { schema });
 }
 

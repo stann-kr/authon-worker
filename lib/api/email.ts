@@ -29,7 +29,7 @@ interface SendEmailParams {
 /**
  * 이메일을 발송함
  * @param {SendEmailParams} params - 발송 정보
- * @returns {Promise<any>} SES API 응답
+ * @returns {Promise<unknown>} SES API 응답
  */
 export async function sendEmail({ to, subject, body }: SendEmailParams) {
   checkEnv();

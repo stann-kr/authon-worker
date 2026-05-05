@@ -3,12 +3,6 @@ import { drizzle } from "drizzle-orm/d1";
 import { jwtVerify } from "jose";
 import { guests } from "@/lib/db/schema";
 
-interface Env {
-  DB: D1Database;
-  TERMINAL_VENUE_ID: string;
-  INTERNAL_API_SECRET: string;
-}
-
 /**
  * 내부 Service Binding 전용 게스트 동기화 엔드포인트
  * terminal-2 워커에서 Service Binding으로 호출되어 게스트를 D1에 삽입함.
@@ -17,7 +11,7 @@ interface Env {
  */
 export async function POST(request: Request) {
   try {
-    const { env } = getCloudflareContext() as unknown as { env: Env };
+    const { env } = getCloudflareContext();
 
     // ─── Shared Secret 인증 ────────────────────────────────────
     // Service Binding 직접 호출이더라도, 외부 노출 경로이므로 시크릿 검증 필수

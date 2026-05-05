@@ -6,12 +6,6 @@ import bcrypt from "bcryptjs";
 import { users, passwordResetTokens } from "@/lib/db/schema";
 import { sendEmail } from "@/lib/api/email";
 
-interface Env {
-  DB: D1Database;
-  NEXT_PUBLIC_APP_URL: string;
-  JWT_SECRET: string;
-}
-
 /**
  * 레거시 유저 마이그레이션 API (super_admin 전용)
  * - JWT 쿠키에서 역할 검증 후 실행
@@ -21,7 +15,7 @@ interface Env {
 
 export async function POST(request: Request) {
   try {
-    const { env } = getCloudflareContext() as unknown as { env: Env };
+    const { env } = getCloudflareContext();
 
     // ─── super_admin 역할 검증 ────────────────────────────────
     const cookieHeader = request.headers.get("cookie") || "";
@@ -121,9 +115,9 @@ export async function POST(request: Request) {
         });
 
         results.push({ email: legacyUser.email, status: "success" });
-      } catch (err: any) {
+      } catch (err: unknown) {
         console.error(`Migration failed for ${legacyUser.email}:`, err);
-        results.push({ email: legacyUser.email, status: "failed", reason: err.message });
+        results.push({ email: legacyUser.email, status: "failed", reason: err instanceof Error ? err.message : String(err) });
       }
     }
 

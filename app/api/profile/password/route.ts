@@ -6,14 +6,9 @@ import bcrypt from "bcryptjs";
 import { jwtVerify } from "jose";
 import { users } from "@/lib/db/schema";
 
-interface Env {
-  DB: D1Database;
-  JWT_SECRET: string;
-}
-
 export async function PUT(request: Request) {
   try {
-    const { env } = getCloudflareContext() as unknown as { env: Env };
+    const { env } = getCloudflareContext();
 
     // Get token from cookie
     const cookieHeader = request.headers.get("cookie") || "";
@@ -63,7 +58,7 @@ export async function PUT(request: Request) {
     await db.update(users).set({ passwordHash: hashedPassword }).where(eq(users.id, userId as string));
 
     return NextResponse.json({ ok: true, message: "Password updated successfully" });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Update password error:", error);
     return NextResponse.json(
       { error: "비밀번호 변경 중 오류가 발생했습니다." },

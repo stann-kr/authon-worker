@@ -6,18 +6,13 @@ import bcrypt from "bcryptjs";
 import { users, passwordResetTokens } from "@/lib/db/schema";
 import { sendEmail } from "@/lib/api/email";
 
-interface Env {
-  DB: D1Database;
-  NEXT_PUBLIC_APP_URL: string;
-}
-
 /**
  * 비밀번호 재설정 요청 (POST) 및 재설정 실행 (PUT)
  */
 
 export async function POST(request: Request) {
   try {
-    const { env } = getCloudflareContext() as unknown as { env: Env };
+    const { env } = getCloudflareContext();
     const { email } = await request.json();
 
     if (!email) {
@@ -76,7 +71,7 @@ export async function POST(request: Request) {
 
 export async function PUT(request: Request) {
   try {
-    const { env } = getCloudflareContext() as unknown as { env: Env };
+    const { env } = getCloudflareContext();
     const { token, newPassword } = await request.json();
 
     if (!token || !newPassword) {

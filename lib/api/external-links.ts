@@ -10,7 +10,7 @@ import { deleteGuest } from "./guests";
 
 // Helper to get Drizzle instance
 async function getDb() {
-  const { env } = getCloudflareContext() as unknown as { env: { DB: any } };
+  const { env } = getCloudflareContext();
   return drizzle(env.DB, { schema });
 }
 

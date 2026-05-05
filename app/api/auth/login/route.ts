@@ -6,15 +6,9 @@ import { SignJWT } from "jose";
 import bcrypt from "bcryptjs";
 import { users } from "@/lib/db/schema";
 
-interface Env {
-  DB: D1Database;
-  SESSIONS: KVNamespace;
-  JWT_SECRET: string;
-}
-
 export async function POST(request: Request) {
   try {
-    const { env } = getCloudflareContext() as unknown as { env: Env };
+    const { env } = getCloudflareContext();
     const { email, password } = await request.json();
 
     if (!email || !password) {
