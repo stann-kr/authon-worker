@@ -1,22 +1,18 @@
 "use server";
 
 import { getCloudflareContext } from "@opennextjs/cloudflare";
-import { drizzle } from "drizzle-orm/d1";
 import { eq, and, ne, desc } from "drizzle-orm";
 import * as schema from "../db/schema";
 import { externalDjLinks, venues, guests } from "../db/schema";
 import { type ExternalDJLink, type Guest, type Venue, type ApiResponse } from "./types";
 import { deleteGuest } from "./guests";
-
-// Helper to get Drizzle instance
-async function getDb() {
-  const { env } = getCloudflareContext();
-  return drizzle(env.DB, { schema });
-}
+import { requireRole } from "../auth/server";
+import { getDb } from "../db/client";
 
 export async function fetchExternalLinks(venueId: string): Promise<ApiResponse<ExternalDJLink[]>> {
   try {
-    const db = await getDb();
+    await requireRole(["super_admin", "venue_admin", "door_staff", "staff"]);
+    const db = getDb();
     const result = await db.select().from(externalDjLinks)
       .where(eq(externalDjLinks.venueId, venueId))
       .orderBy(desc(externalDjLinks.date));
@@ -28,7 +24,8 @@ export async function fetchExternalLinks(venueId: string): Promise<ApiResponse<E
 
 export async function fetchExternalLinksByDate(venueId: string, date: string): Promise<ApiResponse<ExternalDJLink[]>> {
   try {
-    const db = await getDb();
+    await requireRole(["super_admin", "venue_admin", "door_staff", "staff"]);
+    const db = getDb();
     const result = await db.select().from(externalDjLinks)
       .where(and(eq(externalDjLinks.venueId, venueId), eq(externalDjLinks.date, date)))
       .orderBy(desc(externalDjLinks.id));
@@ -47,9 +44,10 @@ export async function createExternalLink(link: {
   createdBy?: string;
 }): Promise<ApiResponse<ExternalDJLink>> {
   try {
-    const db = await getDb();
+    await requireRole(["super_admin", "venue_admin"]);
+    const db = getDb();
     const id = crypto.randomUUID();
-    const token = crypto.randomUUID(); 
+    const token = crypto.randomUUID();
     await db.insert(externalDjLinks).values({
       id,
       venueId: link.venueId,
@@ -71,7 +69,8 @@ export async function createExternalLink(link: {
 
 export async function deleteExternalLink(linkId: string): Promise<{ error: string | null }> {
   try {
-    const db = await getDb();
+    await requireRole(["super_admin", "venue_admin"]);
+    const db = getDb();
     await db.delete(externalDjLinks).where(eq(externalDjLinks.id, linkId));
     return { error: null };
   } catch (error: unknown) {
@@ -81,7 +80,8 @@ export async function deleteExternalLink(linkId: string): Promise<{ error: strin
 
 export async function deactivateExternalLink(linkId: string): Promise<{ error: string | null }> {
   try {
-    const db = await getDb();
+    await requireRole(["super_admin", "venue_admin"]);
+    const db = getDb();
     await db.update(externalDjLinks).set({ active: false }).where(eq(externalDjLinks.id, linkId));
     return { error: null };
   } catch (error: unknown) {
@@ -91,7 +91,8 @@ export async function deactivateExternalLink(linkId: string): Promise<{ error: s
 
 export async function activateExternalLink(linkId: string): Promise<{ error: string | null }> {
   try {
-    const db = await getDb();
+    await requireRole(["super_admin", "venue_admin"]);
+    const db = getDb();
     await db.update(externalDjLinks).set({ active: true }).where(eq(externalDjLinks.id, linkId));
     return { error: null };
   } catch (error: unknown) {
@@ -99,9 +100,10 @@ export async function activateExternalLink(linkId: string): Promise<{ error: str
   }
 }
 
+/** 외부 DJ 토큰 검증 (인증 불필요 — 토큰 기반 공개 접근) */
 export async function validateExternalToken(token: string): Promise<ApiResponse<{ link: ExternalDJLink; venue: Venue; guests: Guest[] }>> {
   try {
-    const db = await getDb();
+    const db = getDb();
     const linkResult = await db.select().from(externalDjLinks).where(eq(externalDjLinks.token, token));
     const link = linkResult[0];
 
@@ -116,36 +118,49 @@ export async function validateExternalToken(token: string): Promise<ApiResponse<
       return { data: null, error: "Associated venue not found." };
     }
 
-    const guestsResult = await db.select().from(guests).where(and(eq(guests.externalLinkId, link.id), ne(guests.status, "deleted")));
+    const guestsResult = await db.select().from(guests)
+      .where(and(eq(guests.externalLinkId, link.id), ne(guests.status, "deleted")));
 
     return {
       data: {
         link,
         venue,
-        guests: guestsResult.map(g => ({ ...g, status: g.status as Guest["status"] })),
+        guests: guestsResult.map((g) => ({ ...g, status: g.status as Guest["status"] })),
       },
-      error: null
+      error: null,
     };
   } catch (error: unknown) {
     return { data: null, error: error instanceof Error ? error.message : "Failed to validate external token" };
   }
 }
 
+/**
+ * 외부 DJ 토큰으로 게스트 생성 (인증 불필요 — 토큰 기반 공개 접근).
+ * usedGuests 증가를 D1 원자 UPDATE로 처리하여 race condition 방지.
+ */
 export async function createGuestViaExternalLink(params: {
   token: string;
   guestName: string;
   date: string;
 }): Promise<ApiResponse<Guest>> {
   try {
-    const db = await getDb();
-    const linkResult = await db.select().from(externalDjLinks).where(eq(externalDjLinks.token, params.token));
+    const { env } = getCloudflareContext();
+    const db = getDb();
+
+    const linkResult = await db.select().from(externalDjLinks)
+      .where(eq(externalDjLinks.token, params.token));
     const link = linkResult[0];
 
     if (!link || !link.active) {
       return { data: null, error: "Link is invalid or inactive." };
     }
 
-    if (link.usedGuests >= link.maxGuests) {
+    // 원자적 정원 체크 + 증가: used_guests < max_guests 인 경우에만 UPDATE
+    const updated = await env.DB.prepare(
+      "UPDATE external_dj_links SET used_guests = used_guests + 1 WHERE id = ? AND used_guests < max_guests RETURNING used_guests"
+    ).bind(link.id).first<{ used_guests: number }>();
+
+    if (!updated) {
       return { data: null, error: "Guest limit reached for this link." };
     }
 
@@ -163,10 +178,6 @@ export async function createGuestViaExternalLink(params: {
       updatedAt: now,
     });
 
-    await db.update(externalDjLinks)
-      .set({ usedGuests: link.usedGuests + 1 })
-      .where(eq(externalDjLinks.id, link.id));
-
     const result = await db.select().from(guests).where(eq(guests.id, id));
     return { data: result[0] ? { ...result[0], status: result[0].status as Guest["status"] } : null, error: null };
   } catch (error: unknown) {
@@ -174,22 +185,33 @@ export async function createGuestViaExternalLink(params: {
   }
 }
 
+/** 외부 DJ 토큰으로 게스트 삭제 (토큰 기반). 소유권 검증 포함. */
 export async function deleteGuestViaExternalLink(params: {
   token: string;
   guestId: string;
 }): Promise<{ error: string | null }> {
   try {
-    const db = await getDb();
-    
-    // Validate token first
-    const linkResult = await db.select().from(externalDjLinks).where(eq(externalDjLinks.token, params.token));
+    const db = getDb();
+
+    const linkResult = await db.select().from(externalDjLinks)
+      .where(eq(externalDjLinks.token, params.token));
     const link = linkResult[0];
 
     if (!link || !link.active) {
       return { error: "Link is invalid or inactive." };
     }
 
-    // Call the existing deleteGuest function
+    // 소유권 검증: guest가 이 link에 속하는지 확인
+    const guestResult = await db.select({ externalLinkId: guests.externalLinkId })
+      .from(guests)
+      .where(eq(guests.id, params.guestId))
+      .limit(1);
+
+    const guest = guestResult[0];
+    if (!guest || guest.externalLinkId !== link.id) {
+      return { error: "Forbidden: guest does not belong to this link." };
+    }
+
     const result = await deleteGuest(params.guestId);
     return { error: result.error };
   } catch (error: unknown) {

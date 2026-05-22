@@ -43,8 +43,8 @@ function ResetPasswordContent() {
 
       setMessage({ type: "success", text: "재설정 링크가 이메일로 발송되었습니다." });
       setStep("completed");
-    } catch (err: any) {
-      setMessage({ type: "error", text: err.message });
+    } catch (err: unknown) {
+      setMessage({ type: "error", text: err instanceof Error ? err.message : "오류가 발생했습니다." });
     } finally {
       setLoading(false);
     }
@@ -73,8 +73,8 @@ function ResetPasswordContent() {
       setMessage({ type: "success", text: "비밀번호가 성공적으로 변경되었습니다." });
       setStep("completed");
       setTimeout(() => router.push("/auth/login"), 3000);
-    } catch (err: any) {
-      setMessage({ type: "error", text: err.message });
+    } catch (err: unknown) {
+      setMessage({ type: "error", text: err instanceof Error ? err.message : "오류가 발생했습니다." });
     } finally {
       setLoading(false);
     }
@@ -125,7 +125,7 @@ function ResetPasswordContent() {
                 disabled={loading}
                 className="w-full bg-white text-black py-3 sm:py-4 font-mono text-sm tracking-wider uppercase hover:bg-gray-200 transition-colors disabled:bg-gray-600 flex items-center justify-center gap-2"
               >
-                {loading ? <Spinner size="sm" /> : "SEND RESET LINK"}
+                {loading ? <Spinner mode="button" /> : "SEND RESET LINK"}
               </button>
             </form>
           )}
@@ -163,7 +163,7 @@ function ResetPasswordContent() {
                 disabled={loading}
                 className="w-full bg-white text-black py-3 sm:py-4 font-mono text-sm tracking-wider uppercase hover:bg-gray-200 transition-colors disabled:bg-gray-600 flex items-center justify-center gap-2"
               >
-                {loading ? <Spinner size="sm" /> : "UPDATE PASSWORD"}
+                {loading ? <Spinner mode="button" /> : "UPDATE PASSWORD"}
               </button>
             </form>
           )}

@@ -12,6 +12,57 @@ tags:
 
 ---
 
+## 2026-05-22 — 마이그레이션 사후 보안 점검 및 품질 개선 (P0/P1/P2 전체)
+
+### 보안 (P0)
+
+- **Server Actions 권한 검증 추가** — `lib/api/*.ts`의 모든 `"use server"` 함수에 `requireAuth()`/`requireRole()` 적용 (`lib/auth/server.ts` 신규)
+- **세션 revocation 구현** — `middleware.ts`에서 KV `session:${sessionId}` 존재 여부 추가 검증. 로그아웃 후 JWT 토큰 재사용 불가
+- **이메일 enumeration 차단** — `reset-password POST`가 미가입 이메일에도 동일 응답 반환
+- **폴백 패스워드 제거** — `lib/api/users.ts`의 `bcrypt.hash("123456", 10)` 폴백 삭제. password 미전달 시 400 에러
+- **external-link 소유권 검증** — `deleteGuestViaExternalLink`에서 `guest.externalLinkId === link.id` 확인 추가
+- **usedGuests race condition 해소** — `createGuestViaExternalLink`의 정원 체크+증가를 D1 원자 UPDATE로 교체
+- **reset-password 토큰 원자화** — `D1.batch()`로 비밀번호 업데이트+토큰 사용 처리 동시 실행
+- **비밀번호 강도 검증 추가** — reset-password PUT에서 8자 이상 + 영문 + 숫자 체크
+- **임시 비밀번호 평문 노출 제거** — `InviteUser.tsx` 성공 메시지의 비밀번호를 마스킹+토글+복사 버튼으로 교체
+
+### env 바인딩 통일
+
+- `middleware.ts` `process.env.JWT_SECRET` → `getCloudflareContext().env.JWT_SECRET`
+- `lib/api/email.ts` 모듈 최상위 `AwsClient` 초기화 → `sendEmail` 진입 시 요청-스코프 생성. `process.env.*` → `getCloudflareContext().env.*`
+- `worker-configuration.d.ts`에 `AWS_SES_*` 키 선언 추가
+- 쿠키 `secure` 속성 `process.env.NODE_ENV === "production"` → 항상 `true`
+
+### 비밀번호 해시 전환
+
+- **WebCrypto PBKDF2** 신규 (`lib/auth/password.ts`) — `pbkdf2$100000$<salt>$<hash>` 포맷, 100k iter / SHA-256
+- 기존 bcrypt 해시 호환 검증 유지 (다음 로그인 시 자동 재해시)
+- `app/api/auth/login/route.ts`, `reset-password/route.ts`, `profile/password/route.ts`, `admin/migrate/route.ts`, `lib/api/users.ts` 전면 교체
+
+### 정확성 (P1)
+
+- **인덱스 추가** — `migrations/0005_add_indexes.sql`: `guests(venue_id, date)`, `guests(external_link_id)`, `guests(created_by_user_id)`, `external_dj_links(venue_id)`, `users(venue_id)`. `lib/db/schema.ts` drizzle 동기화
+- **login 응답 완전화** — `venueId`, `guestLimit` 포함 (`lib/auth.ts` 클라이언트 타입과 일치)
+- **migrate route sendEmail 격리** — 이메일 발송 실패 시 user 생성 롤백 없이 `emailSent: boolean` 별도 반환
+- **INTERNAL_API_SECRET 미설정 시 503** — warn → 엔드포인트 비활성화
+- **deleteGuest 이중 차감 방어** — 이미 `deleted` 상태인 guest 재삭제 시 `usedGuests` 추가 차감 방지
+
+### 품질 (P2)
+
+- `lib/db/client.ts` 신규 — `getDb()` 공통 헬퍼로 drizzle 인스턴스 생성 중앙화
+- `GuestList.tsx` 폴링 → `useGuestPolling` 훅 통일
+- `public/local-users.json` — PII 포함 파일 내용 초기화 + `.gitignore` 등록
+- `.dockerignore` 신규 추가
+- `Spinner size=` → `mode=` 수정 (Button.tsx, LegacyUserMigration.tsx, reset-password/page.tsx)
+- `catch (err: any)` → `unknown` 전환 (다수 파일)
+- `(e.target as any)` → `HTMLInputElement` (admin/page.tsx)
+
+### Breaking Changes
+
+- 없음. PBKDF2 전환은 점진적(기존 bcrypt 해시는 다음 로그인 시 자동 재해시).
+
+---
+
 ## 2026-05-04 — Cloudflare 마이그레이션 공식 종료 및 코드베이스 정비
 
 ### Phase A. 빌드 복구

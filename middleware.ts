@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { jwtVerify } from "jose";
+import { getCloudflareContext } from "@opennextjs/cloudflare";
 
 export async function middleware(request: NextRequest) {
   const { pathname, searchParams } = request.nextUrl;
@@ -12,33 +13,41 @@ export async function middleware(request: NextRequest) {
     pathname.startsWith("/_next/") ||
     pathname.startsWith("/favicon.ico") ||
     pathname === "/auth/login" ||
-    pathname === "/auth/reset-password"
+    pathname === "/auth/reset-password" ||
+    pathname === "/auth/register"
   ) {
     return NextResponse.next();
   }
 
   // ─── 외부 DJ 토큰 링크: /guest?token=xxx ────────────────────
-  // 토큰 기반 접근은 로그인 없이 허용 (ExternalDJGuestView가 토큰 검증 처리)
   if (pathname === "/guest" && searchParams.has("token")) {
     return NextResponse.next();
   }
 
-  // ─── JWT 검증 ────────────────────────────────────────────────
+  // ─── JWT + 세션 검증 ──────────────────────────────────────
   const token = request.cookies.get("token")?.value;
+  const sessionId = request.cookies.get("sessionId")?.value;
 
-  if (!token) {
+  if (!token || !sessionId) {
     return NextResponse.redirect(new URL("/auth/login", request.url));
   }
 
-  const jwtSecret = process.env.JWT_SECRET;
-  if (!jwtSecret) {
+  const { env } = getCloudflareContext();
+
+  if (!env.JWT_SECRET) {
     console.error("JWT_SECRET is not configured");
     return NextResponse.redirect(new URL("/auth/login", request.url));
   }
 
   try {
-    const secret = new TextEncoder().encode(jwtSecret);
+    const secret = new TextEncoder().encode(env.JWT_SECRET);
     const { payload } = await jwtVerify(token, secret);
+
+    // ─── KV 세션 존재 여부 확인 (revocation) ─────────────────
+    const session = await env.SESSIONS.get(`session:${sessionId}`);
+    if (!session) {
+      return NextResponse.redirect(new URL("/auth/login", request.url));
+    }
 
     // ─── RBAC: /admin 경로는 super_admin, venue_admin만 접근 ──
     if (pathname.startsWith("/admin")) {
@@ -65,14 +74,6 @@ export async function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
-    /*
-     * 아래 경로를 제외한 모든 요청에 미들웨어 적용:
-     * - api/auth      (로그인/로그아웃 API)
-     * - api/internal  (Service Binding 전용 내부 API)
-     * - _next/static  (정적 파일)
-     * - _next/image   (이미지 최적화)
-     * - favicon.ico
-     */
     "/((?!api/auth|api/internal|_next/static|_next/image|favicon.ico).*)",
   ],
 };

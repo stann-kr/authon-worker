@@ -95,7 +95,7 @@ function AdminPageContent() {
                     type="date"
                     value={selectedDate}
                     onChange={(e) => setSelectedDate(e.target.value)}
-                    onClick={(e) => (e.target as any).showPicker?.()}
+                    onClick={(e) => (e.target as HTMLInputElement).showPicker?.()}
                     className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10 [color-scheme:dark]"
                   />
                 </div>

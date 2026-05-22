@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import { useLocalStorage } from "../../../lib/hooks";
+import { useLocalStorage, useGuestPolling } from "../../../lib/hooks";
 import GuestListCard from "../../../components/GuestListCard";
 import GuestSearchInput from "../../../components/GuestSearchInput";
 import StatGrid from "../../../components/StatGrid";
@@ -87,19 +87,14 @@ export default function GuestList({ selectedDate }: GuestListProps) {
     loadData();
   }, [loadData]);
 
-  // Polling for real-time updates (every 15 seconds)
-  useEffect(() => {
+  // 실시간 폴링 (15초 간격) — useGuestPolling 훅으로 통일
+  const pollGuests = useCallback(async () => {
     if (!venueId) return;
-    const interval = setInterval(async () => {
-      try {
-        const { data } = await fetchGuestsByDate(selectedDate, venueId);
-        if (data) setGuests(data);
-      } catch {
-        // Silent fail for polling
-      }
-    }, 15000);
-    return () => clearInterval(interval);
+    const { data } = await fetchGuestsByDate(selectedDate, venueId);
+    if (data) setGuests(data);
   }, [selectedDate, venueId]);
+
+  useGuestPolling(pollGuests, 15000, !!venueId);
 
   const handleStatusChange = async (
     id: string,

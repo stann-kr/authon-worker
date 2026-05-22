@@ -53,7 +53,7 @@ export default function Button({
       className={combinedClasses}
       {...props}
     >
-      {isLoading && <Spinner size="sm" />}
+      {isLoading && <Spinner mode="button" />}
       {!isLoading && leftIcon && <span className="flex-shrink-0">{leftIcon}</span>}
       <span className="truncate">{children}</span>
       {!isLoading && rightIcon && <span className="flex-shrink-0">{rightIcon}</span>}

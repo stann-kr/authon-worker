@@ -1,4 +1,4 @@
-import { sqliteTable, text, integer } from 'drizzle-orm/sqlite-core';
+import { sqliteTable, text, integer, index } from 'drizzle-orm/sqlite-core';
 
 export const venues = sqliteTable('venues', {
   id: text('id').primaryKey(),
@@ -13,12 +13,12 @@ export const users = sqliteTable('users', {
   email: text('email').notNull().unique(),
   passwordHash: text('password_hash').notNull(),
   name: text('name').notNull(),
-  role: text('role').notNull(), // 'super_admin', 'venue_admin', 'door_staff', 'staff', 'dj'
+  role: text('role').notNull(),
   venueId: text('venue_id').references(() => venues.id),
   guestLimit: integer('guest_limit'),
   active: integer('active', { mode: 'boolean' }).notNull().default(true),
   createdAt: text('created_at').notNull(),
-});
+}, (t) => [index('idx_users_venue').on(t.venueId)]);
 
 export const externalDjLinks = sqliteTable('external_dj_links', {
   id: text('id').primaryKey(),
@@ -32,7 +32,7 @@ export const externalDjLinks = sqliteTable('external_dj_links', {
   active: integer('active', { mode: 'boolean' }).notNull().default(true),
   expiresAt: text('expires_at'),
   createdBy: text('created_by').references(() => users.id),
-});
+}, (t) => [index('idx_external_dj_links_venue').on(t.venueId)]);
 
 export const guests = sqliteTable('guests', {
   id: text('id').primaryKey(),
@@ -43,13 +43,17 @@ export const guests = sqliteTable('guests', {
   externalLinkId: text('external_link_id').references(() => externalDjLinks.id),
   createdByUserId: text('created_by_user_id').references(() => users.id),
   terminalRequestId: text('terminal_request_id'),
-  source: text('source').notNull().default('authon'), // 'authon' or 'terminal'
-  status: text('status').notNull().default('pending'), // 'pending', 'checked', 'deleted'
+  source: text('source').notNull().default('authon'),
+  status: text('status').notNull().default('pending'),
   checkInTime: text('check_in_time'),
   date: text('date').notNull(),
   createdAt: text('created_at').notNull(),
   updatedAt: text('updated_at').notNull(),
-});
+}, (t) => [
+  index('idx_guests_venue_date').on(t.venueId, t.date),
+  index('idx_guests_external_link').on(t.externalLinkId),
+  index('idx_guests_created_by').on(t.createdByUserId),
+]);
 
 export const checkIns = sqliteTable('check_ins', {
   id: text('id').primaryKey(),

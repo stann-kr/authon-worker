@@ -3,8 +3,8 @@ import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { drizzle } from "drizzle-orm/d1";
 import { eq } from "drizzle-orm";
 import { SignJWT } from "jose";
-import bcrypt from "bcryptjs";
 import { users } from "@/lib/db/schema";
+import { verifyPassword, hashPassword, needsRehash } from "@/lib/auth/password";
 
 export async function POST(request: Request) {
   try {
@@ -29,7 +29,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const isMatch = await bcrypt.compare(password, user.passwordHash);
+    const isMatch = await verifyPassword(password, user.passwordHash);
     if (!isMatch) {
       return NextResponse.json(
         { error: "비밀번호가 일치하지 않습니다." },
@@ -37,7 +37,12 @@ export async function POST(request: Request) {
       );
     }
 
-    // JWT 생성
+    // bcrypt 해시 → PBKDF2 자동 재해시
+    if (needsRehash(user.passwordHash)) {
+      const newHash = await hashPassword(password);
+      await db.update(users).set({ passwordHash: newHash }).where(eq(users.id, user.id));
+    }
+
     if (!env.JWT_SECRET) {
       console.error("JWT_SECRET is not configured");
       return NextResponse.json({ error: "Server configuration error." }, { status: 500 });
@@ -54,33 +59,40 @@ export async function POST(request: Request) {
       .setExpirationTime("24h")
       .sign(secret);
 
-    // KV에 세션 저장 (선택적이지만 요구사항에 포함)
     const sessionId = crypto.randomUUID();
-    await env.SESSIONS.put(`session:${sessionId}`, JSON.stringify({ userId: user.id, token }), {
-      expirationTtl: 60 * 60 * 24, // 24 hours
+    await env.SESSIONS.put(`session:${sessionId}`, JSON.stringify({ userId: user.id }), {
+      expirationTtl: 60 * 60 * 24,
     });
 
-    const response = NextResponse.json({ ok: true, user: { id: user.id, email: user.email, role: user.role, name: user.name } });
+    const response = NextResponse.json({
+      ok: true,
+      user: {
+        id: user.id,
+        email: user.email,
+        role: user.role,
+        name: user.name,
+        venueId: user.venueId ?? null,
+        guestLimit: user.guestLimit ?? 0,
+      },
+    });
 
-    // 쿠키 설정
     response.cookies.set({
       name: "token",
       value: token,
       httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
+      secure: true,
       sameSite: "lax",
-      maxAge: 60 * 60 * 24, // 1 day
+      maxAge: 60 * 60 * 24,
       path: "/",
     });
-    
-    // session id cookie (optional, but good for KV revoking later)
+
     response.cookies.set({
       name: "sessionId",
       value: sessionId,
       httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
+      secure: true,
       sameSite: "lax",
-      maxAge: 60 * 60 * 24, // 1 day
+      maxAge: 60 * 60 * 24,
       path: "/",
     });
 

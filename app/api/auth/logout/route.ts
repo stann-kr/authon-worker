@@ -28,17 +28,17 @@ export async function POST(request: Request) {
       name: "token",
       value: "",
       httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
+      secure: true,
       sameSite: "lax",
       maxAge: 0,
       path: "/",
     });
-    
+
     response.cookies.set({
       name: "sessionId",
       value: "",
       httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
+      secure: true,
       sameSite: "lax",
       maxAge: 0,
       path: "/",

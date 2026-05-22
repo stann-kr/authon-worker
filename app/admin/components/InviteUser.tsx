@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { getUser } from "../../../lib/auth";
+import { getUser, type User } from "../../../lib/auth";
 import { createUserViaEdge } from "../../../lib/api/users";
 import { fetchVenues } from "../../../lib/api/venues";
 import type { Venue } from "../../../lib/api/types";
@@ -19,8 +19,10 @@ export default function InviteUser() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+  const [tempPassword, setTempPassword] = useState("");
+  const [showTempPassword, setShowTempPassword] = useState(false);
   const [venues, setVenues] = useState<Venue[]>([]);
-  const [currentUser, setCurrentUser] = useState<any>(null);
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
 
   useEffect(() => {
     const user = getUser();
@@ -96,9 +98,13 @@ export default function InviteUser() {
       if (createError) {
         setError(createError || "Failed to create user.");
       } else {
+        if (createMode === "password" && formData.password) {
+          setTempPassword(formData.password);
+          setShowTempPassword(false);
+        }
         const msg =
           createMode === "password"
-            ? `Account created for ${formData.name} (${formData.email}). Temporary password: ${formData.password}`
+            ? `Account created for ${formData.name} (${formData.email}).`
             : `Invitation email sent to ${formData.name} (${formData.email}).`;
         setSuccess(msg);
         setFormData((prev) => ({
@@ -218,7 +224,7 @@ export default function InviteUser() {
                   key={opt.value}
                   type="button"
                   onClick={() =>
-                    setFormData({ ...formData, role: opt.value as any })
+                    setFormData({ ...formData, role: opt.value as typeof formData.role })
                   }
                   className={`p-3 border font-mono text-xs tracking-wider uppercase transition-colors ${
                     formData.role === opt.value
@@ -244,7 +250,7 @@ export default function InviteUser() {
                 value={formData.guest_limit}
                 onChange={(e) => {
                   const val = e.target.value.replace(/[^0-9]/g, "");
-                  setFormData({ ...formData, guest_limit: val as any });
+                  setFormData({ ...formData, guest_limit: val });
                 }}
                 className="w-full bg-black border border-gray-700 px-4 py-3 text-white font-mono text-sm tracking-wider focus:outline-none focus:border-white"
                 placeholder="Enter guest limit"
@@ -284,15 +290,39 @@ export default function InviteUser() {
           )}
 
           {success && (
-            <div className="bg-green-900/30 border border-green-700 p-4">
-              <p className="text-green-400 font-mono text-xs tracking-wider uppercase mb-1">
-                {createMode === "password"
-                  ? "ACCOUNT CREATED"
-                  : "INVITATION SENT"}
+            <div className="bg-green-900/30 border border-green-700 p-4 space-y-2">
+              <p className="text-green-400 font-mono text-xs tracking-wider uppercase">
+                {tempPassword ? "ACCOUNT CREATED" : "INVITATION SENT"}
               </p>
               <p className="text-green-300 font-mono text-xs tracking-wider">
                 {success}
               </p>
+              {tempPassword && (
+                <div className="mt-2 border border-green-800 p-2 flex items-center justify-between gap-2">
+                  <span className="font-mono text-xs text-green-200 tracking-wider">
+                    TEMP PASSWORD:{" "}
+                    <span className="select-all">
+                      {showTempPassword ? tempPassword : "•".repeat(tempPassword.length)}
+                    </span>
+                  </span>
+                  <div className="flex gap-2 shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => setShowTempPassword((v) => !v)}
+                      className="text-green-400 hover:text-white font-mono text-[10px] uppercase"
+                    >
+                      {showTempPassword ? "HIDE" : "SHOW"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => navigator.clipboard.writeText(tempPassword)}
+                      className="text-green-400 hover:text-white font-mono text-[10px] uppercase"
+                    >
+                      COPY
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           )}
 

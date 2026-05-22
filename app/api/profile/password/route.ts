@@ -2,15 +2,14 @@ import { NextResponse } from "next/server";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { drizzle } from "drizzle-orm/d1";
 import { eq } from "drizzle-orm";
-import bcrypt from "bcryptjs";
 import { jwtVerify } from "jose";
 import { users } from "@/lib/db/schema";
+import { verifyPassword, hashPassword } from "@/lib/auth/password";
 
 export async function PUT(request: Request) {
   try {
     const { env } = getCloudflareContext();
 
-    // Get token from cookie
     const cookieHeader = request.headers.get("cookie") || "";
     const cookies = Object.fromEntries(
       cookieHeader.split("; ").map((c) => {
@@ -49,12 +48,12 @@ export async function PUT(request: Request) {
       return NextResponse.json({ error: "User not found" }, { status: 404 });
     }
 
-    const isMatch = await bcrypt.compare(currentPassword, user.passwordHash);
+    const isMatch = await verifyPassword(currentPassword, user.passwordHash);
     if (!isMatch) {
       return NextResponse.json({ error: "비밀번호가 일치하지 않습니다." }, { status: 400 });
     }
 
-    const hashedPassword = await bcrypt.hash(newPassword, 10);
+    const hashedPassword = await hashPassword(newPassword);
     await db.update(users).set({ passwordHash: hashedPassword }).where(eq(users.id, userId as string));
 
     return NextResponse.json({ ok: true, message: "Password updated successfully" });

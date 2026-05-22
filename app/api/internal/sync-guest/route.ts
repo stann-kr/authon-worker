@@ -16,13 +16,14 @@ export async function POST(request: Request) {
     // ─── Shared Secret 인증 ────────────────────────────────────
     // Service Binding 직접 호출이더라도, 외부 노출 경로이므로 시크릿 검증 필수
     const internalSecret = env.INTERNAL_API_SECRET;
-    if (internalSecret) {
-      const requestSecret = request.headers.get("X-Internal-Secret");
-      if (requestSecret !== internalSecret) {
-        return Response.json({ ok: false, error: "Unauthorized" }, { status: 401 });
-      }
-    } else {
-      console.warn("[sync-guest] INTERNAL_API_SECRET is not configured — endpoint is unprotected");
+    if (!internalSecret) {
+      console.error("[sync-guest] INTERNAL_API_SECRET is not configured — endpoint disabled");
+      return Response.json({ ok: false, error: "Endpoint not available" }, { status: 503 });
+    }
+
+    const requestSecret = request.headers.get("X-Internal-Secret");
+    if (requestSecret !== internalSecret) {
+      return Response.json({ ok: false, error: "Unauthorized" }, { status: 401 });
     }
 
     // ─── TERMINAL_VENUE_ID 검증 ───────────────────────────────

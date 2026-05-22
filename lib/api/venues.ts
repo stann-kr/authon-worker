@@ -1,29 +1,24 @@
 "use server";
 
-import { getCloudflareContext } from "@opennextjs/cloudflare";
-import { drizzle } from "drizzle-orm/d1";
 import { eq, asc } from "drizzle-orm";
 import * as schema from "../db/schema";
 import { venues } from "../db/schema";
 import { type Venue, type ApiResponse } from "./types";
-
-// Helper to get Drizzle instance
-async function getDb() {
-  const { env } = getCloudflareContext();
-  return drizzle(env.DB, { schema });
-}
+import { requireRole } from "../auth/server";
+import { getDb } from "../db/client";
 
 export async function fetchVenues(includeInactive = false): Promise<ApiResponse<Venue[]>> {
   try {
-    const db = await getDb();
+    await requireRole(["super_admin", "venue_admin", "door_staff", "staff", "dj"]);
+    const db = getDb();
     let query = db.select().from(venues).$dynamic();
-    
+
     if (!includeInactive) {
       query = query.where(eq(venues.active, true));
     }
-    
+
     const result = await query.orderBy(asc(venues.name));
-    return { data: result.map(v => ({ ...v, type: v.type as Venue["type"] })), error: null };
+    return { data: result.map((v) => ({ ...v, type: v.type as Venue["type"] })), error: null };
   } catch (error: unknown) {
     return { data: null, error: error instanceof Error ? error.message : "Failed to fetch venues" };
   }
@@ -36,7 +31,8 @@ export async function createVenue(venue: {
   description?: string;
 }): Promise<ApiResponse<Venue>> {
   try {
-    const db = await getDb();
+    await requireRole(["super_admin"]);
+    const db = getDb();
     const id = crypto.randomUUID();
     await db.insert(venues).values({
       id,
@@ -57,9 +53,9 @@ export async function updateVenue(
   updates: Partial<Pick<Venue, "name" | "type" | "address" | "active">>,
 ): Promise<ApiResponse<Venue>> {
   try {
-    const db = await getDb();
-    
-    // 명시적인 타입이 지정된 dbUpdates 객체 생성
+    await requireRole(["super_admin"]);
+    const db = getDb();
+
     const dbUpdates: Partial<typeof venues.$inferInsert> = {};
     if (updates.name !== undefined) dbUpdates.name = updates.name;
     if (updates.type !== undefined) dbUpdates.type = updates.type;

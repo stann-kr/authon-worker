@@ -41,9 +41,9 @@ export default function LegacyUserMigration() {
       if (!migrateRes.ok) throw new Error(data.error || "마이그레이션 API 오류");
 
       setResults(data.results);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Migration error:", err);
-      setError(err.message);
+      setError(err instanceof Error ? err.message : "마이그레이션 오류가 발생했습니다.");
     } finally {
       setLoading(false);
     }
@@ -80,7 +80,7 @@ export default function LegacyUserMigration() {
             disabled={loading}
             className="px-8 py-4 bg-cyan-600 hover:bg-cyan-700 text-white font-mono text-sm tracking-wider uppercase transition-colors disabled:opacity-50 flex items-center gap-2"
           >
-            {loading ? <Spinner size="sm" /> : <><i className="ri-play-fill"></i> START MIGRATION</>}
+            {loading ? <Spinner mode="button" /> : <><i className="ri-play-fill"></i> START MIGRATION</>}
           </button>
         )}
       </div>

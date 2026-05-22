@@ -1,31 +1,27 @@
 "use server";
 
 import { getCloudflareContext } from "@opennextjs/cloudflare";
-import { drizzle } from "drizzle-orm/d1";
 import { eq, asc } from "drizzle-orm";
 import * as schema from "../db/schema";
 import { users, passwordResetTokens } from "../db/schema";
 import { type User, type ApiResponse } from "./types";
-import bcrypt from "bcryptjs";
+import { hashPassword } from "../auth/password";
+import { requireRole } from "../auth/server";
+import { getDb } from "../db/client";
 import { sendEmail } from "./email";
-
-// Helper to get Drizzle instance
-async function getDb() {
-  const { env } = getCloudflareContext();
-  return drizzle(env.DB, { schema });
-}
 
 export async function fetchUsersByVenue(venueId?: string | null): Promise<ApiResponse<User[]>> {
   try {
-    const db = await getDb();
+    await requireRole(["super_admin", "venue_admin", "door_staff", "staff", "dj"]);
+    const db = getDb();
     let query = db.select().from(users).$dynamic();
-    
+
     if (venueId) {
       query = query.where(eq(users.venueId, venueId));
     }
-    
+
     const result = await query.orderBy(asc(users.name));
-    return { data: result.map(u => ({ ...u, role: u.role as User["role"] })), error: null };
+    return { data: result.map((u) => ({ ...u, role: u.role as User["role"] })), error: null };
   } catch (error: unknown) {
     return { data: null, error: error instanceof Error ? error.message : "Failed to fetch users" };
   }
@@ -41,7 +37,8 @@ export async function updateUserProfile(
   },
 ): Promise<ApiResponse<User>> {
   try {
-    const db = await getDb();
+    await requireRole(["super_admin", "venue_admin"]);
+    const db = getDb();
     const dbUpdates: Partial<typeof users.$inferInsert> = {};
     if (updates.name !== undefined) dbUpdates.name = updates.name;
     if (updates.guestLimit !== undefined) dbUpdates.guestLimit = updates.guestLimit;
@@ -65,10 +62,16 @@ export async function createUserViaEdge(params: {
   password?: string;
 }): Promise<ApiResponse<{ id: string }>> {
   try {
-    const db = await getDb();
+    await requireRole(["super_admin", "venue_admin"]);
+
+    if (!params.password) {
+      return { data: null, error: "비밀번호를 입력해주세요." };
+    }
+
+    const db = getDb();
     const id = crypto.randomUUID();
-    const passwordHash = params.password ? await bcrypt.hash(params.password, 10) : await bcrypt.hash("123456", 10);
-    
+    const passwordHash = await hashPassword(params.password);
+
     await db.insert(users).values({
       id,
       email: params.email,
@@ -81,7 +84,6 @@ export async function createUserViaEdge(params: {
       createdAt: new Date().toISOString(),
     });
 
-    // Send invitation email
     await resendInvitationViaEdge(id);
 
     return { data: { id }, error: null };
@@ -92,7 +94,8 @@ export async function createUserViaEdge(params: {
 
 export async function deleteUserViaEdge(userId: string): Promise<{ error: string | null }> {
   try {
-    const db = await getDb();
+    await requireRole(["super_admin"]);
+    const db = getDb();
     await db.delete(users).where(eq(users.id, userId));
     return { error: null };
   } catch (error: unknown) {
@@ -103,27 +106,25 @@ export async function deleteUserViaEdge(userId: string): Promise<{ error: string
 export async function resendInvitationViaEdge(userId: string): Promise<{ error: string | null }> {
   try {
     const { env } = getCloudflareContext();
-    const db = await getDb();
-    
+    const db = getDb();
+
     const userResult = await db.select().from(users).where(eq(users.id, userId)).limit(1);
     const user = userResult[0];
-    
+
     if (!user) return { error: "User not found." };
 
-    // Create reset token
     const token = crypto.randomUUID();
     const expiresAt = new Date(Date.now() + 1000 * 60 * 60 * 24 * 7).toISOString();
 
     await db.insert(passwordResetTokens).values({
       id: crypto.randomUUID(),
-      userId: userId,
+      userId,
       token,
       expiresAt,
       used: false,
       createdAt: new Date().toISOString(),
     });
 
-    // Send email
     const appUrl = env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
     const resetLink = `${appUrl}/auth/reset-password?token=${token}`;
 

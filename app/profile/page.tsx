@@ -274,8 +274,8 @@ function PasswordChangeForm() {
       setCurrentPassword("");
       setNewPassword("");
       setConfirmPassword("");
-    } catch (err: any) {
-      setPasswordError(err.message || "An error occurred.");
+    } catch (err: unknown) {
+      setPasswordError(err instanceof Error ? err.message : "An error occurred.");
     } finally {
       setIsUpdating(false);
     }

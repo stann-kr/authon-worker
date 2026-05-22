@@ -29,7 +29,7 @@ DJ가 게스트를 등록하고, Door 스태프가 체크인하며, Admin이 전
 | 스타일링     | [[Tailwind CSS]] v3                                |
 | 데이터베이스 | [[Cloudflare]] [[D1]] (SQLite) + [[Drizzle ORM]]           |
 | 세션/캐시    | [[Cloudflare]] KV                                  |
-| 인증         | 자체 JWT (`jose`) + 비밀번호 해싱 (`bcryptjs`) |
+| 인증         | 자체 JWT (`jose`) + 비밀번호 해싱 (WebCrypto PBKDF2 / bcryptjs 호환) |
 | 이메일       | AWS SES v2 (`aws4fetch`)                       |
 | 개발 환경    | [[Docker]] Compose (로컬 런타임 없음)              |
 
@@ -58,8 +58,37 @@ Host (macOS / Apple Silicon)
   - `guests.ts`, `users.ts`, `venues.ts`, `external-links.ts`
 - 인증: `app/api/auth/login/route.ts` → JWT 발급 → HTTP-Only 쿠키
 - 세션: KV에 `session:{sessionId}` 저장 (24h TTL)
-- 미들웨어: `middleware.ts` → JWT 검증 → 경로별 RBAC
+- 미들웨어: `middleware.ts` → JWT 검증 + KV 세션 존재 확인 → 경로별 RBAC
+- Server Actions: `lib/auth/server.ts`의 `requireRole()` 호출로 모든 변경 함수에 JWT+KV 인증 적용
 - Terminal 연동: `terminal-2` → Service Binding → `/api/internal/sync-guest`
+
+---
+
+## 비밀번호 해시 형식 (2026-05-22~)
+
+`lib/auth/password.ts`에서 관리. WebCrypto PBKDF2 기반.
+
+| 형식 | 설명 | 해싱 |
+|------|------|------|
+| `pbkdf2$100000$<saltB64>$<hashB64>` | 신규 (2026-05-22~) | WebCrypto PBKDF2-SHA-256, 100k iter |
+| `$2a$` / `$2b$` | 기존 bcrypt | 로그인 시 자동 재해시 (bcryptjs 검증 후 PBKDF2로 교체) |
+
+**점진적 전환**: `needsRehash(stored)` 반환 true이면 다음 로그인에서 자동 재해시.
+기존 사용자는 재로그인 없이 비밀번호 변경 불필요.
+
+---
+
+## D1 인덱스 (2026-05-22~)
+
+`migrations/0005_add_indexes.sql` 및 `lib/db/schema.ts` 동기화.
+
+| 테이블 | 인덱스 | 목적 |
+|--------|--------|------|
+| `guests` | `(venue_id, date)` | fetchGuestsByDate 풀스캔 방지 |
+| `guests` | `(external_link_id)` | 외부 DJ 링크 조회 |
+| `guests` | `(created_by_user_id)` | 사용자별 게스트 조회 |
+| `external_dj_links` | `(venue_id)` | 베뉴별 링크 조회 |
+| `users` | `(venue_id)` | 베뉴별 사용자 조회 |
 
 ---
 

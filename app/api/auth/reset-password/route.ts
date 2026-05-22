@@ -2,9 +2,9 @@ import { NextResponse } from "next/server";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { drizzle } from "drizzle-orm/d1";
 import { eq } from "drizzle-orm";
-import bcrypt from "bcryptjs";
 import { users, passwordResetTokens } from "@/lib/db/schema";
 import { sendEmail } from "@/lib/api/email";
+import { hashPassword } from "@/lib/auth/password";
 
 /**
  * 비밀번호 재설정 요청 (POST) 및 재설정 실행 (PUT)
@@ -23,14 +23,13 @@ export async function POST(request: Request) {
     const result = await db.select().from(users).where(eq(users.email, email)).limit(1);
     const user = result[0];
 
-    // 보안상 사용자가 없더라도 성공 메시지를 보낼 수도 있지만, 여기서는 명시적으로 처리
+    // 이메일 enumeration 방지: 미가입 이메일도 동일 응답
     if (!user) {
-      return NextResponse.json({ error: "등록되지 않은 이메일입니다." }, { status: 404 });
+      return NextResponse.json({ ok: true, message: "재설정 메일이 발송되었습니다." });
     }
 
-    // 토큰 생성 (UUID 기반)
     const token = crypto.randomUUID();
-    const expiresAt = new Date(Date.now() + 1000 * 60 * 60).toISOString(); // 1시간 후 만료
+    const expiresAt = new Date(Date.now() + 1000 * 60 * 60).toISOString();
 
     await db.insert(passwordResetTokens).values({
       id: crypto.randomUUID(),
@@ -41,10 +40,9 @@ export async function POST(request: Request) {
       createdAt: new Date().toISOString(),
     });
 
-    // 재설정 링크 이메일 발송
     const appUrl = env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
     const resetLink = `${appUrl}/auth/reset-password?token=${token}`;
-    
+
     await sendEmail({
       to: email,
       subject: "[Authon] 비밀번호 재설정 안내",
@@ -78,27 +76,40 @@ export async function PUT(request: Request) {
       return NextResponse.json({ error: "필수 정보가 누락되었습니다." }, { status: 400 });
     }
 
+    // 비밀번호 강도 검증 (8자 이상, 영문 + 숫자 포함)
+    if (
+      newPassword.length < 8 ||
+      !/[a-zA-Z]/.test(newPassword) ||
+      !/[0-9]/.test(newPassword)
+    ) {
+      return NextResponse.json(
+        { error: "비밀번호는 영문과 숫자를 포함하여 8자 이상이어야 합니다." },
+        { status: 400 }
+      );
+    }
+
     const db = drizzle(env.DB);
-    
-    // 토큰 검증
+
     const tokenResult = await db
       .select()
       .from(passwordResetTokens)
       .where(eq(passwordResetTokens.token, token))
       .limit(1);
-    
+
     const resetToken = tokenResult[0];
 
     if (!resetToken || resetToken.used || new Date(resetToken.expiresAt) < new Date()) {
       return NextResponse.json({ error: "유효하지 않거나 만료된 토큰입니다." }, { status: 400 });
     }
 
-    // 비밀번호 해싱 및 업데이트
-    const passwordHash = await bcrypt.hash(newPassword, 10);
-    
-    // 유저 비밀번호 업데이트 및 토큰 사용 처리 (트랜잭션 권장되나 D1 API 특성상 단순 순차 실행)
-    await db.update(users).set({ passwordHash }).where(eq(users.id, resetToken.userId));
-    await db.update(passwordResetTokens).set({ used: true }).where(eq(passwordResetTokens.id, resetToken.id));
+    // D1 batch로 비밀번호 업데이트 + 토큰 사용 처리를 원자적으로 실행
+    const passwordHash = await hashPassword(newPassword);
+    await env.DB.batch([
+      env.DB.prepare("UPDATE users SET password_hash = ? WHERE id = ?")
+        .bind(passwordHash, resetToken.userId),
+      env.DB.prepare("UPDATE password_reset_tokens SET used = 1 WHERE id = ?")
+        .bind(resetToken.id),
+    ]);
 
     return NextResponse.json({ ok: true, message: "비밀번호가 성공적으로 변경되었습니다." });
   } catch (error) {

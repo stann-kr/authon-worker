@@ -14,6 +14,76 @@ tags:
 
 ---
 
+## 2026-05-22 — Server Actions 권한 검증 부재 (보안 P0)
+
+### 발생 원인
+
+`"use server"` 지시어를 가진 `lib/api/*.ts` 함수들이 JWT/세션 검증 없이 호출 가능했음.
+Next.js Server Actions는 클라이언트에서 직접 호출 가능한 HTTP 엔드포인트로 노출되므로, 무권한 사용자가 사용자 삭제·역할 변경·게스트 영구 삭제 등을 수행할 수 있었음.
+
+### 해결
+
+`lib/auth/server.ts` 신규 생성:
+- `requireAuth()` — `next/headers` cookies()에서 token/sessionId 추출 → JWT 검증 → KV 세션 확인
+- `requireRole(roles[])` — requireAuth() 후 role 체크
+- 모든 `lib/api/*.ts` 함수 진입부에 `await requireAuth()` 또는 `await requireRole([...])` 호출
+
+### 재발 방지
+
+신규 Server Action 추가 시 반드시 첫 줄에 `await requireRole([...])` 삽입.
+토큰 기반 공개 API (`validateExternalToken`, `createGuestViaExternalLink`)는 예외.
+
+---
+
+## 2026-05-22 — lib/api/email.ts Cold Start 시 빈 환경 변수 캡처
+
+### 발생 원인
+
+`AwsClient`를 모듈 최상위에서 `process.env.AWS_SES_ACCESS_KEY`로 초기화.
+Cloudflare Workers에서 모듈 코드는 isolate 초기화 시 한 번만 실행되며, 이 시점에 `process.env`는 Workers 바인딩을 포함하지 않아 빈 문자열로 고정됨.
+
+### 해결
+
+`sendEmail()` 함수 내부에서 `getCloudflareContext().env`로 AWS 자격증명 읽고 `AwsClient` 생성.
+`worker-configuration.d.ts`에 `AWS_SES_*` 키 타입 선언 추가.
+`.dev.vars`에 `AWS_SES_ACCESS_KEY` 등 설정 필요 (실제 시크릿은 Cloudflare Dashboard에서 `wrangler secret put` 사용).
+
+---
+
+## 2026-05-22 — `worker-configuration.d.ts` CloudflareEnv 증강 미동작
+
+### 발생 원인
+
+`worker-configuration.d.ts`에 `declare global { interface CloudflareEnv { ... } }`를 선언했지만 TypeScript가 속성을 인식하지 못함.
+스크립트 파일(import/export 없음)에서의 `declare global`은 모듈 파일의 global augmentation과 동작이 다름.
+
+### 해결
+
+파일 최상단에 `export {};` 추가하여 모듈 파일로 전환. `declare global { ... }`이 정상 증강됨.
+tsc --noEmit 통과 확인.
+
+---
+
+## 2026-05-22 — usedGuests Race Condition (외부 DJ 링크 정원 초과 허용)
+
+### 발생 원인
+
+`createGuestViaExternalLink`에서 SELECT로 `usedGuests >= maxGuests` 체크 후 별도 UPDATE 실행.
+동시 요청 시 두 요청 모두 체크를 통과하여 정원 초과 게스트 생성 가능.
+
+### 해결
+
+D1 raw SQL로 조건부 원자 UPDATE:
+```sql
+UPDATE external_dj_links
+SET used_guests = used_guests + 1
+WHERE id = ? AND used_guests < max_guests
+RETURNING used_guests
+```
+`first()` 반환값이 null이면 정원 초과로 판단하여 에러 반환.
+
+---
+
 ## [Workers] 코드베이스 감사 발견 이슈 (2026-04-23) — ✅ 전체 해결 완료 (2026-04-23)
 
 ### 이슈 1: `no such table: users` — [[D1]] 마이그레이션 미적용
