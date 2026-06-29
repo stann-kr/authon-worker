@@ -5,37 +5,26 @@ import { eq } from "drizzle-orm";
 import { users, passwordResetTokens } from "@/lib/db/schema";
 import { sendEmail } from "@/lib/api/email";
 import { hashPassword } from "@/lib/auth/password";
+import { requireRole } from "@/lib/auth/server";
 
 /**
  * 레거시 유저 마이그레이션 API (super_admin 전용)
- * - JWT 쿠키에서 역할 검증 후 실행
+ * - 공통 `requireRole(["super_admin"])` 경로로 인증/세션/활성 사용자 검증 후 실행
  * - 유저 데이터 삽입 + 비밀번호 재설정 토큰 생성
  * - sendEmail 실패는 user 생성을 롤백하지 않고 별도 상태로 반환
  */
 
+function getAuthErrorStatus(error: unknown): number | null {
+  if (!(error instanceof Error)) return null;
+  if (error.message === "Unauthorized" || error.message === "Session expired") return 401;
+  if (error.message === "Forbidden") return 403;
+  return null;
+}
+
 export async function POST(request: Request) {
   try {
     const { env } = getCloudflareContext();
-
-    // ─── super_admin 역할 검증 ────────────────────────────────
-    const cookieHeader = request.headers.get("cookie") || "";
-    const tokenMatch = cookieHeader.match(/(?:^|;\s*)token=([^;]+)/);
-    const jwtToken = tokenMatch?.[1];
-
-    if (!jwtToken || !env.JWT_SECRET) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    try {
-      const { payload } = await import("jose").then(({ jwtVerify }) =>
-        jwtVerify(jwtToken, new TextEncoder().encode(env.JWT_SECRET))
-      );
-      if (payload.role !== "super_admin") {
-        return NextResponse.json({ error: "Forbidden: super_admin only" }, { status: 403 });
-      }
-    } catch {
-      return NextResponse.json({ error: "Invalid or expired token" }, { status: 401 });
-    }
+    await requireRole(["super_admin"]);
 
     const { users: legacyUsers } = await request.json();
 
@@ -133,6 +122,10 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: true, results });
   } catch (error) {
     console.error("Migration API error:", error);
+    const authStatus = getAuthErrorStatus(error);
+    if (authStatus) {
+      return NextResponse.json({ error: authStatus === 403 ? "Forbidden" : "Unauthorized" }, { status: authStatus });
+    }
     return NextResponse.json({ error: "마이그레이션 처리 중 오류가 발생했습니다." }, { status: 500 });
   }
 }

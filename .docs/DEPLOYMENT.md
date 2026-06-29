@@ -65,11 +65,13 @@ docker compose run --rm web npm run db:migrate:remote
 마이그레이션 파일은 `migrations/` 디렉토리에서 번호 순으로 자동 적용됨.
 현재 마이그레이션 목록:
 
-| 파일                          | 내용                           |
-| ----------------------------- | ------------------------------ |
+| 파일                          | 내용 |
+| ----------------------------- | ---- |
 | `0001_init.sql`               | 기본 스키마 (venues, users, djs, external_dj_links, guests, check_ins) |
-| `0002_password_reset.sql`     | password_reset_tokens 테이블   |
-| `0003_add_created_by_user.sql`| guests.created_by_user_id 컬럼 추가 |
+| `0002_password_reset.sql`     | `password_reset_tokens` 테이블 추가 |
+| `0003_add_created_by_user.sql`| `guests.created_by_user_id` 컬럼 추가 |
+| `0004_drop_djs.sql`           | `djs` 테이블 제거 및 `guests.dj_id` 제거 |
+| `0005_add_indexes.sql`        | `guests`, `external_dj_links`, `users` 조회 인덱스 추가 |
 
 ---
 
@@ -158,6 +160,8 @@ docker compose run --rm web npm run cf:preview
 ---
 
 ## 7. 유저 마이그레이션 (구 시스템 이관)
+
+> 운영 전환 전체 순서는 `SUPABASE_TO_WORKER_CUTOVER_RUNBOOK.md`를 기준으로 진행한다. 이 섹션은 유저 이관 경로만 발췌한다.
 
 구 [[Supabase]] 기반 사용자를 Worker 기반으로 이관하는 두 가지 방법:
 

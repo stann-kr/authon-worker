@@ -14,6 +14,28 @@ tags:
 
 ---
 
+## 2026-06-25 — Docker compose 검증 환경 드리프트 및 Next 16 proxy 전환
+
+### 증상
+
+- `docker compose run --rm web npm run lint` 실행 시 `eslint-config-next/core-web-vitals` import 해석 실패
+- 컨테이너 내부 빌드는 Next.js 15.3.2로 표시되는데, 호스트 기준 `package.json`/빌드는 Next.js 16.2.4 기준으로 동작
+- `middleware.ts` 경고 제거를 위해 `proxy.ts` 전환이 필요했음
+
+### 원인
+
+- 컨테이너의 `node_modules` / 이미지 상태가 현재 호스트 lockfile 상태와 드리프트된 것으로 보임
+- ESLint flat config import가 컨테이너 해석 환경과 불일치
+- Next 16에서는 `middleware.ts` 파일 컨벤션이 deprecated
+
+### 해결/현황
+
+- 호스트 기준 `proxy.ts` 전환 후 `npm run build` 통과, deprecation 경고 제거 확인
+- Docker 데몬 미기동 문제는 `open -a Docker` 후 `docker info` / `docker compose ps` 로 해소 가능 확인
+- 컨테이너 기준 lint는 아직 후속 과제로 남음 (`.docs/MIGRATION_TODO.md` 참고)
+
+---
+
 ## 2026-05-22 — Server Actions 권한 검증 부재 (보안 P0)
 
 ### 발생 원인

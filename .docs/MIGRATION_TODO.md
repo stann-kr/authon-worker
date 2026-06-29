@@ -34,9 +34,9 @@ tags:
 
 ### 인증
 - [x] NextAuth 제거 → 자체 JWT (`jose`) + KV 세션 인증
-- [x] `middleware.ts` — JWT 검증 및 경로별 RBAC (`/admin`, `/door`)
-- [x] `middleware.ts` — `/guest?token=` 외부 DJ 토큰 예외 처리
-- [x] `middleware.ts` — JWT_SECRET 폴백값 제거
+- [x] `proxy.ts` — JWT 검증 및 경로별 RBAC (`/admin`, `/door`)
+- [x] `proxy.ts` — `/guest?token=` 외부 DJ 토큰 예외 처리
+- [x] JWT + KV 세션 + D1 active/role 재검증 구조 도입 (`lib/auth/server.ts`, `proxy.ts`)
 - [x] `.dev.vars`에 `JWT_SECRET` 설정
 
 ### API / 코드 품질
@@ -67,26 +67,30 @@ tags:
 
 ---
 
-## 🔧 잔여 후순위 항목
+## 🔧 현재 후속 과제 / 감사 포인트
 
 ### 수동 실행 필요 (1회성)
 - [ ] **Super Admin 계정 로컬 D1 부트스트랩** — 최초 배포 후 wrangler d1 execute로 직접 INSERT
 
-### 코드 개선 (후순위)
-- [ ] `lib/api/email.ts` — `process.env.*` → Cloudflare `env` 바인딩 방식으로 전환
-  - 현재: `process.env.AWS_SES_*`로 동작 중 (로컬에서 정상 동작)
-  - 개선: `getCloudflareContext().env.AWS_SES_*` 방식으로 Workers 네이티브하게 변경
+### 보안/아키텍처 후속 과제
+- [ ] 로그인 및 비밀번호 재설정 요청 rate limit 도입 (`app/api/auth/login/route.ts`, `app/api/auth/reset-password/route.ts`) [2026-06-25 완료]
+- [ ] 비밀번호 변경/재설정 시 기존 KV 세션 일괄 무효화 [2026-06-25 완료 — `session_version` 기반]
+- [x] reset token 소비를 단일 조건부 UPDATE로 원자화 [2026-06-25 완료]
+- [x] `/api/admin/migrate`를 `requireRole(["super_admin"])` 경로로 통일 [2026-06-25 완료]
+- [x] 외부 DJ 링크 생성 시 `expiresAt` 기본값 강제 [2026-06-25 완료 — event day + 1일, fallback 7일]
+
+### 개발/운영 환경 후속 과제
+- [ ] Docker 컨테이너 기준 `npm run lint` 복구 (`eslint.config.mjs` import 호환성 점검)
+- [ ] 컨테이너 Next 버전/의존성 드리프트 제거 후 compose 기준 build/lint 재검증
 
 ---
 
-## 📋 검증 포인트
+## 📋 현재 검증 상태
 
-코드 수정 후 아래 흐름이 정상 동작하는지 확인:
+2026-06-25 기준 확인됨:
 
-- [ ] 로그인 → 대시보드 이동
-- [ ] 게스트 등록 → 등록자 이름 표시 (createdByUserId 반영 확인)
-- [ ] Door 페이지 체크인 동작
-- [ ] 외부 DJ 링크 (`/guest?token=xxx`) 로그인 없이 접근 가능
-- [ ] 로그아웃 → 쿠키 삭제 확인
-- [ ] 비밀번호 변경 (`/profile` → CHANGE PASSWORD)
-- [ ] 유저 마이그레이션 → 비밀번호 재설정 이메일 발송 확인
+- [x] 호스트 기준 `npm run build` 통과
+- [x] Next 16 `middleware` deprecation 경고 제거 (`proxy.ts` 전환 완료)
+- [x] `git diff --check` 통과
+- [ ] Docker compose 기준 `npm run lint` 통과
+- [ ] Docker compose 기준 `npm run build`가 호스트와 동일한 Next 16/의존성 상태에서 재검증됨

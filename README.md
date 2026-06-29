@@ -3,7 +3,7 @@
 클럽/바/라운지 등 베뉴의 게스트 리스트 관리 시스템.
 DJ 게스트 등록 → Door 스태프 체크인 → Admin 전체 관리를 단일 플랫폼에서 처리.
 
-**스택:** Next.js 15 (App Router) · Cloudflare Workers + D1 + KV · Drizzle ORM · JWT 자체 인증 · AWS SES
+**스택:** Next.js 16 (App Router) · Cloudflare Workers + D1 + KV · Drizzle ORM · JWT 자체 인증 · AWS SES
 
 ---
 

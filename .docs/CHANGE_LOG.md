@@ -12,6 +12,43 @@ tags:
 
 ---
 
+## 2026-06-25 — Next 16 proxy 전환, Supabase 대체 문서 정리, 후속 감사 포인트 정리
+
+### 런타임/인증 문서 현행화
+
+- `middleware.ts` → `proxy.ts` 전환 반영
+- `.docs/TECH_SPEC.md`에 Supabase → Worker 대체 매핑 표 추가
+- `.docs/MIGRATION_TODO.md`의 stale 항목 정리 및 현재 후속 감사 포인트 반영
+- `.docs/README.md` 신규 작성 (repo-local 문서 허브)
+- 루트 `README.md`의 Next.js 버전 표기 15 → 16 수정
+
+### 운영/검증 메모
+
+- Docker Desktop 미기동 시 `docker.sock` 접속 실패 가능성 문서화
+- 컨테이너 lint/build 환경 드리프트 이슈를 `.docs/TROUBLESHOOTING.md`에 기록
+
+### 보안 보강
+
+- 로그인 및 비밀번호 재설정 요청에 KV 기반 rate limit 추가
+- `users.session_version` 도입으로 비밀번호 변경/재설정 후 기존 세션 무효화
+- 비밀번호 재설정 토큰 소비를 조건부 UPDATE로 강화
+- `/api/admin/migrate`를 공통 `requireRole(["super_admin"])` 경로로 통일
+- 외부 DJ 링크 생성 시 기본 만료시간 강제 (`event day + 1일`, fallback 7일)
+- `.docs/REMEDIATION_PLAN.md` 신규 작성
+- `.docs/SUPABASE_TO_WORKER_CUTOVER_RUNBOOK.md` 신규 작성 — remote Wrangler 인증 점검, D1 적용, 레거시 유저 이관, DNS 컷오버, 롤백 절차 문서화
+
+---
+
+## 2026-06-25 — 로그인 화면 비밀번호 재설정 경로 추가 및 접근성 개선
+
+### UI/UX 개선
+- **비밀번호 재설정 링크 추가** — 로그인 화면 하단의 분실 안내 한글 문구를 제거하고, `/auth/reset-password`로 연결되는 미니멀한 "FORGOT PASSWORD?" 링크(CTA) 추가. 기존의 monospace, dark, minimal 비주얼 아이덴티티 유지.
+
+### 접근성 및 상호작용 개선
+- **입력 폼 접근성 개선** — 이메일 및 비밀번호 입력 필드 `label`에 `htmlFor` 속성 매핑 및 `input`에 `id` 속성 부여. 스크린 리더 지원 및 라벨 클릭 시의 포커스 동작 보장.
+
+---
+
 ## 2026-05-22 — 마이그레이션 사후 보안 점검 및 품질 개선 (P0/P1/P2 전체)
 
 ### 보안 (P0)
