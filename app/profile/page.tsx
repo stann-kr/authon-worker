@@ -7,6 +7,7 @@ import Footer from "@/components/Footer";
 import Spinner from "@/components/Spinner";
 import Alert from "@/components/Alert";
 import RoleLabel from "@/components/RoleLabel";
+import PasswordInput from "@/components/PasswordInput";
 import { getUser, User } from "@/lib/auth";
 import { updateUserProfile } from "@/lib/api/users";
 
@@ -16,6 +17,9 @@ export default function ProfilePage() {
   const [isSaving, setIsSaving] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
   const [error, setError] = useState("");
+  const [activeSection, setActiveSection] = useState<"profile" | "security">(
+    "profile",
+  );
 
   const [formData, setFormData] = useState({
     name: "",
@@ -115,10 +119,10 @@ export default function ProfilePage() {
                   <h2 className="font-mono text-base sm:text-lg tracking-wider text-white uppercase mb-1">
                     {user.name}
                   </h2>
-                  <p className="text-gray-400 font-mono text-xs tracking-wider mb-3">
+                  <p className="text-gray-400 font-mono text-xs tracking-[0.16em] break-all mb-3">
                     {user.email}
                   </p>
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center justify-center gap-2">
                     <span className="px-2 py-1 bg-black border border-gray-600 text-xs font-mono text-gray-300 uppercase">
                       <RoleLabel role={user.role} />
                     </span>
@@ -134,15 +138,15 @@ export default function ProfilePage() {
                   ACCOUNT INFO
                 </h3>
                 <div className="space-y-3">
-                  <div className="flex justify-between items-center">
+                  <div className="flex justify-between items-center gap-3">
                     <span className="text-gray-500 font-mono text-xs uppercase">
                       Role
                     </span>
-                    <span className="text-white font-mono text-xs uppercase">
+                    <span className="text-white font-mono text-xs uppercase text-right">
                       <RoleLabel role={user.role} />
                     </span>
                   </div>
-                  <div className="flex justify-between items-center">
+                  <div className="flex justify-between items-center gap-3">
                     <span className="text-gray-500 font-mono text-xs uppercase">
                       Guest Limit
                     </span>
@@ -150,7 +154,7 @@ export default function ProfilePage() {
                       {user.guest_limit}
                     </span>
                   </div>
-                  <div className="flex justify-between items-center">
+                  <div className="flex justify-between items-center gap-3">
                     <span className="text-gray-500 font-mono text-xs uppercase">
                       Status
                     </span>
@@ -162,7 +166,7 @@ export default function ProfilePage() {
               </div>
             </div>
 
-            <div className="lg:col-span-3">
+            <div className="lg:col-span-3 space-y-6">
               {showSuccess && (
                 <Alert
                   type="success"
@@ -173,57 +177,103 @@ export default function ProfilePage() {
 
               {error && <Alert type="error" message={error} className="mb-6" />}
 
-              <div className="bg-gray-900 border border-gray-700">
-                <div className="border-b border-gray-700 p-4">
-                  <h3 className="font-mono text-xs sm:text-sm tracking-wider text-white uppercase">
-                    EDIT PROFILE
-                  </h3>
-                </div>
-
-                <form onSubmit={handleSubmit} className="p-4 sm:p-6 space-y-6">
+              <div className="bg-gray-900 border border-gray-700 overflow-hidden">
+                <div className="border-b border-gray-700 p-4 space-y-4">
                   <div>
-                    <label className="block text-xs sm:text-sm text-gray-400 font-mono tracking-wider uppercase mb-2">
-                      NAME
-                    </label>
-                    <input
-                      type="text"
-                      value={formData.name}
-                      onChange={(e) =>
-                        setFormData({ ...formData, name: e.target.value })
-                      }
-                      className="w-full bg-black border border-gray-600 px-4 py-3 text-white font-mono text-sm tracking-wider focus:outline-none focus:border-white transition-colors"
-                      required
-                    />
+                    <h3 className="font-mono text-xs sm:text-sm tracking-wider text-white uppercase">
+                      ACCOUNT SETTINGS
+                    </h3>
+                    <p className="mt-2 text-gray-500 font-mono text-[10px] tracking-[0.18em] uppercase leading-relaxed">
+                      Keep profile details and security actions separated so each task is easier to review on desktop and mobile.
+                    </p>
                   </div>
 
-                  <button
-                    type="submit"
-                    disabled={isSaving}
-                    className="w-full bg-white text-black font-mono text-sm tracking-wider uppercase py-3 sm:py-4 hover:bg-gray-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                  >
-                    {isSaving ? (
-                      <>
-                        <div className="w-4 h-4 border-2 border-black border-t-transparent rounded-full animate-spin"></div>
-                        SAVING...
-                      </>
-                    ) : (
-                      <>
-                        <i className="ri-save-line"></i>
-                        SAVE CHANGES
-                      </>
-                    )}
-                  </button>
-                </form>
-              </div>
-
-              {/* Password Change Section */}
-              <div className="bg-gray-900 border border-gray-700 mt-6">
-                <div className="border-b border-gray-700 p-4">
-                  <h3 className="font-mono text-xs sm:text-sm tracking-wider text-white uppercase">
-                    CHANGE PASSWORD
-                  </h3>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setActiveSection("profile")}
+                      className={`px-4 py-3 border font-mono text-[10px] sm:text-xs tracking-[0.22em] uppercase transition-colors ${
+                        activeSection === "profile"
+                          ? "bg-white text-black border-white"
+                          : "bg-black text-gray-400 border-gray-700 hover:text-white hover:border-gray-500"
+                      }`}
+                    >
+                      BASIC INFO
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setActiveSection("security")}
+                      className={`px-4 py-3 border font-mono text-[10px] sm:text-xs tracking-[0.22em] uppercase transition-colors ${
+                        activeSection === "security"
+                          ? "bg-white text-black border-white"
+                          : "bg-black text-gray-400 border-gray-700 hover:text-white hover:border-gray-500"
+                      }`}
+                    >
+                      SECURITY
+                    </button>
+                  </div>
                 </div>
-                <PasswordChangeForm />
+
+                {activeSection === "profile" ? (
+                  <div>
+                    <div className="border-b border-gray-700 p-4">
+                      <h3 className="font-mono text-xs sm:text-sm tracking-wider text-white uppercase">
+                        EDIT PROFILE
+                      </h3>
+                    </div>
+
+                    <form onSubmit={handleSubmit} className="p-4 sm:p-6 space-y-6" aria-busy={isSaving}>
+                      <div>
+                        <label htmlFor="profile-name" className="block text-xs sm:text-sm text-gray-400 font-mono tracking-wider uppercase mb-2">
+                          NAME
+                        </label>
+                        <input
+                          id="profile-name"
+                          type="text"
+                          value={formData.name}
+                          onChange={(e) =>
+                            setFormData({ ...formData, name: e.target.value })
+                          }
+                          disabled={isSaving}
+                          className="w-full bg-black border border-gray-600 px-4 py-3 text-white font-mono text-sm tracking-wider focus:outline-none focus:border-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                          required
+                          aria-describedby="profile-name-helper"
+                          aria-invalid={error ? "true" : "false"}
+                        />
+                        <p id="profile-name-helper" className="text-gray-500 font-mono text-[10px] tracking-[0.18em] uppercase mt-2 leading-relaxed">
+                          Your display name or identifier within this context.
+                        </p>
+                      </div>
+
+                      <button
+                        type="submit"
+                        disabled={isSaving}
+                        className="w-full bg-white text-black font-mono text-sm tracking-wider uppercase py-3 sm:py-4 hover:bg-gray-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                      >
+                        {isSaving ? (
+                          <>
+                            <div className="w-4 h-4 border-2 border-black border-t-transparent rounded-full animate-spin"></div>
+                            SAVING...
+                          </>
+                        ) : (
+                          <>
+                            <i className="ri-save-line"></i>
+                            SAVE CHANGES
+                          </>
+                        )}
+                      </button>
+                    </form>
+                  </div>
+                ) : (
+                  <div>
+                    <div className="border-b border-gray-700 p-4">
+                      <h3 className="font-mono text-xs sm:text-sm tracking-wider text-white uppercase">
+                        CHANGE PASSWORD
+                      </h3>
+                    </div>
+                    <PasswordChangeForm />
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -234,26 +284,37 @@ export default function ProfilePage() {
   );
 }
 
+function passwordPolicyError(password: string): string | null {
+  if (password.length < 8) return "Password must be at least 8 characters.";
+  if (!/[A-Za-z]/.test(password) || !/[0-9]/.test(password)) {
+    return "Password must include letters and numbers.";
+  }
+  return null;
+}
+
 function PasswordChangeForm() {
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [isUpdating, setIsUpdating] = useState(false);
+  const [isRedirecting, setIsRedirecting] = useState(false);
   const [passwordError, setPasswordError] = useState("");
   const [passwordSuccess, setPasswordSuccess] = useState("");
+  const router = useRouter();
 
   const handlePasswordChange = async (e: React.FormEvent) => {
     e.preventDefault();
     setPasswordError("");
     setPasswordSuccess("");
 
-    if (newPassword !== confirmPassword) {
-      setPasswordError("New passwords do not match.");
+    const policyError = passwordPolicyError(newPassword);
+    if (policyError) {
+      setPasswordError(policyError);
       return;
     }
 
-    if (newPassword.length < 6) {
-      setPasswordError("Password must be at least 6 characters.");
+    if (newPassword !== confirmPassword) {
+      setPasswordError("New passwords do not match.");
       return;
     }
 
@@ -270,10 +331,17 @@ function PasswordChangeForm() {
         throw new Error(data.error || "Failed to update password");
       }
 
-      setPasswordSuccess("Password updated successfully.");
+      setPasswordSuccess(data.message || "Password updated successfully.");
       setCurrentPassword("");
       setNewPassword("");
       setConfirmPassword("");
+
+      if (data.reauthRequired) {
+        setIsRedirecting(true);
+        setTimeout(() => {
+          router.push("/auth/login");
+        }, 1200);
+      }
     } catch (err: unknown) {
       setPasswordError(err instanceof Error ? err.message : "An error occurred.");
     } finally {
@@ -282,52 +350,87 @@ function PasswordChangeForm() {
   };
 
   return (
-    <form onSubmit={handlePasswordChange} className="p-4 sm:p-6 space-y-4">
+    <form onSubmit={handlePasswordChange} className="p-4 sm:p-6 space-y-5" aria-busy={isUpdating || isRedirecting}>
       {passwordError && <Alert type="error" message={passwordError} className="mb-4" />}
       {passwordSuccess && <Alert type="success" message={passwordSuccess} className="mb-4" />}
-      
+
+      <div className="border border-yellow-700/60 bg-yellow-950/20 p-4 space-y-2">
+        <div className="flex items-center gap-2 text-yellow-300 font-mono text-[10px] tracking-[0.24em] uppercase">
+          <i className="ri-alert-line"></i>
+          Security warning
+        </div>
+        <p id="password-warning-msg" className="text-yellow-100/80 font-mono text-[10px] sm:text-xs tracking-[0.16em] uppercase leading-relaxed">
+          Changing your password will immediately sign you out. You will need to log in again on this device.
+        </p>
+      </div>
+
       <div>
-        <label className="block text-xs sm:text-sm text-gray-400 font-mono tracking-wider uppercase mb-2">
+        <label htmlFor="current-password" className="block text-xs sm:text-sm text-gray-400 font-mono tracking-wider uppercase mb-2">
           CURRENT PASSWORD
         </label>
-        <input
-          type="password"
+        <PasswordInput
+          id="current-password"
           value={currentPassword}
           onChange={(e) => setCurrentPassword(e.target.value)}
-          className="w-full bg-black border border-gray-600 px-4 py-3 text-white font-mono text-sm tracking-wider focus:outline-none focus:border-white transition-colors"
+          autoComplete="current-password"
+          disabled={isUpdating || isRedirecting}
           required
+          aria-describedby="password-warning-msg"
+          aria-invalid={passwordError ? "true" : "false"}
         />
       </div>
+
       <div>
-        <label className="block text-xs sm:text-sm text-gray-400 font-mono tracking-wider uppercase mb-2">
+        <label htmlFor="new-password" className="block text-xs sm:text-sm text-gray-400 font-mono tracking-wider uppercase mb-2">
           NEW PASSWORD
         </label>
-        <input
-          type="password"
+        <PasswordInput
+          id="new-password"
           value={newPassword}
           onChange={(e) => setNewPassword(e.target.value)}
-          className="w-full bg-black border border-gray-600 px-4 py-3 text-white font-mono text-sm tracking-wider focus:outline-none focus:border-white transition-colors"
+          autoComplete="new-password"
+          disabled={isUpdating || isRedirecting}
           required
+          placeholder="Create a new password"
+          aria-describedby="new-password-policy"
+          aria-invalid={passwordError ? "true" : "false"}
         />
+        <p id="new-password-policy" className="text-gray-500 font-mono text-[10px] tracking-[0.18em] uppercase mt-2 leading-relaxed">
+          Minimum 8 characters, including letters and numbers.
+        </p>
       </div>
+
       <div>
-        <label className="block text-xs sm:text-sm text-gray-400 font-mono tracking-wider uppercase mb-2">
+        <label htmlFor="confirm-password" className="block text-xs sm:text-sm text-gray-400 font-mono tracking-wider uppercase mb-2">
           CONFIRM NEW PASSWORD
         </label>
-        <input
-          type="password"
+        <PasswordInput
+          id="confirm-password"
           value={confirmPassword}
           onChange={(e) => setConfirmPassword(e.target.value)}
-          className="w-full bg-black border border-gray-600 px-4 py-3 text-white font-mono text-sm tracking-wider focus:outline-none focus:border-white transition-colors"
+          autoComplete="new-password"
+          disabled={isUpdating || isRedirecting}
           required
+          placeholder="Re-enter your new password"
+          aria-describedby="confirm-password-helper"
+          aria-invalid={passwordError ? "true" : "false"}
         />
+        <p id="confirm-password-helper" className="text-gray-500 font-mono text-[10px] tracking-[0.18em] uppercase mt-2 leading-relaxed">
+          Re-enter your new password to confirm accuracy before saving.
+        </p>
       </div>
+
       <button
         type="submit"
-        disabled={isUpdating}
+        disabled={isUpdating || isRedirecting}
         className="w-full bg-white text-black font-mono text-sm tracking-wider uppercase py-3 sm:py-4 hover:bg-gray-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
       >
-        {isUpdating ? (
+        {isRedirecting ? (
+          <>
+            <div className="w-4 h-4 border-2 border-black border-t-transparent rounded-full animate-spin"></div>
+            REDIRECTING TO LOGIN...
+          </>
+        ) : isUpdating ? (
           <>
             <div className="w-4 h-4 border-2 border-black border-t-transparent rounded-full animate-spin"></div>
             UPDATING...

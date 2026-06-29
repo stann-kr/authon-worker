@@ -1,11 +1,12 @@
-
 'use client';
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import Footer from '@/components/Footer';
 import Alert from '@/components/Alert';
 import Button from '@/components/Button';
+import PasswordInput from '@/components/PasswordInput';
 import { login } from '@/lib/auth';
 import { BRAND_NAME } from '@/lib/brand';
 
@@ -25,13 +26,13 @@ export default function LoginPage() {
 
     try {
       const result = await login(formData.email, formData.password);
-      
+
       if (result.success) {
         router.push('/');
       } else {
         setError(result.message || 'Login failed.');
       }
-    } catch (_error) {
+    } catch {
       setError('An error occurred during login.');
     } finally {
       setIsLoading(false);
@@ -41,8 +42,8 @@ export default function LoginPage() {
   return (
     <div className="min-h-screen bg-black flex items-center justify-center px-4 sm:px-6 lg:px-8">
       <div className="w-full max-w-sm sm:max-w-md">
-        <div className="bg-surface/50 border border-border-subtle p-6 sm:p-8 lg:p-10">
-          <div className="text-center mb-8">
+        <div className="bg-surface/60 border border-border-subtle p-6 sm:p-8 lg:p-10 shadow-[0_0_0_1px_rgba(255,255,255,0.02)]">
+          <div className="text-center mb-8 sm:mb-9">
             <div className="flex items-center justify-center gap-2 mb-4">
               <div className="w-2 h-2 bg-white"></div>
               <div className="w-2 h-2 bg-white"></div>
@@ -54,33 +55,64 @@ export default function LoginPage() {
             </p>
           </div>
 
-          <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-5">
+          <form onSubmit={handleSubmit} className="space-y-6" aria-busy={isLoading}>
             <div>
-              <label className="block text-text-muted font-mono text-xs sm:text-sm tracking-wider uppercase mb-2">
+              <label
+                htmlFor="email"
+                className="block text-text-muted font-mono text-xs sm:text-sm tracking-wider uppercase mb-2"
+              >
                 EMAIL ADDRESS
               </label>
               <input
+                id="email"
                 type="email"
                 value={formData.email}
                 onChange={(e) => setFormData({...formData, email: e.target.value})}
-                className="w-full bg-surface border border-border-default px-4 py-3 sm:py-4 text-white font-mono text-sm tracking-wider focus:outline-none focus:border-border-focus transition-colors"
-                placeholder="Enter your email"
+                className="w-full bg-surface border border-border-default px-4 py-3 sm:py-4 text-white font-mono text-sm tracking-wider focus:outline-none focus:border-border-focus transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                placeholder="name@example.com"
+                autoComplete="email"
                 required
+                disabled={isLoading}
+                aria-describedby="email-helper"
+                aria-invalid={error ? 'true' : 'false'}
               />
+              <p id="email-helper" className="text-text-dim font-mono text-[10px] tracking-[0.22em] uppercase mt-2 leading-relaxed">
+                Use the email address registered to your account.
+              </p>
             </div>
 
-            <div>
-              <label className="block text-text-muted font-mono text-xs sm:text-sm tracking-wider uppercase mb-2">
-                PASSWORD
-              </label>
-              <input
-                type="password"
+            <div className="space-y-2">
+              <div className="flex items-center justify-between gap-3">
+                <label
+                  htmlFor="password"
+                  className="block text-text-muted font-mono text-xs sm:text-sm tracking-wider uppercase"
+                >
+                  PASSWORD
+                </label>
+                <Link
+                  href="/auth/reset-password"
+                  className="inline-flex items-center gap-1 text-[10px] sm:text-xs text-white font-mono tracking-[0.22em] uppercase hover:text-gray-300 transition-colors"
+                  aria-label="Forgot password? Go to password reset page"
+                >
+                  FORGOT?
+                  <i className="ri-arrow-right-up-line text-xs"></i>
+                </Link>
+              </div>
+              <PasswordInput
+                id="password"
                 value={formData.password}
                 onChange={(e) => setFormData({...formData, password: e.target.value})}
-                className="w-full bg-surface border border-border-default px-4 py-3 sm:py-4 text-white font-mono text-sm tracking-wider focus:outline-none focus:border-border-focus transition-colors"
-                placeholder="Enter your password"
+                inputClassName="w-full bg-surface border border-border-default px-4 py-3 sm:py-4 pr-12 text-white font-mono text-sm tracking-wider focus:outline-none focus:border-border-focus transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                placeholder="••••••••"
+                autoComplete="current-password"
                 required
+                disabled={isLoading}
+                aria-describedby="password-helper password-support"
+                aria-invalid={error ? 'true' : 'false'}
               />
+              <p id="password-helper" className="text-text-dim font-mono text-[10px] tracking-[0.22em] uppercase leading-relaxed">
+                Case-sensitive. Use show/hide if you want to verify what you typed.
+              </p>
             </div>
 
             {error && (
@@ -95,10 +127,13 @@ export default function LoginPage() {
             >
               SIGN IN
             </Button>
-            
-            <div className="text-center mt-4">
-              <p className="text-text-dim font-mono text-xs tracking-wider uppercase">
-                비밀번호를 분실하신 경우 시스템 관리자에게 문의하세요.
+
+            <div className="border border-white/10 bg-black/30 px-4 py-3 space-y-1.5">
+              <p className="text-white font-mono text-[10px] tracking-[0.22em] uppercase">
+                Need account recovery?
+              </p>
+              <p id="password-support" className="text-text-dim font-mono text-[10px] tracking-[0.18em] uppercase leading-relaxed">
+                We only send reset links to registered email addresses. If you cannot access that inbox, contact your administrator.
               </p>
             </div>
           </form>

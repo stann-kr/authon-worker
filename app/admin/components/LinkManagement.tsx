@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import VenueSelector, {
   useVenueSelector,
 } from "../../../components/VenueSelector";
@@ -18,6 +18,16 @@ import {
   activateExternalLink,
 } from "../../../lib/api/external-links";
 import type { ExternalDJLink } from "../../../lib/api/types";
+import {
+  deriveLinkStatus,
+  filterLinksByManageFilter,
+  formatExpiryTimestamp,
+  formatRelativeExpiry,
+  getDashboardStats,
+  sortLinks,
+  type ManageFilter,
+  type ManageSort,
+} from "./linkStatus";
 
 interface LinkManagementProps {
   selectedDate: string;
@@ -25,6 +35,9 @@ interface LinkManagementProps {
 
 export default function LinkManagement({ selectedDate }: LinkManagementProps) {
   const [activeTab, setActiveTab] = useState<"create" | "manage">("create");
+  const [manageFilter, setManageFilter] = useState<ManageFilter>("all");
+  const [manageSort, setManageSort] = useState<ManageSort>("expiresSoonest");
+  const [now, setNow] = useState(() => Date.now());
   const [formData, setFormData] = useState({
     date: selectedDate,
     dj: "",
@@ -44,6 +57,8 @@ export default function LinkManagement({ selectedDate }: LinkManagementProps) {
   }>({});
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [copyToast, setCopyToast] = useState<string | null>(null);
+  const [pendingDeleteLink, setPendingDeleteLink] = useState<ExternalDJLink | null>(null);
 
   // 로딩 중 이전 데이터를 유지하여 화면 깜빡임 방지
   const displayCacheRef = useRef<ExternalDJLink[]>([]);
@@ -96,6 +111,11 @@ export default function LinkManagement({ selectedDate }: LinkManagementProps) {
     }
   }, [activeTab, loadLinks]);
 
+  useEffect(() => {
+    const intervalId = window.setInterval(() => setNow(Date.now()), 30 * 1000);
+    return () => window.clearInterval(intervalId);
+  }, []);
+
   const getGuestPageUrl = (token: string) => {
     if (typeof window === "undefined") return "";
     return `${window.location.origin}/guest?token=${token}`;
@@ -141,8 +161,11 @@ export default function LinkManagement({ selectedDate }: LinkManagementProps) {
         setCopiedId(id);
         setTimeout(() => setCopiedId(null), 2000);
       }
+      setCopyToast(id ? "Guest link copied." : "Generated link copied.");
+      setTimeout(() => setCopyToast(null), 2200);
     } catch (err) {
       console.error("Copy failed:", err);
+      setError("Failed to copy link.");
     }
 
     setTimeout(() => {
@@ -156,7 +179,6 @@ export default function LinkManagement({ selectedDate }: LinkManagementProps) {
 
   const handleDeleteLink = async (id: string) => {
     setSuccess(null);
-    if (!confirm("DELETE THIS LINK?")) return;
     setLoadingStates((prev) => ({ ...prev, [`delete_${id}`]: true }));
     const { error } = await deleteExternalLink(id);
     if (error) {
@@ -165,8 +187,15 @@ export default function LinkManagement({ selectedDate }: LinkManagementProps) {
     } else {
       setLinks((prev) => prev.filter((link) => link.id !== id));
       setSuccess("Link deleted.");
+      setPendingDeleteLink(null);
     }
     setLoadingStates((prev) => ({ ...prev, [`delete_${id}`]: false }));
+  };
+
+  const requestDeleteLink = (link: ExternalDJLink) => {
+    setError(null);
+    setSuccess(null);
+    setPendingDeleteLink(link);
   };
 
   const handleDeactivateLink = async (id: string) => {
@@ -208,8 +237,20 @@ export default function LinkManagement({ selectedDate }: LinkManagementProps) {
     setLoadingStates((prev) => ({ ...prev, [`activate_${id}`]: false }));
   };
 
-  const activeLinks = displayLinks.filter((l) => l.active);
-  const inactiveLinks = displayLinks.filter((l) => !l.active);
+  const dashboardStats = useMemo(
+    () => getDashboardStats(displayLinks, now),
+    [displayLinks, now],
+  );
+
+  const filteredLinks = useMemo(
+    () => filterLinksByManageFilter(displayLinks, manageFilter, now),
+    [displayLinks, manageFilter, now],
+  );
+
+  const sortedLinks = useMemo(
+    () => sortLinks(filteredLinks, manageSort, now),
+    [filteredLinks, manageSort, now],
+  );
 
   const getTabInfo = () => {
     switch (activeTab) {
@@ -228,7 +269,8 @@ export default function LinkManagement({ selectedDate }: LinkManagementProps) {
   const tabInfo = getTabInfo();
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 lg:gap-6">
+    <>
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 lg:gap-6">
       <div className="lg:col-span-1 space-y-4">
         {/* Venue selector for super_admin */}
         {isSuperAdmin && venues.length > 0 && (
@@ -284,7 +326,7 @@ export default function LinkManagement({ selectedDate }: LinkManagementProps) {
           </div>
           <div className="text-center mb-4">
             <div className="text-white font-mono text-3xl sm:text-4xl tracking-wider">
-              {displayLinks.length}
+              {dashboardStats.total}
             </div>
             <div className="text-cyan-300 text-xs font-mono tracking-wider uppercase">
               TOTAL LINKS
@@ -293,8 +335,8 @@ export default function LinkManagement({ selectedDate }: LinkManagementProps) {
 
           <StatGrid
             items={[
-              { label: "ACTIVE", value: activeLinks.length, color: "green" },
-              { label: "EXPIRED", value: inactiveLinks.length, color: "red" },
+              { label: "ACTIVE", value: dashboardStats.active, color: "green" },
+              { label: "INACTIVE", value: dashboardStats.inactive, color: "red" },
             ]}
           />
         </div>
@@ -469,27 +511,116 @@ export default function LinkManagement({ selectedDate }: LinkManagementProps) {
             <div className="bg-gray-900 border border-gray-700">
               <PanelHeader
                 title="LINK LIST"
-                count={displayLinks.length}
+                count={sortedLinks.length}
                 onRefresh={loadLinks}
                 isLoading={isFetching}
               />
 
-              {isFetching && displayLinks.length === 0 ? (
+              <div className="border-t border-gray-700 p-4 sm:p-5 space-y-4">
+                <div className="grid grid-cols-2 xl:grid-cols-6 gap-3">
+                  {[
+                    { label: "TOTAL", value: dashboardStats.total, tone: "text-white border-gray-700" },
+                    { label: "ACTIVE", value: dashboardStats.active, tone: "text-green-400 border-green-900/60" },
+                    { label: "INACTIVE", value: dashboardStats.inactive, tone: "text-gray-300 border-gray-700" },
+                    { label: "EXPIRED", value: dashboardStats.expired, tone: "text-red-400 border-red-900/60" },
+                    { label: "24H", value: dashboardStats.expiringSoon, tone: "text-yellow-300 border-yellow-900/60" },
+                    { label: "FULL", value: dashboardStats.full, tone: "text-cyan-300 border-cyan-900/60" },
+                  ].map((item) => (
+                    <div key={item.label} className={`bg-black border p-3 ${item.tone}`}>
+                      <div className="font-mono text-[10px] tracking-[0.25em] uppercase text-gray-500 mb-2">
+                        {item.label}
+                      </div>
+                      <div className="font-mono text-2xl tracking-wider">
+                        {item.value}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="flex flex-wrap items-end justify-between gap-3">
+                  <div className="flex flex-wrap gap-2">
+                    {[
+                      { key: "all", label: "ALL", count: dashboardStats.total },
+                      { key: "active", label: "ACTIVE", count: dashboardStats.active },
+                      { key: "inactive", label: "INACTIVE", count: dashboardStats.inactive },
+                      { key: "expired", label: "EXPIRED", count: dashboardStats.expired },
+                      { key: "expiring-soon", label: "24H", count: dashboardStats.expiringSoon },
+                      { key: "full", label: "FULL", count: dashboardStats.full },
+                    ].map((filter) => (
+                      <button
+                        key={filter.key}
+                        onClick={() => setManageFilter(filter.key as ManageFilter)}
+                        className={`px-3 py-2 border font-mono text-[10px] tracking-[0.25em] uppercase transition-colors ${
+                          manageFilter === filter.key
+                            ? "bg-white text-black border-white"
+                            : "bg-black text-gray-400 border-gray-700 hover:text-white hover:border-gray-500"
+                        }`}
+                      >
+                        {filter.label} ({filter.count})
+                      </button>
+                    ))}
+                  </div>
+
+                  <div className="min-w-[220px] ml-auto">
+                    <label className="block mb-2 text-gray-500 font-mono text-[10px] tracking-[0.22em] uppercase">
+                      SORT BY
+                    </label>
+                    <select
+                      value={manageSort}
+                      onChange={(e) => setManageSort(e.target.value as ManageSort)}
+                      className="w-full bg-black border border-gray-700 px-3 py-2.5 text-white font-mono text-xs tracking-[0.16em] uppercase focus:outline-none focus:border-white transition-colors"
+                    >
+                      <option value="expiresSoonest">EXPIRES SOONEST</option>
+                      <option value="highestUsage">HIGHEST USAGE</option>
+                      <option value="newest">NEWEST CREATED</option>
+                      <option value="djName">DJ NAME</option>
+                    </select>
+                  </div>
+                </div>
+
+                <p className="text-gray-500 font-mono text-[10px] tracking-[0.22em] uppercase">
+                  SHOWING {sortedLinks.length} OF {dashboardStats.total} LINKS FOR {formatDateDisplay(selectedDate)}
+                </p>
+              </div>
+
+              {isFetching && sortedLinks.length === 0 ? (
                 <Spinner mode="inline" text="LOADING..." />
               ) : (
                 <div
                   className={`divide-y divide-gray-700 lg:overflow-y-auto transition-opacity duration-200 ${isFetching ? "opacity-50 pointer-events-none" : ""}`}
                 >
-                  {displayLinks.length === 0 ? (
+                  {sortedLinks.length === 0 ? (
                     <EmptyState
                       icon="ri-link"
-                      message="NO LINKS FOUND FOR THIS DATE"
+                      message="NO LINKS MATCH THIS FILTER"
                     />
                   ) : (
-                    displayLinks.map((link, index) => (
+                    sortedLinks.map((link, index) => {
+                      const status = deriveLinkStatus(link, now);
+                      const usageTone = status.full
+                        ? "bg-red-500"
+                        : status.usagePercent >= 80
+                          ? "bg-yellow-400"
+                          : "bg-green-500";
+
+                      const statusBadges = [
+                        status.expired
+                          ? { label: "EXPIRED", className: "text-red-400 border-red-900/70 bg-red-950/30" }
+                          : status.active
+                            ? { label: "ACTIVE", className: "text-green-400 border-green-900/70 bg-green-950/30" }
+                            : { label: "INACTIVE", className: "text-gray-300 border-gray-700 bg-gray-900/60" },
+                        status.expiringSoon
+                          ? { label: "EXPIRING SOON", className: "text-yellow-300 border-yellow-900/70 bg-yellow-950/30" }
+                          : null,
+                        status.full
+                          ? { label: "FULL", className: "text-cyan-300 border-cyan-900/70 bg-cyan-950/30" }
+                          : null,
+                      ].filter(Boolean) as { label: string; className: string }[];
+
+                      return (
                       <div
                         key={link.id}
-                        className={`p-4 ${!link.active ? "opacity-50" : ""} ${index % 2 === 1 ? "bg-gray-800/60" : ""}`}
+                        className={`p-4 ${(!link.active && !status.expired) ? "opacity-70" : ""} ${index % 2 === 1 ? "bg-gray-800/60" : ""}`}
                       >
                         <div className="flex items-center justify-between mb-4">
                           <div className="flex items-center gap-3">
@@ -502,29 +633,64 @@ export default function LinkManagement({ selectedDate }: LinkManagementProps) {
                               <p className="font-mono text-sm tracking-wider text-white uppercase">
                                 {link.djName} - {link.event}
                               </p>
-                              <p className="text-xs font-mono text-gray-400 mt-1">
-                                MAX: {link.maxGuests} | USED: {link.usedGuests}{" "}
-                                |{" "}
-                                {link.active ? (
-                                  <span className="text-green-400">ACTIVE</span>
-                                ) : (
-                                  <span className="text-red-400">INACTIVE</span>
-                                )}
-                              </p>
+                              <div className="mt-1 flex flex-wrap gap-2">
+                                {statusBadges.map((badge) => (
+                                  <span
+                                    key={badge.label}
+                                    className={`px-2 py-1 border font-mono text-[10px] tracking-[0.22em] uppercase ${badge.className}`}
+                                  >
+                                    {badge.label}
+                                  </span>
+                                ))}
+                              </div>
                             </div>
                           </div>
                         </div>
 
-                        <div className="bg-black border border-gray-700 p-3 mb-4">
-                          <div className="mb-1">
-                            <span className="font-mono text-xs tracking-wider text-gray-400 uppercase">
-                              GUEST URL
-                            </span>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
+                          <div className="bg-black border border-gray-700 p-3">
+                            <div className="font-mono text-[10px] tracking-[0.25em] uppercase text-gray-500 mb-1">
+                              Usage
+                            </div>
+                            <div className="font-mono text-sm tracking-wider text-white">
+                              {link.usedGuests}/{link.maxGuests}
+                            </div>
                           </div>
-                          <div className="font-mono text-xs tracking-wider text-white break-all">
-                            {getGuestPageUrl(link.token)}
+                          <div className="bg-black border border-gray-700 p-3">
+                            <div className="font-mono text-[10px] tracking-[0.25em] uppercase text-gray-500 mb-1">
+                              Expires At
+                            </div>
+                            <div className="font-mono text-sm tracking-wider text-white">
+                              {formatExpiryTimestamp(link.expiresAt)}
+                            </div>
+                          </div>
+                          <div className="bg-black border border-gray-700 p-3">
+                            <div className="font-mono text-[10px] tracking-[0.25em] uppercase text-gray-500 mb-1">
+                              Countdown
+                            </div>
+                            <div className={`font-mono text-sm tracking-wider ${status.expired ? "text-red-400" : status.expiringSoon ? "text-yellow-300" : "text-white"}`}>
+                              {formatRelativeExpiry(link.expiresAt, now)}
+                            </div>
                           </div>
                         </div>
+
+                        <details className="mb-4 border border-gray-700 bg-black/70 group">
+                          <summary className="flex cursor-pointer items-center justify-between px-3 py-3 list-none">
+                            <div>
+                              <span className="font-mono text-[10px] tracking-[0.22em] uppercase text-gray-400">
+                                GUEST URL
+                              </span>
+                              <p className="mt-1 font-mono text-[10px] tracking-[0.16em] uppercase text-gray-600">
+                                Hidden by default for faster scanning. Expand only when needed.
+                              </p>
+                            </div>
+                            <i className="ri-add-line text-gray-500 group-open:hidden"></i>
+                            <i className="ri-subtract-line text-gray-500 hidden group-open:block"></i>
+                          </summary>
+                          <div className="border-t border-gray-800 px-3 py-3 font-mono text-xs tracking-[0.12em] text-white break-all">
+                            {getGuestPageUrl(link.token)}
+                          </div>
+                        </details>
 
                         {/* Usage progress bar */}
                         <div className="mb-4">
@@ -536,15 +702,15 @@ export default function LinkManagement({ selectedDate }: LinkManagementProps) {
                           </div>
                           <div className="w-full bg-gray-800 h-1">
                             <div
-                              className={`h-1 transition-all ${link.usedGuests >= link.maxGuests ? "bg-red-500" : "bg-green-500"}`}
+                              className={`h-1 transition-all ${usageTone}`}
                               style={{
-                                width: `${Math.min((link.usedGuests / link.maxGuests) * 100, 100)}%`,
+                                width: `${status.usagePercent}%`,
                               }}
                             ></div>
                           </div>
                         </div>
 
-                        <div className="grid grid-cols-3 gap-px bg-gray-700">
+                        <div className="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] gap-2">
                           <button
                             onClick={() =>
                               copyToClipboard(
@@ -553,7 +719,7 @@ export default function LinkManagement({ selectedDate }: LinkManagementProps) {
                               )
                             }
                             disabled={loadingStates[`copy_${link.id}`]}
-                            className="bg-white text-black py-2 font-mono text-xs tracking-wider uppercase hover:bg-gray-200 transition-colors disabled:opacity-50"
+                            className="bg-white text-black py-3 px-3 font-mono text-xs tracking-wider uppercase hover:bg-gray-200 transition-colors disabled:opacity-50"
                           >
                             {loadingStates[`copy_${link.id}`] ? (
                               <div className="flex items-center justify-center">
@@ -562,14 +728,21 @@ export default function LinkManagement({ selectedDate }: LinkManagementProps) {
                             ) : copiedId === link.id ? (
                               "COPIED"
                             ) : (
-                              "COPY"
+                              "COPY LINK"
                             )}
                           </button>
-                          {link.active ? (
+                          {status.expired ? (
+                            <button
+                              disabled
+                              className="bg-gray-900 border border-gray-600 text-red-400 py-3 px-3 font-mono text-xs tracking-wider uppercase transition-colors disabled:opacity-50"
+                            >
+                              EXPIRED
+                            </button>
+                          ) : link.active ? (
                             <button
                               onClick={() => handleDeactivateLink(link.id)}
                               disabled={loadingStates[`deactivate_${link.id}`]}
-                              className="bg-gray-900 border border-gray-600 text-yellow-400 py-2 font-mono text-xs tracking-wider uppercase hover:bg-gray-800 transition-colors disabled:opacity-50"
+                              className="bg-gray-900 border border-gray-600 text-yellow-400 py-3 px-3 font-mono text-xs tracking-wider uppercase hover:bg-gray-800 transition-colors disabled:opacity-50"
                             >
                               {loadingStates[`deactivate_${link.id}`]
                                 ? "..."
@@ -579,7 +752,7 @@ export default function LinkManagement({ selectedDate }: LinkManagementProps) {
                             <button
                               onClick={() => handleActivateLink(link.id)}
                               disabled={loadingStates[`activate_${link.id}`]}
-                              className="bg-gray-900 border border-gray-600 text-green-400 py-2 font-mono text-xs tracking-wider uppercase hover:bg-gray-800 transition-colors disabled:opacity-50"
+                              className="bg-gray-900 border border-gray-600 text-green-400 py-3 px-3 font-mono text-xs tracking-wider uppercase hover:bg-gray-800 transition-colors disabled:opacity-50"
                             >
                               {loadingStates[`activate_${link.id}`]
                                 ? "..."
@@ -587,13 +760,13 @@ export default function LinkManagement({ selectedDate }: LinkManagementProps) {
                             </button>
                           )}
                           <button
-                            onClick={() => handleDeleteLink(link.id)}
+                            onClick={() => requestDeleteLink(link)}
                             disabled={loadingStates[`delete_${link.id}`]}
-                            className="bg-gray-900 border border-gray-600 text-red-400 py-2 font-mono text-xs tracking-wider uppercase hover:bg-gray-800 transition-colors disabled:opacity-50"
+                            className="bg-red-950/30 border border-red-800 text-red-300 py-3 px-4 font-mono text-xs tracking-wider uppercase hover:bg-red-950/50 transition-colors disabled:opacity-50"
                           >
                             {loadingStates[`delete_${link.id}`] ? (
                               <div className="flex items-center justify-center">
-                                <div className="w-3 h-3 border-2 border-gray-400 border-t-transparent rounded-full animate-spin"></div>
+                                <div className="w-3 h-3 border-2 border-red-300 border-t-transparent rounded-full animate-spin"></div>
                               </div>
                             ) : (
                               "DELETE"
@@ -601,7 +774,7 @@ export default function LinkManagement({ selectedDate }: LinkManagementProps) {
                           </button>
                         </div>
                       </div>
-                    ))
+                    )})
                   )}
                 </div>
               )}
@@ -610,5 +783,73 @@ export default function LinkManagement({ selectedDate }: LinkManagementProps) {
         )}
       </div>
     </div>
+
+      {copyToast && (
+        <div className="fixed bottom-5 right-5 z-40 border border-green-700/70 bg-green-950/80 px-4 py-3 text-green-200 shadow-lg backdrop-blur-sm">
+          <p className="font-mono text-[10px] tracking-[0.22em] uppercase">
+            {copyToast}
+          </p>
+        </div>
+      )}
+
+      {pendingDeleteLink && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 px-4">
+          <div className="w-full max-w-md border border-red-900/70 bg-gray-950 p-5 sm:p-6 shadow-2xl">
+            <div className="flex items-start justify-between gap-4 mb-4">
+              <div>
+                <p className="font-mono text-[10px] tracking-[0.24em] uppercase text-red-300 mb-2">
+                  Destructive action
+                </p>
+                <h3 className="font-mono text-sm sm:text-base tracking-[0.18em] uppercase text-white">
+                  Delete guest link?
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setPendingDeleteLink(null)}
+                className="text-gray-500 hover:text-white transition-colors"
+                aria-label="Close delete confirmation"
+              >
+                <i className="ri-close-line text-lg"></i>
+              </button>
+            </div>
+
+            <div className="space-y-3 mb-6">
+              <p className="font-mono text-[10px] tracking-[0.16em] uppercase text-gray-400 leading-relaxed">
+                This action is permanent and will immediately invalidate the active guest link.
+              </p>
+              <div className="border border-gray-800 bg-black/50 p-3">
+                <p className="font-mono text-xs tracking-[0.18em] uppercase text-white break-words">
+                  {pendingDeleteLink.djName} — {pendingDeleteLink.event}
+                </p>
+                <p className="mt-2 font-mono text-[10px] tracking-[0.16em] uppercase text-gray-500">
+                  Usage {pendingDeleteLink.usedGuests}/{pendingDeleteLink.maxGuests}
+                </p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => setPendingDeleteLink(null)}
+                className="bg-black border border-gray-700 text-gray-300 py-3 px-4 font-mono text-xs tracking-[0.22em] uppercase hover:text-white hover:border-gray-500 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => handleDeleteLink(pendingDeleteLink.id)}
+                disabled={loadingStates[`delete_${pendingDeleteLink.id}`]}
+                className="bg-red-950/40 border border-red-800 text-red-200 py-3 px-4 font-mono text-xs tracking-[0.22em] uppercase hover:bg-red-950/60 transition-colors disabled:opacity-50"
+              >
+                {loadingStates[`delete_${pendingDeleteLink.id}`]
+                  ? "Deleting..."
+                  : "Delete link"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 }
