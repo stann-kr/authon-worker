@@ -8,7 +8,7 @@
     "build:worker": "rm -rf .wrangler && opennextjs-cloudflare build",
     "deploy": "opennextjs-cloudflare deploy",
     "cf:preview": "rm -rf .wrangler && opennextjs-cloudflare preview",
-    "lint": "next lint",
+    "lint": "eslint .",
     "db:generate": "drizzle-kit generate",
     "db:migrate:local": "wrangler d1 migrations apply authon-db --local",
     "db:migrate:remote": "wrangler d1 migrations apply authon-db --remote"

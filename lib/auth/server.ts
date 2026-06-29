@@ -1,8 +1,13 @@
 import { cookies } from "next/headers";
 import { jwtVerify } from "jose";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
+import { eq } from "drizzle-orm";
+import { users } from "../db/schema";
+import { getDb } from "../db/client";
 
 export type Role = "super_admin" | "venue_admin" | "door_staff" | "staff" | "dj";
+
+const VALID_ROLES: Role[] = ["super_admin", "venue_admin", "door_staff", "staff", "dj"];
 
 export interface SessionUser {
   id: string;
@@ -11,7 +16,25 @@ export interface SessionUser {
   venueId: string | null;
 }
 
-/** JWT + KV 세션 검증. 실패 시 Error throw. */
+interface StoredSession {
+  userId?: string;
+  sessionVersion?: number;
+}
+
+function parseStoredSession(raw: string): StoredSession | null {
+  try {
+    const parsed = JSON.parse(raw) as StoredSession;
+    return parsed && typeof parsed === "object" ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+function isRole(role: string | undefined): role is Role {
+  return !!role && VALID_ROLES.includes(role as Role);
+}
+
+/** JWT + KV 세션 + DB 사용자 상태 검증. 실패 시 Error throw. */
 export async function requireAuth(): Promise<SessionUser> {
   const cookieStore = await cookies();
   const token = cookieStore.get("token")?.value;
@@ -22,7 +45,7 @@ export async function requireAuth(): Promise<SessionUser> {
   const { env } = getCloudflareContext();
   if (!env.JWT_SECRET) throw new Error("Server configuration error");
 
-  let payload: { sub?: string; email?: string; role?: string; venueId?: string | null };
+  let payload: { sub?: string; email?: string; role?: string; venueId?: string | null; sv?: number };
   try {
     const result = await jwtVerify(token, new TextEncoder().encode(env.JWT_SECRET));
     payload = result.payload as typeof payload;
@@ -30,16 +53,45 @@ export async function requireAuth(): Promise<SessionUser> {
     throw new Error("Unauthorized");
   }
 
-  const session = await env.SESSIONS.get(`session:${sessionId}`);
-  if (!session) throw new Error("Session expired");
+  if (!payload.sub || !isRole(payload.role)) throw new Error("Unauthorized");
 
-  if (!payload.sub || !payload.role) throw new Error("Unauthorized");
+  const sessionRaw = await env.SESSIONS.get(`session:${sessionId}`);
+  if (!sessionRaw) throw new Error("Session expired");
+
+  const session = parseStoredSession(sessionRaw);
+  if (!session?.userId || session.userId !== payload.sub) {
+    throw new Error("Session expired");
+  }
+
+  const db = getDb();
+  const userRows = await db
+    .select({
+      id: users.id,
+      email: users.email,
+      role: users.role,
+      venueId: users.venueId,
+      active: users.active,
+      sessionVersion: users.sessionVersion,
+    })
+    .from(users)
+    .where(eq(users.id, payload.sub))
+    .limit(1);
+  const user = userRows[0];
+
+  if (!user || !user.active || !isRole(user.role)) {
+    throw new Error("Unauthorized");
+  }
+
+  const expectedSessionVersion = user.sessionVersion ?? 0;
+  if (payload.sv !== expectedSessionVersion || session.sessionVersion !== expectedSessionVersion) {
+    throw new Error("Session expired");
+  }
 
   return {
-    id: payload.sub,
-    email: payload.email ?? "",
-    role: payload.role as Role,
-    venueId: payload.venueId ?? null,
+    id: user.id,
+    email: user.email,
+    role: user.role,
+    venueId: user.venueId ?? null,
   };
 }
 

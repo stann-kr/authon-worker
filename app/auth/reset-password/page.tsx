@@ -7,16 +7,9 @@ import { BRAND_NAME } from "@/lib/brand";
 import Spinner from "@/components/Spinner";
 import Alert from "@/components/Alert";
 import PasswordInput from "@/components/PasswordInput";
+import { getPasswordPolicyError, PASSWORD_POLICY_HINT } from "@/lib/auth/password-policy";
 
 const STEP_ITEMS = ["REQUEST", "EMAIL", "RESET", "DONE"] as const;
-
-function passwordPolicyError(password: string): string | null {
-  if (password.length < 8) return "Password must be at least 8 characters.";
-  if (!/[A-Za-z]/.test(password) || !/[0-9]/.test(password)) {
-    return "Password must include both letters and numbers.";
-  }
-  return null;
-}
 
 function StepIndicator({ currentStep }: { currentStep: 0 | 1 | 2 | 3 }) {
   return (
@@ -108,7 +101,7 @@ function ResetPasswordContent() {
   const handleReset = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    const policyError = passwordPolicyError(newPassword);
+    const policyError = getPasswordPolicyError(newPassword);
     if (policyError) {
       setMessage({ type: "error", text: policyError });
       return;
@@ -141,7 +134,7 @@ function ResetPasswordContent() {
         text: "Your password has been updated successfully.",
       });
       setStep("resetComplete");
-      setTimeout(() => router.push("/auth/login"), 3000);
+      setTimeout(() => router.push("/auth/login"), 4500);
     } catch (err: unknown) {
       setMessage({
         type: "error",
@@ -176,8 +169,8 @@ function ResetPasswordContent() {
             <p className="font-mono text-[10px] tracking-[0.24em] uppercase text-white mb-2">
               Secure recovery flow
             </p>
-            <p className="font-mono text-[10px] tracking-[0.16em] uppercase text-gray-400 leading-relaxed">
-              Reset links are single-use, time-limited, and only sent to registered email addresses.
+            <p className="font-mono text-[10px] tracking-[0.08em] text-gray-400 leading-relaxed">
+              Reset links are single-use, time-limited, and only work for registered accounts.
             </p>
           </div>
 
@@ -205,7 +198,7 @@ function ResetPasswordContent() {
                   aria-describedby="email-helper request-helper"
                   aria-invalid={message?.type === "error" ? "true" : "false"}
                 />
-                <p id="email-helper" className="text-gray-500 font-mono text-[10px] tracking-[0.18em] uppercase mt-2 leading-relaxed">
+                <p id="email-helper" className="text-gray-500 font-mono text-[10px] tracking-[0.08em] mt-2 leading-relaxed">
                   Use the email address registered to your account.
                 </p>
               </div>
@@ -225,8 +218,8 @@ function ResetPasswordContent() {
                 </div>
               </div>
 
-              <p id="request-helper" className="text-gray-500 font-mono text-[10px] tracking-[0.16em] uppercase leading-relaxed">
-                For security, we do not disclose whether an address is registered until the recovery flow continues.
+              <p id="request-helper" className="text-gray-500 font-mono text-[10px] tracking-[0.08em] leading-relaxed">
+                For security, we do not confirm whether an email is registered during the request step.
               </p>
 
               <button
@@ -257,8 +250,8 @@ function ResetPasswordContent() {
                   aria-describedby="password-policy"
                   aria-invalid={message?.type === "error" ? "true" : "false"}
                 />
-                <p id="password-policy" className="text-gray-500 font-mono text-[10px] tracking-[0.18em] uppercase mt-2 leading-relaxed">
-                  Must be at least 8 characters and include letters + numbers.
+                <p id="password-policy" className="text-gray-500 font-mono text-[10px] tracking-[0.08em] mt-2 leading-relaxed">
+                  {PASSWORD_POLICY_HINT}
                 </p>
               </div>
 
@@ -278,7 +271,7 @@ function ResetPasswordContent() {
                   aria-describedby="confirm-helper"
                   aria-invalid={message?.type === "error" ? "true" : "false"}
                 />
-                <p id="confirm-helper" className="text-gray-500 font-mono text-[10px] tracking-[0.18em] uppercase mt-2 leading-relaxed">
+                <p id="confirm-helper" className="text-gray-500 font-mono text-[10px] tracking-[0.08em] mt-2 leading-relaxed">
                   Re-enter the same password to confirm it before submission.
                 </p>
               </div>
@@ -295,15 +288,15 @@ function ResetPasswordContent() {
 
           {step === "requestSent" && (
             <div className="text-center space-y-6">
-              <div className="w-16 h-16 border border-green-500 flex items-center justify-center mx-auto">
+              <div className="w-16 h-16 border border-green-500 bg-green-950/20 flex items-center justify-center mx-auto">
                 <i className="ri-mail-check-line text-green-500 text-3xl"></i>
               </div>
 
               <div className="space-y-3">
-                <p className="text-gray-300 font-mono text-xs tracking-[0.18em] uppercase leading-relaxed">
+                <p className="text-gray-300 font-mono text-xs tracking-[0.08em] leading-relaxed">
                   A secure reset link has been sent to your email.
                 </p>
-                <p className="text-gray-500 font-mono text-[10px] tracking-[0.16em] uppercase leading-relaxed">
+                <p className="text-gray-500 font-mono text-[10px] tracking-[0.08em] leading-relaxed">
                   The link is valid for 1 hour. If it does not arrive, check your spam folder or contact your administrator/support team.
                 </p>
               </div>
@@ -319,15 +312,15 @@ function ResetPasswordContent() {
 
           {step === "resetComplete" && (
             <div className="text-center space-y-6">
-              <div className="w-16 h-16 border border-green-500 flex items-center justify-center mx-auto">
+              <div className="w-16 h-16 border border-green-500 bg-green-950/20 flex items-center justify-center mx-auto">
                 <i className="ri-check-line text-green-500 text-3xl"></i>
               </div>
 
               <div className="space-y-3">
-                <p className="text-gray-300 font-mono text-xs tracking-[0.18em] uppercase leading-relaxed">
+                <p className="text-gray-300 font-mono text-xs tracking-[0.08em] leading-relaxed">
                   Your password has been updated successfully.
                 </p>
-                <p className="text-gray-500 font-mono text-[10px] tracking-[0.16em] uppercase leading-relaxed">
+                <p className="text-gray-500 font-mono text-[10px] tracking-[0.08em] leading-relaxed">
                   Redirecting you back to login so you can sign in with the new password.
                 </p>
               </div>

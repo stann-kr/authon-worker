@@ -2,11 +2,10 @@
 
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { eq, asc } from "drizzle-orm";
-import * as schema from "../db/schema";
 import { users, passwordResetTokens } from "../db/schema";
 import { type User, type ApiResponse } from "./types";
 import { hashPassword } from "../auth/password";
-import { requireRole } from "../auth/server";
+import { requireAuth, requireRole } from "../auth/server";
 import { getDb } from "../db/client";
 import { sendEmail } from "./email";
 
@@ -37,13 +36,24 @@ export async function updateUserProfile(
   },
 ): Promise<ApiResponse<User>> {
   try {
-    await requireRole(["super_admin", "venue_admin"]);
+    const actor = await requireAuth();
+    const isSelfUpdate = actor.id === userId;
+    const isAdmin = actor.role === "super_admin" || actor.role === "venue_admin";
+
+    if (!isSelfUpdate && !isAdmin) {
+      throw new Error("Forbidden");
+    }
+
     const db = getDb();
     const dbUpdates: Partial<typeof users.$inferInsert> = {};
+
     if (updates.name !== undefined) dbUpdates.name = updates.name;
-    if (updates.guestLimit !== undefined) dbUpdates.guestLimit = updates.guestLimit;
-    if (updates.active !== undefined) dbUpdates.active = updates.active;
-    if (updates.role !== undefined) dbUpdates.role = updates.role;
+
+    if (isAdmin) {
+      if (updates.guestLimit !== undefined) dbUpdates.guestLimit = updates.guestLimit;
+      if (updates.active !== undefined) dbUpdates.active = updates.active;
+      if (updates.role !== undefined) dbUpdates.role = updates.role;
+    }
 
     await db.update(users).set(dbUpdates).where(eq(users.id, userId));
     const result = await db.select().from(users).where(eq(users.id, userId));

@@ -10,6 +10,7 @@ import RoleLabel from "@/components/RoleLabel";
 import PasswordInput from "@/components/PasswordInput";
 import { getUser, User } from "@/lib/auth";
 import { updateUserProfile } from "@/lib/api/users";
+import { getPasswordPolicyError, PASSWORD_POLICY_HINT } from "@/lib/auth/password-policy";
 
 export default function ProfilePage() {
   const [user, setUser] = useState<User | null>(null);
@@ -44,8 +45,15 @@ export default function ProfilePage() {
     setIsSaving(true);
 
     try {
-      if (user && formData.name !== user.name) {
-        const { error: nameError } = await updateUserProfile(user.id, {
+      if (!user) {
+        setError("User session is unavailable.");
+        return;
+      }
+
+      let nextUser: User = user;
+
+      if (formData.name !== user.name) {
+        const { data, error: nameError } = await updateUserProfile(user.id, {
           name: formData.name,
         });
 
@@ -54,15 +62,21 @@ export default function ProfilePage() {
           setIsSaving(false);
           return;
         }
+
+        if (data) {
+          nextUser = {
+            ...user,
+            name: data.name,
+            email: data.email,
+            role: data.role,
+            venue_id: data.venueId,
+            guest_limit: data.guestLimit ?? 0,
+          };
+        }
       }
 
-      const updatedUser = {
-        ...user,
-        name: formData.name,
-      };
-
-      localStorage.setItem("user", JSON.stringify(updatedUser));
-      setUser(updatedUser as User);
+      localStorage.setItem("user", JSON.stringify(nextUser));
+      setUser(nextUser);
 
       setShowSuccess(true);
       setTimeout(() => setShowSuccess(false), 3000);
@@ -183,7 +197,7 @@ export default function ProfilePage() {
                     <h3 className="font-mono text-xs sm:text-sm tracking-wider text-white uppercase">
                       ACCOUNT SETTINGS
                     </h3>
-                    <p className="mt-2 text-gray-500 font-mono text-[10px] tracking-[0.18em] uppercase leading-relaxed">
+                    <p className="mt-2 text-gray-500 font-mono text-[10px] tracking-[0.08em] leading-relaxed">
                       Keep profile details and security actions separated so each task is easier to review on desktop and mobile.
                     </p>
                   </div>
@@ -192,7 +206,7 @@ export default function ProfilePage() {
                     <button
                       type="button"
                       onClick={() => setActiveSection("profile")}
-                      className={`px-4 py-3 border font-mono text-[10px] sm:text-xs tracking-[0.22em] uppercase transition-colors ${
+                      className={`px-4 py-3.5 border font-mono text-[10px] sm:text-xs tracking-[0.22em] uppercase transition-colors ${
                         activeSection === "profile"
                           ? "bg-white text-black border-white"
                           : "bg-black text-gray-400 border-gray-700 hover:text-white hover:border-gray-500"
@@ -203,7 +217,7 @@ export default function ProfilePage() {
                     <button
                       type="button"
                       onClick={() => setActiveSection("security")}
-                      className={`px-4 py-3 border font-mono text-[10px] sm:text-xs tracking-[0.22em] uppercase transition-colors ${
+                      className={`px-4 py-3.5 border font-mono text-[10px] sm:text-xs tracking-[0.22em] uppercase transition-colors ${
                         activeSection === "security"
                           ? "bg-white text-black border-white"
                           : "bg-black text-gray-400 border-gray-700 hover:text-white hover:border-gray-500"
@@ -240,7 +254,7 @@ export default function ProfilePage() {
                           aria-describedby="profile-name-helper"
                           aria-invalid={error ? "true" : "false"}
                         />
-                        <p id="profile-name-helper" className="text-gray-500 font-mono text-[10px] tracking-[0.18em] uppercase mt-2 leading-relaxed">
+                        <p id="profile-name-helper" className="text-gray-500 font-mono text-[10px] tracking-[0.08em] mt-2 leading-relaxed">
                           Your display name or identifier within this context.
                         </p>
                       </div>
@@ -284,14 +298,6 @@ export default function ProfilePage() {
   );
 }
 
-function passwordPolicyError(password: string): string | null {
-  if (password.length < 8) return "Password must be at least 8 characters.";
-  if (!/[A-Za-z]/.test(password) || !/[0-9]/.test(password)) {
-    return "Password must include letters and numbers.";
-  }
-  return null;
-}
-
 function PasswordChangeForm() {
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
@@ -307,7 +313,7 @@ function PasswordChangeForm() {
     setPasswordError("");
     setPasswordSuccess("");
 
-    const policyError = passwordPolicyError(newPassword);
+    const policyError = getPasswordPolicyError(newPassword);
     if (policyError) {
       setPasswordError(policyError);
       return;
@@ -338,9 +344,10 @@ function PasswordChangeForm() {
 
       if (data.reauthRequired) {
         setIsRedirecting(true);
+        localStorage.removeItem("user");
         setTimeout(() => {
           router.push("/auth/login");
-        }, 1200);
+        }, 3000);
       }
     } catch (err: unknown) {
       setPasswordError(err instanceof Error ? err.message : "An error occurred.");
@@ -359,7 +366,7 @@ function PasswordChangeForm() {
           <i className="ri-alert-line"></i>
           Security warning
         </div>
-        <p id="password-warning-msg" className="text-yellow-100/80 font-mono text-[10px] sm:text-xs tracking-[0.16em] uppercase leading-relaxed">
+        <p id="password-warning-msg" className="text-yellow-100/80 font-mono text-[10px] sm:text-xs tracking-[0.08em] leading-relaxed">
           Changing your password will immediately sign you out. You will need to log in again on this device.
         </p>
       </div>
@@ -395,8 +402,8 @@ function PasswordChangeForm() {
           aria-describedby="new-password-policy"
           aria-invalid={passwordError ? "true" : "false"}
         />
-        <p id="new-password-policy" className="text-gray-500 font-mono text-[10px] tracking-[0.18em] uppercase mt-2 leading-relaxed">
-          Minimum 8 characters, including letters and numbers.
+        <p id="new-password-policy" className="text-gray-500 font-mono text-[10px] tracking-[0.08em] mt-2 leading-relaxed">
+          {PASSWORD_POLICY_HINT}
         </p>
       </div>
 
@@ -415,7 +422,7 @@ function PasswordChangeForm() {
           aria-describedby="confirm-password-helper"
           aria-invalid={passwordError ? "true" : "false"}
         />
-        <p id="confirm-password-helper" className="text-gray-500 font-mono text-[10px] tracking-[0.18em] uppercase mt-2 leading-relaxed">
+        <p id="confirm-password-helper" className="text-gray-500 font-mono text-[10px] tracking-[0.08em] mt-2 leading-relaxed">
           Re-enter your new password to confirm accuracy before saving.
         </p>
       </div>

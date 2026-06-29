@@ -67,7 +67,7 @@ export default function PasswordInput({
           id={capsLockWarningId}
           role="status"
           aria-live="polite"
-          className="mt-2 flex items-center gap-1.5 text-[10px] font-mono tracking-[0.22em] uppercase text-yellow-300"
+          className="mt-2 flex items-center gap-1.5 text-[10px] font-mono tracking-[0.08em] text-yellow-300"
         >
           <i className="ri-alert-line"></i>
           Caps Lock is on

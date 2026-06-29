@@ -5,6 +5,7 @@ import { eq } from "drizzle-orm";
 import { SignJWT } from "jose";
 import { users } from "@/lib/db/schema";
 import { verifyPassword, hashPassword, needsRehash } from "@/lib/auth/password";
+import { clearRateLimit, consumeRateLimit, getRequestIp } from "@/lib/auth/rate-limit";
 
 export async function POST(request: Request) {
   try {
@@ -18,8 +19,27 @@ export async function POST(request: Request) {
       );
     }
 
+    const normalizedEmail = String(email).trim().toLowerCase();
+    const ip = getRequestIp(request);
+    const rateLimit = await consumeRateLimit({
+      namespace: "login",
+      identifier: `${ip}:${normalizedEmail}`,
+      limit: 5,
+      windowSeconds: 60 * 15,
+    });
+
+    if (!rateLimit.allowed) {
+      return NextResponse.json(
+        { error: "로그인 시도가 너무 많습니다. 잠시 후 다시 시도해주세요." },
+        {
+          status: 429,
+          headers: { "Retry-After": String(rateLimit.retryAfterSeconds) },
+        }
+      );
+    }
+
     const db = drizzle(env.DB);
-    const result = await db.select().from(users).where(eq(users.email, email)).limit(1);
+    const result = await db.select().from(users).where(eq(users.email, normalizedEmail)).limit(1);
     const user = result[0];
 
     if (!user || !user.active) {
@@ -53,6 +73,7 @@ export async function POST(request: Request) {
       email: user.email,
       role: user.role,
       venueId: user.venueId,
+      sv: user.sessionVersion ?? 0,
     })
       .setProtectedHeader({ alg: "HS256" })
       .setIssuedAt()
@@ -60,9 +81,14 @@ export async function POST(request: Request) {
       .sign(secret);
 
     const sessionId = crypto.randomUUID();
-    await env.SESSIONS.put(`session:${sessionId}`, JSON.stringify({ userId: user.id }), {
+    await env.SESSIONS.put(`session:${sessionId}`, JSON.stringify({
+      userId: user.id,
+      sessionVersion: user.sessionVersion ?? 0,
+    }), {
       expirationTtl: 60 * 60 * 24,
     });
+
+    await clearRateLimit("login", `${ip}:${normalizedEmail}`);
 
     const response = NextResponse.json({
       ok: true,

@@ -76,7 +76,7 @@ export default function LoginPage() {
                 aria-describedby="email-helper"
                 aria-invalid={error ? 'true' : 'false'}
               />
-              <p id="email-helper" className="text-text-dim font-mono text-[10px] tracking-[0.22em] uppercase mt-2 leading-relaxed">
+              <p id="email-helper" className="text-text-dim font-mono text-[10px] tracking-[0.08em] mt-2 leading-relaxed">
                 Use the email address registered to your account.
               </p>
             </div>
@@ -91,7 +91,7 @@ export default function LoginPage() {
                 </label>
                 <Link
                   href="/auth/reset-password"
-                  className="inline-flex items-center gap-1 text-[10px] sm:text-xs text-white font-mono tracking-[0.22em] uppercase hover:text-gray-300 transition-colors"
+                  className="relative inline-flex items-center gap-1 text-[10px] sm:text-xs text-white font-mono tracking-[0.22em] uppercase hover:text-gray-300 transition-colors before:absolute before:-inset-2 before:content-['']"
                   aria-label="Forgot password? Go to password reset page"
                 >
                   FORGOT?
@@ -110,7 +110,7 @@ export default function LoginPage() {
                 aria-describedby="password-helper password-support"
                 aria-invalid={error ? 'true' : 'false'}
               />
-              <p id="password-helper" className="text-text-dim font-mono text-[10px] tracking-[0.22em] uppercase leading-relaxed">
+              <p id="password-helper" className="text-text-dim font-mono text-[10px] tracking-[0.08em] leading-relaxed">
                 Case-sensitive. Use show/hide if you want to verify what you typed.
               </p>
             </div>
@@ -132,7 +132,7 @@ export default function LoginPage() {
               <p className="text-white font-mono text-[10px] tracking-[0.22em] uppercase">
                 Need account recovery?
               </p>
-              <p id="password-support" className="text-text-dim font-mono text-[10px] tracking-[0.18em] uppercase leading-relaxed">
+              <p id="password-support" className="text-text-dim font-mono text-[10px] tracking-[0.08em] leading-relaxed">
                 We only send reset links to registered email addresses. If you cannot access that inbox, contact your administrator.
               </p>
             </div>

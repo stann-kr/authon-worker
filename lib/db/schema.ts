@@ -17,6 +17,7 @@ export const users = sqliteTable('users', {
   venueId: text('venue_id').references(() => venues.id),
   guestLimit: integer('guest_limit'),
   active: integer('active', { mode: 'boolean' }).notNull().default(true),
+  sessionVersion: integer('session_version').notNull().default(0),
   createdAt: text('created_at').notNull(),
 }, (t) => [index('idx_users_venue').on(t.venueId)]);
 
