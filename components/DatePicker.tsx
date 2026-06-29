@@ -43,7 +43,12 @@ export default function DatePicker({
           type="date"
           value={value}
           onChange={(e) => onChange(e.target.value)}
-          onClick={(e) => (e.target as any).showPicker?.()}
+          onClick={(e) => {
+            const input = e.currentTarget as HTMLInputElement & {
+              showPicker?: () => void;
+            };
+            input.showPicker?.();
+          }}
           className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10 [color-scheme:dark]"
         />
       </div>
