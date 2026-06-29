@@ -14,6 +14,27 @@ tags:
 
 ---
 
+## 2026-06-29 — LinkManagement 만료 상태 정적 표시
+
+### 발생 상황 및 에러 로그 요약
+
+- 관리 탭에서 만료 예정 링크의 카운트다운, `ACTIVE`/`EXPIRED`, `24H` 필터 상태가 시간 경계 통과 후 자동 갱신되지 않음
+- Docker 검증 실행 시 `docker.sock` 접근 권한 오류 발생: `permission denied while trying to connect to the docker API`
+
+### 원인 분석
+
+- `Date.now()`를 `useMemo` 내부에서 직접 호출하여 `displayLinks` 변경 전까지 만료 상태 재계산 불가
+- 행 배지, 필터, 사이드바 카운트가 서로 다른 계산식을 사용하여 상태 불일치 가능
+
+### 해결에 적용된 Docker 명령어 및 코드 변경 내역
+
+- 실행 시도: `docker compose run --rm web node scripts/verify-link-status.mjs`
+- `app/admin/components/linkStatus.ts` 신규 추가 — 만료/임박/정원/필터/카운트다운 순수 함수 분리
+- `app/admin/components/LinkManagement.tsx` 수정 — 30초 `now` tick 기반 재계산, 만료 링크 액션 비활성화
+- `scripts/verify-link-status.mjs` 추가 — 링크 상태 파생 로직 검증 스크립트
+
+---
+
 ## 2026-06-25 — Docker compose 검증 환경 드리프트 및 Next 16 proxy 전환
 
 ### 증상

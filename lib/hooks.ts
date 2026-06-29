@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 
 /**
  * useState와 동일하지만 localStorage에 값을 영속화합니다.
@@ -15,18 +15,22 @@ export function useLocalStorage<T>(key: string, initialValue: T) {
     }
   });
 
-  const setValue = (value: T | ((prev: T) => T)) => {
-    try {
-      const valueToStore =
-        value instanceof Function ? value(storedValue) : value;
-      setStoredValue(valueToStore);
-      if (typeof window !== "undefined") {
-        window.localStorage.setItem(key, JSON.stringify(valueToStore));
-      }
-    } catch (e) {
-      console.warn(`useLocalStorage: failed to save key "${key}"`, e);
-    }
-  };
+  const setValue = useCallback(
+    (value: T | ((prev: T) => T)) => {
+      setStoredValue((prev) => {
+        const valueToStore = value instanceof Function ? value(prev) : value;
+        try {
+          if (typeof window !== "undefined") {
+            window.localStorage.setItem(key, JSON.stringify(valueToStore));
+          }
+        } catch (e) {
+          console.warn(`useLocalStorage: failed to save key "${key}"`, e);
+        }
+        return valueToStore;
+      });
+    },
+    [key],
+  );
 
   return [storedValue, setValue] as const;
 }
@@ -40,7 +44,7 @@ export function useGuestPolling(fetchFn: () => Promise<void>, intervalMs: number
     const interval = setInterval(async () => {
       try {
         await fetchFn();
-      } catch (_err) {
+      } catch {
         // Silent fail for polling
       }
     }, intervalMs);

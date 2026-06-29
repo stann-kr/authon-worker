@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useLocalStorage } from "../../../lib/hooks";
 import InviteUser from "./InviteUser";
 import LegacyUserMigration from "./LegacyUserMigration";
@@ -39,13 +39,7 @@ export default function UserManagement() {
     ? selectedVenueId
     : currentUser?.venue_id;
 
-  useEffect(() => {
-    if (activeTab === "users" && effectiveVenueId) {
-      loadUsers();
-    }
-  }, [activeTab, effectiveVenueId]);
-
-  const loadUsers = async () => {
+  const loadUsers = useCallback(async () => {
     if (!effectiveVenueId && !isSuperAdmin) return;
     setIsLoading(true);
     try {
@@ -62,7 +56,13 @@ export default function UserManagement() {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [effectiveVenueId, isSuperAdmin]);
+
+  useEffect(() => {
+    if (activeTab === "users" && effectiveVenueId) {
+      loadUsers();
+    }
+  }, [activeTab, effectiveVenueId, loadUsers]);
 
   const handleUserUpdate = async (
     userId: string,

@@ -1,7 +1,6 @@
 "use server";
 
 import { eq, asc } from "drizzle-orm";
-import * as schema from "../db/schema";
 import { venues } from "../db/schema";
 import { type Venue, type ApiResponse } from "./types";
 import { requireRole } from "../auth/server";

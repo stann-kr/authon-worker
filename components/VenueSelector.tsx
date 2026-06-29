@@ -27,13 +27,13 @@ export function useVenueSelector() {
       fetchVenues().then(({ data }) => {
         if (data) {
           setVenues(data);
-          if (data.length > 0 && !selectedVenueId) {
-            setSelectedVenueId(data[0].id);
+          if (data.length > 0) {
+            setSelectedVenueId((prev) => prev || data[0].id);
           }
         }
       });
     }
-  }, [isSuperAdmin]);
+  }, [isSuperAdmin, setSelectedVenueId]);
 
   const venueId = isSuperAdmin ? selectedVenueId : (user?.venue_id ?? "");
 

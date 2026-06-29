@@ -1,18 +1,44 @@
 "use server";
 
-import { eq, and, ne, desc } from "drizzle-orm";
-import * as schema from "../db/schema";
+import { eq, and, ne, desc, sql } from "drizzle-orm";
 import { guests, externalDjLinks } from "../db/schema";
 import { type Guest, type ApiResponse } from "./types";
-import { requireRole } from "../auth/server";
+import { requireRole, type SessionUser } from "../auth/server";
 import { getDb } from "../db/client";
+
+type Db = ReturnType<typeof getDb>;
+
+function scopedVenueId(user: SessionUser, requestedVenueId?: string | null): string | undefined {
+  if (user.role === "super_admin") return requestedVenueId ?? undefined;
+  if (!user.venueId) throw new Error("Forbidden");
+  if (requestedVenueId && requestedVenueId !== user.venueId) throw new Error("Forbidden");
+  return user.venueId;
+}
+
+async function getAccessibleGuest(db: Db, user: SessionUser, guestId: string) {
+  const rows = await db
+    .select({
+      id: guests.id,
+      venueId: guests.venueId,
+      externalLinkId: guests.externalLinkId,
+      status: guests.status,
+    })
+    .from(guests)
+    .where(eq(guests.id, guestId))
+    .limit(1);
+  const guest = rows[0];
+  if (!guest) throw new Error("Guest not found");
+  if (user.role !== "super_admin" && guest.venueId !== user.venueId) throw new Error("Forbidden");
+  return guest;
+}
 
 export async function fetchGuestsByDate(date: string, venueId?: string): Promise<ApiResponse<Guest[]>> {
   try {
-    await requireRole(["super_admin", "venue_admin", "door_staff", "staff"]);
+    const user = await requireRole(["super_admin", "venue_admin", "door_staff", "staff", "dj"]);
     const db = getDb();
+    const effectiveVenueId = scopedVenueId(user, venueId);
     const conditions = [eq(guests.date, date), ne(guests.status, "deleted")];
-    if (venueId) conditions.push(eq(guests.venueId, venueId));
+    if (effectiveVenueId) conditions.push(eq(guests.venueId, effectiveVenueId));
 
     const result = await db.select().from(guests)
       .where(and(...conditions))
@@ -26,11 +52,12 @@ export async function fetchGuestsByDate(date: string, venueId?: string): Promise
 
 export async function fetchAllGuests(venueId?: string): Promise<ApiResponse<Guest[]>> {
   try {
-    await requireRole(["super_admin", "venue_admin", "door_staff", "staff"]);
+    const user = await requireRole(["super_admin", "venue_admin", "door_staff", "staff", "dj"]);
     const db = getDb();
+    const effectiveVenueId = scopedVenueId(user, venueId);
     const baseQuery = db.select().from(guests);
     const result = await (
-      venueId ? baseQuery.where(eq(guests.venueId, venueId)) : baseQuery
+      effectiveVenueId ? baseQuery.where(eq(guests.venueId, effectiveVenueId)) : baseQuery
     ).orderBy(desc(guests.date), desc(guests.createdAt));
 
     return { data: result.map((g) => ({ ...g, status: g.status as Guest["status"] })), error: null };
@@ -48,16 +75,19 @@ export async function createGuest(guest: {
   status?: "pending" | "checked" | "deleted";
 }): Promise<ApiResponse<Guest>> {
   try {
-    await requireRole(["super_admin", "venue_admin", "door_staff", "staff"]);
+    const user = await requireRole(["super_admin", "venue_admin", "door_staff", "staff", "dj"]);
     const db = getDb();
+    const effectiveVenueId = scopedVenueId(user, guest.venueId);
+    if (!effectiveVenueId) throw new Error("Venue is required");
+
     const id = crypto.randomUUID();
     const now = new Date().toISOString();
     await db.insert(guests).values({
       id,
-      venueId: guest.venueId,
+      venueId: effectiveVenueId,
       name: guest.name,
       externalLinkId: guest.externalLinkId || null,
-      createdByUserId: guest.createdByUserId || null,
+      createdByUserId: user.role === "super_admin" ? (guest.createdByUserId || user.id) : user.id,
       date: guest.date,
       status: guest.status || "pending",
       createdAt: now,
@@ -75,8 +105,10 @@ export async function updateGuestStatus(
   status: "pending" | "checked" | "deleted",
 ): Promise<ApiResponse<Guest>> {
   try {
-    await requireRole(["super_admin", "venue_admin", "door_staff", "staff"]);
+    const user = await requireRole(["super_admin", "venue_admin", "door_staff", "staff", "dj"]);
     const db = getDb();
+    await getAccessibleGuest(db, user, guestId);
+
     const updateData: Partial<typeof guests.$inferInsert> = { status, updatedAt: new Date().toISOString() };
 
     if (status === "checked") {
@@ -95,33 +127,28 @@ export async function updateGuestStatus(
 
 export async function deleteGuest(guestId: string): Promise<ApiResponse<Guest>> {
   try {
-    await requireRole(["super_admin", "venue_admin", "door_staff", "staff"]);
+    const user = await requireRole(["super_admin", "venue_admin", "door_staff", "staff", "dj"]);
     const db = getDb();
 
     // 현재 상태 확인 — 이미 deleted이면 카운터 이중 차감 방지
-    const guestRow = await db
-      .select({ externalLinkId: guests.externalLinkId, status: guests.status })
-      .from(guests)
-      .where(eq(guests.id, guestId))
-      .limit(1);
+    const current = await getAccessibleGuest(db, user, guestId);
+    const wasAlreadyDeleted = current.status === "deleted";
 
-    const current = guestRow[0];
-    const wasAlreadyDeleted = current?.status === "deleted";
+    const updateData: Partial<typeof guests.$inferInsert> = {
+      status: "deleted",
+      updatedAt: new Date().toISOString(),
+    };
+    await db.update(guests).set(updateData).where(eq(guests.id, guestId));
+    const updatedRows = await db.select().from(guests).where(eq(guests.id, guestId));
+    const updated = updatedRows[0];
 
-    const result = await updateGuestStatus(guestId, "deleted");
-
-    if (!result.error && !wasAlreadyDeleted && current?.externalLinkId) {
-      const linkRow = await db
-        .select({ usedGuests: externalDjLinks.usedGuests })
-        .from(externalDjLinks)
+    if (!wasAlreadyDeleted && current.externalLinkId) {
+      await db.update(externalDjLinks)
+        .set({ usedGuests: sql`max(0, ${externalDjLinks.usedGuests} - 1)` })
         .where(eq(externalDjLinks.id, current.externalLinkId));
-      if (linkRow[0]) {
-        await db.update(externalDjLinks)
-          .set({ usedGuests: Math.max(0, (linkRow[0].usedGuests || 0) - 1) })
-          .where(eq(externalDjLinks.id, current.externalLinkId));
-      }
     }
-    return result;
+
+    return { data: updated ? { ...updated, status: updated.status as Guest["status"] } : null, error: null };
   } catch (error: unknown) {
     return { data: null, error: error instanceof Error ? error.message : "Failed to delete guest" };
   }
@@ -129,8 +156,9 @@ export async function deleteGuest(guestId: string): Promise<ApiResponse<Guest>> 
 
 export async function permanentlyDeleteGuest(guestId: string): Promise<{ error: string | null }> {
   try {
-    await requireRole(["super_admin", "venue_admin"]);
+    const user = await requireRole(["super_admin", "venue_admin"]);
     const db = getDb();
+    await getAccessibleGuest(db, user, guestId);
     await db.delete(guests).where(eq(guests.id, guestId));
     return { error: null };
   } catch (error: unknown) {
@@ -147,13 +175,18 @@ export async function updateGuest(
   },
 ): Promise<ApiResponse<Guest>> {
   try {
-    await requireRole(["super_admin", "venue_admin", "door_staff", "staff"]);
+    const user = await requireRole(["super_admin", "venue_admin", "door_staff", "staff", "dj"]);
     const db = getDb();
+    await getAccessibleGuest(db, user, guestId);
     const updateData: Partial<typeof guests.$inferInsert> = { updatedAt: new Date().toISOString() };
 
     if (updates.name !== undefined) updateData.name = updates.name;
     if (updates.date !== undefined) updateData.date = updates.date;
-    if (updates.venueId !== undefined) updateData.venueId = updates.venueId;
+    if (updates.venueId !== undefined) {
+      const effectiveVenueId = scopedVenueId(user, updates.venueId);
+      if (!effectiveVenueId) throw new Error("Venue is required");
+      updateData.venueId = effectiveVenueId;
+    }
 
     await db.update(guests).set(updateData).where(eq(guests.id, guestId));
     const result = await db.select().from(guests).where(eq(guests.id, guestId));

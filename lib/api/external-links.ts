@@ -1,20 +1,53 @@
 "use server";
 
 import { getCloudflareContext } from "@opennextjs/cloudflare";
-import { eq, and, ne, desc } from "drizzle-orm";
-import * as schema from "../db/schema";
+import { eq, and, ne, desc, sql } from "drizzle-orm";
 import { externalDjLinks, venues, guests } from "../db/schema";
 import { type ExternalDJLink, type Guest, type Venue, type ApiResponse } from "./types";
-import { deleteGuest } from "./guests";
-import { requireRole } from "../auth/server";
+import { requireRole, type SessionUser } from "../auth/server";
 import { getDb } from "../db/client";
+
+type Db = ReturnType<typeof getDb>;
+
+const DEFAULT_EXTERNAL_LINK_TTL_DAYS = 7;
+
+function defaultExternalLinkExpiresAt(date?: string | null): string {
+  if (date) {
+    const eventDay = new Date(`${date}T23:59:59.999Z`);
+    if (!Number.isNaN(eventDay.getTime())) {
+      eventDay.setUTCDate(eventDay.getUTCDate() + 1);
+      return eventDay.toISOString();
+    }
+  }
+
+  return new Date(Date.now() + DEFAULT_EXTERNAL_LINK_TTL_DAYS * 24 * 60 * 60 * 1000).toISOString();
+}
+
+function scopedVenueId(user: SessionUser, requestedVenueId: string): string {
+  if (user.role === "super_admin") return requestedVenueId;
+  if (!user.venueId || requestedVenueId !== user.venueId) throw new Error("Forbidden");
+  return user.venueId;
+}
+
+async function getAccessibleLink(db: Db, user: SessionUser, linkId: string) {
+  const rows = await db.select().from(externalDjLinks).where(eq(externalDjLinks.id, linkId)).limit(1);
+  const link = rows[0];
+  if (!link) throw new Error("External link not found");
+  if (user.role !== "super_admin" && link.venueId !== user.venueId) throw new Error("Forbidden");
+  return link;
+}
+
+function isExpired(expiresAt?: string | null): boolean {
+  return !!expiresAt && new Date(expiresAt).getTime() <= Date.now();
+}
 
 export async function fetchExternalLinks(venueId: string): Promise<ApiResponse<ExternalDJLink[]>> {
   try {
-    await requireRole(["super_admin", "venue_admin", "door_staff", "staff"]);
+    const user = await requireRole(["super_admin", "venue_admin", "door_staff", "staff"]);
     const db = getDb();
+    const effectiveVenueId = scopedVenueId(user, venueId);
     const result = await db.select().from(externalDjLinks)
-      .where(eq(externalDjLinks.venueId, venueId))
+      .where(eq(externalDjLinks.venueId, effectiveVenueId))
       .orderBy(desc(externalDjLinks.date));
     return { data: result, error: null };
   } catch (error: unknown) {
@@ -24,10 +57,11 @@ export async function fetchExternalLinks(venueId: string): Promise<ApiResponse<E
 
 export async function fetchExternalLinksByDate(venueId: string, date: string): Promise<ApiResponse<ExternalDJLink[]>> {
   try {
-    await requireRole(["super_admin", "venue_admin", "door_staff", "staff"]);
+    const user = await requireRole(["super_admin", "venue_admin", "door_staff", "staff"]);
     const db = getDb();
+    const effectiveVenueId = scopedVenueId(user, venueId);
     const result = await db.select().from(externalDjLinks)
-      .where(and(eq(externalDjLinks.venueId, venueId), eq(externalDjLinks.date, date)))
+      .where(and(eq(externalDjLinks.venueId, effectiveVenueId), eq(externalDjLinks.date, date)))
       .orderBy(desc(externalDjLinks.id));
     return { data: result, error: null };
   } catch (error: unknown) {
@@ -44,13 +78,15 @@ export async function createExternalLink(link: {
   createdBy?: string;
 }): Promise<ApiResponse<ExternalDJLink>> {
   try {
-    await requireRole(["super_admin", "venue_admin"]);
+    const user = await requireRole(["super_admin", "venue_admin"]);
     const db = getDb();
+    const effectiveVenueId = scopedVenueId(user, link.venueId);
+    const expiresAt = defaultExternalLinkExpiresAt(link.date);
     const id = crypto.randomUUID();
     const token = crypto.randomUUID();
     await db.insert(externalDjLinks).values({
       id,
-      venueId: link.venueId,
+      venueId: effectiveVenueId,
       token,
       djName: link.djName,
       event: link.event,
@@ -58,7 +94,8 @@ export async function createExternalLink(link: {
       maxGuests: link.maxGuests,
       usedGuests: 0,
       active: true,
-      createdBy: link.createdBy || null,
+      expiresAt,
+      createdBy: user.role === "super_admin" ? (link.createdBy || user.id) : user.id,
     });
     const result = await db.select().from(externalDjLinks).where(eq(externalDjLinks.id, id));
     return { data: result[0] ? { ...result[0] } : null, error: null };
@@ -69,8 +106,9 @@ export async function createExternalLink(link: {
 
 export async function deleteExternalLink(linkId: string): Promise<{ error: string | null }> {
   try {
-    await requireRole(["super_admin", "venue_admin"]);
+    const user = await requireRole(["super_admin", "venue_admin"]);
     const db = getDb();
+    await getAccessibleLink(db, user, linkId);
     await db.delete(externalDjLinks).where(eq(externalDjLinks.id, linkId));
     return { error: null };
   } catch (error: unknown) {
@@ -80,8 +118,9 @@ export async function deleteExternalLink(linkId: string): Promise<{ error: strin
 
 export async function deactivateExternalLink(linkId: string): Promise<{ error: string | null }> {
   try {
-    await requireRole(["super_admin", "venue_admin"]);
+    const user = await requireRole(["super_admin", "venue_admin"]);
     const db = getDb();
+    await getAccessibleLink(db, user, linkId);
     await db.update(externalDjLinks).set({ active: false }).where(eq(externalDjLinks.id, linkId));
     return { error: null };
   } catch (error: unknown) {
@@ -91,8 +130,10 @@ export async function deactivateExternalLink(linkId: string): Promise<{ error: s
 
 export async function activateExternalLink(linkId: string): Promise<{ error: string | null }> {
   try {
-    await requireRole(["super_admin", "venue_admin"]);
+    const user = await requireRole(["super_admin", "venue_admin"]);
     const db = getDb();
+    const link = await getAccessibleLink(db, user, linkId);
+    if (isExpired(link.expiresAt)) throw new Error("Link is expired");
     await db.update(externalDjLinks).set({ active: true }).where(eq(externalDjLinks.id, linkId));
     return { error: null };
   } catch (error: unknown) {
@@ -107,8 +148,8 @@ export async function validateExternalToken(token: string): Promise<ApiResponse<
     const linkResult = await db.select().from(externalDjLinks).where(eq(externalDjLinks.token, token));
     const link = linkResult[0];
 
-    if (!link || !link.active) {
-      return { data: null, error: "Link is invalid or inactive." };
+    if (!link || !link.active || isExpired(link.expiresAt)) {
+      return { data: null, error: "Link is invalid, expired, or inactive." };
     }
 
     const venueResult = await db.select().from(venues).where(eq(venues.id, link.venueId));
@@ -151,13 +192,17 @@ export async function createGuestViaExternalLink(params: {
       .where(eq(externalDjLinks.token, params.token));
     const link = linkResult[0];
 
-    if (!link || !link.active) {
-      return { data: null, error: "Link is invalid or inactive." };
+    if (!link || !link.active || isExpired(link.expiresAt)) {
+      return { data: null, error: "Link is invalid, expired, or inactive." };
+    }
+
+    if (link.date && params.date !== link.date) {
+      return { data: null, error: "Guest date does not match this link." };
     }
 
     // 원자적 정원 체크 + 증가: used_guests < max_guests 인 경우에만 UPDATE
     const updated = await env.DB.prepare(
-      "UPDATE external_dj_links SET used_guests = used_guests + 1 WHERE id = ? AND used_guests < max_guests RETURNING used_guests"
+      "UPDATE external_dj_links SET used_guests = used_guests + 1 WHERE id = ? AND active = 1 AND used_guests < max_guests RETURNING used_guests"
     ).bind(link.id).first<{ used_guests: number }>();
 
     if (!updated) {
@@ -167,16 +212,23 @@ export async function createGuestViaExternalLink(params: {
     const id = crypto.randomUUID();
     const now = new Date().toISOString();
 
-    await db.insert(guests).values({
-      id,
-      venueId: link.venueId,
-      name: params.guestName,
-      externalLinkId: link.id,
-      date: params.date,
-      status: "pending",
-      createdAt: now,
-      updatedAt: now,
-    });
+    try {
+      await db.insert(guests).values({
+        id,
+        venueId: link.venueId,
+        name: params.guestName,
+        externalLinkId: link.id,
+        date: params.date,
+        status: "pending",
+        createdAt: now,
+        updatedAt: now,
+      });
+    } catch (insertError) {
+      await db.update(externalDjLinks)
+        .set({ usedGuests: sql`max(0, ${externalDjLinks.usedGuests} - 1)` })
+        .where(eq(externalDjLinks.id, link.id));
+      throw insertError;
+    }
 
     const result = await db.select().from(guests).where(eq(guests.id, id));
     return { data: result[0] ? { ...result[0], status: result[0].status as Guest["status"] } : null, error: null };
@@ -197,12 +249,12 @@ export async function deleteGuestViaExternalLink(params: {
       .where(eq(externalDjLinks.token, params.token));
     const link = linkResult[0];
 
-    if (!link || !link.active) {
-      return { error: "Link is invalid or inactive." };
+    if (!link || !link.active || isExpired(link.expiresAt)) {
+      return { error: "Link is invalid, expired, or inactive." };
     }
 
     // 소유권 검증: guest가 이 link에 속하는지 확인
-    const guestResult = await db.select({ externalLinkId: guests.externalLinkId })
+    const guestResult = await db.select({ externalLinkId: guests.externalLinkId, status: guests.status })
       .from(guests)
       .where(eq(guests.id, params.guestId))
       .limit(1);
@@ -212,8 +264,18 @@ export async function deleteGuestViaExternalLink(params: {
       return { error: "Forbidden: guest does not belong to this link." };
     }
 
-    const result = await deleteGuest(params.guestId);
-    return { error: result.error };
+    const wasAlreadyDeleted = guest.status === "deleted";
+    await db.update(guests)
+      .set({ status: "deleted", updatedAt: new Date().toISOString() })
+      .where(eq(guests.id, params.guestId));
+
+    if (!wasAlreadyDeleted) {
+      await db.update(externalDjLinks)
+        .set({ usedGuests: sql`max(0, ${externalDjLinks.usedGuests} - 1)` })
+        .where(eq(externalDjLinks.id, link.id));
+    }
+
+    return { error: null };
   } catch (error: unknown) {
     return { error: error instanceof Error ? error.message : "Failed to delete guest via external link" };
   }

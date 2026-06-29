@@ -1,6 +1,5 @@
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { drizzle } from "drizzle-orm/d1";
-import { jwtVerify } from "jose";
 import { guests } from "@/lib/db/schema";
 
 /**

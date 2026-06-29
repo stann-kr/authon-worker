@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useLocalStorage, useGuestPolling } from "@/lib/hooks";
 import AdminHeader from "../../admin/components/AdminHeader";
 import Footer from "@/components/Footer";
@@ -63,7 +63,7 @@ export default function AuthenticatedGuestView({ user }: AuthenticatedGuestViewP
     ? selectedVenueId
     : (user?.venue_id ?? "");
 
-  const loadGuests = async () => {
+  const loadGuests = useCallback(async () => {
     if (!effectiveVenueId) return;
     setIsFetching(true);
     setError(null);
@@ -81,11 +81,11 @@ export default function AuthenticatedGuestView({ user }: AuthenticatedGuestViewP
     }
 
     setIsFetching(false);
-  };
+  }, [selectedDate, effectiveVenueId]);
 
   useEffect(() => {
     loadGuests();
-  }, [selectedDate, effectiveVenueId]);
+  }, [loadGuests]);
 
   // 주기적으로 데이터 갱신 (15초)
   useGuestPolling(async () => {
