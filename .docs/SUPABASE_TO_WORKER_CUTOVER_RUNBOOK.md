@@ -22,6 +22,7 @@ Cloudflare Workers + D1 + KV 기반 Authon Worker v2로 전환할 때의 실제 
 - `DEPLOYMENT.md` — 빌드/배포/도메인/운영 절차
 - `MIGRATION_TODO.md` — 전환 완료 범위와 남은 후속 과제
 - `REMEDIATION_PLAN.md` — 전환 이후 보안 보강 계획/적용 현황
+- `SUPABASE_D1_DATA_MIGRATION_PLAN.md` — 실제 Supabase snapshot export/import, reset-link 이관, 검증 절차
 
 ---
 
@@ -126,9 +127,11 @@ npm run lint
 ```
 
 현재 기준 로컬 검증 완료 항목:
-- `0001_init.sql` ~ `0006_session_version_and_security.sql`
+- `0001_init.sql` ~ `0007_migration_metadata.sql`
 - 호스트 기준 `npm run build` 통과
 - 호스트 기준 `npm run lint` 통과
+- `npm run build:worker` 통과
+- sample snapshot 기준 `migration:verify:snapshot` / `migration:generate:d1-import` / local D1 import 통과
 
 ### 3-2. 원격 D1 적용
 Wrangler 인증 복구 후 실행:
@@ -148,21 +151,40 @@ npm exec wrangler d1 execute authon-db --remote --command="SELECT name FROM sqli
 Supabase에서 직접 평문 비밀번호를 가져오지 않는다. 추출 대상은 다음에 제한한다.
 
 권장 추출 대상:
-- venues
-- users의 프로필 필드
-  - email
-  - name
-  - role
-  - venue_id
-  - guest_limit
-  - active
-- guests
-- external_dj_links (필요 시)
+- `venues`
+- `users`의 프로필/연결 필드
+  - `id`
+  - `auth_user_id` → D1 `legacy_auth_user_id`
+  - `email`
+  - `name`
+  - `role`
+  - `venue_id`
+  - `guest_limit`
+  - `active`
+  - `created_at`
+- `guests`
+- `external_dj_links` (`token` 보존 필수)
 - 운영상 필요한 최소 참조 데이터
 
 비권장/금지:
 - Supabase Auth 비밀번호 평문/재사용 가정
 - 불필요한 auth 메타데이터 전체 복제
+
+보조 스크립트:
+```bash
+SUPABASE_URL=... SUPABASE_SERVICE_ROLE_KEY=... \
+  npm run migration:export:supabase -- migration/supabase-snapshot.json
+
+npm run migration:verify:snapshot -- migration/supabase-snapshot.json
+
+NEXT_PUBLIC_APP_URL=https://authon.example.com \
+  npm run migration:generate:d1-import -- \
+  migration/supabase-snapshot.json \
+  migration/d1-import.sql \
+  migration/reset-links.json
+```
+
+`migration/reset-links.json`은 실제 reset token 원문 URL을 포함하므로 git에 커밋하지 않는다.
 
 ---
 

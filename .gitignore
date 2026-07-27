@@ -50,6 +50,8 @@ build_log.txt
 # git worktrees
 .worktrees/
 
-# seed data
+# seed / migration data
 migrations/seed_*.sql
 public/local-users.json
+/migration/
+!/migration/.gitkeep

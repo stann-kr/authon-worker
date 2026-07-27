@@ -7,6 +7,7 @@ import { sendEmail } from "@/lib/api/email";
 import { hashPassword } from "@/lib/auth/password";
 import { consumeRateLimit, getRequestIp } from "@/lib/auth/rate-limit";
 import { getPasswordPolicyError } from "@/lib/auth/password-policy";
+import { generateResetToken, hashResetToken } from "@/lib/auth/token";
 
 /**
  * 비밀번호 재설정 요청 (POST) 및 재설정 실행 (PUT)
@@ -49,13 +50,14 @@ export async function POST(request: Request) {
       return NextResponse.json({ ok: true, message: "재설정 메일이 발송되었습니다." });
     }
 
-    const token = crypto.randomUUID();
+    const token = generateResetToken();
+    const tokenHash = await hashResetToken(token);
     const expiresAt = new Date(Date.now() + 1000 * 60 * 60).toISOString();
 
     await db.insert(passwordResetTokens).values({
       id: crypto.randomUUID(),
       userId: user.id,
-      token,
+      token: tokenHash,
       expiresAt,
       used: false,
       createdAt: new Date().toISOString(),
@@ -104,6 +106,7 @@ export async function PUT(request: Request) {
 
     const passwordHash = await hashPassword(newPassword);
     const nowIso = new Date().toISOString();
+    const tokenHash = await hashResetToken(token);
 
     // Execute as a D1 batch (transactional) and make the success path depend on
     // both statements succeeding in sequence:
@@ -115,6 +118,8 @@ export async function PUT(request: Request) {
       env.DB.prepare(
         `UPDATE users
          SET password_hash = ?, session_version = session_version + 1
+             , migration_status = CASE WHEN migration_status = 'pending_reset' THEN 'active' ELSE migration_status END
+             , password_set_at = ?
          WHERE id = (
            SELECT prt.user_id
            FROM password_reset_tokens prt
@@ -125,7 +130,7 @@ export async function PUT(request: Request) {
              AND u.active = 1
          )
          RETURNING id`
-      ).bind(passwordHash, token, nowIso),
+      ).bind(passwordHash, nowIso, tokenHash, nowIso),
       env.DB.prepare(
         `UPDATE password_reset_tokens
          SET used = 1
@@ -134,7 +139,7 @@ export async function PUT(request: Request) {
            AND expires_at > ?
            AND changes() = 1
          RETURNING user_id`
-      ).bind(token, nowIso),
+      ).bind(tokenHash, nowIso),
     ]);
 
     const updatedUserId = (passwordResult.results?.[0] as { id?: string } | undefined)?.id;

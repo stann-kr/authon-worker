@@ -10,6 +10,7 @@ export const venues = sqliteTable('venues', {
 
 export const users = sqliteTable('users', {
   id: text('id').primaryKey(),
+  legacyAuthUserId: text('legacy_auth_user_id'),
   email: text('email').notNull().unique(),
   passwordHash: text('password_hash').notNull(),
   name: text('name').notNull(),
@@ -18,6 +19,9 @@ export const users = sqliteTable('users', {
   guestLimit: integer('guest_limit'),
   active: integer('active', { mode: 'boolean' }).notNull().default(true),
   sessionVersion: integer('session_version').notNull().default(0),
+  migrationStatus: text('migration_status').notNull().default('native'),
+  migratedAt: text('migrated_at'),
+  passwordSetAt: text('password_set_at'),
   createdAt: text('created_at').notNull(),
 }, (t) => [index('idx_users_venue').on(t.venueId)]);
 

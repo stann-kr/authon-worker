@@ -12,6 +12,33 @@ tags:
 
 ---
 
+## 2026-07-27 — Supabase 운영 데이터 → D1 이전 준비 보강
+
+### 데이터 마이그레이션
+
+- `migrations/0007_migration_metadata.sql` 추가: `users.legacy_auth_user_id`, `migration_status`, `migrated_at`, `password_set_at` 컬럼과 조회 인덱스 도입
+- `lib/db/schema.ts`를 0007 마이그레이션과 동기화
+- `scripts/migration/export-supabase-snapshot.mjs` 추가: Supabase REST API로 `venues`, `users`, `guests`, `external_dj_links` snapshot export
+- `scripts/migration/verify-supabase-snapshot.mjs` 추가: FK orphan 및 `external_dj_links.used_guests` drift 사전 검증
+- `scripts/migration/generate-d1-import-sql.mjs` 추가: snapshot에서 D1 import SQL과 reset-link JSON 생성
+- `package.json`에 `migration:export:supabase`, `migration:verify:snapshot`, `migration:generate:d1-import` 스크립트 추가
+
+### 인증/보안
+
+- reset-password token 원문 DB 저장을 중단하고 SHA-256 hash만 `password_reset_tokens.token`에 저장하도록 변경
+- `lib/auth/token.ts` 추가: reset token 생성 및 hash helper
+- reset 완료 시 `pending_reset` 사용자를 `active`로 전환하고 `password_set_at`을 기록
+- `/api/admin/migrate`가 legacy user id, Supabase `auth_user_id`, `venue_id`, `active`, `created_at`을 보존하도록 보강
+
+### 문서/검증
+
+- `.docs/SUPABASE_D1_DATA_MIGRATION_PLAN.md` 신규 작성: 기존 유저 reset-link 전환, 무손실 import 원칙, 운영 전 남은 작업 기록
+- `.docs/TECH_SPEC.md`, `.docs/MIGRATION_TODO.md`, `.docs/SUPABASE_TO_WORKER_CUTOVER_RUNBOOK.md`, `.docs/README.md` 현행화
+- 호스트 기준 `npm run lint`, `npm run build`, `npm run build:worker` 통과
+- sample snapshot으로 검증/SQL 생성/local D1 import 확인
+
+---
+
 ## 2026-07-27 — OpenNext Cloudflare 빌드 복구 및 운영 UI 개선
 
 ### 빌드/마이그레이션

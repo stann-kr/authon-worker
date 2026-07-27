@@ -18,6 +18,7 @@ tags:
 - [TROUBLESHOOTING.md](TROUBLESHOOTING.md) — 실제 이슈와 해결 기록
 - [CHANGE_LOG.md](CHANGE_LOG.md) — 코드/문서 변경 이력
 - [MIGRATION_TODO.md](MIGRATION_TODO.md) — 전환 완료 범위와 남은 후속 과제/감사 포인트
+- [SUPABASE_D1_DATA_MIGRATION_PLAN.md](SUPABASE_D1_DATA_MIGRATION_PLAN.md) — Supabase 운영 데이터 export/import, 기존 유저 reset-link 전환, D1 무손실 검증 계획
 - [REMEDIATION_PLAN.md](REMEDIATION_PLAN.md) — Supabase 제거 이후 인증/세션 보안 보강 계획과 적용 상태
 - [SUPABASE_TO_WORKER_CUTOVER_RUNBOOK.md](SUPABASE_TO_WORKER_CUTOVER_RUNBOOK.md) — 운영 중인 Supabase 서비스를 Worker/D1/KV 구조로 전환하는 실제 컷오버 순서
 

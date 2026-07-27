@@ -6,6 +6,7 @@ import { users, passwordResetTokens } from "@/lib/db/schema";
 import { sendEmail } from "@/lib/api/email";
 import { hashPassword } from "@/lib/auth/password";
 import { requireRole } from "@/lib/auth/server";
+import { generateResetToken, hashResetToken } from "@/lib/auth/token";
 
 /**
  * 레거시 유저 마이그레이션 API (super_admin 전용)
@@ -37,10 +38,11 @@ export async function POST(request: Request) {
 
     for (const legacyUser of legacyUsers) {
       try {
-        const existing = await db.select().from(users).where(eq(users.email, legacyUser.email)).limit(1);
+        const normalizedEmail = String(legacyUser.email).trim().toLowerCase();
+        const existing = await db.select().from(users).where(eq(users.email, normalizedEmail)).limit(1);
 
         if (existing.length > 0) {
-          results.push({ email: legacyUser.email, status: "skipped", reason: "이미 존재함" });
+          results.push({ email: normalizedEmail, status: "skipped", reason: "이미 존재함" });
           continue;
         }
 
@@ -52,32 +54,39 @@ export async function POST(request: Request) {
         else if (legacyRole === "admin") role = "venue_admin";
 
         // 유저 생성
-        const userId = crypto.randomUUID();
+        const userId = legacyUser.id || crypto.randomUUID();
         const initialPassword = crypto.randomUUID().slice(0, 12);
         const passwordHash = await hashPassword(initialPassword);
+        const nowIso = new Date().toISOString();
 
         await db.insert(users).values({
           id: userId,
-          email: legacyUser.email,
+          legacyAuthUserId: legacyUser.auth_user_id || legacyUser.legacy_auth_user_id || null,
+          email: normalizedEmail,
           name: legacyUser.name,
           passwordHash,
           role,
+          venueId: legacyUser.venue_id || legacyUser.venueId || null,
           guestLimit: legacyUser.guest_limit || 10,
-          active: true,
-          createdAt: new Date().toISOString(),
+          active: legacyUser.active !== false,
+          migrationStatus: "pending_reset",
+          migratedAt: nowIso,
+          passwordSetAt: null,
+          createdAt: legacyUser.created_at || nowIso,
         });
 
         // 비밀번호 재설정 토큰 생성
-        const token = crypto.randomUUID();
+        const token = generateResetToken();
+        const tokenHash = await hashResetToken(token);
         const expiresAt = new Date(Date.now() + 1000 * 60 * 60 * 24 * 7).toISOString();
 
         await db.insert(passwordResetTokens).values({
           id: crypto.randomUUID(),
           userId,
-          token,
+          token: tokenHash,
           expiresAt,
           used: false,
-          createdAt: new Date().toISOString(),
+          createdAt: nowIso,
         });
 
         // 이메일 발송 (실패해도 user 생성 롤백 없이 상태만 기록)
@@ -87,7 +96,7 @@ export async function POST(request: Request) {
 
         try {
           await sendEmail({
-            to: legacyUser.email,
+            to: normalizedEmail,
             subject: "[Authon] 계정 마이그레이션 및 비밀번호 설정 안내",
             body: `
               <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
@@ -105,10 +114,10 @@ export async function POST(request: Request) {
           });
           emailSent = true;
         } catch (emailErr) {
-          console.error(`[migrate] Email failed for ${legacyUser.email}:`, emailErr);
+          console.error(`[migrate] Email failed for ${normalizedEmail}:`, emailErr);
         }
 
-        results.push({ email: legacyUser.email, status: "success", emailSent });
+        results.push({ email: normalizedEmail, id: userId, status: "success", emailSent });
       } catch (err: unknown) {
         console.error(`Migration failed for ${legacyUser.email}:`, err);
         results.push({

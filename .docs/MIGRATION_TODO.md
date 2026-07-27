@@ -27,9 +27,10 @@ tags:
 
 ### 데이터베이스
 - [x] Drizzle ORM + D1(SQLite) 전환 — Prisma/Supabase 잔존 흔적 0건
-- [x] `migrations/0001_init.sql` ~ `0004_drop_djs.sql` 순차 마이그레이션 관리
+- [x] `migrations/0001_init.sql` ~ `0007_migration_metadata.sql` 순차 마이그레이션 관리
 - [x] `migrations/0003_add_created_by_user.sql` — `guests.created_by_user_id` 컬럼 추가
 - [x] DJ 도메인 제거: `djs` 테이블 드롭, `guests.dj_id` 컬럼 드롭 (`0004_drop_djs.sql`)
+- [x] `migrations/0007_migration_metadata.sql` — Supabase Auth legacy id 및 reset-link 이관 상태 추적 컬럼 추가
 - [x] `lib/database.types.ts` 레거시 Supabase 타입 파일 삭제
 
 ### 인증
@@ -51,8 +52,9 @@ tags:
 
 ### 기능 구현
 - [x] AWS SES v2 이메일 발송 (`lib/api/email.ts`)
-- [x] 비밀번호 재설정 플로우 (`password_reset_tokens` 테이블 + API)
+- [x] 비밀번호 재설정 플로우 (`password_reset_tokens` 테이블 + API, token hash 저장)
 - [x] 유저 마이그레이션 UI (`LegacyUserMigration` 컴포넌트)
+- [x] Supabase snapshot export / 검증 / D1 import SQL 생성 스크립트 (`scripts/migration/*.mjs`)
 - [x] Service Binding 수신 엔드포인트 (`/api/internal/sync-guest`)
 
 ### 환경 설정
@@ -71,6 +73,8 @@ tags:
 
 ### 수동 실행 필요 (1회성)
 - [ ] **Super Admin 계정 로컬 D1 부트스트랩** — 최초 배포 후 wrangler d1 execute로 직접 INSERT
+- [ ] **운영 D1 마이그레이션 적용** — 2026-07-27 확인 기준 remote에는 `0003`~`0007` 미적용
+- [ ] **실제 Supabase snapshot export/import dry-run** — `SUPABASE_D1_DATA_MIGRATION_PLAN.md` 절차 기준
 
 ### 보안/아키텍처 후속 과제
 - [ ] 로그인 및 비밀번호 재설정 요청 rate limit 도입 (`app/api/auth/login/route.ts`, `app/api/auth/reset-password/route.ts`) [2026-06-25 완료]
@@ -87,10 +91,13 @@ tags:
 
 ## 📋 현재 검증 상태
 
-2026-06-25 기준 확인됨:
+2026-07-27 기준 확인됨:
 
 - [x] 호스트 기준 `npm run build` 통과
+- [x] 호스트 기준 `npm run lint` 통과
 - [x] OpenNext Cloudflare Worker 빌드 검증 완료 — `proxy.ts`가 Next 16 Node runtime으로 처리되어, Cloudflare 배포 호환성을 위해 `middleware.ts` 유지
+- [x] 로컬 D1 `0001`~`0007` 마이그레이션 적용 통과
+- [x] sample Supabase snapshot → 검증 → D1 import SQL/reset link 생성 → local D1 import 확인
 - [x] `git diff --check` 통과
 - [ ] Docker compose 기준 `npm run lint` 통과
 - [ ] Docker compose 기준 `npm run build`가 호스트와 동일한 Next 16/의존성 상태에서 재검증됨

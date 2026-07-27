@@ -74,7 +74,7 @@ Host (macOS / Apple Silicon)
 | 비밀번호 재설정 | D1 `password_reset_tokens` + AWS SES 메일 발송 | `app/api/auth/reset-password/route.ts`, `lib/api/email.ts` |
 | RLS / 정책 기반 접근 제어 | `requireAuth()` / `requireRole()` + venue scoping | `lib/auth/server.ts`, `lib/api/{users,guests,external-links}.ts` |
 | 공개 링크 / 외부 등록 폼 | `external_dj_links.token` 기반 공개 bearer 링크 | `lib/api/external-links.ts`, `middleware.ts` |
-| 레거시 유저 이관 | `super_admin` 전용 migrate API + reset 링크 발송 | `app/api/admin/migrate/route.ts` |
+| 레거시 유저 이관 | `super_admin` 전용 migrate API + reset 링크 발송, `legacy_auth_user_id`/`migration_status` 추적 | `app/api/admin/migrate/route.ts`, `migrations/0007_migration_metadata.sql` |
 | Edge Function/내부 동기화 | Worker 내부 `/api/internal/sync-guest` + shared secret | `app/api/internal/sync-guest/route.ts` |
 
 ## 비밀번호 해시 형식 (2026-05-22~)
@@ -144,13 +144,23 @@ Host (macOS / Apple Silicon)
 | 테이블                | 주요 컬럼                                                                    |
 | --------------------- | ---------------------------------------------------------------------------- |
 | `venues`              | id, name, type, address, active                                              |
-| `users`               | id, email, password_hash, name, role, venue_id, guest_limit, active          |
+| `users`               | id, legacy_auth_user_id, email, password_hash, name, role, venue_id, guest_limit, active, session_version, migration_status, migrated_at, password_set_at |
 | `external_dj_links`   | id, venue_id, token, dj_name, date, max_guests, used_guests, active          |
 | `guests`              | id, venue_id, name, status, date, external_link_id, created_by_user_id, source, terminal_request_id |
 | `check_ins`           | id, guest_id, checked_by, checked_at                                         |
-| `password_reset_tokens` | id, user_id, token, expires_at, used                                       |
+| `password_reset_tokens` | id, user_id, token(SHA-256 hash), expires_at, used                        |
 
 마이그레이션 파일: `migrations/` 디렉토리 (Wrangler [[D1]] Migrations 관리)
+
+### Supabase 운영 데이터 이전
+
+실제 운영 데이터 이전 방침과 스크립트는 `SUPABASE_D1_DATA_MIGRATION_PLAN.md`를 기준으로 한다.
+
+- Supabase Auth 비밀번호/세션은 이전하지 않는다.
+- `users.auth_user_id`는 D1 `users.legacy_auth_user_id`로 보존한다.
+- 이관 사용자는 `migration_status='pending_reset'` 상태로 생성하고 reset link로 새 비밀번호를 설정한다.
+- reset token 원문은 DB에 저장하지 않고 SHA-256 hash만 저장한다.
+- export/import 보조 스크립트는 `scripts/migration/*.mjs`에 있다.
 
 ---
 
