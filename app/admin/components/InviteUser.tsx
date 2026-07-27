@@ -52,7 +52,6 @@ export default function InviteUser() {
         { value: "dj", label: "DJ" },
       ]
     : [
-        { value: "venue_admin", label: "VENUE ADMIN" },
         { value: "door_staff", label: "DOOR STAFF" },
         { value: "staff", label: "STAFF" },
         { value: "dj", label: "DJ" },

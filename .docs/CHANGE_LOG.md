@@ -31,6 +31,29 @@ tags:
 
 ---
 
+## 2026-07-27 — 보안 감사 및 dependency hardening
+
+### Dependency remediation
+
+- `npm audit --omit=dev` 기준 production 취약점 10건(high 6, moderate 3, low 1)을 0건으로 해소
+- `next`/`eslint-config-next` 16.2.12, `@opennextjs/cloudflare` 1.20.2, `wrangler` 4.114.0, `@cloudflare/workers-types` 5.20260727.1로 업데이트
+- `postcss`, `sharp`, `form-data`, `minimatch`, `brace-expansion`, `esbuild`는 안전 패치선으로 고정/override하여 중첩 dependency advisory를 제거
+
+### Runtime/code hardening
+
+- 로그인 실패 응답을 단일 메시지로 통일하여 계정 존재 여부 enumeration 완화
+- `lib/api/*` server action catch 경로가 내부 DB/권한/SES 에러 메시지를 클라이언트로 직접 반환하지 않도록 고정 공개 메시지 + 서버 로그로 분리
+- `/api/internal/sync-guest` shared secret 비교를 digest 기반 timing-safe 비교로 변경하고, payload 길이/날짜 형식 검증 및 내부 설정명 노출 방지 적용
+- Next 응답 보안 헤더(CSP, Referrer-Policy, X-Content-Type-Options, X-Frame-Options, Permissions-Policy) 추가
+- Wrangler compatibility date를 2026-07-27로 올려 최신 Worker compatibility/security behavior를 사용
+- CSP `cdnjs.cloudflare.com` style/font 허용 누락 보정으로 Remix Icon 런타임 차단 방지
+- `/api/internal/sync-guest` malformed JSON 및 `createdAt` ISO timestamp 검증 추가
+- `users` server action의 비-super-admin venue scope 및 venue_admin role 생성 제한 보강
+- venue_admin 사용자 생성/수정 UI에서 서버 권한 경계와 불일치하던 role 전송/선택 옵션 정리
+- 로그인 JWT 시크릿 누락 시 공개 설정 오류 문구 대신 일반 오류 응답 반환
+
+---
+
 ## 2026-06-29 — 링크 관리 대시보드 시간 상태 갱신 수정
 
 ### 버그 수정

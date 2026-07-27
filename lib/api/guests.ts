@@ -46,7 +46,8 @@ export async function fetchGuestsByDate(date: string, venueId?: string): Promise
 
     return { data: result.map((g) => ({ ...g, status: g.status as Guest["status"] })), error: null };
   } catch (error: unknown) {
-    return { data: null, error: error instanceof Error ? error.message : "Failed to fetch guests by date" };
+    console.error("Failed to fetch guests by date:", error);
+    return { data: null, error: "Unable to load guests right now." };
   }
 }
 
@@ -62,7 +63,8 @@ export async function fetchAllGuests(venueId?: string): Promise<ApiResponse<Gues
 
     return { data: result.map((g) => ({ ...g, status: g.status as Guest["status"] })), error: null };
   } catch (error: unknown) {
-    return { data: null, error: error instanceof Error ? error.message : "Failed to fetch all guests" };
+    console.error("Failed to fetch all guests:", error);
+    return { data: null, error: "Unable to load guests right now." };
   }
 }
 
@@ -96,7 +98,8 @@ export async function createGuest(guest: {
     const result = await db.select().from(guests).where(eq(guests.id, id));
     return { data: result[0] ? { ...result[0], status: result[0].status as Guest["status"] } : null, error: null };
   } catch (error: unknown) {
-    return { data: null, error: error instanceof Error ? error.message : "Failed to create guest" };
+    console.error("Failed to create guest:", error);
+    return { data: null, error: "Unable to create guest right now." };
   }
 }
 
@@ -121,7 +124,8 @@ export async function updateGuestStatus(
     const result = await db.select().from(guests).where(eq(guests.id, guestId));
     return { data: result[0] ? { ...result[0], status: result[0].status as Guest["status"] } : null, error: null };
   } catch (error: unknown) {
-    return { data: null, error: error instanceof Error ? error.message : "Failed to update guest status" };
+    console.error("Failed to update guest status:", error);
+    return { data: null, error: "Unable to update guest status right now." };
   }
 }
 
@@ -150,7 +154,8 @@ export async function deleteGuest(guestId: string): Promise<ApiResponse<Guest>> 
 
     return { data: updated ? { ...updated, status: updated.status as Guest["status"] } : null, error: null };
   } catch (error: unknown) {
-    return { data: null, error: error instanceof Error ? error.message : "Failed to delete guest" };
+    console.error("Failed to delete guest:", error);
+    return { data: null, error: "Unable to delete guest right now." };
   }
 }
 
@@ -162,7 +167,8 @@ export async function permanentlyDeleteGuest(guestId: string): Promise<{ error: 
     await db.delete(guests).where(eq(guests.id, guestId));
     return { error: null };
   } catch (error: unknown) {
-    return { error: error instanceof Error ? error.message : "Failed to permanently delete guest" };
+    console.error("Failed to permanently delete guest:", error);
+    return { error: "Unable to permanently delete guest right now." };
   }
 }
 
@@ -192,6 +198,7 @@ export async function updateGuest(
     const result = await db.select().from(guests).where(eq(guests.id, guestId));
     return { data: result[0] ? { ...result[0], status: result[0].status as Guest["status"] } : null, error: null };
   } catch (error: unknown) {
-    return { data: null, error: error instanceof Error ? error.message : "Failed to update guest" };
+    console.error("Failed to update guest:", error);
+    return { data: null, error: "Unable to update guest right now." };
   }
 }

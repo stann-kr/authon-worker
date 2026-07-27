@@ -251,6 +251,7 @@ export default function UserManagement() {
                     <UserCard
                       key={user.id}
                       user={user}
+                      canEditRole={isSuperAdmin}
                       onUpdate={handleUserUpdate}
                       onDelete={handleUserDelete}
                     />
@@ -267,10 +268,12 @@ export default function UserManagement() {
 
 function UserCard({
   user,
+  canEditRole,
   onUpdate,
   onDelete,
 }: {
   user: User;
+  canEditRole: boolean;
   onUpdate: (
     id: string,
     updates: {
@@ -307,7 +310,13 @@ function UserCard({
   };
 
   const handleSave = () => {
-    onUpdate(user.id, editData);
+    const updates = canEditRole
+      ? editData
+      : {
+          guestLimit: editData.guestLimit,
+          active: editData.active,
+        };
+    onUpdate(user.id, updates);
     setIsEditing(false);
   };
 
@@ -384,28 +393,30 @@ function UserCard({
         </div>
       ) : (
         <div className="space-y-3">
-          <div>
-            <label className="block text-gray-400 font-mono text-xs tracking-wider uppercase mb-2">
-              Role
-            </label>
-            <div className="grid grid-cols-4 gap-1">
-              {editableRoles.map((role) => (
-                <button
-                  key={role}
-                  onClick={() =>
-                    setEditData({ ...editData, role: role as User["role"] })
-                  }
-                  className={`p-2 sm:p-3 border font-mono text-xs tracking-wider uppercase transition-colors ${
-                    editData.role === role
-                      ? "bg-white text-black border-white"
-                      : "bg-gray-800 text-gray-400 border-gray-600 hover:text-white hover:border-gray-500"
-                  }`}
-                >
-                  <RoleLabel role={role} />
-                </button>
-              ))}
+          {canEditRole && (
+            <div>
+              <label className="block text-gray-400 font-mono text-xs tracking-wider uppercase mb-2">
+                Role
+              </label>
+              <div className="grid grid-cols-4 gap-1">
+                {editableRoles.map((role) => (
+                  <button
+                    key={role}
+                    onClick={() =>
+                      setEditData({ ...editData, role: role as User["role"] })
+                    }
+                    className={`p-2 sm:p-3 border font-mono text-xs tracking-wider uppercase transition-colors ${
+                      editData.role === role
+                        ? "bg-white text-black border-white"
+                        : "bg-gray-800 text-gray-400 border-gray-600 hover:text-white hover:border-gray-500"
+                    }`}
+                  >
+                    <RoleLabel role={role} />
+                  </button>
+                ))}
+              </div>
             </div>
-          </div>
+          )}
 
           <div>
             <label className="block text-gray-400 font-mono text-xs tracking-wider uppercase mb-2">

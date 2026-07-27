@@ -5,24 +5,31 @@ import { eq, asc } from "drizzle-orm";
 import { users, passwordResetTokens } from "../db/schema";
 import { type User, type ApiResponse } from "./types";
 import { hashPassword } from "../auth/password";
-import { requireAuth, requireRole } from "../auth/server";
+import { requireAuth, requireRole, type Role } from "../auth/server";
 import { getDb } from "../db/client";
 import { sendEmail } from "./email";
 
 export async function fetchUsersByVenue(venueId?: string | null): Promise<ApiResponse<User[]>> {
   try {
-    await requireRole(["super_admin", "venue_admin", "door_staff", "staff", "dj"]);
+    const actor = await requireRole(["super_admin", "venue_admin", "door_staff", "staff", "dj"]);
     const db = getDb();
+    const effectiveVenueId = actor.role === "super_admin" ? venueId : actor.venueId;
+
+    if (actor.role !== "super_admin" && !effectiveVenueId) {
+      throw new Error("Forbidden");
+    }
+
     let query = db.select().from(users).$dynamic();
 
-    if (venueId) {
-      query = query.where(eq(users.venueId, venueId));
+    if (effectiveVenueId) {
+      query = query.where(eq(users.venueId, effectiveVenueId));
     }
 
     const result = await query.orderBy(asc(users.name));
     return { data: result.map((u) => ({ ...u, role: u.role as User["role"] })), error: null };
   } catch (error: unknown) {
-    return { data: null, error: error instanceof Error ? error.message : "Failed to fetch users" };
+    console.error("Failed to fetch users:", error);
+    return { data: null, error: "Unable to load users right now." };
   }
 }
 
@@ -38,44 +45,69 @@ export async function updateUserProfile(
   try {
     const actor = await requireAuth();
     const isSelfUpdate = actor.id === userId;
-    const isAdmin = actor.role === "super_admin" || actor.role === "venue_admin";
+    const isSuperAdmin = actor.role === "super_admin";
+    const isVenueAdmin = actor.role === "venue_admin";
 
-    if (!isSelfUpdate && !isAdmin) {
+    if (!isSelfUpdate && !isSuperAdmin && !isVenueAdmin) {
       throw new Error("Forbidden");
     }
 
     const db = getDb();
+
+    // venue_admin은 자신의 venue 소속 유저만 관리 가능 (venue 간 권한 침범 방지)
+    if (!isSelfUpdate && isVenueAdmin) {
+      const targetResult = await db.select({ venueId: users.venueId }).from(users).where(eq(users.id, userId)).limit(1);
+      if (targetResult[0]?.venueId !== actor.venueId) {
+        throw new Error("Forbidden");
+      }
+    }
+
     const dbUpdates: Partial<typeof users.$inferInsert> = {};
 
     if (updates.name !== undefined) dbUpdates.name = updates.name;
 
-    if (isAdmin) {
+    if (isSuperAdmin || isVenueAdmin) {
       if (updates.guestLimit !== undefined) dbUpdates.guestLimit = updates.guestLimit;
       if (updates.active !== undefined) dbUpdates.active = updates.active;
-      if (updates.role !== undefined) dbUpdates.role = updates.role;
+    }
+
+    // role 승격은 super_admin만 가능 (venue_admin의 권한 상승 방지)
+    if (updates.role !== undefined) {
+      if (!isSuperAdmin) throw new Error("Forbidden");
+      dbUpdates.role = updates.role;
     }
 
     await db.update(users).set(dbUpdates).where(eq(users.id, userId));
     const result = await db.select().from(users).where(eq(users.id, userId));
     return { data: result[0] ? { ...result[0], role: result[0].role as User["role"] } : null, error: null };
   } catch (error: unknown) {
-    return { data: null, error: error instanceof Error ? error.message : "Failed to update user" };
+    console.error("Failed to update user:", error);
+    return { data: null, error: "Unable to update user right now." };
   }
 }
 
 export async function createUserViaEdge(params: {
   email: string;
   name: string;
-  role: "super_admin" | "venue_admin" | "door_staff" | "staff" | "dj";
+  role: Role;
   venueId?: string | null;
   guestLimit?: number;
   password?: string;
 }): Promise<ApiResponse<{ id: string }>> {
   try {
-    await requireRole(["super_admin", "venue_admin"]);
+    const actor = await requireRole(["super_admin", "venue_admin"]);
 
     if (!params.password) {
       return { data: null, error: "비밀번호를 입력해주세요." };
+    }
+
+    const venueId = actor.role === "super_admin" ? params.venueId || null : actor.venueId;
+    if (!venueId) {
+      throw new Error("Forbidden");
+    }
+
+    if (actor.role !== "super_admin" && (params.role === "super_admin" || params.role === "venue_admin")) {
+      throw new Error("Forbidden");
     }
 
     const db = getDb();
@@ -87,7 +119,7 @@ export async function createUserViaEdge(params: {
       email: params.email,
       name: params.name,
       role: params.role,
-      venueId: params.venueId || null,
+      venueId,
       guestLimit: params.guestLimit || null,
       passwordHash,
       active: true,
@@ -98,7 +130,8 @@ export async function createUserViaEdge(params: {
 
     return { data: { id }, error: null };
   } catch (error: unknown) {
-    return { data: null, error: error instanceof Error ? error.message : "Failed to create user" };
+    console.error("Failed to create user:", error);
+    return { data: null, error: "Unable to create user right now." };
   }
 }
 
@@ -109,19 +142,24 @@ export async function deleteUserViaEdge(userId: string): Promise<{ error: string
     await db.delete(users).where(eq(users.id, userId));
     return { error: null };
   } catch (error: unknown) {
-    return { error: error instanceof Error ? error.message : "Failed to delete user" };
+    console.error("Failed to delete user:", error);
+    return { error: "Unable to delete user right now." };
   }
 }
 
 export async function resendInvitationViaEdge(userId: string): Promise<{ error: string | null }> {
   try {
     const { env } = getCloudflareContext();
+    const actor = await requireRole(["super_admin", "venue_admin"]);
     const db = getDb();
 
     const userResult = await db.select().from(users).where(eq(users.id, userId)).limit(1);
     const user = userResult[0];
 
     if (!user) return { error: "User not found." };
+    if (actor.role !== "super_admin" && user.venueId !== actor.venueId) {
+      throw new Error("Forbidden");
+    }
 
     const token = crypto.randomUUID();
     const expiresAt = new Date(Date.now() + 1000 * 60 * 60 * 24 * 7).toISOString();
@@ -158,6 +196,6 @@ export async function resendInvitationViaEdge(userId: string): Promise<{ error: 
     return { error: null };
   } catch (error: unknown) {
     console.error("Resend invitation error:", error);
-    return { error: error instanceof Error ? error.message : "Failed to resend invitation" };
+    return { error: "Unable to resend invitation right now." };
   }
 }

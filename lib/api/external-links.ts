@@ -51,7 +51,8 @@ export async function fetchExternalLinks(venueId: string): Promise<ApiResponse<E
       .orderBy(desc(externalDjLinks.date));
     return { data: result, error: null };
   } catch (error: unknown) {
-    return { data: null, error: error instanceof Error ? error.message : "Failed to fetch external links" };
+    console.error("Failed to fetch external links:", error);
+    return { data: null, error: "Unable to load external links right now." };
   }
 }
 
@@ -65,7 +66,8 @@ export async function fetchExternalLinksByDate(venueId: string, date: string): P
       .orderBy(desc(externalDjLinks.id));
     return { data: result, error: null };
   } catch (error: unknown) {
-    return { data: null, error: error instanceof Error ? error.message : "Failed to fetch external links by date" };
+    console.error("Failed to fetch external links by date:", error);
+    return { data: null, error: "Unable to load external links right now." };
   }
 }
 
@@ -100,7 +102,8 @@ export async function createExternalLink(link: {
     const result = await db.select().from(externalDjLinks).where(eq(externalDjLinks.id, id));
     return { data: result[0] ? { ...result[0] } : null, error: null };
   } catch (error: unknown) {
-    return { data: null, error: error instanceof Error ? error.message : "Failed to create external link" };
+    console.error("Failed to create external link:", error);
+    return { data: null, error: "Unable to create external link right now." };
   }
 }
 
@@ -112,7 +115,8 @@ export async function deleteExternalLink(linkId: string): Promise<{ error: strin
     await db.delete(externalDjLinks).where(eq(externalDjLinks.id, linkId));
     return { error: null };
   } catch (error: unknown) {
-    return { error: error instanceof Error ? error.message : "Failed to delete external link" };
+    console.error("Failed to delete external link:", error);
+    return { error: "Unable to delete external link right now." };
   }
 }
 
@@ -124,7 +128,8 @@ export async function deactivateExternalLink(linkId: string): Promise<{ error: s
     await db.update(externalDjLinks).set({ active: false }).where(eq(externalDjLinks.id, linkId));
     return { error: null };
   } catch (error: unknown) {
-    return { error: error instanceof Error ? error.message : "Failed to deactivate external link" };
+    console.error("Failed to deactivate external link:", error);
+    return { error: "Unable to update external link right now." };
   }
 }
 
@@ -137,7 +142,8 @@ export async function activateExternalLink(linkId: string): Promise<{ error: str
     await db.update(externalDjLinks).set({ active: true }).where(eq(externalDjLinks.id, linkId));
     return { error: null };
   } catch (error: unknown) {
-    return { error: error instanceof Error ? error.message : "Failed to activate external link" };
+    console.error("Failed to activate external link:", error);
+    return { error: "Unable to update external link right now." };
   }
 }
 
@@ -263,7 +269,7 @@ export async function deleteGuestViaExternalLink(params: {
 
     const guest = guestResult[0];
     if (!guest || guest.externalLinkId !== link.id) {
-      return { error: "Forbidden: guest does not belong to this link." };
+      return { error: "Unable to delete this guest from this link." };
     }
 
     const wasAlreadyDeleted = guest.status === "deleted";

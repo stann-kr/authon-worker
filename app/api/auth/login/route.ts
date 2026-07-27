@@ -42,19 +42,18 @@ export async function POST(request: Request) {
     const result = await db.select().from(users).where(eq(users.email, normalizedEmail)).limit(1);
     const user = result[0];
 
+    const invalidCredentialsResponse = () => NextResponse.json(
+      { error: "이메일 또는 비밀번호가 올바르지 않습니다." },
+      { status: 401 }
+    );
+
     if (!user || !user.active) {
-      return NextResponse.json(
-        { error: "존재하지 않거나 비활성화된 계정입니다." },
-        { status: 401 }
-      );
+      return invalidCredentialsResponse();
     }
 
     const isMatch = await verifyPassword(password, user.passwordHash);
     if (!isMatch) {
-      return NextResponse.json(
-        { error: "비밀번호가 일치하지 않습니다." },
-        { status: 401 }
-      );
+      return invalidCredentialsResponse();
     }
 
     // bcrypt 해시 → PBKDF2 자동 재해시
@@ -65,7 +64,7 @@ export async function POST(request: Request) {
 
     if (!env.JWT_SECRET) {
       console.error("JWT_SECRET is not configured");
-      return NextResponse.json({ error: "Server configuration error." }, { status: 500 });
+      return NextResponse.json({ error: "로그인 처리 중 오류가 발생했습니다." }, { status: 500 });
     }
     const secret = new TextEncoder().encode(env.JWT_SECRET);
     const token = await new SignJWT({

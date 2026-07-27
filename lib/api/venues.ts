@@ -19,7 +19,8 @@ export async function fetchVenues(includeInactive = false): Promise<ApiResponse<
     const result = await query.orderBy(asc(venues.name));
     return { data: result.map((v) => ({ ...v, type: v.type as Venue["type"] })), error: null };
   } catch (error: unknown) {
-    return { data: null, error: error instanceof Error ? error.message : "Failed to fetch venues" };
+    console.error("Failed to fetch venues:", error);
+    return { data: null, error: "Unable to load venues right now." };
   }
 }
 
@@ -43,7 +44,8 @@ export async function createVenue(venue: {
     const result = await db.select().from(venues).where(eq(venues.id, id));
     return { data: result[0] ? { ...result[0], type: result[0].type as Venue["type"] } : null, error: null };
   } catch (error: unknown) {
-    return { data: null, error: error instanceof Error ? error.message : "Failed to create venue" };
+    console.error("Failed to create venue:", error);
+    return { data: null, error: "Unable to create venue right now." };
   }
 }
 
@@ -65,6 +67,7 @@ export async function updateVenue(
     const result = await db.select().from(venues).where(eq(venues.id, id));
     return { data: result[0] ? { ...result[0], type: result[0].type as Venue["type"] } : null, error: null };
   } catch (error: unknown) {
-    return { data: null, error: error instanceof Error ? error.message : "Failed to update venue" };
+    console.error("Failed to update venue:", error);
+    return { data: null, error: "Unable to update venue right now." };
   }
 }
