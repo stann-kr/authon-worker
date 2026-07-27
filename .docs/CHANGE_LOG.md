@@ -12,6 +12,25 @@ tags:
 
 ---
 
+## 2026-07-27 — OpenNext Cloudflare 빌드 복구 및 운영 UI 개선
+
+### 빌드/마이그레이션
+
+- 루트 `middleware.ts`/`proxy.ts` 중복 감지 빌드 실패를 해소
+- Next 16 `proxy.ts`는 Node.js runtime으로 처리되어 `@opennextjs/cloudflare` 1.19.3 Worker 빌드에서 `Node.js middleware is not currently supported`로 실패함을 확인
+- Cloudflare Worker 배포 호환성을 우선하여 `proxy.ts`를 제거하고, 동일한 JWT/KV 세션/D1 사용자 상태/sessionVersion/RBAC 검증 로직을 `middleware.ts`에 유지
+- 호스트 기준 `npm run lint`, `npx tsc --noEmit`, `npm run build`, `npm run build:worker` 통과 확인
+
+### UI/UX 및 기능 추가
+
+- 홈 대시보드 카드에 `KEY 1/2/3` 단축키 힌트와 키보드 이동 추가
+- Admin 화면에 탭 단축키(`1`~`4`), `Escape` 홈 복귀, HOME CTA, 운영 상태 배지 추가
+- Admin 날짜 선택 영역에 `[-1D]`, `[TODAY]`, `[+1D]` 영업일 퀵 프리셋과 `LIVE TODAY`/`CUSTOM DATE` 상태 배지 추가
+- 탭 UI ARIA 속성, 아이콘 버튼 라벨, 전역 `focus-visible` 포커스 링 보강
+- 외부 DJ 토큰 검증/등록/삭제 실패 화면에서 내부 D1 쿼리 에러가 노출되지 않도록 공개 오류 메시지 정리
+
+---
+
 ## 2026-06-29 — 링크 관리 대시보드 시간 상태 갱신 수정
 
 ### 버그 수정

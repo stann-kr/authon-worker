@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { getUser, logout, hasAccess, User } from "../lib/auth";
@@ -26,6 +26,78 @@ export default function Home() {
     setIsLoading(false);
   }, [router]);
 
+  const menuItems = useMemo(
+    () => [
+      {
+        id: "guest",
+        title: "GUEST",
+        subtitle: "ACCESS REGISTRATION",
+        description: "REGISTER FOR EVENT ACCESS",
+        icon: "ri-user-line",
+        href: "/guest",
+        bgColor: "from-blue-900 to-blue-800",
+        requiredAccess: ["guest"],
+        shortcut: "1",
+      },
+      {
+        id: "door",
+        title: "DOOR",
+        subtitle: "ENTRANCE CONTROL",
+        description: "CHECK GUEST VERIFICATION",
+        icon: "ri-door-open-line",
+        href: "/door",
+        bgColor: "from-purple-900 to-purple-800",
+        requiredAccess: ["door"],
+        shortcut: "2",
+      },
+      {
+        id: "admin",
+        title: "ADMIN",
+        subtitle: "SYSTEM MANAGEMENT",
+        description: "GUEST CONTROL SYSTEM",
+        icon: "ri-settings-line",
+        href: "/admin",
+        bgColor: "from-gray-900 to-black",
+        requiredAccess: ["admin"],
+        shortcut: "3",
+      },
+    ],
+    [],
+  );
+
+  const accessibleMenus = useMemo(
+    () =>
+      user
+        ? menuItems.filter((item) => hasAccess(user.role, item.requiredAccess))
+        : [],
+    [menuItems, user],
+  );
+
+  useEffect(() => {
+    if (!user || accessibleMenus.length === 0) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (
+        target &&
+        (target.tagName === "INPUT" ||
+          target.tagName === "TEXTAREA" ||
+          target.tagName === "SELECT" ||
+          target.isContentEditable)
+      ) {
+        return;
+      }
+
+      const keyIndex = parseInt(e.key, 10) - 1;
+      if (!isNaN(keyIndex) && accessibleMenus[keyIndex]) {
+        router.push(accessibleMenus[keyIndex].href);
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [user, accessibleMenus, router]);
+
   if (isLoading) {
     return <Spinner mode="fullscreen" text="LOADING..." />;
   }
@@ -34,43 +106,6 @@ export default function Home() {
     return null;
   }
 
-  const menuItems = [
-    {
-      id: "guest",
-      title: "GUEST",
-      subtitle: "ACCESS REGISTRATION",
-      description: "REGISTER FOR EVENT ACCESS",
-      icon: "ri-user-line",
-      href: "/guest",
-      bgColor: "from-blue-900 to-blue-800",
-      requiredAccess: ["guest"],
-    },
-    {
-      id: "door",
-      title: "DOOR",
-      subtitle: "ENTRANCE CONTROL",
-      description: "CHECK GUEST VERIFICATION",
-      icon: "ri-door-open-line",
-      href: "/door",
-      bgColor: "from-purple-900 to-purple-800",
-      requiredAccess: ["door"],
-    },
-    {
-      id: "admin",
-      title: "ADMIN",
-      subtitle: "SYSTEM MANAGEMENT",
-      description: "GUEST CONTROL SYSTEM",
-      icon: "ri-settings-line",
-      href: "/admin",
-      bgColor: "from-gray-900 to-black",
-      requiredAccess: ["admin"],
-    },
-  ];
-
-  const accessibleMenus = menuItems.filter((item) =>
-    hasAccess(user.role, item.requiredAccess),
-  );
-
   return (
     <div className="min-h-screen bg-black flex flex-col">
       <div className="w-full max-w-6xl mx-auto flex flex-col flex-1">
@@ -78,9 +113,9 @@ export default function Home() {
           <div className="flex items-center justify-between mb-6 lg:mb-8">
             <div className="text-left flex-1">
               <div className="flex items-center gap-2 mb-3">
-                <div className="w-2 h-2 bg-white"></div>
-                <div className="w-2 h-2 bg-white"></div>
-                <div className="w-2 h-2 bg-white"></div>
+                <div className="w-2 h-2 bg-white" aria-hidden="true"></div>
+                <div className="w-2 h-2 bg-white" aria-hidden="true"></div>
+                <div className="w-2 h-2 bg-white" aria-hidden="true"></div>
               </div>
               <h1 className="font-mono text-xl sm:text-2xl lg:text-3xl tracking-wider text-white uppercase mb-1">
                 {BRAND_NAME}
@@ -93,14 +128,15 @@ export default function Home() {
             <Button
               onClick={logout}
               variant="ghost"
-              className="w-8 h-8 sm:w-10 sm:h-10 p-0 border border-border-default text-text-muted hover:bg-surface-hover"
-              aria-label="Logout"
+              className="w-8 h-8 sm:w-10 sm:h-10 p-0 border border-border-default text-text-muted hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-white"
+              aria-label="Logout of System"
+              title="Logout"
             >
               <i className="ri-logout-box-line text-sm sm:text-base" aria-hidden="true"></i>
             </Button>
           </div>
 
-          <div className="bg-surface border border-border-subtle p-4 lg:p-6">
+          <div className="bg-surface border border-border-subtle p-4 lg:p-6 mb-2">
             <div className="flex items-center justify-between">
               <div>
                 <p className="font-mono text-sm sm:text-base lg:text-lg tracking-wider text-white uppercase">
@@ -111,23 +147,33 @@ export default function Home() {
                   {user.guest_limit}
                 </p>
               </div>
-              <Link href="/profile" passHref>
-                <Button
-                  variant="ghost"
-                  className="w-8 h-8 sm:w-10 sm:h-10 p-0 border border-border-default text-text-muted hover:bg-surface-hover"
-                  aria-label="Edit Profile"
-                >
-                  <i className="ri-user-settings-line text-sm sm:text-base" aria-hidden="true"></i>
-                </Button>
+              <Link
+                href="/profile"
+                className="w-8 h-8 sm:w-10 sm:h-10 p-0 border border-border-default text-text-muted hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-white bg-transparent hover:text-white hover:bg-white/5 font-mono tracking-wider uppercase transition-all duration-150 ease-out flex items-center justify-center gap-2 active:scale-[0.98] active:opacity-90"
+                aria-label="Edit Profile Settings"
+                title="Edit Profile"
+              >
+                <i className="ri-user-settings-line text-sm sm:text-base" aria-hidden="true"></i>
               </Link>
             </div>
+          </div>
+
+          {/* Quick Nav Shortcut Helper */}
+          <div className="flex items-center justify-between text-[11px] font-mono text-gray-500 px-1 py-1">
+            <span className="flex items-center gap-1.5">
+              <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse" aria-hidden="true"></span>
+              SYSTEM ONLINE
+            </span>
+            <span className="hidden sm:inline-block">
+              TIP: PRESS [1-{accessibleMenus.length}] KEY TO QUICK NAVIGATE
+            </span>
           </div>
         </div>
 
         <div className="flex-1 px-4 sm:px-6 lg:px-8 flex flex-col">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 lg:gap-6 flex-1 content-start">
             {accessibleMenus.map((item, index) => (
-              <Link key={item.id} href={item.href} className="block group">
+              <Link key={item.id} href={item.href} className="block group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-black">
                 <div
                   className={`bg-gradient-to-br ${item.bgColor} border border-border-subtle p-5 sm:p-6 group-hover:border-border-focus transition-all duration-300 h-full flex flex-col justify-between min-h-[180px] lg:min-h-[200px] active:scale-[0.99]`}
                 >
@@ -149,7 +195,10 @@ export default function Home() {
                       </div>
                     </div>
 
-                    <div className="text-right">
+                    <div className="text-right flex items-center gap-1.5">
+                      <span className="hidden sm:inline-block text-[10px] font-mono text-gray-400 border border-gray-700 px-1 py-0.5 rounded">
+                        KEY {index + 1}
+                      </span>
                       <div className="w-6 h-6 border border-border-default flex items-center justify-center group-hover:border-border-focus transition-colors">
                         <span className="text-xs font-mono text-text-muted group-hover:text-white">
                           {String(index + 1).padStart(2, "0")}
@@ -166,9 +215,9 @@ export default function Home() {
 
                   <div className="flex items-center justify-between">
                     <div className="flex gap-2">
-                      <div className="w-1 h-1 bg-border-subtle group-hover:bg-white transition-colors"></div>
-                      <div className="w-1 h-1 bg-border-subtle group-hover:bg-white transition-colors"></div>
-                      <div className="w-1 h-1 bg-border-subtle group-hover:bg-white transition-colors"></div>
+                      <div className="w-1 h-1 bg-border-subtle group-hover:bg-white transition-colors" aria-hidden="true"></div>
+                      <div className="w-1 h-1 bg-border-subtle group-hover:bg-white transition-colors" aria-hidden="true"></div>
+                      <div className="w-1 h-1 bg-border-subtle group-hover:bg-white transition-colors" aria-hidden="true"></div>
                     </div>
 
                     <div className="flex items-center gap-2">

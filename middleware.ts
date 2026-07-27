@@ -15,7 +15,7 @@ function parseStoredSession(raw: string): { userId?: string; sessionVersion?: nu
   }
 }
 
-export default async function proxy(request: NextRequest) {
+export async function middleware(request: NextRequest) {
   const { pathname, searchParams } = request.nextUrl;
 
   // ─── 공개 경로 (인증 불필요) ────────────────────────────────

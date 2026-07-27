@@ -23,7 +23,7 @@ DJ가 게스트를 등록하고, Door 스태프가 체크인하며, Admin이 전
 
 | 구분         | 기술                                           |
 | ------------ | ---------------------------------------------- |
-| 프레임워크   | [[Next.js]] 15 (App Router, SSR)                   |
+| 프레임워크   | [[Next.js]] 16 (App Router, SSR)                   |
 | 배포 어댑터  | `@opennextjs/cloudflare`                       |
 | 언어         | [[TypeScript]]                                     |
 | 스타일링     | [[Tailwind CSS]] v3                                |
@@ -58,7 +58,7 @@ Host (macOS / Apple Silicon)
   - `guests.ts`, `users.ts`, `venues.ts`, `external-links.ts`
 - 인증: `app/api/auth/login/route.ts` → JWT 발급 → HTTP-Only 쿠키
 - 세션: KV에 `session:{sessionId}` 저장 (24h TTL, `sessionVersion` 포함)
-- 미들웨어/프록시: `proxy.ts` → JWT 검증 + KV 세션 존재 확인 + sessionVersion 검증 → 경로별 RBAC
+- 미들웨어: `middleware.ts` → JWT 검증 + KV 세션 존재 확인 + sessionVersion 검증 → 경로별 RBAC
 - Server Actions: `lib/auth/server.ts`의 `requireRole()` 호출로 모든 변경 함수에 JWT+KV 인증 적용
 - Terminal 연동: `terminal-2` → Service Binding → `/api/internal/sync-guest`
 
@@ -68,12 +68,12 @@ Host (macOS / Apple Silicon)
 
 | 기존 Supabase 의존 영역 | 현재 대체 방식 | 근거 파일 |
 | ----------------------- | ------------- | --------- |
-| Supabase Auth 로그인/세션 | 자체 JWT(`jose`) + HTTP-only 쿠키 + KV `session:{sessionId}` | `app/api/auth/login/route.ts`, `lib/auth/server.ts`, `proxy.ts` |
+| Supabase Auth 로그인/세션 | 자체 JWT(`jose`) + HTTP-only 쿠키 + KV `session:{sessionId}` | `app/api/auth/login/route.ts`, `lib/auth/server.ts`, `middleware.ts` |
 | `auth.users` / 앱 프로필 | D1 `users` 테이블 + Drizzle schema | `lib/db/schema.ts` |
 | 비밀번호 해시/검증 | WebCrypto PBKDF2 기본 + bcrypt 레거시 호환/자동 재해시 | `lib/auth/password.ts` |
 | 비밀번호 재설정 | D1 `password_reset_tokens` + AWS SES 메일 발송 | `app/api/auth/reset-password/route.ts`, `lib/api/email.ts` |
 | RLS / 정책 기반 접근 제어 | `requireAuth()` / `requireRole()` + venue scoping | `lib/auth/server.ts`, `lib/api/{users,guests,external-links}.ts` |
-| 공개 링크 / 외부 등록 폼 | `external_dj_links.token` 기반 공개 bearer 링크 | `lib/api/external-links.ts`, `proxy.ts` |
+| 공개 링크 / 외부 등록 폼 | `external_dj_links.token` 기반 공개 bearer 링크 | `lib/api/external-links.ts`, `middleware.ts` |
 | 레거시 유저 이관 | `super_admin` 전용 migrate API + reset 링크 발송 | `app/api/admin/migrate/route.ts` |
 | Edge Function/내부 동기화 | Worker 내부 `/api/internal/sync-guest` + shared secret | `app/api/internal/sync-guest/route.ts` |
 

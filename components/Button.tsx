@@ -24,8 +24,8 @@ export default function Button({
   disabled,
   ...props
 }: ButtonProps) {
-  // Base classes with touch feedback
-  const baseClasses = "font-mono tracking-wider uppercase transition-all duration-150 ease-out flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed active:scale-[0.98] active:opacity-90";
+  // Base classes with touch feedback and focus accessibility
+  const baseClasses = "font-mono tracking-wider uppercase transition-all duration-150 ease-out flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed active:scale-[0.98] active:opacity-90 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-white";
   
   const variantClasses = {
     primary: "bg-white text-black hover:bg-gray-200",

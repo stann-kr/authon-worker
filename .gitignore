@@ -16,6 +16,7 @@
 # misc
 .DS_Store
 *.pem
+*.sync-conflict-*
 
 # debug
 npm-debug.log*

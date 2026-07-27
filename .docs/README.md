@@ -31,7 +31,7 @@ tags:
 
 ## 이번 문서 정리 포인트 (2026-06-25)
 
-- `middleware.ts` → `proxy.ts` 전환 반영
+- Next 16 `proxy.ts` 전환 시도 후 OpenNext Cloudflare 호환성 기준으로 `middleware.ts` 유지 결정 반영
 - Supabase 기반 기능이 현재 Worker 구조에서 어떻게 대체되었는지 문서화
 - stale migration status/운영 문구 정리
 - 현재 감사 기준의 남은 보안/운영 리스크 정리

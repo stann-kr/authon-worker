@@ -34,9 +34,9 @@ tags:
 
 ### 인증
 - [x] NextAuth 제거 → 자체 JWT (`jose`) + KV 세션 인증
-- [x] `proxy.ts` — JWT 검증 및 경로별 RBAC (`/admin`, `/door`)
-- [x] `proxy.ts` — `/guest?token=` 외부 DJ 토큰 예외 처리
-- [x] JWT + KV 세션 + D1 active/role 재검증 구조 도입 (`lib/auth/server.ts`, `proxy.ts`)
+- [x] `middleware.ts` — JWT 검증 및 경로별 RBAC (`/admin`, `/door`)
+- [x] `middleware.ts` — `/guest?token=` 외부 DJ 토큰 예외 처리
+- [x] JWT + KV 세션 + D1 active/role 재검증 구조 도입 (`lib/auth/server.ts`, `middleware.ts`)
 - [x] `.dev.vars`에 `JWT_SECRET` 설정
 
 ### API / 코드 품질
@@ -90,7 +90,7 @@ tags:
 2026-06-25 기준 확인됨:
 
 - [x] 호스트 기준 `npm run build` 통과
-- [x] Next 16 `middleware` deprecation 경고 제거 (`proxy.ts` 전환 완료)
+- [x] OpenNext Cloudflare Worker 빌드 검증 완료 — `proxy.ts`가 Next 16 Node runtime으로 처리되어, Cloudflare 배포 호환성을 위해 `middleware.ts` 유지
 - [x] `git diff --check` 통과
 - [ ] Docker compose 기준 `npm run lint` 통과
 - [ ] Docker compose 기준 `npm run build`가 호스트와 동일한 Next 16/의존성 상태에서 재검증됨

@@ -171,7 +171,8 @@ export async function validateExternalToken(token: string): Promise<ApiResponse<
       error: null,
     };
   } catch (error: unknown) {
-    return { data: null, error: error instanceof Error ? error.message : "Failed to validate external token" };
+    console.error("Failed to validate external token:", error);
+    return { data: null, error: "Link is invalid, expired, or inactive." };
   }
 }
 
@@ -233,7 +234,8 @@ export async function createGuestViaExternalLink(params: {
     const result = await db.select().from(guests).where(eq(guests.id, id));
     return { data: result[0] ? { ...result[0], status: result[0].status as Guest["status"] } : null, error: null };
   } catch (error: unknown) {
-    return { data: null, error: error instanceof Error ? error.message : "Failed to create guest via external link" };
+    console.error("Failed to create guest via external link:", error);
+    return { data: null, error: "Unable to register guest right now. Please try again." };
   }
 }
 
@@ -277,6 +279,7 @@ export async function deleteGuestViaExternalLink(params: {
 
     return { error: null };
   } catch (error: unknown) {
-    return { error: error instanceof Error ? error.message : "Failed to delete guest via external link" };
+    console.error("Failed to delete guest via external link:", error);
+    return { error: "Unable to delete guest right now. Please try again." };
   }
 }

@@ -14,6 +14,36 @@ tags:
 
 ---
 
+## 2026-07-27 — Next 16 proxy / OpenNext Cloudflare Worker 빌드 충돌
+
+### 발생 상황 및 에러 로그 요약
+
+- `npm run build` 초기 실패: `Both middleware file ./middleware.ts and proxy file ./proxy.ts are detected. Please use ./proxy.ts only.`
+- 중복 해소 후 `proxy.ts`만 남기면 `npm run build`는 통과하지만 `npm run build:worker`가 실패: `ERROR Node.js middleware is not currently supported. Consider switching to Edge Middleware.`
+- Next 16 내부 분석 코드에서 Proxy file은 `Proxy always runs on Node.js runtime`으로 처리됨을 확인
+
+### 원인 분석
+
+- Next.js 16은 `middleware.ts` → `proxy.ts` rename을 권장하지만, 현재 `@opennextjs/cloudflare` 1.19.3 Worker 번들러는 Node.js middleware/proxy runtime을 지원하지 않음
+- 따라서 Cloudflare Worker 배포 가능성을 기준으로는 `proxy.ts` 전환보다 Edge Middleware로 번들되는 `middleware.ts` 유지가 필요
+- 기존 루트 `middleware.ts`는 구형 `process.env.JWT_SECRET` 검증만 포함했으므로, 단순 복구가 아니라 강화된 `proxy.ts` 인증 로직을 `middleware.ts`로 이식해야 했음
+
+### 해결 및 검증
+
+- `proxy.ts` 제거, `middleware.ts` 단일 엔트리 유지
+- `middleware.ts`에 Cloudflare env, KV 세션, D1 사용자 active/role/sessionVersion 검증, `/admin`/`/door` RBAC, `/guest?token=` 공개 예외 유지
+- 호스트 기준 `npm run lint` 통과
+- 호스트 기준 `npx tsc --noEmit` 통과
+- 호스트 기준 `npm run build` 통과 — 단, Next 16 deprecation warning은 남음
+- 호스트 기준 `npm run build:worker` 통과 — `.open-next/worker.js` 생성 확인
+
+### 남은 주의점
+
+- Next.js warning 자체를 제거하기 위해 `proxy.ts`로 바꾸면 현재 OpenNext Cloudflare Worker 빌드가 깨짐
+- 향후 OpenNext/Next 조합이 Node.js proxy runtime을 Cloudflare Worker에서 지원하는지 확인한 뒤에만 `proxy.ts` 재전환 검토
+
+---
+
 ## 2026-06-29 — LinkManagement 만료 상태 정적 표시
 
 ### 발생 상황 및 에러 로그 요약

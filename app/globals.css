@@ -57,3 +57,9 @@ input[type="date"] {
     @apply bg-gray-900 border border-gray-700 flex flex-col min-h-0 lg:min-h-[520px];
   }
 }
+
+/* Global focus-visible accessibility polish */
+*:focus-visible {
+  outline: 1px solid #ffffff;
+  outline-offset: 2px;
+}
