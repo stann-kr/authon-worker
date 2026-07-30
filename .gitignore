@@ -46,7 +46,6 @@ dist/
 build_log.txt
 
 # private
-.docs/private/
 # git worktrees
 .worktrees/
 
@@ -55,3 +54,16 @@ migrations/seed_*.sql
 public/local-users.json
 /migration/
 !/migration/.gitkeep
+
+# --- 프로젝트 문서 정책 ---
+# docs/ = GitHub에 올릴 공개 프로젝트 문서
+# .docs/ = Obsidian 동기화/개인 작업/AI 작업 문서 (GitHub 업로드 금지)
+/.docs/
+!/docs/
+!/docs/**/*.md
+
+# 에이전트 지침 및 로컬 설정 (공개 금지)
+/CLAUDE.md
+/AGENTS.md
+/.claude/
+/.codex/
