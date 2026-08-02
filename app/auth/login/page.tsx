@@ -177,23 +177,12 @@ export default function LoginPage() {
 
             {mode === "login" ? (
               <div className="space-y-2">
-                <div className="flex items-center justify-between gap-3">
-                  <label
-                    htmlFor="password"
-                    className="block text-text-muted font-mono text-xs sm:text-sm tracking-wider uppercase"
-                  >
-                    PASSWORD
-                  </label>
-                  <button
-                    type="button"
-                    onClick={enterSetupMode}
-                    disabled={!formData.email.trim() || isLoading}
-                    className="relative inline-flex items-center gap-1 text-[10px] sm:text-xs text-white font-mono tracking-[0.22em] uppercase hover:text-gray-300 transition-colors before:absolute before:-inset-2 before:content-[''] disabled:text-gray-600 disabled:cursor-not-allowed"
-                  >
-                    FIRST LOGIN?
-                    <i className="ri-arrow-right-line text-xs" aria-hidden="true"></i>
-                  </button>
-                </div>
+                <label
+                  htmlFor="password"
+                  className="block text-text-muted font-mono text-xs sm:text-sm tracking-wider uppercase"
+                >
+                  PASSWORD
+                </label>
                 <PasswordInput
                   id="password"
                   value={formData.password}
@@ -283,7 +272,7 @@ export default function LoginPage() {
               </p>
               <p id="password-support" className="text-text-dim font-mono text-[10px] tracking-[0.08em] leading-relaxed">
                 {mode === "login"
-                  ? "Use FIRST LOGIN to set your password once. Email recovery will be added later."
+                  ? "Migrated users can enter any password once. Accounts awaiting setup will continue to the new password step automatically."
                   : "Only accounts awaiting migration setup can use this flow. Active accounts must sign in normally or contact an administrator."}
               </p>
             </div>
