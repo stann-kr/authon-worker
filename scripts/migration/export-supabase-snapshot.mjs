@@ -3,15 +3,20 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
-const SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const SUPABASE_API_KEY =
+  process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY;
 const OUT = process.argv[2] || 'migration/supabase-snapshot.json';
 const TABLES = ['venues', 'users', 'guests', 'external_dj_links'];
 const PAGE_SIZE = 1000;
 
-if (!SUPABASE_URL || !SERVICE_ROLE_KEY) {
-  console.error('Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY.');
+if (!SUPABASE_URL || !SUPABASE_API_KEY) {
+  console.error(
+    'Missing SUPABASE_URL and one of SUPABASE_SECRET_KEY or SUPABASE_SERVICE_ROLE_KEY.',
+  );
   process.exit(1);
 }
+
+const USES_SECRET_KEY = SUPABASE_API_KEY.startsWith('sb_secret_');
 
 async function fetchTable(table) {
   const rows = [];
@@ -20,14 +25,19 @@ async function fetchTable(table) {
     url.searchParams.set('select', '*');
     url.searchParams.set('order', 'created_at.asc.nullslast');
 
-    const res = await fetch(url, {
-      headers: {
-        apikey: SERVICE_ROLE_KEY,
-        Authorization: `Bearer ${SERVICE_ROLE_KEY}`,
-        Range: `${offset}-${offset + PAGE_SIZE - 1}`,
-        Prefer: 'count=exact',
-      },
-    });
+    const headers = {
+      apikey: SUPABASE_API_KEY,
+      Range: `${offset}-${offset + PAGE_SIZE - 1}`,
+      Prefer: 'count=exact',
+    };
+
+    // New sb_secret_ keys are API keys, not JWTs. Legacy service_role keys
+    // still require the Bearer authorization header.
+    if (!USES_SECRET_KEY) {
+      headers.Authorization = `Bearer ${SUPABASE_API_KEY}`;
+    }
+
+    const res = await fetch(url, { headers });
 
     if (!res.ok) {
       const text = await res.text();

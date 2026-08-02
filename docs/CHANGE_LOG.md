@@ -10,6 +10,19 @@
 - 내부 전환 계획, remediation checklist, deployment runbook은 비공개 문서 레이어로 분리했다.
 - 변경 이력과 트러블슈팅의 날짜·항목 헤딩을 최신 문서 구조에 맞춰 정리했다.
 
+## 2026-08-03
+
+### Supabase 운영 데이터 D1 이전 도구 보강
+
+#### Changed
+
+- Supabase의 새 Secret API key와 레거시 service role key를 모두 사용해 운영 데이터 snapshot을 내보낼 수 있도록 호환성을 보강했다.
+- 외부 링크의 사용 인원을 비삭제 게스트 행에서 다시 계산해 원본 카운터 드리프트가 D1으로 전파되지 않도록 했다.
+
+#### Security
+
+- snapshot 검증 결과에서 외부 링크 token 원문이 출력되지 않도록 정리했다.
+
 ## 2026-07-27
 
 ### 운영 데이터 이전 준비, 빌드 복구, 보안 감사

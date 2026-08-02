@@ -49,7 +49,7 @@ for (const link of tables.external_dj_links || []) {
   const actual = (tables.guests || []).filter((guest) => guest.external_link_id === link.id && guest.status !== 'deleted').length;
   const stored = Number(link.used_guests || 0);
   if (actual !== stored) {
-    findings.usedGuestsDrift.push({ id: link.id, token: link.token, stored, actual });
+    findings.usedGuestsDrift.push({ id: link.id, stored, actual, delta: actual - stored });
   }
 }
 

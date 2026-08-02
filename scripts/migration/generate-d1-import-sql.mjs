@@ -15,6 +15,13 @@ const tables = snapshot.tables || {};
 const now = new Date().toISOString();
 const resetExpiresAt = new Date(Date.now() + RESET_DAYS * 24 * 60 * 60 * 1000).toISOString();
 const resetLinks = [];
+const activeGuestCountsByExternalLink = new Map();
+
+for (const guest of tables.guests || []) {
+  if (!guest.external_link_id || guest.status === 'deleted') continue;
+  const count = activeGuestCountsByExternalLink.get(guest.external_link_id) || 0;
+  activeGuestCountsByExternalLink.set(guest.external_link_id, count + 1);
+}
 
 function sql(value) {
   if (value === undefined || value === null) return 'NULL';
@@ -124,7 +131,7 @@ for (const link of tables.external_dj_links || []) {
     event: link.event || null,
     date: link.date || null,
     max_guests: link.max_guests ?? 10,
-    used_guests: link.used_guests ?? 0,
+    used_guests: activeGuestCountsByExternalLink.get(link.id) || 0,
     active: boolInt(link.active, true),
     expires_at: link.expires_at || null,
     created_by: link.created_by || link.created_by_user_id || null,
