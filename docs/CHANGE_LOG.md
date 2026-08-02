@@ -12,6 +12,12 @@
 
 ## 2026-08-03
 
+### 원격 D1 import 호환성 보강
+
+#### Fixed
+
+- D1 CLI가 업로드 SQL 파일을 원자적으로 처리하는 동작에 맞춰 import 생성기에서 원격 실행이 거부하는 명시적 transaction 문을 제거했다.
+
 ### Cloudflare Worker 운영 배포 설정 정비
 
 #### Changed
