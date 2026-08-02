@@ -12,6 +12,21 @@ interface SendEmailParams {
   body: string;
 }
 
+type EmailEnvironment = Pick<
+  CloudflareEnv,
+  | "AWS_SES_ACCESS_KEY"
+  | "AWS_SES_SECRET_KEY"
+  | "AWS_SES_FROM_EMAIL"
+>;
+
+export function isEmailConfigured(env: EmailEnvironment): boolean {
+  return Boolean(
+    env.AWS_SES_ACCESS_KEY &&
+      env.AWS_SES_SECRET_KEY &&
+      env.AWS_SES_FROM_EMAIL,
+  );
+}
+
 /**
  * 이메일 발송
  * @param params - 발송 정보 (to, subject, body)
@@ -24,7 +39,7 @@ export async function sendEmail({ to, subject, body }: SendEmailParams): Promise
   const region = env.AWS_SES_REGION ?? "ap-northeast-2";
   const fromEmail = env.AWS_SES_FROM_EMAIL;
 
-  if (!accessKeyId || !secretAccessKey || !fromEmail) {
+  if (!isEmailConfigured(env) || !accessKeyId || !secretAccessKey || !fromEmail) {
     throw new Error("[SES] AWS credentials or FROM_EMAIL are not configured");
   }
 

@@ -5,9 +5,12 @@ import { getUser, type User } from "../../../lib/auth";
 import { createUserViaEdge } from "../../../lib/api/users";
 import { fetchVenues } from "../../../lib/api/venues";
 import type { Venue } from "../../../lib/api/types";
+import PasswordInput from "../../../components/PasswordInput";
+import Alert from "../../../components/Alert";
+import { getPasswordPolicyError, PASSWORD_POLICY_HINT } from "../../../lib/auth/password-policy";
 
 export default function InviteUser() {
-  const [createMode, setCreateMode] = useState<"invite" | "password">("invite");
+  const [createMode, setCreateMode] = useState<"invite" | "password">("password");
   const [formData, setFormData] = useState({
     email: "",
     name: "",
@@ -67,6 +70,15 @@ export default function InviteUser() {
       setError("Please select a venue.");
       setIsLoading(false);
       return;
+    }
+
+    if (createMode === "password") {
+      const passwordPolicyError = getPasswordPolicyError(formData.password);
+      if (passwordPolicyError) {
+        setError(passwordPolicyError);
+        setIsLoading(false);
+        return;
+      }
     }
 
     // guest_limit 유효성 검사
@@ -132,36 +144,44 @@ export default function InviteUser() {
         <div className="grid grid-cols-2 gap-px bg-gray-700 mb-4">
           <button
             type="button"
-            onClick={() => setCreateMode("invite")}
+            disabled
+            aria-disabled="true"
+            title="Available after the email service is connected"
             className={`p-3 font-mono text-xs tracking-wider uppercase transition-colors ${
               createMode === "invite"
                 ? "bg-white text-black"
-                : "bg-black text-gray-400 hover:text-white"
+                : "bg-black text-gray-600 cursor-not-allowed"
             }`}
           >
-            <i className="ri-mail-send-line mr-1"></i> EMAIL INVITE
+            <i className="ri-mail-send-line mr-1" aria-hidden="true"></i> EMAIL LATER
           </button>
           <button
             type="button"
             onClick={() => setCreateMode("password")}
+            aria-pressed={createMode === "password"}
             className={`p-3 font-mono text-xs tracking-wider uppercase transition-colors ${
               createMode === "password"
                 ? "bg-white text-black"
                 : "bg-black text-gray-400 hover:text-white"
             }`}
           >
-            <i className="ri-key-line mr-1"></i> TEMP PASSWORD
+            <i className="ri-key-line mr-1" aria-hidden="true"></i> TEMP PASSWORD
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <p className="mb-4 border border-amber-900/60 bg-amber-950/20 p-3 font-mono text-[10px] leading-relaxed tracking-[0.12em] text-amber-200" role="note">
+          EMAIL INVITES ARE TEMPORARILY UNAVAILABLE. CREATE THE ACCOUNT WITH A TEMPORARY PASSWORD AND SHARE IT SECURELY.
+        </p>
+
+        <form onSubmit={handleSubmit} className="space-y-4" aria-busy={isLoading}>
           {isSuperAdmin && venues.length > 0 && (
             <div>
-              <label className="block text-gray-400 font-mono text-xs tracking-wider uppercase mb-2">
+              <label htmlFor="invite-venue" className="block text-gray-400 font-mono text-xs tracking-wider uppercase mb-2">
                 VENUE
               </label>
               <div className="relative">
                 <select
+                  id="invite-venue"
                   value={formData.venue_id}
                   onChange={(e) =>
                     setFormData({ ...formData, venue_id: e.target.value })
@@ -176,16 +196,17 @@ export default function InviteUser() {
                     </option>
                   ))}
                 </select>
-                <i className="ri-arrow-down-s-line absolute right-3 top-1/2 -translate-y-1/2 text-base text-gray-400 pointer-events-none"></i>
+                <i className="ri-arrow-down-s-line absolute right-3 top-1/2 -translate-y-1/2 text-base text-gray-400 pointer-events-none" aria-hidden="true"></i>
               </div>
             </div>
           )}
 
           <div>
-            <label className="block text-gray-400 font-mono text-xs tracking-wider uppercase mb-2">
+            <label htmlFor="invite-email" className="block text-gray-400 font-mono text-xs tracking-wider uppercase mb-2">
               EMAIL ADDRESS
             </label>
             <input
+              id="invite-email"
               type="email"
               value={formData.email}
               onChange={(e) =>
@@ -198,10 +219,11 @@ export default function InviteUser() {
           </div>
 
           <div>
-            <label className="block text-gray-400 font-mono text-xs tracking-wider uppercase mb-2">
+            <label htmlFor="invite-name" className="block text-gray-400 font-mono text-xs tracking-wider uppercase mb-2">
               NAME
             </label>
             <input
+              id="invite-name"
               type="text"
               value={formData.name}
               onChange={(e) =>
@@ -213,15 +235,16 @@ export default function InviteUser() {
             />
           </div>
 
-          <div>
-            <label className="block text-gray-400 font-mono text-xs tracking-wider uppercase mb-2">
+          <fieldset>
+            <legend className="block text-gray-400 font-mono text-xs tracking-wider uppercase mb-2">
               ROLE
-            </label>
+            </legend>
             <div className="grid grid-cols-4 gap-2">
               {roleOptions.map((opt) => (
                 <button
                   key={opt.value}
                   type="button"
+                  aria-pressed={formData.role === opt.value}
                   onClick={() =>
                     setFormData({ ...formData, role: opt.value as typeof formData.role })
                   }
@@ -235,14 +258,15 @@ export default function InviteUser() {
                 </button>
               ))}
             </div>
-          </div>
+          </fieldset>
 
           {formData.role !== "venue_admin" && (
             <div>
-              <label className="block text-gray-400 font-mono text-xs tracking-wider uppercase mb-2">
+              <label htmlFor="invite-guest-limit" className="block text-gray-400 font-mono text-xs tracking-wider uppercase mb-2">
                 GUEST LIMIT
               </label>
               <input
+                id="invite-guest-limit"
                 type="text"
                 inputMode="numeric"
                 pattern="[0-9]*"
@@ -259,37 +283,31 @@ export default function InviteUser() {
 
           {createMode === "password" && (
             <div>
-              <label className="block text-gray-400 font-mono text-xs tracking-wider uppercase mb-2">
+              <label htmlFor="invite-password" className="block text-gray-400 font-mono text-xs tracking-wider uppercase mb-2">
                 TEMPORARY PASSWORD
               </label>
-              <input
-                type="text"
+              <PasswordInput
+                id="invite-password"
                 value={formData.password}
                 onChange={(e) =>
                   setFormData({ ...formData, password: e.target.value })
                 }
-                className="w-full bg-black border border-gray-700 px-4 py-3 text-white font-mono text-sm tracking-wider focus:outline-none focus:border-white"
-                placeholder="Min 6 characters"
-                minLength={6}
+                inputClassName="w-full bg-black border border-gray-700 px-4 py-3 pr-12 text-white font-mono text-sm tracking-wider focus:outline-none focus:border-white"
+                placeholder="Create a temporary password"
+                autoComplete="new-password"
+                aria-describedby="invite-password-help"
                 required
               />
-              <p className="text-gray-500 font-mono text-xs mt-1 tracking-wider">
-                Share this with the user and ask them to change it after first
-                login
+              <p id="invite-password-help" className="text-gray-500 font-mono text-xs mt-1 tracking-wider">
+                {PASSWORD_POLICY_HINT} Share it securely and ask the user to change it after first login.
               </p>
             </div>
           )}
 
-          {error && (
-            <div className="bg-red-900/30 border border-red-700 p-3">
-              <p className="text-red-400 font-mono text-xs tracking-wider">
-                {error}
-              </p>
-            </div>
-          )}
+          {error && <Alert type="error" message={error} />}
 
           {success && (
-            <div className="bg-green-900/30 border border-green-700 p-4 space-y-2">
+            <div className="bg-green-900/30 border border-green-700 p-4 space-y-2" role="status" aria-live="polite">
               <p className="text-green-400 font-mono text-xs tracking-wider uppercase">
                 {tempPassword ? "ACCOUNT CREATED" : "INVITATION SENT"}
               </p>

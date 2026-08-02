@@ -243,7 +243,7 @@ export default function ExternalDJGuestView({ token }: ExternalDJGuestViewProps)
               <div className="main-content-panel lg:min-h-0 lg:max-h-full">
                 <PanelHeader
                   title="GUEST LIST"
-                  count={guests.length}
+                  count={displayGuests.length}
                   sortMode={sortMode}
                   onSortToggle={() =>
                     setSortMode((prev) =>
@@ -257,10 +257,10 @@ export default function ExternalDJGuestView({ token }: ExternalDJGuestViewProps)
                   onChange={setSearchQuery}
                 />
 
-                {guests.length === 0 ? (
+                {displayGuests.length === 0 ? (
                   <EmptyState
                     icon="ri-user-add-line"
-                    message="ADD YOUR GUESTS BELOW"
+                    message={searchQuery ? "NO GUESTS MATCH THIS SEARCH" : "ADD YOUR GUESTS BELOW"}
                   />
                 ) : (
                   <div className="divide-y divide-border-subtle lg:overflow-y-auto">
@@ -290,7 +290,11 @@ export default function ExternalDJGuestView({ token }: ExternalDJGuestViewProps)
                         </span>
                       </div>
 
+                      <label htmlFor="external-guest-name" className="sr-only">
+                        게스트 이름
+                      </label>
                       <input
+                        id="external-guest-name"
                         type="text"
                         value={guestName}
                         onChange={(e) => setGuestName(e.target.value)}

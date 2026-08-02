@@ -32,16 +32,18 @@ export default function Spinner({
 }: SpinnerProps) {
   if (mode === "fullscreen") {
     return (
-      <div className="min-h-screen bg-black flex items-center justify-center">
+      <div className="min-h-screen bg-black flex items-center justify-center" role="status" aria-live="polite">
         <div className="text-center">
           <div
             className={`w-8 h-8 border ${colorMap[color]} rounded-full animate-spin mx-auto mb-4`}
+            aria-hidden="true"
           ></div>
           {text && (
             <p className="text-white font-mono text-sm tracking-wider uppercase">
               {text}
             </p>
           )}
+          {!text && <span className="sr-only">로딩 중</span>}
         </div>
       </div>
     );
@@ -49,13 +51,15 @@ export default function Spinner({
 
   if (mode === "inline") {
     return (
-      <div className="flex-1 min-h-[200px] flex items-center justify-center p-8">
+      <div className="flex-1 min-h-[200px] flex items-center justify-center p-8" role="status" aria-live="polite">
         <div
           className={`w-6 h-6 border ${colorMap[color]} rounded-full animate-spin`}
+          aria-hidden="true"
         ></div>
         {text && (
           <span className="ml-2 text-white font-mono text-sm">{text}</span>
         )}
+        {!text && <span className="sr-only">로딩 중</span>}
       </div>
     );
   }
@@ -64,6 +68,7 @@ export default function Spinner({
   return (
     <div
       className={`w-4 h-4 border ${colorMap[color]} rounded-full animate-spin`}
+      aria-hidden="true"
     ></div>
   );
 }

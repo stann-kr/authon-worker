@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useId } from "react";
 import { useLocalStorage } from "@/lib/hooks";
 import { fetchVenues } from "@/lib/api/venues";
 import type { Venue } from "@/lib/api/types";
@@ -66,17 +66,20 @@ export default function VenueSelector({
   placeholder = "-- Select Venue --",
   className = "",
 }: VenueSelectorProps) {
+  const selectId = useId();
+
   return (
     <div
       className={`bg-gray-900 border border-gray-700 p-4 sm:p-5 ${className}`}
     >
       <div className="mb-2">
-        <h3 className="font-mono text-xs sm:text-sm tracking-wider text-gray-400 uppercase">
+        <label htmlFor={selectId} className="font-mono text-xs sm:text-sm tracking-wider text-gray-400 uppercase">
           SELECT VENUE
-        </h3>
+        </label>
       </div>
       <div className="relative">
         <select
+          id={selectId}
           value={selectedVenueId}
           onChange={(e) => onVenueChange(e.target.value)}
           className="w-full appearance-none bg-black border border-gray-600 px-4 py-3 pr-10 text-white font-mono text-sm tracking-wider focus:outline-none focus:border-white"
@@ -88,7 +91,7 @@ export default function VenueSelector({
             </option>
           ))}
         </select>
-        <i className="ri-arrow-down-s-line absolute right-3 top-1/2 -translate-y-1/2 text-base text-gray-400 pointer-events-none"></i>
+        <i className="ri-arrow-down-s-line absolute right-3 top-1/2 -translate-y-1/2 text-base text-gray-400 pointer-events-none" aria-hidden="true"></i>
       </div>
     </div>
   );

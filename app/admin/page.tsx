@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import { useRouter } from "next/navigation";
 import { useLocalStorage } from "../../lib/hooks";
 import AdminHeader from "./components/AdminHeader";
@@ -44,10 +44,12 @@ function AdminPageContent() {
     getBusinessDate(),
   );
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
+  const [isRoleReady, setIsRoleReady] = useState(false);
 
   useEffect(() => {
     const user = getUser();
     setIsSuperAdmin(user?.role === "super_admin");
+    setIsRoleReady(true);
   }, []);
 
   const tabs = useMemo(
@@ -61,6 +63,12 @@ function AdminPageContent() {
     ],
     [isSuperAdmin],
   );
+
+  useEffect(() => {
+    if (isRoleReady && !tabs.some((tab) => tab.id === activeTab)) {
+      setActiveTab("guests");
+    }
+  }, [activeTab, isRoleReady, setActiveTab, tabs]);
 
   // Keyboard shortcut listener for tab switching & home return
   useEffect(() => {
@@ -95,6 +103,29 @@ function AdminPageContent() {
 
   const isToday = selectedDate === getBusinessDate();
 
+  const handleTabKeyDown = (
+    event: ReactKeyboardEvent<HTMLButtonElement>,
+    tabIndex: number,
+  ) => {
+    let nextIndex: number | null = null;
+
+    if (event.key === "ArrowRight" || event.key === "ArrowDown") {
+      nextIndex = (tabIndex + 1) % tabs.length;
+    } else if (event.key === "ArrowLeft" || event.key === "ArrowUp") {
+      nextIndex = (tabIndex - 1 + tabs.length) % tabs.length;
+    } else if (event.key === "Home") {
+      nextIndex = 0;
+    } else if (event.key === "End") {
+      nextIndex = tabs.length - 1;
+    }
+
+    if (nextIndex === null) return;
+    event.preventDefault();
+    const nextTab = tabs[nextIndex];
+    setActiveTab(nextTab.id);
+    document.getElementById(`tab-${nextTab.id}`)?.focus();
+  };
+
   return (
     <div className="min-h-screen bg-black flex flex-col">
       <AdminHeader />
@@ -105,9 +136,10 @@ function AdminPageContent() {
             <div
               role="tablist"
               aria-label="Admin Sections"
+              aria-orientation="horizontal"
               className={`grid ${tabs.length === 4 ? "grid-cols-4" : "grid-cols-3"} gap-px bg-gray-700`}
             >
-              {tabs.map((tab) => {
+              {tabs.map((tab, tabIndex) => {
                 const isActive = activeTab === tab.id;
                 return (
                   <button
@@ -116,7 +148,9 @@ function AdminPageContent() {
                     id={`tab-${tab.id}`}
                     aria-selected={isActive}
                     aria-controls={`panel-${tab.id}`}
+                    tabIndex={isActive ? 0 : -1}
                     onClick={() => setActiveTab(tab.id)}
+                    onKeyDown={(event) => handleTabKeyDown(event, tabIndex)}
                     className={`p-3 sm:p-4 font-mono text-xs sm:text-sm tracking-wider uppercase transition-colors relative focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white z-10 ${
                       isActive
                         ? "bg-white text-black font-bold"

@@ -273,7 +273,7 @@ export default function AuthenticatedGuestView({ user }: AuthenticatedGuestViewP
               <div className="main-content-panel lg:min-h-0 lg:max-h-full">
                 <PanelHeader
                   title="GUEST LIST"
-                  count={filteredGuests.length}
+                  count={displayGuests.length}
                   sortMode={sortMode}
                   onSortToggle={() =>
                     setSortMode((prev) =>
@@ -289,12 +289,12 @@ export default function AuthenticatedGuestView({ user }: AuthenticatedGuestViewP
                   onChange={setSearchQuery}
                 />
 
-                {isFetching && filteredGuests.length === 0 ? (
+                {isFetching && displayDataGuests.length === 0 ? (
                   <Spinner mode="inline" text="LOADING..." />
-                ) : filteredGuests.length === 0 ? (
+                ) : displayGuests.length === 0 ? (
                   <EmptyState
                     icon="ri-user-add-line"
-                    message="No guests registered for this date"
+                    message={searchQuery ? "NO GUESTS MATCH THIS SEARCH" : "NO GUESTS REGISTERED FOR THIS DATE"}
                   />
                 ) : (
                   <div
@@ -326,7 +326,11 @@ export default function AuthenticatedGuestView({ user }: AuthenticatedGuestViewP
                         </span>
                       </div>
 
+                      <label htmlFor="authenticated-guest-name" className="sr-only">
+                        게스트 이름
+                      </label>
                       <input
+                        id="authenticated-guest-name"
                         type="text"
                         value={guestName}
                         onChange={(e) => setGuestName(e.target.value)}

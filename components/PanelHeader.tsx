@@ -52,6 +52,7 @@ export default function PanelHeader({
         <div className="flex items-center gap-2 mt-2">
           {sortMode !== undefined && onSortToggle && (
             <button
+              type="button"
               onClick={onSortToggle}
               className="flex-1 py-2 bg-gray-800 text-gray-400 font-mono text-xs tracking-wider uppercase hover:text-white transition-colors border border-gray-700 whitespace-nowrap text-center"
             >
@@ -60,12 +61,14 @@ export default function PanelHeader({
           )}
           {onRefresh && (
             <button
+              type="button"
               onClick={onRefresh}
               disabled={isLoading}
               className="flex-1 py-2 bg-gray-800 text-gray-400 font-mono text-xs tracking-wider uppercase hover:text-white transition-colors border border-gray-700 disabled:opacity-50"
             >
               <i
                 className={`ri-refresh-line mr-1 ${isLoading ? "animate-spin inline-block" : ""}`}
+                aria-hidden="true"
               ></i>
               REFRESH
             </button>

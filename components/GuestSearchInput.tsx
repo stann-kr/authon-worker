@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useId } from "react";
 
 /**
  * GuestSearchInput — 게스트 목록 검색용 공용 입력 컴포넌트.
@@ -25,12 +25,18 @@ const GuestSearchInput: React.FC<GuestSearchInputProps> = ({
   placeholder = "SEARCH GUEST...",
   className = "",
 }) => {
+  const inputId = useId();
+
   return (
     <div className={`px-4 py-3 border-b border-gray-700 ${className}`}>
+      <label htmlFor={inputId} className="sr-only">
+        게스트 이름 검색
+      </label>
       <div className="relative flex items-center">
-        <i className="ri-search-line absolute left-3 text-gray-500 text-sm pointer-events-none"></i>
+        <i className="ri-search-line absolute left-3 text-gray-500 text-sm pointer-events-none" aria-hidden="true"></i>
         <input
-          type="text"
+          id={inputId}
+          type="search"
           value={value}
           onChange={(e) => onChange(e.target.value)}
           placeholder={placeholder}
@@ -38,11 +44,12 @@ const GuestSearchInput: React.FC<GuestSearchInputProps> = ({
         />
         {value && (
           <button
+            type="button"
             onClick={() => onChange("")}
             className="absolute right-2 w-6 h-6 flex items-center justify-center text-gray-400 hover:text-white transition-colors"
             aria-label="Clear search"
           >
-            <i className="ri-close-line text-sm"></i>
+            <i className="ri-close-line text-sm" aria-hidden="true"></i>
           </button>
         )}
       </div>

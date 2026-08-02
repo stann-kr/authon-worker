@@ -59,6 +59,9 @@ export default function LinkManagement({ selectedDate }: LinkManagementProps) {
   const [success, setSuccess] = useState<string | null>(null);
   const [copyToast, setCopyToast] = useState<string | null>(null);
   const [pendingDeleteLink, setPendingDeleteLink] = useState<ExternalDJLink | null>(null);
+  const deleteDialogRef = useRef<HTMLDivElement>(null);
+  const deleteCancelRef = useRef<HTMLButtonElement>(null);
+  const deleteTriggerRef = useRef<HTMLElement | null>(null);
 
   // 로딩 중 이전 데이터를 유지하여 화면 깜빡임 방지
   const displayCacheRef = useRef<ExternalDJLink[]>([]);
@@ -115,6 +118,41 @@ export default function LinkManagement({ selectedDate }: LinkManagementProps) {
     const intervalId = window.setInterval(() => setNow(Date.now()), 30 * 1000);
     return () => window.clearInterval(intervalId);
   }, []);
+
+  useEffect(() => {
+    if (!pendingDeleteLink) return;
+
+    deleteCancelRef.current?.focus();
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setPendingDeleteLink(null);
+        return;
+      }
+
+      if (event.key === "Tab" && deleteDialogRef.current) {
+        const focusable = Array.from(
+          deleteDialogRef.current.querySelectorAll<HTMLElement>(
+            'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+          ),
+        );
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+
+        if (event.shiftKey && document.activeElement === first) {
+          event.preventDefault();
+          last?.focus();
+        } else if (!event.shiftKey && document.activeElement === last) {
+          event.preventDefault();
+          first?.focus();
+        }
+      }
+    };
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown);
+      deleteTriggerRef.current?.focus();
+    };
+  }, [pendingDeleteLink]);
 
   const getGuestPageUrl = (token: string) => {
     if (typeof window === "undefined") return "";
@@ -193,6 +231,7 @@ export default function LinkManagement({ selectedDate }: LinkManagementProps) {
   };
 
   const requestDeleteLink = (link: ExternalDJLink) => {
+    deleteTriggerRef.current = document.activeElement as HTMLElement | null;
     setError(null);
     setSuccess(null);
     setPendingDeleteLink(link);
@@ -360,7 +399,7 @@ export default function LinkManagement({ selectedDate }: LinkManagementProps) {
               <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-6">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
                   <div>
-                    <label className="block font-mono text-xs tracking-wider text-gray-400 uppercase mb-2">
+                    <label htmlFor="link-date" className="block font-mono text-xs tracking-wider text-gray-400 uppercase mb-2">
                       DATE
                     </label>
                     <div className="relative h-[46px] group">
@@ -374,6 +413,7 @@ export default function LinkManagement({ selectedDate }: LinkManagementProps) {
 
                       {/* Hidden Native Input */}
                       <input
+                        id="link-date"
                         type="date"
                         value={formData.date}
                         onChange={(e) =>
@@ -387,10 +427,11 @@ export default function LinkManagement({ selectedDate }: LinkManagementProps) {
                   </div>
 
                   <div>
-                    <label className="block font-mono text-xs tracking-wider text-gray-400 uppercase mb-2">
+                    <label htmlFor="link-dj-name" className="block font-mono text-xs tracking-wider text-gray-400 uppercase mb-2">
                       DJ NAME
                     </label>
                     <input
+                      id="link-dj-name"
                       type="text"
                       value={formData.dj}
                       onChange={(e) =>
@@ -407,10 +448,11 @@ export default function LinkManagement({ selectedDate }: LinkManagementProps) {
                 </div>
 
                 <div>
-                  <label className="block font-mono text-xs tracking-wider text-gray-400 uppercase mb-2">
+                  <label htmlFor="link-event-name" className="block font-mono text-xs tracking-wider text-gray-400 uppercase mb-2">
                     EVENT NAME
                   </label>
                   <input
+                    id="link-event-name"
                     type="text"
                     value={formData.event}
                     onChange={(e) =>
@@ -426,10 +468,11 @@ export default function LinkManagement({ selectedDate }: LinkManagementProps) {
                 </div>
 
                 <div>
-                  <label className="block font-mono text-xs tracking-wider text-gray-400 uppercase mb-2">
+                  <label htmlFor="link-max-guests" className="block font-mono text-xs tracking-wider text-gray-400 uppercase mb-2">
                     MAX GUESTS
                   </label>
                   <input
+                    id="link-max-guests"
                     type="number"
                     min="1"
                     max="999"
@@ -550,6 +593,7 @@ export default function LinkManagement({ selectedDate }: LinkManagementProps) {
                       <button
                         key={filter.key}
                         onClick={() => setManageFilter(filter.key as ManageFilter)}
+                        aria-pressed={manageFilter === filter.key}
                         className={`px-3 py-2 border font-mono text-[10px] tracking-[0.25em] uppercase transition-colors ${
                           manageFilter === filter.key
                             ? "bg-white text-black border-white"
@@ -562,10 +606,11 @@ export default function LinkManagement({ selectedDate }: LinkManagementProps) {
                   </div>
 
                   <div className="min-w-[220px] ml-auto">
-                    <label className="block mb-2 text-gray-500 font-mono text-[10px] tracking-[0.22em] uppercase">
+                    <label htmlFor="link-sort" className="block mb-2 text-gray-500 font-mono text-[10px] tracking-[0.22em] uppercase">
                       SORT BY
                     </label>
                     <select
+                      id="link-sort"
                       value={manageSort}
                       onChange={(e) => setManageSort(e.target.value as ManageSort)}
                       className="w-full bg-black border border-gray-700 px-3 py-2.5 text-white font-mono text-xs tracking-[0.16em] uppercase focus:outline-none focus:border-white transition-colors"
@@ -785,7 +830,7 @@ export default function LinkManagement({ selectedDate }: LinkManagementProps) {
     </div>
 
       {copyToast && (
-        <div className="fixed bottom-5 right-5 z-40 border border-green-700/70 bg-green-950/80 px-4 py-3 text-green-200 shadow-lg backdrop-blur-sm">
+        <div className="fixed bottom-5 right-5 z-40 border border-green-700/70 bg-green-950/80 px-4 py-3 text-green-200 shadow-lg backdrop-blur-sm" role="status" aria-live="polite">
           <p className="font-mono text-[10px] tracking-[0.22em] uppercase">
             {copyToast}
           </p>
@@ -794,13 +839,20 @@ export default function LinkManagement({ selectedDate }: LinkManagementProps) {
 
       {pendingDeleteLink && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 px-4">
-          <div className="w-full max-w-md border border-red-900/70 bg-gray-950 p-5 sm:p-6 shadow-2xl">
+          <div
+            ref={deleteDialogRef}
+            className="w-full max-w-md border border-red-900/70 bg-gray-950 p-5 sm:p-6 shadow-2xl"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="delete-link-title"
+            aria-describedby="delete-link-description"
+          >
             <div className="flex items-start justify-between gap-4 mb-4">
               <div>
                 <p className="font-mono text-[10px] tracking-[0.24em] uppercase text-red-300 mb-2">
                   Destructive action
                 </p>
-                <h3 className="font-mono text-sm sm:text-base tracking-[0.18em] uppercase text-white">
+                <h3 id="delete-link-title" className="font-mono text-sm sm:text-base tracking-[0.18em] uppercase text-white">
                   Delete guest link?
                 </h3>
               </div>
@@ -810,12 +862,12 @@ export default function LinkManagement({ selectedDate }: LinkManagementProps) {
                 className="text-gray-500 hover:text-white transition-colors"
                 aria-label="Close delete confirmation"
               >
-                <i className="ri-close-line text-lg"></i>
+                <i className="ri-close-line text-lg" aria-hidden="true"></i>
               </button>
             </div>
 
             <div className="space-y-3 mb-6">
-              <p className="font-mono text-[10px] tracking-[0.16em] uppercase text-gray-400 leading-relaxed">
+              <p id="delete-link-description" className="font-mono text-[10px] tracking-[0.16em] uppercase text-gray-400 leading-relaxed">
                 This action is permanent and will immediately invalidate the active guest link.
               </p>
               <div className="border border-gray-800 bg-black/50 p-3">
@@ -830,6 +882,7 @@ export default function LinkManagement({ selectedDate }: LinkManagementProps) {
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               <button
+                ref={deleteCancelRef}
                 type="button"
                 onClick={() => setPendingDeleteLink(null)}
                 className="bg-black border border-gray-700 text-gray-300 py-3 px-4 font-mono text-xs tracking-[0.22em] uppercase hover:text-white hover:border-gray-500 transition-colors"

@@ -3,7 +3,7 @@ import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { drizzle } from "drizzle-orm/d1";
 import { eq } from "drizzle-orm";
 import { users, passwordResetTokens } from "@/lib/db/schema";
-import { sendEmail } from "@/lib/api/email";
+import { isEmailConfigured, sendEmail } from "@/lib/api/email";
 import { hashPassword } from "@/lib/auth/password";
 import { consumeRateLimit, getRequestIp } from "@/lib/auth/rate-limit";
 import { getPasswordPolicyError } from "@/lib/auth/password-policy";
@@ -20,6 +20,18 @@ export async function POST(request: Request) {
 
     if (!email) {
       return NextResponse.json({ error: "이메일을 입력해주세요." }, { status: 400 });
+    }
+
+    // SES를 연결하기 전에는 계정 조회나 토큰 생성을 하지 않는다.
+    // 모든 이메일에 같은 응답을 반환해 계정 존재 여부도 노출하지 않는다.
+    if (!isEmailConfigured(env)) {
+      return NextResponse.json(
+        {
+          error:
+            "Email password reset is temporarily unavailable. Use your issued setup link or contact an administrator.",
+        },
+        { status: 503 },
+      );
     }
 
     const normalizedEmail = String(email).trim().toLowerCase();
@@ -54,8 +66,10 @@ export async function POST(request: Request) {
     const tokenHash = await hashResetToken(token);
     const expiresAt = new Date(Date.now() + 1000 * 60 * 60).toISOString();
 
+    const resetTokenId = crypto.randomUUID();
+
     await db.insert(passwordResetTokens).values({
-      id: crypto.randomUUID(),
+      id: resetTokenId,
       userId: user.id,
       token: tokenHash,
       expiresAt,
@@ -66,10 +80,11 @@ export async function POST(request: Request) {
     const appUrl = env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
     const resetLink = `${appUrl}/auth/reset-password?token=${token}`;
 
-    await sendEmail({
-      to: normalizedEmail,
-      subject: "[Authon] 비밀번호 재설정 안내",
-      body: `
+    try {
+      await sendEmail({
+        to: normalizedEmail,
+        subject: "[Authon] 비밀번호 재설정 안내",
+        body: `
         <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
           <h2>비밀번호 재설정 안내</h2>
           <p>안녕하세요, ${user.name}님.</p>
@@ -80,8 +95,14 @@ export async function POST(request: Request) {
           <p>만약 본인이 요청하지 않았다면 이 메일을 무시하셔도 됩니다.</p>
           <p style="color: #666; font-size: 12px; margin-top: 40px;">본 메일은 발신 전용입니다.</p>
         </div>
-      `,
-    });
+        `,
+      });
+    } catch (error) {
+      await db
+        .delete(passwordResetTokens)
+        .where(eq(passwordResetTokens.id, resetTokenId));
+      throw error;
+    }
 
     return NextResponse.json({ ok: true, message: "재설정 메일이 발송되었습니다." });
   } catch (error) {

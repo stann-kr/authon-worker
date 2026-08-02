@@ -19,6 +19,10 @@ body {
   overflow-x: hidden;
 }
 
+html {
+  color-scheme: dark;
+}
+
 /* iOS Safari: min-h-screen을 dvh로 오버라이드 (주소창 동적 높이 대응) */
 .min-h-screen {
   min-height: 100dvh;
@@ -40,6 +44,14 @@ input[type="date"] {
 }
 
 @layer components {
+  .skip-link {
+    @apply fixed left-4 top-3 z-[100] -translate-y-24 bg-white px-4 py-3 font-mono text-xs font-bold uppercase tracking-wider text-black transition-transform;
+  }
+
+  .skip-link:focus {
+    @apply translate-y-0;
+  }
+
   .page-shell {
     @apply flex flex-col bg-black;
     min-height: 100dvh;
@@ -60,6 +72,17 @@ input[type="date"] {
 
 /* Global focus-visible accessibility polish */
 *:focus-visible {
-  outline: 1px solid #ffffff;
-  outline-offset: 2px;
+  outline: 2px solid #ffffff;
+  outline-offset: 3px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }

@@ -15,6 +15,7 @@ import StatGrid from "../../components/StatGrid";
 import PanelHeader from "../../components/PanelHeader";
 import Spinner from "../../components/Spinner";
 import EmptyState from "../../components/EmptyState";
+import Alert from "../../components/Alert";
 import { getBusinessDate, formatDateDisplay } from "../../lib/date";
 import {
   fetchGuestsByDate,
@@ -42,12 +43,11 @@ function DoorPageContent() {
   const [loadingStates, setLoadingStates] = useState<{
     [key: string]: boolean;
   }>({});
-  const [isDJDropdownOpen, setIsDJDropdownOpen] = useState(false);
-  const dropdownRef = useRef<HTMLDivElement>(null);
   const [users, setUsers] = useState<User[]>([]);
   const [externalLinks, setExternalLinks] = useState<ExternalDJLink[]>([]);
   const [guests, setGuests] = useState<Guest[]>([]);
   const [isFetching, setIsFetching] = useState(true);
+  const [feedback, setFeedback] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [sortMode, setSortMode] = useLocalStorage<"default" | "alpha">(
     "door:sortMode",
@@ -79,19 +79,27 @@ function DoorPageContent() {
     useVenueSelector();
 
   const loadData = useCallback(async () => {
-    if (!venueId) return;
+    if (!venueId) {
+      setIsFetching(false);
+      return;
+    }
     setIsFetching(true);
+    setFeedback(null);
     try {
       const [guestRes, userRes, linkRes] = await Promise.all([
         fetchGuestsByDate(selectedDate, venueId),
         fetchUsersByVenue(venueId),
         fetchExternalLinksByDate(venueId, selectedDate),
       ]);
+      if (guestRes.error || userRes.error || linkRes.error) {
+        setFeedback("일부 운영 데이터를 불러오지 못했습니다. 새로고침 후 다시 시도해주세요.");
+      }
       if (guestRes.data) setGuests(guestRes.data);
       if (userRes.data) setUsers(userRes.data);
       if (linkRes.data) setExternalLinks(linkRes.data);
-    } catch (_err) {
-      console.error("Failed to load data:", _err);
+    } catch (error) {
+      console.error("Failed to load data:", error);
+      setFeedback("운영 데이터를 불러오지 못했습니다. 네트워크 상태를 확인해주세요.");
     } finally {
       setIsFetching(false);
     }
@@ -108,19 +116,6 @@ function DoorPageContent() {
     if (data) setGuests(data);
   }, 15000, !!venueId);
 
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (
-        dropdownRef.current &&
-        !dropdownRef.current.contains(event.target as Node)
-      ) {
-        setIsDJDropdownOpen(false);
-      }
-    };
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
-
   const handleStatusChange = async (
     id: string,
     newStatus: Guest["status"],
@@ -135,8 +130,10 @@ function DoorPageContent() {
 
     if (!error && data) {
       setGuests((prev) => prev.map((g) => (g.id === id ? data : g)));
+      setFeedback(null);
     } else {
       console.error("Failed to update guest status:", error);
+      setFeedback("게스트 상태를 변경하지 못했습니다. 다시 시도해주세요.");
     }
 
     setLoadingStates((prev) => ({ ...prev, [`${id}_${action}`]: false }));
@@ -211,18 +208,6 @@ function DoorPageContent() {
 
   const selectedDJInfo = getSelectedDJInfo();
 
-  const getSelectedDJName = () => {
-    if (selectedDJ === "all") return "SELECT USER";
-    if (selectedDJ.startsWith("ext:")) {
-      const link = displayData.externalLinks.find(
-        (l) => l.id === selectedDJ.replace("ext:", ""),
-      );
-      return link ? link.djName : "SELECT USER";
-    }
-    const u = displayData.users.find((u) => u.id === selectedDJ);
-    return u ? u.name : "SELECT USER";
-  };
-
   // Only show users/links who registered guests on the selected date
   const activeUserIds = new Set(
     displayData.guests.map((g) => g.createdByUserId).filter(Boolean),
@@ -260,75 +245,30 @@ function DoorPageContent() {
 
           <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 lg:gap-6 lg:flex-1 lg:min-h-0">
             <div className="lg:col-span-1 space-y-4 lg:overflow-y-auto">
+              {feedback && <Alert type="error" message={feedback} />}
               <div className="bg-surface border border-border-subtle p-4 sm:p-5">
                 <div className="mb-4">
-                  <h3 className="font-mono text-xs sm:text-sm tracking-wider text-text-muted uppercase mb-3">
+                  <label htmlFor="door-user-filter" className="block font-mono text-xs sm:text-sm tracking-wider text-text-muted uppercase mb-3">
                     SELECT USER
-                  </h3>
-                  <div className="space-y-2">
-                    <button
-                      onClick={() => setSelectedDJ("all")}
-                      className={`w-full p-3 font-mono text-xs tracking-wider uppercase transition-colors ${
-                        selectedDJ === "all"
-                          ? "bg-white text-black"
-                          : "bg-surface-hover text-text-muted hover:text-white border border-border-subtle"
-                      }`}
+                  </label>
+                  <div className="relative">
+                    <select
+                      id="door-user-filter"
+                      value={selectedDJ}
+                      onChange={(event) => setSelectedDJ(event.target.value)}
+                      className="w-full appearance-none bg-surface-hover border border-border-subtle px-4 py-3 pr-10 font-mono text-xs tracking-wider uppercase text-white transition-colors focus:outline-none focus:border-border-focus"
                     >
-                      ALL USERS
-                    </button>
-
-                    <div className="relative" ref={dropdownRef}>
-                      <button
-                        onClick={() => setIsDJDropdownOpen(!isDJDropdownOpen)}
-                        className={`w-full bg-surface-hover border border-border-subtle px-4 py-3 font-mono text-xs tracking-wider uppercase focus:outline-none focus:border-border-focus flex items-center justify-between gap-3 transition-colors ${
-                          selectedDJ !== "all" ? "text-white" : "text-text-muted"
-                        }`}
-                      >
-                        <span className="break-words">
-                          {getSelectedDJName()}
-                        </span>
-                        <i
-                          className={`ri-arrow-down-s-line text-base transition-transform flex-shrink-0 ${isDJDropdownOpen ? "rotate-180" : ""}`}
-                        ></i>
-                      </button>
-
-                      {isDJDropdownOpen && (
-                        <div className="absolute top-full left-0 right-0 mt-1 bg-surface border border-border-subtle z-50 max-h-60 overflow-y-auto">
-                          {filteredUsers.map((u) => (
-                            <button
-                              key={u.id}
-                              onClick={() => {
-                                setSelectedDJ(u.id);
-                                setIsDJDropdownOpen(false);
-                              }}
-                              className={`w-full p-3 font-mono text-xs tracking-wider uppercase text-left transition-colors ${
-                                selectedDJ === u.id
-                                  ? "bg-white text-black"
-                                  : "text-text-muted hover:bg-surface-hover hover:text-white"
-                              }`}
-                            >
-                              {u.name}
-                            </button>
-                          ))}
-                          {filteredExtLinks.map((link) => (
-                            <button
-                              key={`ext:${link.id}`}
-                              onClick={() => {
-                                setSelectedDJ(`ext:${link.id}`);
-                                setIsDJDropdownOpen(false);
-                              }}
-                              className={`w-full p-3 font-mono text-xs tracking-wider uppercase text-left transition-colors ${
-                                selectedDJ === `ext:${link.id}`
-                                  ? "bg-white text-black"
-                                  : "text-text-muted hover:bg-surface-hover hover:text-white"
-                              }`}
-                            >
-                              {link.djName} (EXT)
-                            </button>
-                          ))}
-                        </div>
-                      )}
-                    </div>
+                      <option value="all">ALL USERS</option>
+                      {filteredUsers.map((user) => (
+                        <option key={user.id} value={user.id}>{user.name}</option>
+                      ))}
+                      {filteredExtLinks.map((link) => (
+                        <option key={`ext:${link.id}`} value={`ext:${link.id}`}>
+                          {link.djName} (EXT)
+                        </option>
+                      ))}
+                    </select>
+                    <i className="ri-arrow-down-s-line pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-base text-text-muted" aria-hidden="true"></i>
                   </div>
                 </div>
               </div>
@@ -375,7 +315,7 @@ function DoorPageContent() {
               <div className="main-content-panel lg:min-h-0 lg:max-h-full">
                 <PanelHeader
                   title="GUEST LIST"
-                  count={filteredGuests.length}
+                  count={displayGuests.length}
                   sortMode={sortMode}
                   onSortToggle={() =>
                     setSortMode((prev) =>
@@ -391,12 +331,12 @@ function DoorPageContent() {
                   onChange={setSearchQuery}
                 />
 
-                {isFetching && filteredGuests.length === 0 ? (
+                {isFetching && displayData.guests.length === 0 ? (
                   <Spinner mode="inline" text="LOADING..." />
-                ) : filteredGuests.length === 0 ? (
+                ) : displayGuests.length === 0 ? (
                   <EmptyState
                     icon="ri-user-line"
-                    message="NO GUESTS FOR THIS DATE"
+                    message={searchQuery ? "NO GUESTS MATCH THIS SEARCH" : "NO GUESTS FOR THIS DATE"}
                   />
                 ) : (
                   <div

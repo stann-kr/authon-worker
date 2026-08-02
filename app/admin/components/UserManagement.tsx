@@ -11,11 +11,11 @@ import StatGrid from "../../../components/StatGrid";
 import PanelHeader from "../../../components/PanelHeader";
 import Spinner from "../../../components/Spinner";
 import RoleLabel from "../../../components/RoleLabel";
+import Alert from "../../../components/Alert";
 import {
   fetchUsersByVenue,
   updateUserProfile,
   deleteUserViaEdge,
-  resendInvitationViaEdge,
 } from "../../../lib/api/users";
 import type { User } from "../../../lib/api/types";
 
@@ -26,6 +26,7 @@ export default function UserManagement() {
   );
   const [users, setUsers] = useState<User[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [loadError, setLoadError] = useState("");
 
   const {
     venues,
@@ -39,30 +40,39 @@ export default function UserManagement() {
     ? selectedVenueId
     : currentUser?.venue_id;
 
+  useEffect(() => {
+    if (!isSuperAdmin && activeTab === "migrate") {
+      setActiveTab("create");
+    }
+  }, [activeTab, isSuperAdmin, setActiveTab]);
+
   const loadUsers = useCallback(async () => {
     if (!effectiveVenueId && !isSuperAdmin) return;
     setIsLoading(true);
+    setLoadError("");
     try {
       const { data, error } = await fetchUsersByVenue(
         isSuperAdmin ? effectiveVenueId || null : effectiveVenueId,
       );
       if (error) {
         console.error("Failed to load users:", error);
+        setLoadError("Unable to load users. Please try again.");
       } else if (data) {
         setUsers(data);
       }
     } catch (error) {
       console.error("Failed to load users:", error);
+      setLoadError("Unable to load users. Please check your connection.");
     } finally {
       setIsLoading(false);
     }
   }, [effectiveVenueId, isSuperAdmin]);
 
   useEffect(() => {
-    if (activeTab === "users" && effectiveVenueId) {
+    if (activeTab === "users" && (effectiveVenueId || isSuperAdmin)) {
       loadUsers();
     }
-  }, [activeTab, effectiveVenueId, loadUsers]);
+  }, [activeTab, effectiveVenueId, isSuperAdmin, loadUsers]);
 
   const handleUserUpdate = async (
     userId: string,
@@ -160,17 +170,19 @@ export default function UserManagement() {
                 <i className="ri-user-line mr-2"></i>
                 USERS
               </button>
-              <button
-                onClick={() => setActiveTab("migrate")}
-                className={`w-full p-3 font-mono text-xs tracking-wider uppercase transition-colors text-left ${
-                  activeTab === "migrate"
-                    ? "bg-white text-black"
-                    : "bg-gray-800 text-gray-400 hover:text-white border border-gray-700"
-                }`}
-              >
-                <i className="ri-database-2-line mr-2"></i>
-                MIGRATE
-              </button>
+              {isSuperAdmin && (
+                <button
+                  onClick={() => setActiveTab("migrate")}
+                  className={`w-full p-3 font-mono text-xs tracking-wider uppercase transition-colors text-left ${
+                    activeTab === "migrate"
+                      ? "bg-white text-black"
+                      : "bg-gray-800 text-gray-400 hover:text-white border border-gray-700"
+                  }`}
+                >
+                  <i className="ri-database-2-line mr-2" aria-hidden="true"></i>
+                  MIGRATE
+                </button>
+              )}
             </div>
           </div>
         </div>
@@ -235,6 +247,7 @@ export default function UserManagement() {
               isLoading={isLoading}
             />
             <div className="p-4">
+              {loadError && <Alert type="error" message={loadError} className="mb-4" />}
               {isLoading && users.length === 0 ? (
                 <Spinner mode="inline" text="LOADING..." />
               ) : users.length === 0 ? (
@@ -291,24 +304,6 @@ function UserCard({
     guestLimit: user.guestLimit,
     active: user.active,
   });
-  const [isResending, setIsResending] = useState(false);
-
-  const handleResend = async () => {
-    setIsResending(true);
-    try {
-      const { error } = await resendInvitationViaEdge(user.id);
-      if (error) {
-        alert(error || "Failed to resend invitation.");
-      } else {
-        alert("Invitation resent successfully!");
-      }
-    } catch (e: unknown) {
-      alert(e instanceof Error ? e.message : "Failed to resend invitation.");
-    } finally {
-      setIsResending(false);
-    }
-  };
-
   const handleSave = () => {
     const updates = canEditRole
       ? editData
@@ -365,28 +360,30 @@ function UserCard({
               </p>
             </div>
           </div>
-          <div className="grid grid-cols-2 gap-2">
+          <div className={`grid gap-2 ${canEditRole ? "grid-cols-2" : "grid-cols-1"}`}>
             <button
               onClick={() => setIsEditing(true)}
               className="bg-gray-700 hover:bg-gray-600 text-white font-mono text-xs tracking-wider uppercase py-2 sm:py-3 transition-colors"
             >
               EDIT
             </button>
-            <button
-              onClick={() => onDelete(user.id)}
-              className="bg-red-900/30 hover:bg-red-900/50 text-red-400 border border-red-700 font-mono text-xs tracking-wider uppercase py-2 sm:py-3 transition-colors"
-            >
-              DELETE
-            </button>
+            {canEditRole && (
+              <button
+                onClick={() => onDelete(user.id)}
+                className="bg-red-900/30 hover:bg-red-900/50 text-red-400 border border-red-700 font-mono text-xs tracking-wider uppercase py-2 sm:py-3 transition-colors"
+              >
+                DELETE
+              </button>
+            )}
           </div>
           {!user.active && (
             <div className="mt-2">
               <button
-                onClick={handleResend}
-                disabled={isResending}
-                className="w-full bg-blue-900/30 hover:bg-blue-900/50 text-blue-400 border border-blue-700 font-mono text-xs tracking-wider uppercase py-2 sm:py-3 transition-colors disabled:opacity-50"
+                disabled
+                title="Available after the email service is connected"
+                className="w-full bg-gray-900 text-gray-500 border border-gray-700 font-mono text-xs tracking-wider uppercase py-2 sm:py-3 cursor-not-allowed"
               >
-                {isResending ? "SENDING..." : "RESEND INVITE"}
+                EMAIL INVITE UNAVAILABLE
               </button>
             </div>
           )}
@@ -394,14 +391,16 @@ function UserCard({
       ) : (
         <div className="space-y-3">
           {canEditRole && (
-            <div>
-              <label className="block text-gray-400 font-mono text-xs tracking-wider uppercase mb-2">
+            <fieldset>
+              <legend className="block text-gray-400 font-mono text-xs tracking-wider uppercase mb-2">
                 Role
-              </label>
+              </legend>
               <div className="grid grid-cols-4 gap-1">
                 {editableRoles.map((role) => (
                   <button
                     key={role}
+                    type="button"
+                    aria-pressed={editData.role === role}
                     onClick={() =>
                       setEditData({ ...editData, role: role as User["role"] })
                     }
@@ -415,14 +414,15 @@ function UserCard({
                   </button>
                 ))}
               </div>
-            </div>
+            </fieldset>
           )}
 
           <div>
-            <label className="block text-gray-400 font-mono text-xs tracking-wider uppercase mb-2">
+            <label htmlFor={`user-guest-limit-${user.id}`} className="block text-gray-400 font-mono text-xs tracking-wider uppercase mb-2">
               GUEST LIMIT
             </label>
             <input
+              id={`user-guest-limit-${user.id}`}
               type="number"
               value={editData.guestLimit || ""}
               onChange={(e) =>
@@ -439,6 +439,8 @@ function UserCard({
 
           <div className="flex items-center gap-2">
             <button
+              type="button"
+              aria-pressed={editData.active}
               onClick={() =>
                 setEditData({ ...editData, active: !editData.active })
               }

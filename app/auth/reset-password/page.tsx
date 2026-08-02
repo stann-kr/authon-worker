@@ -151,9 +151,9 @@ function ResetPasswordContent() {
         <div className="bg-gray-900/60 border border-gray-800 p-6 sm:p-8 lg:p-10 shadow-[0_0_0_1px_rgba(255,255,255,0.02)]">
           <div className="text-center mb-8">
             <div className="flex items-center justify-center gap-2 mb-4">
-              <div className="w-2 h-2 bg-white"></div>
-              <div className="w-2 h-2 bg-white"></div>
-              <div className="w-2 h-2 bg-white"></div>
+              <div className="w-2 h-2 bg-white" aria-hidden="true"></div>
+              <div className="w-2 h-2 bg-white" aria-hidden="true"></div>
+              <div className="w-2 h-2 bg-white" aria-hidden="true"></div>
             </div>
             <h1 className="font-mono text-xl sm:text-2xl lg:text-3xl tracking-wider text-white uppercase mb-2">
               {BRAND_NAME}
@@ -289,7 +289,7 @@ function ResetPasswordContent() {
           {step === "requestSent" && (
             <div className="text-center space-y-6">
               <div className="w-16 h-16 border border-green-500 bg-green-950/20 flex items-center justify-center mx-auto">
-                <i className="ri-mail-check-line text-green-500 text-3xl"></i>
+                <i className="ri-mail-check-line text-green-500 text-3xl" aria-hidden="true"></i>
               </div>
 
               <div className="space-y-3">
@@ -313,7 +313,7 @@ function ResetPasswordContent() {
           {step === "resetComplete" && (
             <div className="text-center space-y-6">
               <div className="w-16 h-16 border border-green-500 bg-green-950/20 flex items-center justify-center mx-auto">
-                <i className="ri-check-line text-green-500 text-3xl"></i>
+                <i className="ri-check-line text-green-500 text-3xl" aria-hidden="true"></i>
               </div>
 
               <div className="space-y-3">

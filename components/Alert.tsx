@@ -26,9 +26,13 @@ export default function Alert({ type, message, className = '' }: AlertProps) {
   };
 
   return (
-    <div className={`border p-4 ${styles[type]} ${className}`}>
+    <div
+      className={`border p-4 ${styles[type]} ${className}`}
+      role={type === 'error' ? 'alert' : 'status'}
+      aria-live={type === 'error' ? 'assertive' : 'polite'}
+    >
       <div className="flex items-center gap-3">
-        <i className={`${icons[type]} flex-shrink-0`}></i>
+        <i className={`${icons[type]} flex-shrink-0`} aria-hidden="true"></i>
         <p className="font-mono text-xs sm:text-sm tracking-wider">{message}</p>
       </div>
     </div>

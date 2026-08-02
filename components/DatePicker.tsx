@@ -1,5 +1,6 @@
 "use client";
 
+import { useId } from "react";
 import { formatDateDisplay } from "@/lib/date";
 
 /**
@@ -20,14 +21,16 @@ export default function DatePicker({
   onChange,
   className = "",
 }: DatePickerProps) {
+  const inputId = useId();
+
   return (
     <div
       className={`bg-gray-900 border border-gray-700 p-4 sm:p-5 ${className}`}
     >
       <div className="mb-2">
-        <h3 className="font-mono text-xs sm:text-sm tracking-wider text-gray-400 uppercase">
+        <label htmlFor={inputId} className="font-mono text-xs sm:text-sm tracking-wider text-gray-400 uppercase">
           SELECT DATE
-        </h3>
+        </label>
       </div>
       <div className="relative h-[46px] group">
         {/* Mirroring UI Layer: 사용자가 실제로 보게 되는 텍스트와 달력 아이콘 */}
@@ -35,11 +38,12 @@ export default function DatePicker({
           <span className="text-white font-mono text-sm tracking-wider">
             {formatDateDisplay(value)}
           </span>
-          <i className="ri-calendar-line text-gray-400"></i>
+          <i className="ri-calendar-line text-gray-400" aria-hidden="true"></i>
         </div>
 
-        {/* Hidden Native Input: 클릭 이벤트를 감전하여 달력을 띄우는 역할 */}
+        {/* Hidden Native Input: 클릭 이벤트를 감지하여 달력을 띄우는 역할 */}
         <input
+          id={inputId}
           type="date"
           value={value}
           onChange={(e) => onChange(e.target.value)}

@@ -12,9 +12,9 @@ interface EmptyStateProps {
 
 export default function EmptyState({ icon, message }: EmptyStateProps) {
   return (
-    <div className="p-8 text-center">
+    <div className="p-8 text-center" role="status">
       <div className="w-16 h-16 border border-gray-600 mx-auto mb-4 flex items-center justify-center">
-        <i className={`${icon} text-gray-400 text-2xl`}></i>
+        <i className={`${icon} text-gray-400 text-2xl`} aria-hidden="true"></i>
       </div>
       <p className="text-gray-400 font-mono text-sm tracking-wider uppercase">
         {message}

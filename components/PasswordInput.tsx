@@ -59,7 +59,7 @@ export default function PasswordInput({
           aria-label={isVisible ? "Hide password" : "Show password"}
           aria-pressed={isVisible}
         >
-          <i className={isVisible ? "ri-eye-off-line" : "ri-eye-line"}></i>
+          <i className={isVisible ? "ri-eye-off-line" : "ri-eye-line"} aria-hidden="true"></i>
         </button>
       </div>
       {isWarningVisible && (
@@ -69,7 +69,7 @@ export default function PasswordInput({
           aria-live="polite"
           className="mt-2 flex items-center gap-1.5 text-[10px] font-mono tracking-[0.08em] text-yellow-300"
         >
-          <i className="ri-alert-line"></i>
+          <i className="ri-alert-line" aria-hidden="true"></i>
           Caps Lock is on
         </p>
       )}

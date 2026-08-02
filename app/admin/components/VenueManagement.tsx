@@ -35,12 +35,17 @@ export default function VenueManagement() {
   const [formError, setFormError] = useState("");
   const [formSuccess, setFormSuccess] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [listError, setListError] = useState("");
 
   const loadVenues = useCallback(async () => {
     setIsLoading(true);
+    setListError("");
     const { data, error } = await fetchVenues(true); // include inactive
     if (data) setVenues(data);
-    if (error) console.error("Failed to load venues:", error);
+    if (error) {
+      console.error("Failed to load venues:", error);
+      setListError("Unable to load venues. Please try again.");
+    }
     setIsLoading(false);
   }, []);
 
@@ -81,6 +86,7 @@ export default function VenueManagement() {
     const { error } = await updateVenue(venue.id, { active: !venue.active });
     if (error) {
       console.error("Failed to update venue:", error);
+      setListError("Unable to update the venue. Please try again.");
     } else {
       loadVenues();
     }
@@ -183,10 +189,11 @@ export default function VenueManagement() {
 
               <form onSubmit={handleCreate} className="space-y-4">
                 <div>
-                  <label className="block text-gray-400 font-mono text-xs tracking-wider uppercase mb-2">
+                  <label htmlFor="venue-create-name" className="block text-gray-400 font-mono text-xs tracking-wider uppercase mb-2">
                     VENUE NAME
                   </label>
                   <input
+                    id="venue-create-name"
                     type="text"
                     value={formData.name}
                     onChange={(e) =>
@@ -198,15 +205,16 @@ export default function VenueManagement() {
                   />
                 </div>
 
-                <div>
-                  <label className="block text-gray-400 font-mono text-xs tracking-wider uppercase mb-2">
+                <fieldset>
+                  <legend className="block text-gray-400 font-mono text-xs tracking-wider uppercase mb-2">
                     TYPE
-                  </label>
+                  </legend>
                   <div className="grid grid-cols-5 gap-2">
                     {VENUE_TYPES.map((opt) => (
                       <button
                         key={opt.value}
                         type="button"
+                        aria-pressed={formData.type === opt.value}
                         onClick={() =>
                           setFormData({
                             ...formData,
@@ -223,13 +231,14 @@ export default function VenueManagement() {
                       </button>
                     ))}
                   </div>
-                </div>
+                </fieldset>
 
                 <div>
-                  <label className="block text-gray-400 font-mono text-xs tracking-wider uppercase mb-2">
+                  <label htmlFor="venue-create-address" className="block text-gray-400 font-mono text-xs tracking-wider uppercase mb-2">
                     ADDRESS <span className="text-gray-600">(OPTIONAL)</span>
                   </label>
                   <input
+                    id="venue-create-address"
                     type="text"
                     value={formData.address}
                     onChange={(e) =>
@@ -241,11 +250,12 @@ export default function VenueManagement() {
                 </div>
 
                 <div>
-                  <label className="block text-gray-400 font-mono text-xs tracking-wider uppercase mb-2">
+                  <label htmlFor="venue-create-description" className="block text-gray-400 font-mono text-xs tracking-wider uppercase mb-2">
                     DESCRIPTION{" "}
                     <span className="text-gray-600">(OPTIONAL)</span>
                   </label>
                   <textarea
+                    id="venue-create-description"
                     value={formData.description}
                     onChange={(e) =>
                       setFormData({ ...formData, description: e.target.value })
@@ -288,6 +298,7 @@ export default function VenueManagement() {
               isLoading={isLoading}
             />
             <div className="p-4">
+              {listError && <Alert type="error" message={listError} className="mb-4" />}
               {isLoading && venues.length === 0 ? (
                 <Spinner mode="inline" text="LOADING..." />
               ) : venues.length === 0 ? (
@@ -432,10 +443,11 @@ function VenueCard({
       ) : (
         <div className="space-y-3">
           <div>
-            <label className="block text-gray-400 font-mono text-xs tracking-wider uppercase mb-2">
+            <label htmlFor={`venue-name-${venue.id}`} className="block text-gray-400 font-mono text-xs tracking-wider uppercase mb-2">
               Name
             </label>
             <input
+              id={`venue-name-${venue.id}`}
               type="text"
               value={editData.name}
               onChange={(e) =>
@@ -445,15 +457,16 @@ function VenueCard({
             />
           </div>
 
-          <div>
-            <label className="block text-gray-400 font-mono text-xs tracking-wider uppercase mb-2">
+          <fieldset>
+            <legend className="block text-gray-400 font-mono text-xs tracking-wider uppercase mb-2">
               Type
-            </label>
+            </legend>
             <div className="grid grid-cols-5 gap-1">
               {VENUE_TYPES.map((opt) => (
                 <button
                   key={opt.value}
                   type="button"
+                  aria-pressed={editData.type === opt.value}
                   onClick={() =>
                     setEditData({
                       ...editData,
@@ -470,13 +483,14 @@ function VenueCard({
                 </button>
               ))}
             </div>
-          </div>
+          </fieldset>
 
           <div>
-            <label className="block text-gray-400 font-mono text-xs tracking-wider uppercase mb-2">
+            <label htmlFor={`venue-address-${venue.id}`} className="block text-gray-400 font-mono text-xs tracking-wider uppercase mb-2">
               Address
             </label>
             <input
+              id={`venue-address-${venue.id}`}
               type="text"
               value={editData.address}
               onChange={(e) =>
@@ -487,10 +501,11 @@ function VenueCard({
           </div>
 
           <div>
-            <label className="block text-gray-400 font-mono text-xs tracking-wider uppercase mb-2">
+            <label htmlFor={`venue-description-${venue.id}`} className="block text-gray-400 font-mono text-xs tracking-wider uppercase mb-2">
               Description
             </label>
             <textarea
+              id={`venue-description-${venue.id}`}
               value={editData.description}
               onChange={(e) =>
                 setEditData({ ...editData, description: e.target.value })

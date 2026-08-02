@@ -21,7 +21,6 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
-  maximumScale: 1,
   viewportFit: "cover",
 };
 
@@ -36,7 +35,12 @@ export default function RootLayout({
         className={`${geistSans.variable} ${geistMono.variable} antialiased bg-black`}
         style={{ minHeight: "100dvh" }}
       >
-        {children}
+        <a href="#main-content" className="skip-link">
+          본문으로 건너뛰기
+        </a>
+        <div id="main-content" tabIndex={-1}>
+          {children}
+        </div>
       </body>
     </html>
   );

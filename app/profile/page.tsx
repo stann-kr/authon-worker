@@ -206,6 +206,7 @@ export default function ProfilePage() {
                     <button
                       type="button"
                       onClick={() => setActiveSection("profile")}
+                      aria-pressed={activeSection === "profile"}
                       className={`px-4 py-3.5 border font-mono text-[10px] sm:text-xs tracking-[0.22em] uppercase transition-colors ${
                         activeSection === "profile"
                           ? "bg-white text-black border-white"
@@ -217,6 +218,7 @@ export default function ProfilePage() {
                     <button
                       type="button"
                       onClick={() => setActiveSection("security")}
+                      aria-pressed={activeSection === "security"}
                       className={`px-4 py-3.5 border font-mono text-[10px] sm:text-xs tracking-[0.22em] uppercase transition-colors ${
                         activeSection === "security"
                           ? "bg-white text-black border-white"

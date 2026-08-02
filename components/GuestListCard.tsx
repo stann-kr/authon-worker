@@ -43,7 +43,7 @@ const GuestListCard: React.FC<GuestListCardProps> = ({
   };
 
   return (
-    <div
+    <article
       className={`p-4 overflow-hidden ${index % 2 === 1 ? "bg-surface-hover/30" : ""} ${guest.status === "checked" ? "opacity-50" : ""}`}
     >
       <div className="flex items-start justify-between gap-2">
@@ -124,7 +124,7 @@ const GuestListCard: React.FC<GuestListCardProps> = ({
           {guest.status === "checked" && (
             <div className="flex items-center gap-2">
               <span className="px-4 sm:px-6 py-2 sm:py-3 bg-brand-green/20 border border-brand-green text-brand-green font-mono text-xs tracking-wider uppercase">
-                ACTIVE
+                CHECKED IN
               </span>
               {variant === "admin" && onDelete && (
                 <Button
@@ -147,7 +147,7 @@ const GuestListCard: React.FC<GuestListCardProps> = ({
           )}
         </div>
       </div>
-    </div>
+    </article>
   );
 };
 

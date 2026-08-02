@@ -8,6 +8,7 @@ import StatGrid from "../../../components/StatGrid";
 import PanelHeader from "../../../components/PanelHeader";
 import Spinner from "../../../components/Spinner";
 import EmptyState from "../../../components/EmptyState";
+import Alert from "../../../components/Alert";
 import VenueSelector, {
   useVenueSelector,
 } from "../../../components/VenueSelector";
@@ -34,6 +35,7 @@ export default function GuestList({ selectedDate }: GuestListProps) {
   const [externalLinks, setExternalLinks] = useState<ExternalDJLink[]>([]);
   const [guests, setGuests] = useState<Guest[]>([]);
   const [isFetching, setIsFetching] = useState(true);
+  const [feedback, setFeedback] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [sortMode, setSortMode] = useLocalStorage<"default" | "alpha">(
     "guestlist:sortMode",
@@ -65,19 +67,27 @@ export default function GuestList({ selectedDate }: GuestListProps) {
     useVenueSelector();
 
   const loadData = useCallback(async () => {
-    if (!venueId) return;
+    if (!venueId) {
+      setIsFetching(false);
+      return;
+    }
     setIsFetching(true);
+    setFeedback(null);
     try {
       const [guestRes, userRes, linkRes] = await Promise.all([
         fetchGuestsByDate(selectedDate, venueId),
         fetchUsersByVenue(venueId),
         fetchExternalLinksByDate(venueId, selectedDate),
       ]);
+      if (guestRes.error || userRes.error || linkRes.error) {
+        setFeedback("일부 운영 데이터를 불러오지 못했습니다. 새로고침 후 다시 시도해주세요.");
+      }
       if (guestRes.data) setGuests(guestRes.data);
       if (userRes.data) setUsers(userRes.data);
       if (linkRes.data) setExternalLinks(linkRes.data);
     } catch (err) {
       console.error("Failed to load data:", err);
+      setFeedback("운영 데이터를 불러오지 못했습니다. 네트워크 상태를 확인해주세요.");
     } finally {
       setIsFetching(false);
     }
@@ -110,8 +120,10 @@ export default function GuestList({ selectedDate }: GuestListProps) {
 
     if (!error && data) {
       setGuests((prev) => prev.map((g) => (g.id === id ? data : g)));
+      setFeedback(null);
     } else {
       console.error("Failed to update guest status:", error);
+      setFeedback("게스트 상태를 변경하지 못했습니다. 다시 시도해주세요.");
     }
 
     setLoadingStates((prev) => ({ ...prev, [`${id}_${action}`]: false }));
@@ -203,6 +215,7 @@ export default function GuestList({ selectedDate }: GuestListProps) {
   return (
     <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 lg:gap-6 lg:flex-1 lg:min-h-0">
       <div className="lg:col-span-1 space-y-4 lg:overflow-y-auto">
+        {feedback && <Alert type="error" message={feedback} />}
         {isSuperAdmin && (
           <VenueSelector
             venues={venues}
@@ -212,9 +225,9 @@ export default function GuestList({ selectedDate }: GuestListProps) {
         )}
         <div className="bg-gray-900 border border-gray-700 p-4 sm:p-5">
           <div className="mb-4">
-            <h3 className="font-mono text-xs sm:text-sm tracking-wider text-gray-400 uppercase mb-3">
+            <label htmlFor="admin-guest-user-filter" className="block font-mono text-xs sm:text-sm tracking-wider text-gray-400 uppercase mb-3">
               SELECT USER
-            </h3>
+            </label>
             <div className="space-y-2">
               <button
                 onClick={() => setSelectedDJ("all")}
@@ -228,6 +241,7 @@ export default function GuestList({ selectedDate }: GuestListProps) {
               </button>
               <div className="relative">
                 <select
+                  id="admin-guest-user-filter"
                   value={selectedDJ === "all" ? "" : selectedDJ}
                   onChange={(e) => setSelectedDJ(e.target.value || "all")}
                   className="w-full appearance-none bg-gray-800 border border-gray-700 px-4 py-4 pr-10 text-white font-mono text-sm tracking-wider uppercase focus:outline-none focus:border-white min-h-[52px]"
@@ -248,7 +262,7 @@ export default function GuestList({ selectedDate }: GuestListProps) {
                     </option>
                   ))}
                 </select>
-                <i className="ri-arrow-down-s-line absolute right-3 top-1/2 -translate-y-1/2 text-base text-gray-400 pointer-events-none"></i>
+                <i className="ri-arrow-down-s-line absolute right-3 top-1/2 -translate-y-1/2 text-base text-gray-400 pointer-events-none" aria-hidden="true"></i>
               </div>
             </div>
           </div>
@@ -292,7 +306,7 @@ export default function GuestList({ selectedDate }: GuestListProps) {
         <div className="main-content-panel lg:min-h-0 lg:max-h-full">
           <PanelHeader
             title="GUEST LIST"
-            count={filteredGuests.length}
+            count={displayGuests.length}
             sortMode={sortMode}
             onSortToggle={() =>
               setSortMode((prev) => (prev === "default" ? "alpha" : "default"))
@@ -306,10 +320,10 @@ export default function GuestList({ selectedDate }: GuestListProps) {
             onChange={setSearchQuery}
           />
 
-          {isFetching && filteredGuests.length === 0 ? (
+          {isFetching && displayData.guests.length === 0 ? (
             <Spinner mode="inline" text="LOADING..." />
-          ) : filteredGuests.length === 0 ? (
-            <EmptyState icon="ri-user-line" message="NO GUESTS FOR THIS DATE" />
+          ) : displayGuests.length === 0 ? (
+            <EmptyState icon="ri-user-line" message={searchQuery ? "NO GUESTS MATCH THIS SEARCH" : "NO GUESTS FOR THIS DATE"} />
           ) : (
             <div
               className={`divide-y divide-gray-700 lg:overflow-y-auto transition-opacity duration-200 ${isFetching ? "opacity-50 pointer-events-none" : ""}`}
