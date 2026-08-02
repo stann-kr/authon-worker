@@ -22,7 +22,7 @@ export interface User {
 export const login = async (
   email: string,
   password: string,
-): Promise<{ success: boolean; message?: string }> => {
+): Promise<{ success: boolean; message?: string; requiresSetup?: boolean }> => {
   try {
     const res = await fetch("/api/auth/login", {
       method: "POST",
@@ -32,7 +32,11 @@ export const login = async (
 
     if (!res.ok) {
       const errorData = await res.json().catch(() => ({}));
-      return { success: false, message: errorData.error || "Login failed." };
+      return {
+        success: false,
+        message: errorData.error || "Login failed.",
+        requiresSetup: errorData.code === "PASSWORD_SETUP_REQUIRED",
+      };
     }
 
     const { user } = await res.json();
@@ -52,6 +56,35 @@ export const login = async (
   } catch (error) {
     console.error("Login error:", error);
     return { success: false, message: "An error occurred during login." };
+  }
+};
+
+export const claimMigratedAccount = async (
+  email: string,
+  newPassword: string,
+): Promise<{ success: boolean; message?: string }> => {
+  try {
+    const res = await fetch("/api/auth/claim-account", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, newPassword }),
+    });
+    const data = await res.json().catch(() => ({}));
+
+    if (!res.ok) {
+      return {
+        success: false,
+        message: data.error || "First-time setup failed.",
+      };
+    }
+
+    return { success: true, message: data.message };
+  } catch (error) {
+    console.error("Account claim error:", error);
+    return {
+      success: false,
+      message: "An error occurred during first-time setup.",
+    };
   }
 };
 

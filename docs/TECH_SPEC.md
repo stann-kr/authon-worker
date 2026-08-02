@@ -9,7 +9,7 @@ Client
   -> Next.js App Router / Server Actions
   -> Cloudflare Workers via OpenNext
   -> Cloudflare D1 + KV
-  -> AWS SES for password reset email
+  -> AWS SES for password reset email (후속 연동)
 ```
 
 주요 경계:
@@ -44,6 +44,7 @@ Client
 | External Link | 외부 DJ가 계정 없이 게스트를 등록하는 공개 링크 |
 | Check-in | 도어 운영자의 입장 확인 기록 |
 | Password Reset | 비밀번호 재설정 토큰과 메일 발송 흐름 |
+| Account Claim | 이관 대기 계정의 1회성 직접 비밀번호 설정 |
 
 ## 역할과 접근 범위
 
@@ -61,6 +62,7 @@ Client
 |---|---|---|
 | `/auth/login` | 공개 | 로그인 |
 | `/auth/reset-password` | 공개 | 비밀번호 재설정 |
+| `/api/auth/claim-account` | 공개 API | 이관 대기 계정 1회성 활성화 |
 | `/guest?token=...` | 공개 링크 | 외부 DJ 게스트 등록 |
 | `/` | 인증 필요 | 대시보드 |
 | `/guest` | 인증 필요 | 게스트 등록/관리 |
@@ -75,6 +77,9 @@ Client
 - 비밀번호 변경/재설정 이후 기존 세션을 무효화할 수 있도록 session version을 사용한다.
 - 신규 비밀번호 hash는 WebCrypto PBKDF2 계열을 기준으로 관리하고, 기존 hash는 점진 전환한다.
 - reset token 원문은 저장하지 않고 hash만 저장한다.
+- 이관 대기 계정의 직접 설정은 `pending_reset`이면서 아직 비밀번호를 설정하지 않은 활성 계정에만 허용한다.
+- 직접 설정 성공 시 migration 상태와 session version을 원자적으로 변경하고 기존 reset token을 모두 사용 처리한다.
+- 직접 설정 요청은 IP와 이메일 조합으로 rate limit하며, 한 번 활성화된 계정은 같은 경로를 다시 사용할 수 없다.
 
 ## 데이터 모델 요약
 

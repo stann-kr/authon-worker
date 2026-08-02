@@ -12,7 +12,12 @@ export async function POST(request: Request) {
     const { env } = getCloudflareContext();
     const { email, password } = await request.json();
 
-    if (!email || !password) {
+    if (
+      typeof email !== "string" ||
+      !email.trim() ||
+      typeof password !== "string" ||
+      !password
+    ) {
       return NextResponse.json(
         { error: "이메일과 비밀번호를 입력해주세요." },
         { status: 400 }
@@ -49,6 +54,19 @@ export async function POST(request: Request) {
 
     if (!user || !user.active) {
       return invalidCredentialsResponse();
+    }
+
+    if (
+      user.migrationStatus === "pending_reset" &&
+      !user.passwordSetAt
+    ) {
+      return NextResponse.json(
+        {
+          error: "First-time password setup is required.",
+          code: "PASSWORD_SETUP_REQUIRED",
+        },
+        { status: 409 },
+      );
     }
 
     const isMatch = await verifyPassword(password, user.passwordHash);
