@@ -12,6 +12,17 @@
 
 ## 2026-08-03
 
+### Cloudflare Worker 운영 배포 설정 정비
+
+#### Changed
+
+- 운영 앱 URL을 실제 서비스 도메인으로 설정하고 로컬 개발 URL은 로컬 변수로 오버라이드하도록 배포 경계를 정리했다.
+- Cloudflare Workers의 표준 Node.js compatibility flag를 사용하도록 런타임 설정을 갱신했다.
+
+#### Fixed
+
+- Worker 업로드 검증에서 Next.js 번들의 `node:fs` 모듈을 인식하지 못해 배포가 거부되던 문제를 해결했다.
+
 ### Supabase 운영 데이터 D1 이전 도구 보강
 
 #### Changed

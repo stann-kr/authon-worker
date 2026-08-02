@@ -1,7 +1,7 @@
 name = "authon-worker"
 main = ".open-next/worker.js"
 compatibility_date = "2026-07-27"
-compatibility_flags = ["nodejs_compat_v2"]
+compatibility_flags = ["nodejs_compat"]
 
 [observability]
 enabled = true
@@ -32,7 +32,7 @@ preview_id = "3c3c403d6dbb4aa7b0e8920041b12622"
 # 비시크릿 환경 변수 (시크릿은 .dev.vars 또는 Cloudflare Dashboard에서 관리)
 # JWT_SECRET, AWS_SES_* 등 시크릿은 .dev.vars에 설정 (절대 여기에 입력 금지)
 [vars]
-NEXT_PUBLIC_APP_URL = "http://localhost:3000"
-# 운영 배포 시 Cloudflare Dashboard에서 환경별로 오버라이드:
-#   NEXT_PUBLIC_APP_URL = "https://authon.yourdomain.com"
+NEXT_PUBLIC_APP_URL = "https://guest.faustseoul.kr"
+# 로컬 개발 URL은 .dev.vars의 NEXT_PUBLIC_APP_URL로 오버라이드:
+#   NEXT_PUBLIC_APP_URL = "http://localhost:3000"
 #   TERMINAL_VENUE_ID   = "<실제 베뉴 UUID>"
