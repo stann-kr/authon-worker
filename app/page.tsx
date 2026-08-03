@@ -121,7 +121,7 @@ export default function Home() {
       <main className="mx-auto flex w-full max-w-[1040px] flex-1 flex-col justify-center px-4 pb-8 pt-20 sm:px-6 sm:pt-24 lg:px-10">
         {user.role === "venue_admin" && pendingGuestRequestCount > 0 && (
           <TransitionLink
-            href="/admin?tab=requests"
+            href="/admin?tab=guests&view=requests"
             className="group mb-4 grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-4 border border-status-waiting/70 bg-status-waiting/10 px-4 py-4 text-status-waiting hover:border-status-waiting focus-visible:outline-none sm:px-5"
           >
             <Icon name="warning" size={22} />
@@ -134,8 +134,8 @@ export default function Home() {
               </p>
             </div>
             <span className="flex items-center gap-3">
-              <span className="border border-status-waiting/70 bg-canvas px-2 py-1 font-mono text-sm tabular-nums">
-                {pendingGuestRequestCount}
+              <span className="font-mono text-xs tabular-nums text-status-waiting">
+                {t("pendingGuestRequestCount", { count: pendingGuestRequestCount })}
               </span>
               <Icon name="arrow-right" size={18} />
             </span>

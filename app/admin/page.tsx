@@ -16,7 +16,8 @@ import { getUser } from "../../lib/auth";
 import Icon, { type IconName } from "../../components/Icon";
 import { useTranslations } from "next-intl";
 
-type AdminTab = "guests" | "requests" | "links" | "users" | "venues";
+type AdminTab = "guests" | "links" | "users" | "venues";
+type GuestAdminTab = "list" | "requests";
 
 interface AdminTabDefinition {
   id: AdminTab;
@@ -44,6 +45,10 @@ function AdminPageContent() {
     "admin:selectedDate",
     getBusinessDate(),
   );
+  const [activeGuestTab, setActiveGuestTab] = useLocalStorage<GuestAdminTab>(
+    "admin:guestTab",
+    "list",
+  );
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
   const [isRoleReady, setIsRoleReady] = useState(false);
 
@@ -56,11 +61,10 @@ function AdminPageContent() {
   const tabs = useMemo<AdminTabDefinition[]>(
     () => [
       { id: "guests", label: t("guests"), icon: "users" as IconName, shortcut: "1" },
-      { id: "requests", label: t("requests"), icon: "warning" as IconName, shortcut: "2" },
-      { id: "links", label: t("links"), icon: "link" as IconName, shortcut: "3" },
-      { id: "users", label: t("users"), icon: "user-admin" as IconName, shortcut: "4" },
+      { id: "links", label: t("links"), icon: "link" as IconName, shortcut: "2" },
+      { id: "users", label: t("users"), icon: "user-admin" as IconName, shortcut: "3" },
       ...(isSuperAdmin
-        ? [{ id: "venues" as const, label: t("venues"), icon: "store" as IconName, shortcut: "5" }]
+        ? [{ id: "venues" as const, label: t("venues"), icon: "store" as IconName, shortcut: "4" }]
         : []),
     ],
     [isSuperAdmin, t],
@@ -75,9 +79,21 @@ function AdminPageContent() {
   useEffect(() => {
     if (!isRoleReady) return;
     const requestedTab = new URLSearchParams(window.location.search).get("tab");
+    const requestedGuestTab = new URLSearchParams(window.location.search).get("view");
+    if (requestedTab === "requests") {
+      setActiveTab("guests");
+      setActiveGuestTab("requests");
+      return;
+    }
     const matchingTab = tabs.find((tab) => tab.id === requestedTab);
     if (matchingTab) setActiveTab(matchingTab.id);
-  }, [isRoleReady, setActiveTab, tabs]);
+    if (
+      requestedTab === "guests" &&
+      (requestedGuestTab === "list" || requestedGuestTab === "requests")
+    ) {
+      setActiveGuestTab(requestedGuestTab);
+    }
+  }, [isRoleReady, setActiveGuestTab, setActiveTab, tabs]);
 
   // Keyboard shortcut listener for tab switching & home return
   useEffect(() => {
@@ -141,7 +157,7 @@ function AdminPageContent() {
               role="tablist"
               aria-label={t("sections")}
               aria-orientation="horizontal"
-              className={`grid ${tabs.length === 5 ? "grid-cols-5" : "grid-cols-4"} divide-x divide-border-subtle border border-border-subtle bg-surface`}
+              className={`grid ${tabs.length === 4 ? "grid-cols-4" : "grid-cols-3"} divide-x divide-border-subtle border border-border-subtle bg-surface`}
             >
               {tabs.map((tab, tabIndex) => {
                 const isActive = activeTab === tab.id;
@@ -161,7 +177,7 @@ function AdminPageContent() {
                         : "bg-surface text-text-muted after:bg-transparent hover:bg-surface-raised hover:text-text-heading"
                     }`}
                   >
-                    <div className="flex flex-col items-center justify-center gap-1 sm:flex-row sm:gap-2">
+                    <div className="flex items-center justify-center gap-2">
                       <Icon name={tab.icon} size={18} />
                       <span className="text-xs sm:text-sm">{tab.label}</span>
                       <span className="ml-1 hidden border border-border-default px-1 py-0.5 font-mono text-xs text-text-dim lg:inline-block">
@@ -182,12 +198,42 @@ function AdminPageContent() {
             className="flex min-h-0 flex-col"
           >
             {activeTab === "guests" && (
-              <GuestList
-                selectedDate={selectedDate}
-                onDateChange={setSelectedDate}
-              />
+              <>
+                <div
+                  role="tablist"
+                  aria-label={t("guestSections")}
+                  className="mb-4 grid grid-cols-2 divide-x divide-border-subtle border border-border-subtle bg-surface"
+                >
+                  {(["list", "requests"] as const).map((guestTab) => {
+                    const isActive = activeGuestTab === guestTab;
+                    return (
+                      <button
+                        key={guestTab}
+                        type="button"
+                        role="tab"
+                        aria-selected={isActive}
+                        onClick={() => setActiveGuestTab(guestTab)}
+                        className={`min-h-11 px-4 py-2 text-sm font-medium focus-visible:outline-none ${
+                          isActive
+                            ? "bg-surface-raised text-text-heading"
+                            : "text-text-muted hover:bg-surface-raised hover:text-text-heading"
+                        }`}
+                      >
+                        {guestTab === "list" ? t("guestList") : t("requests")}
+                      </button>
+                    );
+                  })}
+                </div>
+                {activeGuestTab === "list" ? (
+                  <GuestList
+                    selectedDate={selectedDate}
+                    onDateChange={setSelectedDate}
+                  />
+                ) : (
+                  <GuestLimitRequestManagement />
+                )}
+              </>
             )}
-            {activeTab === "requests" && <GuestLimitRequestManagement />}
             {activeTab === "links" && (
               <LinkManagement
                 selectedDate={selectedDate}

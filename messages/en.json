@@ -199,7 +199,8 @@
     "adminTitle": "Administration",
     "adminDescription": "Manage guests, links, users and venue operations.",
     "pendingGuestRequests": "{count} additional guest requests pending",
-    "pendingGuestRequestsDescription": "Open Admin to review and approve these requests."
+    "pendingGuestRequestsDescription": "Open Admin to review and approve these requests.",
+    "pendingGuestRequestCount": "{count} pending"
   },
   "GuestOperations": {
     "title": "Guest registration",
@@ -253,6 +254,8 @@
   "AdminNav": {
     "sections": "Admin sections",
     "guests": "Guests",
+    "guestSections": "Guest management sections",
+    "guestList": "Guest list",
     "requests": "Requests",
     "links": "Links",
     "users": "Users",

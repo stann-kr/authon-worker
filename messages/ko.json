@@ -199,7 +199,8 @@
     "adminTitle": "관리자",
     "adminDescription": "게스트, 링크, 사용자와 베뉴 운영을 관리합니다.",
     "pendingGuestRequests": "추가 게스트 요청 {count}건이 대기 중입니다",
-    "pendingGuestRequestsDescription": "요청을 검토하고 승인하려면 Admin으로 이동하세요."
+    "pendingGuestRequestsDescription": "요청을 검토하고 승인하려면 Admin으로 이동하세요.",
+    "pendingGuestRequestCount": "대기 {count}건"
   },
   "GuestOperations": {
     "title": "게스트 등록",
@@ -253,6 +254,8 @@
   "AdminNav": {
     "sections": "관리자 섹션",
     "guests": "게스트",
+    "guestSections": "게스트 관리 섹션",
+    "guestList": "게스트 목록",
     "requests": "추가 요청",
     "links": "링크",
     "users": "사용자",

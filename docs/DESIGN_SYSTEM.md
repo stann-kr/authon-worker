@@ -106,7 +106,7 @@ Authon UI는 베뉴 현장에서 반복적으로 사용하는 운영 도구다. 
 - `DatePicker`, `VenueSelector`, `GuestSearchInput`: 공통 field와 focus token을 사용한다.
 - 운영 날짜는 Guest, Door, Admin에서 같은 `DatePicker`와 날짜 이동 control을 사용한다. container가 좁으면 날짜 입력과 quick control을 두 줄로 배치한다.
 - Guest, Door와 Admin 하위 작업은 태블릿 이상에서 공통 `OperationsLayout`을 사용한다. 좌측 열에는 날짜·범위·section·요약을, 우측 열에는 생성 form 또는 작업 목록을 둔다.
-- 추가 게스트 요청처럼 여러 사용자에게서 발생하는 운영 승인은 사용자 계정 관리에 종속시키지 않고 Admin 최상위 작업 탭으로 제공한다. 미처리 요청이 있는 Venue Admin 홈에는 건수와 요청함 직접 이동 action을 함께 표시한다.
+- 추가 게스트 요청처럼 게스트 한도에 속하는 운영 승인은 사용자 계정 관리가 아니라 Admin의 게스트 하위 작업으로 제공한다. 미처리 요청이 있는 Venue Admin 홈에는 단축키와 혼동되지 않는 상태 문구, 건수와 요청함 직접 이동 action을 함께 표시한다.
 - Links 관리는 기본 상태와 예외 상태를 한 번씩만 표시한다. 목록 범위는 날짜별 보기와 최근 생성 5개·10개 보기로 구분한다.
 - Links의 긴 URL은 기본 목록에 상시 노출하지 않는다. `VIEW` disclosure 안에서 읽기 전용 URL 선택과 새 탭 열기를 제공해 clipboard 실패 시에도 접근할 수 있게 한다.
 - 반복되는 guest row는 교차 neutral surface를 사용한다. waiting과 checked-in 상태는 각 행의 왼쪽 2px indicator를 공유하되, 모든 waiting 행은 중복 status label을 표시하지 않는다.
