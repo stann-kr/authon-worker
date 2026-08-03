@@ -79,6 +79,7 @@ Client
 |---|---|---|
 | `/auth/login` | 공개 | 로그인 |
 | `/auth/reset-password` | 공개 | 비밀번호 재설정 |
+| `/demo` | 공개 | 운영 API와 분리된 브라우저 로컬 포트폴리오 데모 |
 | `/api/auth/claim-account` | 공개 API | 검증된 1회용 설정 코드로 비밀번호 설정 |
 | `/guest?token=...` | 공개 링크 | 외부 DJ 게스트 등록 |
 | `/` | 인증 필요 | 역할별 대시보드와 Venue Admin의 미처리 추가 게스트 요청 알림 |
@@ -130,5 +131,12 @@ Client
 | 배포 runtime | OpenNext compatibility, Worker build result |
 | 이메일 | reset-password route, SES sender configuration, public error message |
 | 국제화 | locale resolver, 메시지 키 대응, 계정·도메인·External Link 우선순위 |
+
+## 포트폴리오 데모 경계
+
+- `/demo`는 로그인 없이 게스트 등록, 도어 체크인, 추가 한도 승인, 외부 게스트 링크 생성 흐름을 체험하는 샌드박스다.
+- 샘플 상태와 사용자의 변경은 브라우저 `localStorage`에만 저장하며 인증 cookie, API route, D1, KV를 사용하지 않는다.
+- 초기화는 현재 브라우저의 데모 상태만 기본 fixture로 되돌리고 운영 계정이나 데이터에는 영향을 주지 않는다.
+- 데모 상태 전이는 순수 함수로 분리해 등록값 정규화, 체크인 되돌리기, 요청 단일 결정, 링크 정원 제한을 테스트한다.
 
 외부 링크의 최근 목록은 `created_at` 내림차순으로 조회한다. Supabase snapshot을 D1으로 이전할 때도 원본 `created_at`을 보존하므로 컷오버 전에 생성된 링크가 최근 목록에서 누락되지 않는다.

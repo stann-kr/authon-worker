@@ -11,6 +11,7 @@ import { useTranslations } from "next-intl";
 import { claimMigratedAccount, login } from "@/lib/auth";
 import { getPasswordPolicyErrorCode } from "@/lib/auth/password-policy";
 import { useVenueBrand } from "@/components/VenueBrandProvider";
+import Link from "next/link";
 
 type LoginMode = "login" | "setup";
 
@@ -292,6 +293,20 @@ export default function LoginPage() {
             >
               {mode === "login" ? t("signIn") : t("setPasswordAndSignIn")}
             </Button>
+
+            {mode === "login" && (
+              <div className="border-t border-border-subtle pt-5">
+                <p className="mb-3 text-center text-xs leading-relaxed text-text-muted">
+                  {t("portfolioDemoDescription")}
+                </p>
+                <Link
+                  href="/demo"
+                  className="pressable flex min-h-11 w-full items-center justify-center gap-2 border border-border-default bg-surface-raised px-4 py-2.5 text-sm font-medium text-text-heading hover:border-border-strong hover:bg-surface-hover"
+                >
+                  {t("openPortfolioDemo")}
+                </Link>
+              </div>
+            )}
 
             {mode === "setup" && (
               <button
