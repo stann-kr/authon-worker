@@ -38,8 +38,9 @@ export default function LanguageSwitcher({
 
       const url = new URL(window.location.href);
       url.searchParams.set("lang", locale);
+      // replace 자체가 locale query를 포함한 RSC navigation을 시작한다.
+      // 직후 refresh를 겹치면 같은 화면의 navigation이 중복될 수 있다.
       router.replace(`${url.pathname}${url.search}${url.hash}`, { scroll: false });
-      router.refresh();
     });
   };
 

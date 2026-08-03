@@ -36,7 +36,7 @@ export default function ExternalDJGuestView({ token }: ExternalDJGuestViewProps)
   const [linkInfo, setLinkInfo] = useState<ExternalDJLink | null>(null);
   const [venueInfo, setVenueInfo] = useState<Venue | null>(null);
   const [isValidating, setIsValidating] = useState(true);
-  const [validationError, setValidationError] = useState<string | null>(null);
+  const [hasValidationError, setHasValidationError] = useState(false);
   const [guestName, setGuestName] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -54,7 +54,7 @@ export default function ExternalDJGuestView({ token }: ExternalDJGuestViewProps)
     const validate = async () => {
       const isLatestRequest = validationGuard.beginRequest();
       setIsValidating(true);
-      setValidationError(null);
+      setHasValidationError(false);
       setLinkInfo(null);
       setVenueInfo(null);
       setGuests([]);
@@ -63,7 +63,7 @@ export default function ExternalDJGuestView({ token }: ExternalDJGuestViewProps)
         if (!isLatestRequest()) return;
         if (error) {
           console.error("Invalid external guest link:", error);
-          setValidationError(t("invalidTitle"));
+          setHasValidationError(true);
         } else if (data) {
           setLinkInfo(data.link);
           setVenueInfo(data.venue);
@@ -72,13 +72,15 @@ export default function ExternalDJGuestView({ token }: ExternalDJGuestViewProps)
       } catch (validationError) {
         if (!isLatestRequest()) return;
         console.error("Invalid external guest link:", validationError);
-        setValidationError(t("invalidTitle"));
+        setHasValidationError(true);
       } finally {
         if (isLatestRequest()) setIsValidating(false);
       }
     };
     validate();
-  }, [t, token, validationGuard]);
+    // 번역 함수 변경은 이미 검증된 token과 무관하다. locale 전환 때
+    // token 검증과 전체 route loading을 다시 시작하지 않는다.
+  }, [token, validationGuard]);
 
   const handleSave = async () => {
     if (!guestName.trim() || !linkInfo) return;
@@ -176,7 +178,7 @@ export default function ExternalDJGuestView({ token }: ExternalDJGuestViewProps)
     );
   }
 
-  if (validationError) {
+  if (hasValidationError) {
     return (
       <div className="min-h-[100dvh] bg-canvas flex items-center justify-center px-4">
         <div className="app-panel max-w-sm p-7 text-center">
@@ -187,7 +189,7 @@ export default function ExternalDJGuestView({ token }: ExternalDJGuestViewProps)
             {t("invalidTitle")}
           </h1>
           <p className="mb-6 text-sm leading-relaxed text-text-muted">
-            {validationError}
+            {t("invalidTitle")}
           </p>
           <Footer compact />
         </div>
@@ -298,8 +300,12 @@ export default function ExternalDJGuestView({ token }: ExternalDJGuestViewProps)
 
             <StatGrid
               items={[
-                { label: t("registered"), value: guests.length, color: "default" },
-                { label: t("remaining"), value: remaining, color: "default" },
+                { label: t("registered"), value: guests.length, color: "checked" },
+                {
+                  label: t("remaining"),
+                  value: remaining,
+                  color: remaining > 0 ? "waiting" : "danger",
+                },
                 {
                   label: t("max"),
                   value: linkInfo?.maxGuests ?? 0,
