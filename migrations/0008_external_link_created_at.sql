@@ -12,5 +12,8 @@ SET created_at = CASE
 END
 WHERE created_at IS NULL;
 
+-- Before cutover, run migration:generate:cutover-overlays and execute the
+-- generated private backfill SQL to restore exact source timestamps.
+
 CREATE INDEX IF NOT EXISTS idx_external_links_venue_created
   ON external_dj_links(venue_id, created_at DESC);

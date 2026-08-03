@@ -3,10 +3,11 @@ import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { drizzle } from "drizzle-orm/d1";
 import { eq } from "drizzle-orm";
 import { users, passwordResetTokens } from "@/lib/db/schema";
-import { sendEmail } from "@/lib/api/email";
+import { escapeHtml, sendEmail } from "@/lib/api/email";
 import { hashPassword } from "@/lib/auth/password";
 import { requireRole } from "@/lib/auth/server";
 import { generateResetToken, hashResetToken } from "@/lib/auth/token";
+import { getVenueDeliveryContext } from "@/lib/tenant/server";
 
 /**
  * 레거시 유저 마이그레이션 API (super_admin 전용)
@@ -90,22 +91,27 @@ export async function POST(request: Request) {
         });
 
         // 이메일 발송 (실패해도 user 생성 롤백 없이 상태만 기록)
-        const appUrl = env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
-        const resetLink = `${appUrl}/auth/reset-password?token=${token}`;
+        const delivery = await getVenueDeliveryContext(
+          legacyUser.venue_id || legacyUser.venueId || null,
+          env.NEXT_PUBLIC_APP_URL,
+        );
+        const resetLink = `${delivery.baseUrl}/auth/reset-password?token=${token}`;
+        const safeName = escapeHtml(String(legacyUser.name));
+        const safeResetLink = escapeHtml(resetLink);
         let emailSent = false;
 
         try {
           await sendEmail({
             to: normalizedEmail,
-            subject: "[Authon] 계정 마이그레이션 및 비밀번호 설정 안내",
+            subject: `[${delivery.brand.name}] 계정 마이그레이션 및 비밀번호 설정 안내`,
             body: `
               <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
                 <h2>계정 마이그레이션 안내</h2>
-                <p>안녕하세요, ${legacyUser.name}님.</p>
-                <p>기존 시스템의 계정이 새로운 Authon 플랫폼으로 성공적으로 이관되었습니다.</p>
+                <p>안녕하세요, ${safeName}님.</p>
+                <p>기존 시스템의 계정이 새로운 ${escapeHtml(delivery.brand.name)} 플랫폼으로 성공적으로 이관되었습니다.</p>
                 <p>보안을 위해 아래 링크를 클릭하여 새로운 비밀번호를 설정해주시기 바랍니다.</p>
                 <div style="margin: 30px 0;">
-                  <a href="${resetLink}" style="background-color: #000; color: #fff; padding: 12px 24px; text-decoration: none; border-radius: 4px;">새 비밀번호 설정하기</a>
+                  <a href="${safeResetLink}" style="background-color: #000; color: #fff; padding: 12px 24px; text-decoration: none; border-radius: 4px;">새 비밀번호 설정하기</a>
                 </div>
                 <p>이 링크는 7일 동안 유효합니다.</p>
                 <p style="color: #666; font-size: 12px; margin-top: 40px;">본 메일은 발신 전용입니다.</p>

@@ -1,9 +1,10 @@
 import Link from "next/link";
-import { BRAND_NAME } from "@/lib/brand";
 import Button from "@/components/Button";
 import Icon from "@/components/Icon";
+import { getRequestTenantContext } from "@/lib/tenant/server";
 
-export default function NotFound() {
+export default async function NotFound() {
+  const { brand } = await getRequestTenantContext();
   return (
     <div className="flex min-h-[100dvh] items-center justify-center bg-canvas px-4 text-center">
       <div className="app-panel w-full max-w-md p-8 sm:p-10">
@@ -15,7 +16,7 @@ export default function NotFound() {
           Page not found
         </h1>
         <p className="mt-3 text-sm leading-relaxed text-text-muted">
-          The requested {BRAND_NAME} workspace does not exist or is no longer available.
+          The requested {brand.name} workspace does not exist or is no longer available.
         </p>
         <div className="mx-auto mt-8 w-full max-w-xs">
           <Link href="/">

@@ -3,8 +3,8 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { logout } from "@/lib/auth";
-import { BRAND_NAME } from "@/lib/brand";
 import Icon from "@/components/Icon";
+import { useVenueBrand } from "@/components/VenueBrandProvider";
 
 const contextLabels: Record<string, string> = {
   "/admin": "Admin",
@@ -16,6 +16,7 @@ const contextLabels: Record<string, string> = {
 export default function AdminHeader() {
   const pathname = usePathname();
   const contextLabel = contextLabels[pathname];
+  const { brand } = useVenueBrand();
 
   return (
     <header className="fixed inset-x-0 top-0 z-50 border-b border-border-default bg-canvas">
@@ -23,14 +24,14 @@ export default function AdminHeader() {
         <Link
           href="/"
           className="pressable flex min-w-0 items-center gap-3 rounded-control focus-visible:outline-none"
-          aria-label={`${BRAND_NAME} Home`}
+          aria-label={`${brand.name} Home`}
         >
           <span className="grid h-8 w-8 shrink-0 place-items-center border border-border-strong bg-surface font-mono text-sm font-semibold text-text-heading">
-            A
+            {brand.name.charAt(0).toUpperCase()}
           </span>
           <span className="min-w-0">
             <span className="block truncate text-sm font-semibold text-text-heading">
-              {BRAND_NAME}
+              {brand.name}
             </span>
             {contextLabel && (
               <span className="block truncate text-xs text-text-muted">

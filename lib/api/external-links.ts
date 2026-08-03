@@ -6,6 +6,7 @@ import { externalDjLinks, venues, guests } from "../db/schema";
 import { type ExternalDJLink, type Guest, type Venue, type ApiResponse } from "./types";
 import { requireRole, type SessionUser } from "../auth/server";
 import { getDb } from "../db/client";
+import { getRequestTenantContext, getVenueDeliveryContext } from "../tenant/server";
 
 type Db = ReturnType<typeof getDb>;
 
@@ -41,6 +42,17 @@ function isExpired(expiresAt?: string | null): boolean {
   return !!expiresAt && new Date(expiresAt).getTime() <= Date.now();
 }
 
+async function addGuestUrls<T extends typeof externalDjLinks.$inferSelect>(
+  venueId: string,
+  links: T[],
+): Promise<Array<T & { guestUrl: string }>> {
+  const { baseUrl } = await getVenueDeliveryContext(venueId);
+  return links.map((link) => ({
+    ...link,
+    guestUrl: `${baseUrl}/guest?token=${encodeURIComponent(link.token)}`,
+  }));
+}
+
 export async function fetchExternalLinks(venueId: string): Promise<ApiResponse<ExternalDJLink[]>> {
   try {
     const user = await requireRole(["super_admin", "venue_admin", "door_staff", "staff"]);
@@ -49,7 +61,7 @@ export async function fetchExternalLinks(venueId: string): Promise<ApiResponse<E
     const result = await db.select().from(externalDjLinks)
       .where(eq(externalDjLinks.venueId, effectiveVenueId))
       .orderBy(desc(externalDjLinks.createdAt), desc(externalDjLinks.date));
-    return { data: result, error: null };
+    return { data: await addGuestUrls(effectiveVenueId, result), error: null };
   } catch (error: unknown) {
     console.error("Failed to fetch external links:", error);
     return { data: null, error: "Unable to load external links right now." };
@@ -64,7 +76,7 @@ export async function fetchExternalLinksByDate(venueId: string, date: string): P
     const result = await db.select().from(externalDjLinks)
       .where(and(eq(externalDjLinks.venueId, effectiveVenueId), eq(externalDjLinks.date, date)))
       .orderBy(desc(externalDjLinks.createdAt));
-    return { data: result, error: null };
+    return { data: await addGuestUrls(effectiveVenueId, result), error: null };
   } catch (error: unknown) {
     console.error("Failed to fetch external links by date:", error);
     return { data: null, error: "Unable to load external links right now." };
@@ -86,7 +98,7 @@ export async function fetchRecentExternalLinks(
       .where(eq(externalDjLinks.venueId, effectiveVenueId))
       .orderBy(desc(externalDjLinks.createdAt), desc(externalDjLinks.date))
       .limit(normalizedLimit);
-    return { data: result, error: null };
+    return { data: await addGuestUrls(effectiveVenueId, result), error: null };
   } catch (error: unknown) {
     console.error("Failed to fetch recent external links:", error);
     return { data: null, error: "Unable to load recent external links right now." };
@@ -124,7 +136,10 @@ export async function createExternalLink(link: {
       createdAt,
     });
     const result = await db.select().from(externalDjLinks).where(eq(externalDjLinks.id, id));
-    return { data: result[0] ? { ...result[0] } : null, error: null };
+    const withGuestUrl = result[0]
+      ? (await addGuestUrls(effectiveVenueId, [result[0]]))[0]
+      : null;
+    return { data: withGuestUrl, error: null };
   } catch (error: unknown) {
     console.error("Failed to create external link:", error);
     return { data: null, error: "Unable to create external link right now." };
@@ -182,6 +197,11 @@ export async function validateExternalToken(token: string): Promise<ApiResponse<
       return { data: null, error: "Link is invalid, expired, or inactive." };
     }
 
+    const tenant = await getRequestTenantContext();
+    if (!tenant.resolved || (tenant.scope === "venue" && tenant.venueId !== link.venueId)) {
+      return { data: null, error: "Link is invalid, expired, or inactive." };
+    }
+
     const venueResult = await db.select().from(venues).where(eq(venues.id, link.venueId));
     const venue = venueResult[0] as Venue;
 
@@ -224,6 +244,11 @@ export async function createGuestViaExternalLink(params: {
     const link = linkResult[0];
 
     if (!link || !link.active || isExpired(link.expiresAt)) {
+      return { data: null, error: "Link is invalid, expired, or inactive." };
+    }
+
+    const tenant = await getRequestTenantContext();
+    if (!tenant.resolved || (tenant.scope === "venue" && tenant.venueId !== link.venueId)) {
       return { data: null, error: "Link is invalid, expired, or inactive." };
     }
 
@@ -282,6 +307,11 @@ export async function deleteGuestViaExternalLink(params: {
     const link = linkResult[0];
 
     if (!link || !link.active || isExpired(link.expiresAt)) {
+      return { error: "Link is invalid, expired, or inactive." };
+    }
+
+    const tenant = await getRequestTenantContext();
+    if (!tenant.resolved || (tenant.scope === "venue" && tenant.venueId !== link.venueId)) {
       return { error: "Link is invalid, expired, or inactive." };
     }
 

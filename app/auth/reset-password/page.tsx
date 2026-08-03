@@ -3,7 +3,7 @@
 import { Suspense, useState, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Footer from "@/components/Footer";
-import { BRAND_NAME } from "@/lib/brand";
+import { useVenueBrand } from "@/components/VenueBrandProvider";
 import Spinner from "@/components/Spinner";
 import Alert from "@/components/Alert";
 import PasswordInput from "@/components/PasswordInput";
@@ -43,6 +43,7 @@ function StepIndicator({ currentStep }: { currentStep: 0 | 1 | 2 | 3 }) {
 }
 
 function ResetPasswordContent() {
+  const { brand } = useVenueBrand();
   const router = useRouter();
   const searchParams = useSearchParams();
   const token = searchParams.get("token");
@@ -153,10 +154,10 @@ function ResetPasswordContent() {
         <div className="app-panel p-6 sm:p-8 lg:p-10">
           <div className="mb-8 text-center">
             <div className="mx-auto mb-5 grid h-11 w-11 place-items-center border border-border-strong bg-surface font-mono text-sm font-semibold text-text-heading">
-              A
+              {brand.name.charAt(0).toUpperCase()}
             </div>
             <h1 className="mb-2 text-2xl font-semibold tracking-[-0.03em] text-text-heading sm:text-3xl">
-              {BRAND_NAME}
+              {brand.name}
             </h1>
             <p className="text-sm text-text-muted">
               Reset your password securely

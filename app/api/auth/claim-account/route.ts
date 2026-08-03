@@ -7,6 +7,7 @@ import {
   consumeRateLimit,
   getRequestIp,
 } from "@/lib/auth/rate-limit";
+import { getTenantContextForRequest } from "@/lib/tenant/server";
 
 /**
  * 이관 사용자 전용 1회성 비밀번호 설정.
@@ -59,6 +60,12 @@ export async function POST(request: Request) {
 
     const passwordHash = await hashPassword(newPassword);
     const nowIso = new Date().toISOString();
+    const tenant = await getTenantContextForRequest(request);
+    const expectedVenueId = tenant.scope === "venue" ? tenant.venueId : null;
+
+    if (!tenant.resolved) {
+      return NextResponse.json({ error: "Unknown venue." }, { status: 404 });
+    }
 
     const [userResult] = await env.DB.batch<{ id: string } | { user_id: string }>([
       env.DB.prepare(
@@ -71,8 +78,9 @@ export async function POST(request: Request) {
            AND active = 1
            AND migration_status = 'pending_reset'
            AND password_set_at IS NULL
+           AND (? IS NULL OR venue_id = ?)
          RETURNING id`,
-      ).bind(passwordHash, nowIso, normalizedEmail),
+      ).bind(passwordHash, nowIso, normalizedEmail, expectedVenueId, expectedVenueId),
       env.DB.prepare(
         `UPDATE password_reset_tokens
          SET used = 1

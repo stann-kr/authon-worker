@@ -77,6 +77,11 @@ for (const venue of tables.venues || []) {
     name: venue.name,
     type: venue.type || 'club',
     address: venue.address || null,
+    description: venue.description || null,
+    brand_name: venue.brand_name || venue.name || null,
+    brand_tagline: venue.brand_tagline || null,
+    brand_description: venue.brand_description || null,
+    brand_footer: venue.brand_footer || null,
     active: boolInt(venue.active, true),
   }));
 }

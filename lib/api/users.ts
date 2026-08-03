@@ -7,10 +7,10 @@ import { type User, type ApiResponse } from "./types";
 import { hashPassword } from "../auth/password";
 import { requireAuth, requireRole, type Role } from "../auth/server";
 import { getDb } from "../db/client";
-import { sendEmail } from "./email";
-import { isEmailConfigured } from "./email";
+import { escapeHtml, isEmailConfigured, sendEmail } from "./email";
 import { generateResetToken, hashResetToken } from "../auth/token";
 import { getPasswordPolicyError } from "../auth/password-policy";
+import { getVenueDeliveryContext } from "../tenant/server";
 
 export async function fetchUsersByVenue(venueId?: string | null): Promise<ApiResponse<User[]>> {
   try {
@@ -189,20 +189,22 @@ export async function resendInvitationViaEdge(userId: string): Promise<{ error: 
       createdAt: new Date().toISOString(),
     });
 
-    const appUrl = env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
-    const resetLink = `${appUrl}/auth/reset-password?token=${token}`;
+    const delivery = await getVenueDeliveryContext(user.venueId, env.NEXT_PUBLIC_APP_URL);
+    const resetLink = `${delivery.baseUrl}/auth/reset-password?token=${token}`;
+    const safeName = escapeHtml(user.name);
+    const safeResetLink = escapeHtml(resetLink);
 
     try {
       await sendEmail({
         to: user.email,
-        subject: "[Authon] 계정 초기 비밀번호 설정 안내",
+        subject: `[${delivery.brand.name}] 계정 초기 비밀번호 설정 안내`,
         body: `
         <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
           <h2>계정 초기 비밀번호 설정 안내</h2>
-          <p>안녕하세요, ${user.name}님.</p>
+          <p>안녕하세요, ${safeName}님.</p>
           <p>관리자에 의해 귀하의 계정이 생성되었습니다. 아래 링크를 클릭하여 비밀번호를 설정하고 로그인을 완료해주세요.</p>
           <div style="margin: 30px 0;">
-            <a href="${resetLink}" style="background-color: #000; color: #fff; padding: 12px 24px; text-decoration: none; border-radius: 4px;">비밀번호 설정하기</a>
+            <a href="${safeResetLink}" style="background-color: #000; color: #fff; padding: 12px 24px; text-decoration: none; border-radius: 4px;">비밀번호 설정하기</a>
           </div>
           <p>이 링크는 7일 동안 유효합니다.</p>
           <p style="color: #666; font-size: 12px; margin-top: 40px;">본 메일은 발송 전용입니다.</p>

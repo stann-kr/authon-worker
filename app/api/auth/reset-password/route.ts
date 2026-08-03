@@ -3,11 +3,12 @@ import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { drizzle } from "drizzle-orm/d1";
 import { eq } from "drizzle-orm";
 import { users, passwordResetTokens } from "@/lib/db/schema";
-import { isEmailConfigured, sendEmail } from "@/lib/api/email";
+import { escapeHtml, isEmailConfigured, sendEmail } from "@/lib/api/email";
 import { hashPassword } from "@/lib/auth/password";
 import { consumeRateLimit, getRequestIp } from "@/lib/auth/rate-limit";
 import { getPasswordPolicyError } from "@/lib/auth/password-policy";
 import { generateResetToken, hashResetToken } from "@/lib/auth/token";
+import { getTenantContextForRequest, getVenueDeliveryContext } from "@/lib/tenant/server";
 
 /**
  * 비밀번호 재설정 요청 (POST) 및 재설정 실행 (PUT)
@@ -56,9 +57,15 @@ export async function POST(request: Request) {
     const db = drizzle(env.DB);
     const result = await db.select().from(users).where(eq(users.email, normalizedEmail)).limit(1);
     const user = result[0];
+    const tenant = await getTenantContextForRequest(request);
 
     // 이메일 enumeration 방지: 미가입 이메일도 동일 응답
-    if (!user || !user.active) {
+    if (
+      !tenant.resolved ||
+      !user ||
+      !user.active ||
+      (tenant.scope === "venue" && user.role !== "super_admin" && user.venueId !== tenant.venueId)
+    ) {
       return NextResponse.json({ ok: true, message: "재설정 메일이 발송되었습니다." });
     }
 
@@ -77,20 +84,22 @@ export async function POST(request: Request) {
       createdAt: new Date().toISOString(),
     });
 
-    const appUrl = env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
-    const resetLink = `${appUrl}/auth/reset-password?token=${token}`;
+    const delivery = await getVenueDeliveryContext(user.venueId, env.NEXT_PUBLIC_APP_URL);
+    const resetLink = `${delivery.baseUrl}/auth/reset-password?token=${token}`;
+    const safeName = escapeHtml(user.name);
+    const safeResetLink = escapeHtml(resetLink);
 
     try {
       await sendEmail({
         to: normalizedEmail,
-        subject: "[Authon] 비밀번호 재설정 안내",
+        subject: `[${delivery.brand.name}] 비밀번호 재설정 안내`,
         body: `
         <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
           <h2>비밀번호 재설정 안내</h2>
-          <p>안녕하세요, ${user.name}님.</p>
+          <p>안녕하세요, ${safeName}님.</p>
           <p>비밀번호 재설정을 위해 아래 링크를 클릭해주세요. 이 링크는 1시간 동안 유효합니다.</p>
           <div style="margin: 30px 0;">
-            <a href="${resetLink}" style="background-color: #000; color: #fff; padding: 12px 24px; text-decoration: none; border-radius: 4px;">비밀번호 재설정하기</a>
+            <a href="${safeResetLink}" style="background-color: #000; color: #fff; padding: 12px 24px; text-decoration: none; border-radius: 4px;">비밀번호 재설정하기</a>
           </div>
           <p>만약 본인이 요청하지 않았다면 이 메일을 무시하셔도 됩니다.</p>
           <p style="color: #666; font-size: 12px; margin-top: 40px;">본 메일은 발신 전용입니다.</p>
@@ -128,6 +137,12 @@ export async function PUT(request: Request) {
     const passwordHash = await hashPassword(newPassword);
     const nowIso = new Date().toISOString();
     const tokenHash = await hashResetToken(token);
+    const tenant = await getTenantContextForRequest(request);
+    const expectedVenueId = tenant.scope === "venue" ? tenant.venueId : null;
+
+    if (!tenant.resolved) {
+      return NextResponse.json({ error: "Unknown venue." }, { status: 404 });
+    }
 
     // Execute as a D1 batch (transactional) and make the success path depend on
     // both statements succeeding in sequence:
@@ -149,9 +164,10 @@ export async function PUT(request: Request) {
              AND prt.used = 0
              AND prt.expires_at > ?
              AND u.active = 1
+             AND (? IS NULL OR u.venue_id = ?)
          )
          RETURNING id`
-      ).bind(passwordHash, nowIso, tokenHash, nowIso),
+      ).bind(passwordHash, nowIso, tokenHash, nowIso, expectedVenueId, expectedVenueId),
       env.DB.prepare(
         `UPDATE password_reset_tokens
          SET used = 1

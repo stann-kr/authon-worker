@@ -3,8 +3,9 @@ import type { NextRequest } from "next/server";
 import { jwtVerify } from "jose";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { drizzle } from "drizzle-orm/d1";
-import { eq } from "drizzle-orm";
-import { users } from "@/lib/db/schema";
+import { and, eq } from "drizzle-orm";
+import { users, venueDomains, venues } from "@/lib/db/schema";
+import { isPlatformHostname, normalizeHostname } from "@/lib/tenant/host";
 
 function parseStoredSession(raw: string): { userId?: string; sessionVersion?: number } | null {
   try {
@@ -18,12 +19,47 @@ function parseStoredSession(raw: string): { userId?: string; sessionVersion?: nu
 export async function middleware(request: NextRequest) {
   const { pathname, searchParams } = request.nextUrl;
 
+  if (
+    pathname.startsWith("/_next/") ||
+    pathname.startsWith("/favicon.ico")
+  ) {
+    return NextResponse.next();
+  }
+
+  const { env } = getCloudflareContext();
+  const db = drizzle(env.DB);
+  const hostname = normalizeHostname(request.headers.get("host"));
+  let requestVenueId: string | null = null;
+
+  if (!hostname || !isPlatformHostname(hostname)) {
+    const [domain] = hostname
+      ? await db
+          .select({
+            scope: venueDomains.scope,
+            venueId: venueDomains.venueId,
+            venueActive: venues.active,
+          })
+          .from(venueDomains)
+          .leftJoin(venues, eq(venueDomains.venueId, venues.id))
+          .where(
+            and(
+              eq(venueDomains.hostname, hostname),
+              eq(venueDomains.active, true),
+            ),
+          )
+          .limit(1)
+      : [];
+
+    if (!domain || (domain.scope === "venue" && (!domain.venueId || !domain.venueActive))) {
+      return new NextResponse("Unknown venue", { status: 404 });
+    }
+    if (domain.scope === "venue") requestVenueId = domain.venueId;
+  }
+
   // ─── 공개 경로 (인증 불필요) ────────────────────────────────
   if (
     pathname.startsWith("/api/auth/") ||
     pathname.startsWith("/api/internal/") ||
-    pathname.startsWith("/_next/") ||
-    pathname.startsWith("/favicon.ico") ||
     pathname === "/auth/login" ||
     pathname === "/auth/reset-password" ||
     pathname === "/auth/register"
@@ -43,8 +79,6 @@ export async function middleware(request: NextRequest) {
   if (!token || !sessionId) {
     return NextResponse.redirect(new URL("/auth/login", request.url));
   }
-
-  const { env } = getCloudflareContext();
 
   if (!env.JWT_SECRET) {
     console.error("JWT_SECRET is not configured");
@@ -70,14 +104,22 @@ export async function middleware(request: NextRequest) {
     }
 
     // ─── DB 사용자 상태/현재 role 확인 ────────────────────────
-    const db = drizzle(env.DB);
     const userRows = await db
-      .select({ role: users.role, active: users.active, sessionVersion: users.sessionVersion })
+      .select({
+        role: users.role,
+        venueId: users.venueId,
+        active: users.active,
+        sessionVersion: users.sessionVersion,
+      })
       .from(users)
       .where(eq(users.id, userId))
       .limit(1);
     const user = userRows[0];
     if (!user?.active) {
+      return NextResponse.redirect(new URL("/auth/login", request.url));
+    }
+
+    if (requestVenueId && user.role !== "super_admin" && user.venueId !== requestVenueId) {
       return NextResponse.redirect(new URL("/auth/login", request.url));
     }
 

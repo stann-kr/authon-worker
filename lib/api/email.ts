@@ -27,6 +27,16 @@ export function isEmailConfigured(env: EmailEnvironment): boolean {
   );
 }
 
+export function escapeHtml(value: string): string {
+  return value.replace(/[&<>"']/g, (character) => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    '"': "&quot;",
+    "'": "&#039;",
+  })[character] || character);
+}
+
 /**
  * 이메일 발송
  * @param params - 발송 정보 (to, subject, body)

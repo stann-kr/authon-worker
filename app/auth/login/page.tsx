@@ -11,11 +11,12 @@ import {
   getPasswordPolicyError,
   PASSWORD_POLICY_HINT,
 } from "@/lib/auth/password-policy";
-import { BRAND_NAME } from "@/lib/brand";
+import { useVenueBrand } from "@/components/VenueBrandProvider";
 
 type LoginMode = "login" | "setup";
 
 export default function LoginPage() {
+  const { brand } = useVenueBrand();
   const [formData, setFormData] = useState({
     email: "",
     password: "",
@@ -120,9 +121,9 @@ export default function LoginPage() {
         <div className="app-panel p-6 sm:p-8 lg:p-10">
           <div className="mb-8 text-center sm:mb-9">
             <div className="mx-auto mb-5 grid h-11 w-11 place-items-center border border-border-strong bg-surface font-mono text-sm font-semibold text-text-heading">
-              A
+              {brand.name.charAt(0).toUpperCase()}
             </div>
-            <h1 className="mb-2 text-2xl font-semibold tracking-[-0.03em] text-text-heading sm:text-3xl">{BRAND_NAME}</h1>
+            <h1 className="mb-2 text-2xl font-semibold tracking-[-0.03em] text-text-heading sm:text-3xl">{brand.name}</h1>
             <p className="text-sm text-text-muted">
               {mode === "login" ? "Sign in to your workspace" : "Complete your account setup"}
             </p>

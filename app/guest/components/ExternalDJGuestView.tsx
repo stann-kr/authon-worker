@@ -9,7 +9,7 @@ import Spinner from "@/components/Spinner";
 import EmptyState from "@/components/EmptyState";
 import Alert from "@/components/Alert";
 import Button from "@/components/Button";
-import { BRAND_NAME } from "@/lib/brand";
+import { useVenueBrand } from "@/components/VenueBrandProvider";
 import GuestListCard from "@/components/GuestListCard";
 import GuestSearchInput from "@/components/GuestSearchInput";
 import Icon from "@/components/Icon";
@@ -26,6 +26,7 @@ interface ExternalDJGuestViewProps {
 }
 
 export default function ExternalDJGuestView({ token }: ExternalDJGuestViewProps) {
+  const { brand } = useVenueBrand();
   const [linkInfo, setLinkInfo] = useState<ExternalDJLink | null>(null);
   const [venueInfo, setVenueInfo] = useState<Venue | null>(null);
   const [isValidating, setIsValidating] = useState(true);
@@ -122,9 +123,9 @@ export default function ExternalDJGuestView({ token }: ExternalDJGuestViewProps)
     <div className="fixed inset-x-0 top-0 z-50 border-b border-border-default bg-canvas">
       <div className="mx-auto flex h-16 w-full max-w-[1440px] items-center justify-between px-4 sm:px-6 lg:px-10">
         <div className="flex items-center gap-3">
-          <div className="grid h-8 w-8 place-items-center border border-border-strong bg-surface font-mono text-xs font-semibold text-text-heading">A</div>
+          <div className="grid h-8 w-8 place-items-center border border-border-strong bg-surface font-mono text-xs font-semibold text-text-heading">{brand.name.charAt(0).toUpperCase()}</div>
           <span className="text-sm font-semibold text-text-heading">
-            {BRAND_NAME}
+            {brand.name}
           </span>
         </div>
         <span className="operational-label">

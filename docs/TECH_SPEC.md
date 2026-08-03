@@ -6,6 +6,7 @@
 
 ```text
 Client
+  -> 요청 Host 기반 Venue Context
   -> Next.js App Router / Server Actions
   -> Cloudflare Workers via OpenNext
   -> Cloudflare D1 + KV
@@ -18,6 +19,8 @@ Client
 - 서버 변경 작업은 domain API layer와 Server Actions를 통해 수행한다.
 - 인증은 JWT cookie와 KV session을 함께 확인한다.
 - 권한은 role과 venue scope를 함께 확인한다.
+- 하나의 Worker가 여러 도메인을 받고, D1의 도메인 매핑으로 베뉴 브랜드와 대표 URL을 요청 단위로 결정한다.
+- 요청 도메인은 표시 컨텍스트이며 권한 근거로 단독 사용하지 않고 계정·링크의 venue scope와 교차 검증한다.
 - 공개 링크 기반 게스트 등록은 계정 로그인 흐름과 분리한다.
 
 ## 기술 스택
@@ -39,6 +42,7 @@ Client
 | 도메인 | 역할 |
 |---|---|
 | Venue | 베뉴 단위 운영 경계 |
+| Venue Domain | 요청 host와 베뉴 브랜드·대표 URL의 연결 |
 | User | 운영자, 스태프, DJ 계정과 role/scope |
 | Guest | 날짜별 게스트 등록과 상태 관리 |
 | External Link | 외부 DJ가 계정 없이 게스트를 등록하는 공개 링크 |
@@ -86,6 +90,7 @@ Client
 | 테이블 | 설명 |
 |---|---|
 | `venues` | 베뉴 정보와 활성 상태 |
+| `venue_domains` | host, platform/venue scope, 베뉴별 대표 도메인 |
 | `users` | 계정, role, venue scope, session/migration 상태 |
 | `external_dj_links` | 외부 DJ 등록 링크, 정원/사용량, 생성 시각 |
 | `guests` | 게스트 등록 정보와 체크인 전 상태 |
@@ -98,6 +103,7 @@ Client
 |---|---|
 | 인증/세션 | middleware, auth route, server auth helper, KV session invalidation |
 | 권한/role | route guard, Server Action guard, venue scoping |
+| 도메인/브랜드 | host resolver, venue domain mapping, metadata, email/link canonical URL |
 | 게스트 등록 | external link flow, guest limit, date/status 계산 |
 | D1 schema | Drizzle schema, migration files, affected queries |
 | 배포 runtime | OpenNext compatibility, Worker build result |

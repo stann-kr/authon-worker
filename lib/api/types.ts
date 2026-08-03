@@ -9,6 +9,11 @@ export interface Venue {
   type: "club" | "bar" | "lounge" | "festival" | "private";
   address?: string | null;
   description?: string | null;
+  brandName?: string | null;
+  brandTagline?: string | null;
+  brandDescription?: string | null;
+  brandFooter?: string | null;
+  primaryDomain?: string | null;
   active: boolean;
 }
 
@@ -50,4 +55,5 @@ export interface ExternalDJLink {
   expiresAt?: string | null;
   createdBy?: string | null;
   createdAt?: string | null;
+  guestUrl?: string | null;
 }

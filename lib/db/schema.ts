@@ -1,12 +1,33 @@
-import { sqliteTable, text, integer, index } from 'drizzle-orm/sqlite-core';
+import { sql } from 'drizzle-orm';
+import { sqliteTable, text, integer, index, uniqueIndex } from 'drizzle-orm/sqlite-core';
 
 export const venues = sqliteTable('venues', {
   id: text('id').primaryKey(),
   name: text('name').notNull(),
   type: text('type').notNull(), // 'club', 'bar', 'lounge', 'festival', 'private'
   address: text('address'),
+  description: text('description'),
+  brandName: text('brand_name'),
+  brandTagline: text('brand_tagline'),
+  brandDescription: text('brand_description'),
+  brandFooter: text('brand_footer'),
   active: integer('active', { mode: 'boolean' }).notNull().default(true),
 });
+
+export const venueDomains = sqliteTable('venue_domains', {
+  id: text('id').primaryKey(),
+  hostname: text('hostname').notNull().unique(),
+  venueId: text('venue_id').references(() => venues.id),
+  scope: text('scope').notNull().default('venue'),
+  isPrimary: integer('is_primary', { mode: 'boolean' }).notNull().default(false),
+  active: integer('active', { mode: 'boolean' }).notNull().default(true),
+  createdAt: text('created_at').notNull(),
+}, (t) => [
+  index('idx_venue_domains_venue').on(t.venueId, t.active),
+  uniqueIndex('idx_venue_domains_primary').on(t.venueId).where(
+    sql`${t.isPrimary} = 1 AND ${t.active} = 1 AND ${t.venueId} IS NOT NULL`,
+  ),
+]);
 
 export const users = sqliteTable('users', {
   id: text('id').primaryKey(),

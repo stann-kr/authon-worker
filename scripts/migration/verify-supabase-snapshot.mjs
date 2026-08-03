@@ -4,6 +4,7 @@ import { readFile } from 'node:fs/promises';
 const snapshotPath = process.argv[2] || 'migration/supabase-snapshot.json';
 const snapshot = JSON.parse(await readFile(snapshotPath, 'utf8'));
 const tables = snapshot.tables || {};
+const allowReconciledGuestCounts = process.env.ALLOW_RECONCILED_GUEST_COUNTS === '1';
 
 function ids(rows) {
   return new Set((rows || []).map((row) => row.id).filter(Boolean));
@@ -75,6 +76,10 @@ const hasFailures = Object.values(findings.missingVenueRefs).some((arr) => arr.l
   || Object.values(findings.missingUserRefs).some((arr) => arr.length > 0)
   || Object.values(findings.missingExternalLinkRefs).some((arr) => arr.length > 0)
   || Object.values(findings.invalidTimestamps).some((arr) => arr.length > 0)
-  || findings.usedGuestsDrift.length > 0;
+  || (!allowReconciledGuestCounts && findings.usedGuestsDrift.length > 0);
+
+if (allowReconciledGuestCounts && findings.usedGuestsDrift.length > 0) {
+  console.log(`Cutover generator will reconcile ${findings.usedGuestsDrift.length} used_guests counters from active guest rows.`);
+}
 
 if (hasFailures) process.exit(1);

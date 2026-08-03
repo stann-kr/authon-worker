@@ -4,6 +4,7 @@ import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { eq } from "drizzle-orm";
 import { users } from "../db/schema";
 import { getDb } from "../db/client";
+import { getRequestTenantContext } from "../tenant/server";
 
 export type Role = "super_admin" | "venue_admin" | "door_staff" | "staff" | "dj";
 
@@ -87,12 +88,24 @@ export async function requireAuth(): Promise<SessionUser> {
     throw new Error("Session expired");
   }
 
-  return {
+  const sessionUser: SessionUser = {
     id: user.id,
     email: user.email,
     role: user.role,
     venueId: user.venueId ?? null,
   };
+
+  const tenant = await getRequestTenantContext();
+  if (!tenant.resolved) throw new Error("Unknown venue");
+  if (
+    tenant.scope === "venue" &&
+    sessionUser.role !== "super_admin" &&
+    sessionUser.venueId !== tenant.venueId
+  ) {
+    throw new Error("Forbidden");
+  }
+
+  return sessionUser;
 }
 
 /** requireAuth 후 role 검증. 권한 없으면 Error throw. */

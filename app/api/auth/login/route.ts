@@ -6,6 +6,7 @@ import { SignJWT } from "jose";
 import { users } from "@/lib/db/schema";
 import { verifyPassword, hashPassword, needsRehash } from "@/lib/auth/password";
 import { clearRateLimit, consumeRateLimit, getRequestIp } from "@/lib/auth/rate-limit";
+import { getTenantContextForRequest } from "@/lib/tenant/server";
 
 export async function POST(request: Request) {
   try {
@@ -46,13 +47,19 @@ export async function POST(request: Request) {
     const db = drizzle(env.DB);
     const result = await db.select().from(users).where(eq(users.email, normalizedEmail)).limit(1);
     const user = result[0];
+    const tenant = await getTenantContextForRequest(request);
 
     const invalidCredentialsResponse = () => NextResponse.json(
       { error: "이메일 또는 비밀번호가 올바르지 않습니다." },
       { status: 401 }
     );
 
-    if (!user || !user.active) {
+    if (
+      !tenant.resolved ||
+      !user ||
+      !user.active ||
+      (tenant.scope === "venue" && user.role !== "super_admin" && user.venueId !== tenant.venueId)
+    ) {
       return invalidCredentialsResponse();
     }
 

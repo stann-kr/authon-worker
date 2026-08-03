@@ -168,7 +168,8 @@ export default function LinkManagement({
     };
   }, [pendingDeleteLink]);
 
-  const getGuestPageUrl = (token: string) => {
+  const getGuestPageUrl = (token: string, guestUrl?: string | null) => {
+    if (guestUrl) return guestUrl;
     if (typeof window === "undefined") return "";
     return `${window.location.origin}/guest?token=${token}`;
   };
@@ -588,13 +589,13 @@ export default function LinkManagement({
                     GUEST URL
                   </div>
                   <div className="font-mono text-sm tracking-wider text-text-heading break-all">
-                    {getGuestPageUrl(generatedLink.token)}
+                    {getGuestPageUrl(generatedLink.token, generatedLink.guestUrl)}
                   </div>
                 </div>
 
                 <button
                   onClick={() =>
-                    copyToClipboard(getGuestPageUrl(generatedLink.token))
+                    copyToClipboard(getGuestPageUrl(generatedLink.token, generatedLink.guestUrl))
                   }
                   disabled={isCopying}
                   className="w-full bg-action-primary py-3 text-xs font-semibold text-action-text transition-colors hover:bg-action-hover disabled:opacity-50"
@@ -700,7 +701,7 @@ export default function LinkManagement({
                   ) : (
                     sortedLinks.map((link, index) => {
                       const status = deriveLinkStatus(link, now);
-                      const guestPageUrl = getGuestPageUrl(link.token);
+                      const guestPageUrl = getGuestPageUrl(link.token, link.guestUrl);
                       const isLinkVisible = visibleLinkId === link.id;
                       const usageTone = status.full
                         ? "bg-status-danger"

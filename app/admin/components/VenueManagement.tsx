@@ -33,6 +33,9 @@ export default function VenueManagement() {
     type: "club" as Venue["type"],
     address: "",
     description: "",
+    brandName: "",
+    brandTagline: "",
+    primaryDomain: "",
   });
   const [formError, setFormError] = useState("");
   const [formSuccess, setFormSuccess] = useState("");
@@ -72,13 +75,24 @@ export default function VenueManagement() {
       type: formData.type,
       address: formData.address.trim() || undefined,
       description: formData.description.trim() || undefined,
+      brandName: formData.brandName.trim() || undefined,
+      brandTagline: formData.brandTagline.trim() || undefined,
+      primaryDomain: formData.primaryDomain.trim() || undefined,
     });
 
     if (error) {
       setFormError(error || "Failed to create venue.");
     } else if (data) {
       setFormSuccess(`Venue "${data.name}" has been created.`);
-      setFormData({ name: "", type: "club", address: "", description: "" });
+      setFormData({
+        name: "",
+        type: "club",
+        address: "",
+        description: "",
+        brandName: "",
+        brandTagline: "",
+        primaryDomain: "",
+      });
       loadVenues();
     }
     setIsSubmitting(false);
@@ -271,6 +285,51 @@ export default function VenueManagement() {
                   />
                 </div>
 
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div>
+                    <label htmlFor="venue-create-brand-name" className="app-label">
+                      DISPLAY NAME <span className="text-text-dim">(OPTIONAL)</span>
+                    </label>
+                    <input
+                      id="venue-create-brand-name"
+                      type="text"
+                      value={formData.brandName}
+                      onChange={(e) => setFormData({ ...formData, brandName: e.target.value })}
+                      className="app-field"
+                      placeholder="Defaults to venue name"
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="venue-create-brand-tagline" className="app-label">
+                      TAGLINE <span className="text-text-dim">(OPTIONAL)</span>
+                    </label>
+                    <input
+                      id="venue-create-brand-tagline"
+                      type="text"
+                      value={formData.brandTagline}
+                      onChange={(e) => setFormData({ ...formData, brandTagline: e.target.value })}
+                      className="app-field"
+                      placeholder="Guest Management System"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label htmlFor="venue-create-domain" className="app-label">
+                    PRIMARY DOMAIN <span className="text-text-dim">(OPTIONAL)</span>
+                  </label>
+                  <input
+                    id="venue-create-domain"
+                    type="text"
+                    inputMode="url"
+                    value={formData.primaryDomain}
+                    onChange={(e) => setFormData({ ...formData, primaryDomain: e.target.value })}
+                    className="app-field"
+                    placeholder="guest.example.com"
+                  />
+                  <p className="app-helper">Enter the hostname only, without https:// or a path.</p>
+                </div>
+
                 {formError && <Alert type="error" message={formError} />}
 
                 {formSuccess && <Alert type="success" message={formSuccess} />}
@@ -347,7 +406,15 @@ function VenueCard({
   onToggleActive: (venue: Venue) => void;
   onSave: (
     id: string,
-    updates: Partial<Pick<Venue, "name" | "type" | "address" | "description">>,
+    updates: Partial<Pick<Venue,
+      | "name"
+      | "type"
+      | "address"
+      | "description"
+      | "brandName"
+      | "brandTagline"
+      | "primaryDomain"
+    >>,
   ) => Promise<string | null>;
 }) {
   const [isEditing, setIsEditing] = useState(false);
@@ -356,6 +423,9 @@ function VenueCard({
     type: venue.type,
     address: venue.address || "",
     description: venue.description || "",
+    brandName: venue.brandName || "",
+    brandTagline: venue.brandTagline || "",
+    primaryDomain: venue.primaryDomain || "",
   });
 
   const handleSave = async () => {
@@ -364,6 +434,9 @@ function VenueCard({
       type: editData.type,
       address: editData.address || undefined,
       description: editData.description || undefined,
+      brandName: editData.brandName,
+      brandTagline: editData.brandTagline,
+      primaryDomain: editData.primaryDomain,
     });
     if (!error) setIsEditing(false);
   };
@@ -404,6 +477,15 @@ function VenueCard({
               {venue.description}
             </p>
           )}
+          <div className="mb-3 border border-border-subtle bg-canvas p-3">
+            <p className="app-label">BRAND / DOMAIN</p>
+            <p className="font-mono text-sm text-text-heading">
+              {venue.brandName || venue.name}
+            </p>
+            <p className="mt-1 break-all font-mono text-xs text-text-muted">
+              {venue.primaryDomain || "No primary domain assigned"}
+            </p>
+          </div>
           <div className="grid grid-cols-2 gap-2 mb-3">
             <div>
               <p className="text-xs text-text-dim mb-1">
@@ -520,6 +602,51 @@ function VenueCard({
             />
           </div>
 
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div>
+              <label htmlFor={`venue-brand-name-${venue.id}`} className="app-label">
+                Display name
+              </label>
+              <input
+                id={`venue-brand-name-${venue.id}`}
+                type="text"
+                value={editData.brandName}
+                onChange={(e) => setEditData({ ...editData, brandName: e.target.value })}
+                className="app-field"
+                placeholder={venue.name}
+              />
+            </div>
+            <div>
+              <label htmlFor={`venue-brand-tagline-${venue.id}`} className="app-label">
+                Tagline
+              </label>
+              <input
+                id={`venue-brand-tagline-${venue.id}`}
+                type="text"
+                value={editData.brandTagline}
+                onChange={(e) => setEditData({ ...editData, brandTagline: e.target.value })}
+                className="app-field"
+                placeholder="Guest Management System"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label htmlFor={`venue-domain-${venue.id}`} className="app-label">
+              Primary domain
+            </label>
+            <input
+              id={`venue-domain-${venue.id}`}
+              type="text"
+              inputMode="url"
+              value={editData.primaryDomain}
+              onChange={(e) => setEditData({ ...editData, primaryDomain: e.target.value })}
+              className="app-field"
+              placeholder="guest.example.com"
+            />
+            <p className="app-helper">Saving an empty value removes the primary domain.</p>
+          </div>
+
           <div className="grid grid-cols-2 gap-2">
             <button
               onClick={handleSave}
@@ -535,6 +662,9 @@ function VenueCard({
                   type: venue.type,
                   address: venue.address || "",
                   description: venue.description || "",
+                  brandName: venue.brandName || "",
+                  brandTagline: venue.brandTagline || "",
+                  primaryDomain: venue.primaryDomain || "",
                 });
               }}
               className="bg-surface-active hover:bg-border-strong text-text-heading text-xs font-medium py-2 sm:py-3 transition-colors"
