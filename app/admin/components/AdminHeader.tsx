@@ -3,6 +3,7 @@
 import { usePathname } from "next/navigation";
 import { logout } from "@/lib/auth";
 import Icon from "@/components/Icon";
+import AppHeader from "@/components/AppHeader";
 import TransitionLink from "@/components/TransitionLink";
 import { useVenueBrand } from "@/components/VenueBrandProvider";
 import { useTranslations } from "next-intl";
@@ -20,29 +21,13 @@ export default function AdminHeader() {
   const { brand } = useVenueBrand();
 
   return (
-    <header className="fixed inset-x-0 top-0 z-[var(--app-z-chrome)] border-b border-border-default bg-canvas">
-      <div className="mx-auto flex h-[var(--app-header-height)] w-full max-w-[1440px] items-center justify-between px-4 sm:px-6 lg:px-10">
-        <TransitionLink
-          href="/"
-          className="pressable flex min-w-0 items-center gap-3 rounded-control focus-visible:outline-none"
-          aria-label={t("brandHome", { brand: brand.name })}
-        >
-          <span className="grid h-8 w-8 shrink-0 place-items-center border border-border-strong bg-surface font-mono text-sm font-semibold text-text-heading">
-            {brand.name.charAt(0).toUpperCase()}
-          </span>
-          <span className="min-w-0">
-            <span className="block truncate text-sm font-semibold text-text-heading">
-              {brand.name}
-            </span>
-            {contextLabel && (
-              <span className="block truncate text-xs text-text-muted">
-                {contextLabel}
-              </span>
-            )}
-          </span>
-        </TransitionLink>
-
-        <div className="flex items-center gap-1.5 sm:gap-2">
+    <AppHeader
+      brandName={brand.name}
+      homeHref="/"
+      homeLabel={t("brandHome", { brand: brand.name })}
+      contextLabel={contextLabel}
+      actions={
+        <>
           {pathname !== "/profile" && (
             <TransitionLink
               href="/profile"
@@ -61,8 +46,8 @@ export default function AdminHeader() {
           >
             <Icon name="logout" size={18} />
           </button>
-        </div>
-      </div>
-    </header>
+        </>
+      }
+    />
   );
 }
