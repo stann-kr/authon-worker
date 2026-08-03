@@ -169,7 +169,7 @@
   "ExternalGuest": {
     "guestAccess": "게스트 등록",
     "invalidTitle": "유효하지 않은 링크",
-    "guestOwner": "게스트 담당자",
+    "guestOwner": "호스트",
     "event": "이벤트",
     "venue": "베뉴",
     "operationalDate": "운영일",

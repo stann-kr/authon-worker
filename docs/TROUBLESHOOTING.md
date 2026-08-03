@@ -2,6 +2,29 @@
 
 재발 가능성이 있는 이슈의 증상-원인-해결-검증 레시피를 정리한다. 항목 제목의 날짜는 최초 확인 시점이며, 최신순으로 정렬한다.
 
+## 2026-08-04
+
+### 외부 게스트 링크 언어 변경 후 로딩이 종료되지 않음
+
+#### 증상
+
+- token이 포함된 외부 게스트 링크에서 언어를 변경하면 콘텐츠 로딩 화면이 계속 유지될 수 있다.
+
+#### 원인
+
+- locale API 호출 후 URL 교체 navigation과 강제 refresh가 연속 실행돼 같은 화면의 RSC 요청이 중복됐다.
+- 번역 함수 변경을 token 검증 effect의 dependency로 사용해 locale 전환만으로 외부 link 검증과 route loading이 다시 시작됐다.
+
+#### 해결
+
+- locale query를 반영하는 URL 교체 navigation만 사용하고 중복 refresh를 제거한다.
+- 외부 link token 검증은 token이 바뀔 때만 실행하고 locale 변경과 분리한다.
+
+#### 검증
+
+- token query가 유지된 상태에서 영어와 한국어를 연속 전환해 각각 한 번의 navigation으로 완료되는지 확인한다.
+- 언어 변경만으로 external token 검증 Server Action이 다시 호출되지 않는지 확인한다.
+
 ## 2026-07-27
 
 ### Next.js proxy 전환 후 Cloudflare Worker 빌드 실패
