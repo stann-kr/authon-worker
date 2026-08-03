@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo } from "react";
-import { useLocalStorage } from "../../../lib/hooks";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import { useLatestRequestGuard, useLocalStorage } from "../../../lib/hooks";
 import InviteUser from "./InviteUser";
 import LegacyUserMigration from "./LegacyUserMigration";
 import VenueSelector, {
@@ -29,6 +29,9 @@ type StatusFilter = "current" | "ready" | "setup" | "inactive" | "deleted";
 
 type Feedback = { type: "success" | "error"; message: string } | null;
 
+const EMPTY_USERS: User[] = [];
+const EMPTY_AUDIT_EVENTS: UserAuditEvent[] = [];
+
 export default function UserManagement() {
   const t = useTranslations("UserAdmin");
   const locale = useLocale();
@@ -39,6 +42,7 @@ export default function UserManagement() {
   const [users, setUsers] = useState<User[]>([]);
   const [auditEvents, setAuditEvents] = useState<UserAuditEvent[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [loadedScopeKey, setLoadedScopeKey] = useState("");
   const [loadError, setLoadError] = useState("");
   const [feedback, setFeedback] = useState<Feedback>(null);
   const [searchQuery, setSearchQuery] = useState("");
@@ -61,6 +65,18 @@ export default function UserManagement() {
   const effectiveVenueId = isSuperAdmin
     ? selectedVenueId
     : currentUser?.venue_id;
+  const requestScopeKey = `${isSuperAdmin ? "super" : "venue"}:${effectiveVenueId ?? ""}`;
+  const requestGuard = useLatestRequestGuard();
+  const currentScopeKeyRef = useRef(requestScopeKey);
+
+  useEffect(() => {
+    currentScopeKeyRef.current = requestScopeKey;
+  }, [requestScopeKey]);
+
+  const scopedUsers = loadedScopeKey === requestScopeKey ? users : EMPTY_USERS;
+  const scopedAuditEvents =
+    loadedScopeKey === requestScopeKey ? auditEvents : EMPTY_AUDIT_EVENTS;
+  const isCurrentScopeLoading = isLoading || loadedScopeKey !== requestScopeKey;
 
   useEffect(() => {
     const isKnownTab = ["create", "users", "migrate"].includes(activeTab as string);
@@ -75,7 +91,15 @@ export default function UserManagement() {
   }, [effectiveVenueId]);
 
   const loadUsers = useCallback(async () => {
-    if (!effectiveVenueId && !isSuperAdmin) return;
+    if (currentScopeKeyRef.current !== requestScopeKey) return;
+    const isLatestRequest = requestGuard.beginRequest();
+    if (!effectiveVenueId && !isSuperAdmin) {
+      setUsers([]);
+      setAuditEvents([]);
+      setLoadedScopeKey(requestScopeKey);
+      setIsLoading(false);
+      return;
+    }
     setIsLoading(true);
     setLoadError("");
     try {
@@ -86,26 +110,33 @@ export default function UserManagement() {
         fetchManagedUsersByVenue(requestedVenueId),
         isSuperAdmin ? fetchUserAuditEvents(requestedVenueId) : Promise.resolve(null),
       ]);
+      if (!isLatestRequest() || currentScopeKeyRef.current !== requestScopeKey) return;
       if (userResult.error) {
         console.error("Failed to load users:", userResult.error);
         setLoadError(t("loadFailed"));
-      } else if (userResult.data) {
-        setUsers(userResult.data);
+        setUsers([]);
+      } else {
+        setUsers(userResult.data ?? []);
       }
       if (auditResult?.error) {
         console.error("Failed to load user activity:", auditResult.error);
-      } else if (auditResult?.data) {
-        setAuditEvents(auditResult.data);
+        setAuditEvents([]);
+      } else if (isSuperAdmin) {
+        setAuditEvents(auditResult?.data ?? []);
       } else if (!isSuperAdmin) {
         setAuditEvents([]);
       }
+      setLoadedScopeKey(requestScopeKey);
     } catch (error) {
+      if (!isLatestRequest() || currentScopeKeyRef.current !== requestScopeKey) return;
       console.error("Failed to load users:", error);
       setLoadError(t("connectionLoadFailed"));
     } finally {
-      setIsLoading(false);
+      if (isLatestRequest() && currentScopeKeyRef.current === requestScopeKey) {
+        setIsLoading(false);
+      }
     }
-  }, [effectiveVenueId, isSuperAdmin, t]);
+  }, [effectiveVenueId, isSuperAdmin, requestGuard, requestScopeKey, t]);
 
   useEffect(() => {
     if (activeTab === "users" && (effectiveVenueId || isSuperAdmin)) {
@@ -221,13 +252,13 @@ export default function UserManagement() {
   };
 
   const currentUsers = useMemo(
-    () => users.filter((user) => !user.deletedAt),
-    [users],
+    () => scopedUsers.filter((user) => !user.deletedAt),
+    [scopedUsers],
   );
 
   const filteredUsers = useMemo(() => {
     const normalizedQuery = searchQuery.trim().toLowerCase();
-    return users.filter((user) => {
+    return scopedUsers.filter((user) => {
       const matchesSearch =
         !normalizedQuery ||
         user.name.toLowerCase().includes(normalizedQuery) ||
@@ -249,7 +280,7 @@ export default function UserManagement() {
                 : !user.deletedAt && user.active && !isSetupPending;
       return matchesSearch && matchesRole && matchesStatus;
     });
-  }, [roleFilter, searchQuery, statusFilter, users]);
+  }, [roleFilter, scopedUsers, searchQuery, statusFilter]);
 
   const formatActivityDate = (value: string): string =>
     new Intl.DateTimeFormat(locale === "ko" ? "ko-KR" : "en-US", {
@@ -260,7 +291,7 @@ export default function UserManagement() {
   const resolveAuditUserName = (userId: string | null): string => {
     if (!userId) return t("systemActor");
     if (currentUser?.id === userId) return currentUser.name;
-    return users.find((user) => user.id === userId)?.name || t("unknownUser");
+    return scopedUsers.find((user) => user.id === userId)?.name || t("unknownUser");
   };
 
   const getAuditActionLabel = (action: string): string => {
@@ -449,7 +480,7 @@ export default function UserManagement() {
               title={t("userList")}
               count={filteredUsers.length}
               onRefresh={loadUsers}
-              isLoading={isLoading}
+              isLoading={isCurrentScopeLoading}
             />
             <div className="p-4">
               {loadError && <Alert type="error" message={loadError} className="mb-4" />}
@@ -544,17 +575,17 @@ export default function UserManagement() {
                 </div>
               </div>
 
-              {isLoading && users.length === 0 ? (
+              {isCurrentScopeLoading && scopedUsers.length === 0 ? (
                 <Skeleton rows={5} />
               ) : filteredUsers.length === 0 ? (
                 <div className="text-center py-8">
                   <p className="text-text-muted font-mono text-sm">
-                    {users.length === 0 ? t("noUsers") : t("noMatchingUsers")}
+                    {scopedUsers.length === 0 ? t("noUsers") : t("noMatchingUsers")}
                   </p>
                 </div>
               ) : (
                 <div
-                  className={`grid grid-cols-1 md:grid-cols-2 gap-4 transition-opacity duration-200 ${isLoading ? "opacity-50 pointer-events-none" : ""}`}
+                  className={`grid grid-cols-1 md:grid-cols-2 gap-4 transition-opacity duration-200 ${isCurrentScopeLoading ? "opacity-50 pointer-events-none" : ""}`}
                 >
                   {filteredUsers.map((user) => (
                     <UserCard
@@ -579,15 +610,15 @@ export default function UserManagement() {
                     <h3 className="type-panel-title">{t("activityTitle")}</h3>
                     <p className="mt-1 text-xs text-text-muted">{t("activityDescription")}</p>
                   </div>
-                  <span className="font-mono text-xs text-text-dim">{auditEvents.length}</span>
+                  <span className="font-mono text-xs text-text-dim">{scopedAuditEvents.length}</span>
                 </div>
-                {auditEvents.length === 0 ? (
+                {scopedAuditEvents.length === 0 ? (
                   <p className="border border-border-default bg-canvas p-4 text-xs text-text-muted">
                     {t("noActivity")}
                   </p>
                 ) : (
                   <div className="max-h-80 divide-y divide-border-subtle overflow-y-auto border border-border-default bg-canvas">
-                    {auditEvents.map((event) => (
+                    {scopedAuditEvents.map((event) => (
                       <div key={event.id} className="grid gap-1 p-3 text-xs sm:grid-cols-[1fr_auto] sm:items-center">
                         <p className="text-text-body">
                           <span className="font-semibold text-text-heading">

@@ -1,7 +1,11 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback } from "react";
-import { useLocalStorage, useGuestPolling } from "../../lib/hooks";
+import {
+  useLocalStorage,
+  useGuestPolling,
+  useLatestRequestGuard,
+} from "../../lib/hooks";
 import AdminHeader from "../admin/components/AdminHeader";
 import AuthGuard from "../../components/AuthGuard";
 import Footer from "../../components/Footer";
@@ -29,6 +33,12 @@ import { fetchExternalLinksByDate } from "../../lib/api/external-links";
 import type { Guest, UserDirectoryEntry, ExternalDJLink } from "../../lib/api/types";
 import { useLocale, useTranslations } from "next-intl";
 
+const EMPTY_DISPLAY_DATA = {
+  guests: [] as Guest[],
+  users: [] as UserDirectoryEntry[],
+  externalLinks: [] as ExternalDJLink[],
+};
+
 export default function DoorPage() {
   return (
     <AuthGuard requiredAccess={["door"]}>
@@ -55,6 +65,7 @@ function DoorPageContent() {
   const [externalLinks, setExternalLinks] = useState<ExternalDJLink[]>([]);
   const [guests, setGuests] = useState<Guest[]>([]);
   const [isFetching, setIsFetching] = useState(true);
+  const [loadedScopeKey, setLoadedScopeKey] = useState("");
   const [feedback, setFeedback] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [sortMode, setSortMode] = useLocalStorage<"default" | "alpha">(
@@ -64,31 +75,56 @@ function DoorPageContent() {
 
   // 로딩 중 이전 데이터를 유지하여 화면 깜빡임 방지
   const displayCacheRef = useRef<{
+    scopeKey: string;
     guests: Guest[];
     users: UserDirectoryEntry[];
     externalLinks: ExternalDJLink[];
   }>({
+    scopeKey: "",
     guests: [],
     users: [],
     externalLinks: [],
   });
 
-  useEffect(() => {
-    if (!isFetching) {
-      displayCacheRef.current = { guests, users, externalLinks };
-    }
-  }, [isFetching, guests, users, externalLinks]);
+  const requestScopeKey = `${venueId}:${selectedDate}`;
+  const requestGuard = useLatestRequestGuard();
+  const pollingGuard = useLatestRequestGuard();
 
-  const displayData = isFetching
-    ? displayCacheRef.current
-    : { guests, users, externalLinks };
+  useEffect(() => {
+    if (!isFetching && loadedScopeKey === requestScopeKey) {
+      displayCacheRef.current = {
+        scopeKey: requestScopeKey,
+        guests,
+        users,
+        externalLinks,
+      };
+    }
+  }, [externalLinks, guests, isFetching, loadedScopeKey, requestScopeKey, users]);
+
+  const hasCurrentScopeData = loadedScopeKey === requestScopeKey;
+  const isCurrentScopeFetching = isFetching || !hasCurrentScopeData;
+  const displayData = !hasCurrentScopeData
+    ? EMPTY_DISPLAY_DATA
+    : isFetching && displayCacheRef.current.scopeKey === requestScopeKey
+      ? displayCacheRef.current
+      : { guests, users, externalLinks };
 
   useEffect(() => {
     if (currentVenue) setSelectedDate(businessDate);
   }, [businessDate, currentVenue, setSelectedDate]);
 
+  useEffect(() => {
+    setSelectedDJ("all");
+  }, [requestScopeKey]);
+
   const loadData = useCallback(async () => {
+    pollingGuard.invalidateRequests();
+    const isLatestRequest = requestGuard.beginRequest();
     if (!venueId) {
+      setGuests([]);
+      setUsers([]);
+      setExternalLinks([]);
+      setLoadedScopeKey(requestScopeKey);
       setIsFetching(false);
       return;
     }
@@ -100,36 +136,45 @@ function DoorPageContent() {
         fetchUsersByVenue(venueId),
         fetchExternalLinksByDate(venueId, selectedDate),
       ]);
+      if (!isLatestRequest()) return;
       if (guestRes.error || userRes.error || linkRes.error) {
         setFeedback(t("partialLoadFailed"));
       }
-      if (guestRes.data) setGuests(guestRes.data);
-      if (userRes.data) setUsers(userRes.data);
-      if (linkRes.data) setExternalLinks(linkRes.data);
+      setGuests(guestRes.data ?? []);
+      setUsers(userRes.data ?? []);
+      setExternalLinks(linkRes.data ?? []);
+      setLoadedScopeKey(requestScopeKey);
     } catch (error) {
+      if (!isLatestRequest()) return;
       console.error("Failed to load data:", error);
       setFeedback(t("loadFailed"));
     } finally {
-      setIsFetching(false);
+      if (isLatestRequest()) setIsFetching(false);
     }
-  }, [selectedDate, t, venueId]);
+  }, [pollingGuard, requestGuard, requestScopeKey, selectedDate, t, venueId]);
 
   useEffect(() => {
     loadData();
   }, [loadData]);
 
   // 주기적으로 데이터 갱신 (15초)
-  useGuestPolling(async () => {
-    if (!venueId) return;
+  const pollData = useCallback(async () => {
+    if (!venueId || loadedScopeKey !== requestScopeKey) return;
+    const isLatestRequest = pollingGuard.beginRequest();
     const { data } = await fetchGuestsByDate(selectedDate, venueId);
-    if (data) setGuests(data);
-  }, 15000, !!venueId);
+    if (isLatestRequest() && loadedScopeKey === requestScopeKey && data) {
+      setGuests(data);
+    }
+  }, [loadedScopeKey, pollingGuard, requestScopeKey, selectedDate, venueId]);
+
+  useGuestPolling(pollData, 15000, !!venueId);
 
   const handleStatusChange = async (
     id: string,
     newStatus: Guest["status"],
     action: string,
   ) => {
+    pollingGuard.invalidateRequests();
     setLoadingStates((prev) => ({ ...prev, [`${id}_${action}`]: true }));
 
     const { data, error } =
@@ -294,7 +339,7 @@ function DoorPageContent() {
                       )
                     }
                     onRefresh={loadData}
-                    isLoading={isFetching}
+                    isLoading={isCurrentScopeFetching}
                   />
                   <GuestSearchInput
                     value={searchQuery}
@@ -326,7 +371,7 @@ function DoorPageContent() {
             <section
               className="main-content-panel"
               aria-labelledby="door-guest-list-title"
-              aria-busy={isFetching}
+              aria-busy={isCurrentScopeFetching}
             >
               <PanelHeader
                 title={t("guestList")}
@@ -335,7 +380,7 @@ function DoorPageContent() {
                 count={displayGuests.length}
               />
 
-              {isFetching && displayData.guests.length === 0 ? (
+              {isCurrentScopeFetching && displayData.guests.length === 0 ? (
                 <Skeleton rows={6} />
               ) : displayGuests.length === 0 ? (
                 <EmptyState
@@ -349,7 +394,7 @@ function DoorPageContent() {
               ) : (
                 <div
                   className={`divide-y divide-border-subtle transition-opacity duration-200 ${
-                    isFetching ? "pointer-events-none opacity-50" : ""
+                    isCurrentScopeFetching ? "pointer-events-none opacity-50" : ""
                   }`}
                 >
                   {displayGuests.map((guest, index) => {

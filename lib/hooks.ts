@@ -1,4 +1,8 @@
 import { useState, useEffect, useCallback } from "react";
+import {
+  createLatestRequestGuard,
+  type LatestRequestGuard,
+} from "./latest-request";
 
 /**
  * useState와 동일하지만 localStorage에 값을 영속화합니다.
@@ -50,4 +54,18 @@ export function useGuestPolling(fetchFn: () => Promise<void>, intervalMs: number
     }, intervalMs);
     return () => clearInterval(interval);
   }, [fetchFn, intervalMs, active]);
+}
+
+/**
+ * 겹친 비동기 조회 중 최신 요청만 화면 상태를 갱신하도록 판별합니다.
+ * 컴포넌트가 unmount되면 진행 중인 모든 요청을 자동으로 무효화합니다.
+ */
+export function useLatestRequestGuard(): LatestRequestGuard {
+  const [guard] = useState(createLatestRequestGuard);
+
+  useEffect(() => {
+    return guard.invalidateRequests;
+  }, [guard]);
+
+  return guard;
 }
