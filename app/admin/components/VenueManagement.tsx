@@ -14,7 +14,7 @@ import EmptyState from "../../../components/EmptyState";
 import Icon from "../../../components/Icon";
 import Skeleton from "../../../components/Skeleton";
 import OperationsLayout from "../../../components/OperationsLayout";
-import { useRouteLoadingTask } from "../../../components/RouteTransitionProvider";
+import { useSectionLoadingTask } from "../../../components/RouteTransitionProvider";
 import { useLatestRequestGuard } from "../../../lib/hooks";
 import { getVenueTypeColor } from "../../../lib/colors";
 import { useTranslations } from "next-intl";
@@ -77,7 +77,7 @@ export default function VenueManagement() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [listError, setListError] = useState("");
   const requestGuard = useLatestRequestGuard();
-  useRouteLoadingTask(isLoading);
+  useSectionLoadingTask(isLoading);
 
   const loadVenues = useCallback(async () => {
     const isLatestRequest = requestGuard.beginRequest();

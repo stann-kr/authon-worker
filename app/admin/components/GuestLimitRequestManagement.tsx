@@ -14,7 +14,7 @@ import {
 import type { GuestLimitRequestView } from "@/lib/api/types";
 import { useLatestRequestGuard } from "@/lib/hooks";
 import { useTranslations } from "next-intl";
-import { useRouteLoadingTask } from "@/components/RouteTransitionProvider";
+import { useSectionLoadingTask } from "@/components/RouteTransitionProvider";
 
 const EMPTY_REQUESTS: GuestLimitRequestView[] = [];
 
@@ -45,7 +45,7 @@ export default function GuestLimitRequestManagement() {
 
   const scopedRequests = loadedVenueId === venueId ? requests : EMPTY_REQUESTS;
   const isCurrentVenueLoading = isLoading || loadedVenueId !== venueId;
-  useRouteLoadingTask(isCurrentVenueLoading);
+  useSectionLoadingTask(isCurrentVenueLoading);
 
   const loadRequests = useCallback(async () => {
     const requestedVenueId = venueId;

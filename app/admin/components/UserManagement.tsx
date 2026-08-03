@@ -14,7 +14,7 @@ import Alert from "../../../components/Alert";
 import Icon from "../../../components/Icon";
 import Skeleton from "../../../components/Skeleton";
 import OperationsLayout from "../../../components/OperationsLayout";
-import { useRouteLoadingTask } from "../../../components/RouteTransitionProvider";
+import { useSectionLoadingTask } from "../../../components/RouteTransitionProvider";
 import {
   fetchManagedUsersByVenue,
   fetchUserAuditEvents,
@@ -78,7 +78,7 @@ export default function UserManagement() {
   const scopedAuditEvents =
     loadedScopeKey === requestScopeKey ? auditEvents : EMPTY_AUDIT_EVENTS;
   const isCurrentScopeLoading = isLoading || loadedScopeKey !== requestScopeKey;
-  useRouteLoadingTask(activeTab === "users" && isCurrentScopeLoading);
+  useSectionLoadingTask(activeTab === "users" && isCurrentScopeLoading);
 
   useEffect(() => {
     const isKnownTab = ["create", "users", "migrate"].includes(activeTab as string);

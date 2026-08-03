@@ -12,7 +12,7 @@ import Icon from "../../../components/Icon";
 import Skeleton from "../../../components/Skeleton";
 import DatePicker from "../../../components/DatePicker";
 import OperationsLayout from "../../../components/OperationsLayout";
-import { useRouteLoadingTask } from "../../../components/RouteTransitionProvider";
+import { useSectionLoadingTask } from "../../../components/RouteTransitionProvider";
 import { useLatestRequestGuard } from "../../../lib/hooks";
 import { formatDateDisplay } from "../../../lib/date";
 import {
@@ -114,7 +114,7 @@ export default function LinkManagement({
 
   const hasCurrentScopeData = loadedScopeKey === requestScopeKey;
   const isCurrentScopeFetching = isFetching || !hasCurrentScopeData;
-  useRouteLoadingTask(activeTab === "manage" && isCurrentScopeFetching);
+  useSectionLoadingTask(activeTab === "manage" && isCurrentScopeFetching);
   const displayLinks = !hasCurrentScopeData
     ? EMPTY_LINKS
     : isFetching && displayCacheRef.current.scopeKey === requestScopeKey

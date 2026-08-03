@@ -67,6 +67,7 @@ export default function Home() {
       }
 
       setUser(currentUser);
+      setIsLoading(false);
 
       try {
         if (currentUser.role === "venue_admin") {
@@ -83,8 +84,6 @@ export default function Home() {
         if (isLatestRequest()) {
           console.error("Failed to load pending guest request count:", error);
         }
-      } finally {
-        if (isLatestRequest()) setIsLoading(false);
       }
     };
 

@@ -6,6 +6,13 @@ export interface RouteLoadingTracker {
   startRoute: () => void;
 }
 
+export function shouldRegisterRouteLoadingTask(
+  startWhenIdle: boolean,
+  isRouteLoadingVisible: boolean,
+): boolean {
+  return startWhenIdle || isRouteLoadingVisible;
+}
+
 /**
  * route 이동과 목적지 준비 작업을 하나의 로딩 수명주기로 묶습니다.
  * 각 작업의 release 함수는 여러 번 호출돼도 한 번만 반영됩니다.

@@ -12,7 +12,10 @@ import {
 } from "react";
 import { usePathname } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { createRouteLoadingTracker } from "@/lib/route-loading";
+import {
+  createRouteLoadingTracker,
+  shouldRegisterRouteLoadingTask,
+} from "@/lib/route-loading";
 import { announceRouteTransitionStart } from "@/lib/route-transition-events";
 import Spinner from "./Spinner";
 
@@ -20,7 +23,9 @@ type TransitionPhase = "idle" | "visible" | "leaving";
 
 interface RouteTransitionContextValue {
   isRouteTransitionActive: boolean;
-  registerRouteLoadingTask: () => () => void;
+  registerRouteLoadingTask: (options?: {
+    startWhenIdle?: boolean;
+  }) => () => void;
   startRouteTransition: (href?: string) => boolean;
 }
 
@@ -116,7 +121,16 @@ export function RouteTransitionProvider({ children }: { children: ReactNode }) {
     scheduleCompletion();
   }, [loadingTracker, scheduleCompletion, showLoading]);
 
-  const registerRouteLoadingTask = useCallback(() => {
+  const registerRouteLoadingTask = useCallback((options?: {
+    startWhenIdle?: boolean;
+  }) => {
+    if (!shouldRegisterRouteLoadingTask(
+      options?.startWhenIdle ?? true,
+      phaseRef.current === "visible",
+    )) {
+      return () => {};
+    }
+
     const releaseTask = loadingTracker.beginTask();
     reconcileLoading();
 
@@ -206,10 +220,23 @@ export function useRouteTransition() {
  * 현재 route loading cycle에 등록합니다.
  */
 export function useRouteLoadingTask(isLoading: boolean) {
+  useLoadingTask(isLoading, true);
+}
+
+/**
+ * 목록처럼 화면 내부에서 다시 조회할 수 있는 작업입니다.
+ * route loading 중에는 목적지 준비에 합류하고, 화면이 열린 뒤에는
+ * 전체 overlay를 새로 띄우지 않아 section 자체의 loading UI를 유지합니다.
+ */
+export function useSectionLoadingTask(isLoading: boolean) {
+  useLoadingTask(isLoading, false);
+}
+
+function useLoadingTask(isLoading: boolean, startWhenIdle: boolean) {
   const { registerRouteLoadingTask } = useRouteTransition();
 
   useLayoutEffect(() => {
     if (!isLoading) return;
-    return registerRouteLoadingTask();
-  }, [isLoading, registerRouteLoadingTask]);
+    return registerRouteLoadingTask({ startWhenIdle });
+  }, [isLoading, registerRouteLoadingTask, startWhenIdle]);
 }

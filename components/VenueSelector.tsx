@@ -7,7 +7,7 @@ import type { Venue } from "@/lib/api/types";
 import { getUser } from "@/lib/auth";
 import Icon from "./Icon";
 import { useTranslations } from "next-intl";
-import { useRouteLoadingTask } from "./RouteTransitionProvider";
+import { useSectionLoadingTask } from "./RouteTransitionProvider";
 
 /**
  * useVenueSelector — super_admin 베뉴 선택 로직 훅.
@@ -26,7 +26,7 @@ export function useVenueSelector() {
     "",
   );
   const requestGuard = useLatestRequestGuard();
-  useRouteLoadingTask(isLoadingVenues);
+  useSectionLoadingTask(isLoadingVenues);
 
   useEffect(() => {
     const isLatestRequest = requestGuard.beginRequest();
