@@ -12,6 +12,7 @@ import Icon from "../../../components/Icon";
 import Skeleton from "../../../components/Skeleton";
 import DatePicker from "../../../components/DatePicker";
 import OperationsLayout from "../../../components/OperationsLayout";
+import { useLatestRequestGuard } from "../../../lib/hooks";
 import { formatDateDisplay } from "../../../lib/date";
 import {
   fetchExternalLinksByDate,
@@ -33,6 +34,8 @@ import {
   type ManageFilter,
   type ManageSort,
 } from "./linkStatus";
+
+const EMPTY_LINKS: ExternalDJLink[] = [];
 
 interface LinkManagementProps {
   selectedDate: string;
@@ -68,6 +71,7 @@ export default function LinkManagement({
   const [isCopying, setIsCopying] = useState(false);
   const [links, setLinks] = useState<ExternalDJLink[]>([]);
   const [isFetching, setIsFetching] = useState(false);
+  const [loadedScopeKey, setLoadedScopeKey] = useState("");
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [visibleLinkId, setVisibleLinkId] = useState<string | null>(null);
   const [loadingStates, setLoadingStates] = useState<{
@@ -82,15 +86,10 @@ export default function LinkManagement({
   const deleteTriggerRef = useRef<HTMLElement | null>(null);
 
   // 로딩 중 이전 데이터를 유지하여 화면 깜빡임 방지
-  const displayCacheRef = useRef<ExternalDJLink[]>([]);
-
-  useEffect(() => {
-    if (!isFetching) {
-      displayCacheRef.current = links;
-    }
-  }, [isFetching, links]);
-
-  const displayLinks = isFetching ? displayCacheRef.current : links;
+  const displayCacheRef = useRef<{ scopeKey: string; links: ExternalDJLink[] }>({
+    scopeKey: "",
+    links: [],
+  });
 
   const {
     venueId,
@@ -101,13 +100,38 @@ export default function LinkManagement({
     user,
   } = useVenueSelector();
 
+  const requestScopeKey = `${venueId}:${manageScope}:${
+    manageScope === "recent" ? recentLimit : selectedDate
+  }`;
+  const requestGuard = useLatestRequestGuard();
+
+  useEffect(() => {
+    if (!isFetching && loadedScopeKey === requestScopeKey) {
+      displayCacheRef.current = { scopeKey: requestScopeKey, links };
+    }
+  }, [isFetching, links, loadedScopeKey, requestScopeKey]);
+
+  const hasCurrentScopeData = loadedScopeKey === requestScopeKey;
+  const isCurrentScopeFetching = isFetching || !hasCurrentScopeData;
+  const displayLinks = !hasCurrentScopeData
+    ? EMPTY_LINKS
+    : isFetching && displayCacheRef.current.scopeKey === requestScopeKey
+      ? displayCacheRef.current.links
+      : links;
+
   // Update form date when selectedDate prop changes
   useEffect(() => {
     setFormData((prev) => ({ ...prev, date: selectedDate }));
   }, [selectedDate]);
 
   const loadLinks = useCallback(async () => {
-    if (!venueId) return;
+    const isLatestRequest = requestGuard.beginRequest();
+    if (!venueId) {
+      setLinks([]);
+      setLoadedScopeKey(requestScopeKey);
+      setIsFetching(false);
+      return;
+    }
     setIsFetching(true);
     setError(null);
     try {
@@ -115,19 +139,21 @@ export default function LinkManagement({
         manageScope === "recent"
           ? await fetchRecentExternalLinks(venueId, recentLimit)
           : await fetchExternalLinksByDate(venueId, selectedDate);
+      if (!isLatestRequest()) return;
       if (error) {
         console.error("Failed to load links:", error);
         setError(error);
-      } else if (data) {
-        setLinks(data);
       }
+      setLinks(data ?? []);
+      setLoadedScopeKey(requestScopeKey);
     } catch (err) {
+      if (!isLatestRequest()) return;
       console.error("Failed to load links:", err);
       setError(t("loadFailed"));
     } finally {
-      setIsFetching(false);
+      if (isLatestRequest()) setIsFetching(false);
     }
-  }, [manageScope, recentLimit, selectedDate, t, venueId]);
+  }, [manageScope, recentLimit, requestGuard, requestScopeKey, selectedDate, t, venueId]);
 
   useEffect(() => {
     if (activeTab === "manage") {
@@ -679,7 +705,7 @@ export default function LinkManagement({
                 title={t("linkList")}
                 count={sortedLinks.length}
                 onRefresh={loadLinks}
-                isLoading={isFetching}
+                isLoading={isCurrentScopeFetching}
               />
 
               <div className="border-b border-border-subtle p-4 sm:p-5">
@@ -741,11 +767,11 @@ export default function LinkManagement({
                 </p>
               </div>
 
-              {isFetching && sortedLinks.length === 0 ? (
+              {isCurrentScopeFetching && sortedLinks.length === 0 ? (
                 <Skeleton rows={5} />
               ) : (
                 <div
-                  className={`divide-y divide-border-default lg:overflow-y-auto transition-opacity duration-200 ${isFetching ? "opacity-50 pointer-events-none" : ""}`}
+                  className={`divide-y divide-border-default lg:overflow-y-auto transition-opacity duration-200 ${isCurrentScopeFetching ? "opacity-50 pointer-events-none" : ""}`}
                 >
                   {sortedLinks.length === 0 ? (
                     <EmptyState

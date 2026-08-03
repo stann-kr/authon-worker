@@ -1,7 +1,11 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import { useLocalStorage, useGuestPolling } from "../../../lib/hooks";
+import {
+  useLocalStorage,
+  useGuestPolling,
+  useLatestRequestGuard,
+} from "../../../lib/hooks";
 import GuestListCard from "../../../components/GuestListCard";
 import GuestSearchInput from "../../../components/GuestSearchInput";
 import StatGrid from "../../../components/StatGrid";
@@ -26,6 +30,12 @@ import { fetchExternalLinksByDate } from "../../../lib/api/external-links";
 import type { Guest, UserDirectoryEntry, ExternalDJLink } from "../../../lib/api/types";
 import { useLocale, useTranslations } from "next-intl";
 
+const EMPTY_DISPLAY_DATA = {
+  guests: [] as Guest[],
+  users: [] as UserDirectoryEntry[],
+  externalLinks: [] as ExternalDJLink[],
+};
+
 interface GuestListProps {
   selectedDate: string;
   onDateChange: (date: string) => void;
@@ -48,6 +58,7 @@ export default function GuestList({
   const [externalLinks, setExternalLinks] = useState<ExternalDJLink[]>([]);
   const [guests, setGuests] = useState<Guest[]>([]);
   const [isFetching, setIsFetching] = useState(true);
+  const [loadedScopeKey, setLoadedScopeKey] = useState("");
   const [feedback, setFeedback] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [sortMode, setSortMode] = useLocalStorage<"default" | "alpha">(
@@ -57,30 +68,55 @@ export default function GuestList({
 
   // 로딩 중 이전 데이터를 유지하여 화면 깜빡임 방지
   const displayCacheRef = useRef<{
+    scopeKey: string;
     guests: Guest[];
     users: UserDirectoryEntry[];
     externalLinks: ExternalDJLink[];
   }>({
+    scopeKey: "",
     guests: [],
     users: [],
     externalLinks: [],
   });
 
-  useEffect(() => {
-    if (!isFetching) {
-      displayCacheRef.current = { guests, users, externalLinks };
-    }
-  }, [isFetching, guests, users, externalLinks]);
-
-  const displayData = isFetching
-    ? displayCacheRef.current
-    : { guests, users, externalLinks };
-
   const { venueId, venues, selectedVenueId, setSelectedVenueId, isSuperAdmin } =
     useVenueSelector();
 
+  const requestScopeKey = `${venueId}:${selectedDate}`;
+  const requestGuard = useLatestRequestGuard();
+  const pollingGuard = useLatestRequestGuard();
+
+  useEffect(() => {
+    if (!isFetching && loadedScopeKey === requestScopeKey) {
+      displayCacheRef.current = {
+        scopeKey: requestScopeKey,
+        guests,
+        users,
+        externalLinks,
+      };
+    }
+  }, [externalLinks, guests, isFetching, loadedScopeKey, requestScopeKey, users]);
+
+  const hasCurrentScopeData = loadedScopeKey === requestScopeKey;
+  const isCurrentScopeFetching = isFetching || !hasCurrentScopeData;
+  const displayData = !hasCurrentScopeData
+    ? EMPTY_DISPLAY_DATA
+    : isFetching && displayCacheRef.current.scopeKey === requestScopeKey
+      ? displayCacheRef.current
+      : { guests, users, externalLinks };
+
+  useEffect(() => {
+    setSelectedDJ("all");
+  }, [requestScopeKey]);
+
   const loadData = useCallback(async () => {
+    pollingGuard.invalidateRequests();
+    const isLatestRequest = requestGuard.beginRequest();
     if (!venueId) {
+      setGuests([]);
+      setUsers([]);
+      setExternalLinks([]);
+      setLoadedScopeKey(requestScopeKey);
       setIsFetching(false);
       return;
     }
@@ -92,19 +128,22 @@ export default function GuestList({
         fetchUsersByVenue(venueId),
         fetchExternalLinksByDate(venueId, selectedDate),
       ]);
+      if (!isLatestRequest()) return;
       if (guestRes.error || userRes.error || linkRes.error) {
         setFeedback(doorT("partialLoadFailed"));
       }
-      if (guestRes.data) setGuests(guestRes.data);
-      if (userRes.data) setUsers(userRes.data);
-      if (linkRes.data) setExternalLinks(linkRes.data);
+      setGuests(guestRes.data ?? []);
+      setUsers(userRes.data ?? []);
+      setExternalLinks(linkRes.data ?? []);
+      setLoadedScopeKey(requestScopeKey);
     } catch (err) {
+      if (!isLatestRequest()) return;
       console.error("Failed to load data:", err);
       setFeedback(doorT("loadFailed"));
     } finally {
-      setIsFetching(false);
+      if (isLatestRequest()) setIsFetching(false);
     }
-  }, [doorT, selectedDate, venueId]);
+  }, [doorT, pollingGuard, requestGuard, requestScopeKey, selectedDate, venueId]);
 
   useEffect(() => {
     loadData();
@@ -112,10 +151,13 @@ export default function GuestList({
 
   // 실시간 폴링 (15초 간격) — useGuestPolling 훅으로 통일
   const pollGuests = useCallback(async () => {
-    if (!venueId) return;
+    if (!venueId || loadedScopeKey !== requestScopeKey) return;
+    const isLatestRequest = pollingGuard.beginRequest();
     const { data } = await fetchGuestsByDate(selectedDate, venueId);
-    if (data) setGuests(data);
-  }, [selectedDate, venueId]);
+    if (isLatestRequest() && loadedScopeKey === requestScopeKey && data) {
+      setGuests(data);
+    }
+  }, [loadedScopeKey, pollingGuard, requestScopeKey, selectedDate, venueId]);
 
   useGuestPolling(pollGuests, 15000, !!venueId);
 
@@ -124,6 +166,7 @@ export default function GuestList({
     newStatus: Guest["status"],
     action: string,
   ) => {
+    pollingGuard.invalidateRequests();
     setLoadingStates((prev) => ({ ...prev, [`${id}_${action}`]: true }));
 
     const { data, error } =
@@ -339,7 +382,7 @@ export default function GuestList({
               setSortMode((prev) => (prev === "default" ? "alpha" : "default"))
             }
             onRefresh={loadData}
-            isLoading={isFetching}
+            isLoading={isCurrentScopeFetching}
           />
 
           <GuestSearchInput
@@ -347,7 +390,7 @@ export default function GuestList({
             onChange={setSearchQuery}
           />
 
-          {isFetching && displayData.guests.length === 0 ? (
+          {isCurrentScopeFetching && displayData.guests.length === 0 ? (
             <Skeleton rows={6} />
           ) : displayGuests.length === 0 ? (
             <EmptyState
@@ -356,7 +399,7 @@ export default function GuestList({
             />
           ) : (
             <div
-              className={`divide-y divide-border-default lg:overflow-y-auto transition-opacity duration-200 ${isFetching ? "opacity-50 pointer-events-none" : ""}`}
+              className={`divide-y divide-border-default lg:overflow-y-auto transition-opacity duration-200 ${isCurrentScopeFetching ? "opacity-50 pointer-events-none" : ""}`}
             >
               {displayGuests.map((guest, index) => {
                 const contributor = getContributor(guest);

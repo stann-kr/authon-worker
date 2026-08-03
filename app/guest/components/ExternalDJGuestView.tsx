@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useLocalStorage } from "@/lib/hooks";
+import { useLatestRequestGuard, useLocalStorage } from "@/lib/hooks";
 import Footer from "@/components/Footer";
 import StatGrid from "@/components/StatGrid";
 import PanelHeader from "@/components/PanelHeader";
@@ -45,25 +45,37 @@ export default function ExternalDJGuestView({ token }: ExternalDJGuestViewProps)
     "guest:sortMode",
     "default",
   );
+  const validationGuard = useLatestRequestGuard();
 
   useEffect(() => {
     const validate = async () => {
+      const isLatestRequest = validationGuard.beginRequest();
       setIsValidating(true);
-      const { data, error } = await validateExternalToken(token);
-      if (error) {
-        console.error("Invalid external guest link:", error);
-        setValidationError(t("invalidTitle"));
-      } else if (data) {
-        setLinkInfo(data.link);
-        setVenueInfo(data.venue);
-        if (data.guests && data.guests.length > 0) {
-          setGuests(data.guests);
+      setValidationError(null);
+      setLinkInfo(null);
+      setVenueInfo(null);
+      setGuests([]);
+      try {
+        const { data, error } = await validateExternalToken(token);
+        if (!isLatestRequest()) return;
+        if (error) {
+          console.error("Invalid external guest link:", error);
+          setValidationError(t("invalidTitle"));
+        } else if (data) {
+          setLinkInfo(data.link);
+          setVenueInfo(data.venue);
+          setGuests(data.guests ?? []);
         }
+      } catch (validationError) {
+        if (!isLatestRequest()) return;
+        console.error("Invalid external guest link:", validationError);
+        setValidationError(t("invalidTitle"));
+      } finally {
+        if (isLatestRequest()) setIsValidating(false);
       }
-      setIsValidating(false);
     };
     validate();
-  }, [t, token]);
+  }, [t, token, validationGuard]);
 
   const handleSave = async () => {
     if (!guestName.trim() || !linkInfo) return;

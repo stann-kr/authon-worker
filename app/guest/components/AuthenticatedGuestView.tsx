@@ -1,7 +1,11 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
-import { useLocalStorage, useGuestPolling } from "@/lib/hooks";
+import {
+  useLocalStorage,
+  useGuestPolling,
+  useLatestRequestGuard,
+} from "@/lib/hooks";
 import AdminHeader from "../../admin/components/AdminHeader";
 import Footer from "@/components/Footer";
 import StatGrid from "@/components/StatGrid";
@@ -43,6 +47,7 @@ export default function AuthenticatedGuestView({ user }: AuthenticatedGuestViewP
   const [isFetching, setIsFetching] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [guests, setGuests] = useState<Guest[]>([]);
+  const [loadedScopeKey, setLoadedScopeKey] = useState("");
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [quota, setQuota] = useState<GuestQuota | null>(null);
   const [registeredByName, setRegisteredByName] = useState("");
@@ -55,15 +60,10 @@ export default function AuthenticatedGuestView({ user }: AuthenticatedGuestViewP
   );
 
   // 로딩 중 이전 데이터를 유지하여 화면 깜빡임 방지
-  const displayCacheRef = useRef<Guest[]>([]);
-
-  useEffect(() => {
-    if (!isFetching) {
-      displayCacheRef.current = guests;
-    }
-  }, [isFetching, guests]);
-
-  const displayDataGuests = isFetching ? displayCacheRef.current : guests;
+  const displayCacheRef = useRef<{ scopeKey: string; guests: Guest[] }>({
+    scopeKey: "",
+    guests: [],
+  });
 
   // super_admin venue selector
   const {
@@ -78,6 +78,29 @@ export default function AuthenticatedGuestView({ user }: AuthenticatedGuestViewP
     ? selectedVenueId
     : (user?.venue_id ?? "");
   const businessDate = getBusinessDate(currentVenue ?? {});
+  const requestScopeKey = `${effectiveVenueId}:${selectedDate}`;
+  const requestGuard = useLatestRequestGuard();
+  const pollingGuard = useLatestRequestGuard();
+  const currentScopeKeyRef = useRef(requestScopeKey);
+
+  useEffect(() => {
+    currentScopeKeyRef.current = requestScopeKey;
+  }, [requestScopeKey]);
+
+  useEffect(() => {
+    if (!isFetching && loadedScopeKey === requestScopeKey) {
+      displayCacheRef.current = { scopeKey: requestScopeKey, guests };
+    }
+  }, [guests, isFetching, loadedScopeKey, requestScopeKey]);
+
+  const hasCurrentScopeData = loadedScopeKey === requestScopeKey;
+  const isCurrentScopeFetching = isFetching || !hasCurrentScopeData;
+  const displayDataGuests = !hasCurrentScopeData
+    ? []
+    : isFetching && displayCacheRef.current.scopeKey === requestScopeKey
+      ? displayCacheRef.current.guests
+      : guests;
+  const displayQuota = hasCurrentScopeData ? quota : null;
 
   useEffect(() => {
     if (currentVenue) setSelectedDate(businessDate);
@@ -89,49 +112,71 @@ export default function AuthenticatedGuestView({ user }: AuthenticatedGuestViewP
     if (stored) setRegisteredByName(stored);
   }, [user]);
 
-  const refreshQuota = useCallback(async () => {
-    const { data } = await fetchMyGuestQuota(selectedDate);
-    if (data) setQuota(data);
-  }, [selectedDate]);
-
-  const loadGuests = useCallback(async () => {
-    if (!effectiveVenueId) return;
-    setIsFetching(true);
+  const loadGuests = useCallback(async (options?: { silent?: boolean }) => {
+    pollingGuard.invalidateRequests();
+    const isLatestRequest = requestGuard.beginRequest();
+    if (!effectiveVenueId) {
+      setGuests([]);
+      setQuota(null);
+      setLoadedScopeKey(requestScopeKey);
+      setIsFetching(false);
+      return;
+    }
+    if (!options?.silent) setIsFetching(true);
     setError(null);
 
-    const [{ data, error: fetchError }, quotaResult] = await Promise.all([
-      fetchGuestsByDate(selectedDate, effectiveVenueId),
-      fetchMyGuestQuota(selectedDate),
-    ]);
+    try {
+      const [{ data, error: fetchError }, quotaResult] = await Promise.all([
+        fetchGuestsByDate(selectedDate, effectiveVenueId),
+        fetchMyGuestQuota(selectedDate),
+      ]);
 
-    if (fetchError) {
-      console.error("Failed to fetch guests:", fetchError);
+      if (!isLatestRequest()) return;
+
+      if (fetchError) {
+        console.error("Failed to fetch guests:", fetchError);
+        setError(t("loadFailed"));
+      }
+      setGuests(data ?? []);
+      setQuota(quotaResult.data ?? null);
+      setLoadedScopeKey(requestScopeKey);
+    } catch (loadError) {
+      if (!isLatestRequest()) return;
+      console.error("Failed to fetch guests:", loadError);
+      setGuests([]);
+      setQuota(null);
+      setLoadedScopeKey(requestScopeKey);
       setError(t("loadFailed"));
-    } else if (data) {
-      setGuests(data);
+    } finally {
+      if (isLatestRequest()) setIsFetching(false);
     }
-    if (quotaResult.data) setQuota(quotaResult.data);
-
-    setIsFetching(false);
-  }, [selectedDate, effectiveVenueId, t]);
+  }, [effectiveVenueId, pollingGuard, requestGuard, requestScopeKey, selectedDate, t]);
 
   useEffect(() => {
     loadGuests();
   }, [loadGuests]);
 
   // 주기적으로 데이터 갱신 (15초)
-  useGuestPolling(async () => {
-    if (!effectiveVenueId) return;
+  const pollGuests = useCallback(async () => {
+    if (!effectiveVenueId || loadedScopeKey !== requestScopeKey) return;
+    const isLatestRequest = pollingGuard.beginRequest();
     const [{ data }, quotaResult] = await Promise.all([
       fetchGuestsByDate(selectedDate, effectiveVenueId),
       fetchMyGuestQuota(selectedDate),
     ]);
-    if (data) setGuests(data);
-    if (quotaResult.data) setQuota(quotaResult.data);
-  }, 15000, !!effectiveVenueId);
+    if (isLatestRequest() && loadedScopeKey === requestScopeKey) {
+      if (data) setGuests(data);
+      if (quotaResult.data) setQuota(quotaResult.data);
+    }
+  }, [effectiveVenueId, loadedScopeKey, pollingGuard, requestScopeKey, selectedDate]);
+
+  useGuestPolling(pollGuests, 15000, !!effectiveVenueId);
 
   const handleSave = async () => {
     if (!guestName.trim()) return;
+
+    const operationScopeKey = requestScopeKey;
+    pollingGuard.invalidateRequests();
 
     if (!effectiveVenueId) {
       console.error("No venue ID available");
@@ -156,6 +201,11 @@ export default function AuthenticatedGuestView({ user }: AuthenticatedGuestViewP
         user?.account_kind === "shared" ? registeredByName.trim() : null,
     });
 
+    if (currentScopeKeyRef.current !== operationScopeKey) {
+      setIsLoading(false);
+      return;
+    }
+
     if (createError) {
       console.error("Failed to create guest:", createError);
       setError(
@@ -169,20 +219,27 @@ export default function AuthenticatedGuestView({ user }: AuthenticatedGuestViewP
       return;
     }
 
-    if (data) {
+    if (data && currentScopeKeyRef.current === operationScopeKey) {
       setGuests((prev) => [...prev, data]);
       setGuestName("");
-      await refreshQuota();
+      await loadGuests({ silent: true });
     }
 
     setIsLoading(false);
   };
 
   const handleDelete = async (id: string) => {
+    const operationScopeKey = requestScopeKey;
+    pollingGuard.invalidateRequests();
     setIsLoading(true);
     setError(null);
 
     const { data, error: deleteError } = await deleteGuest(id);
+
+    if (currentScopeKeyRef.current !== operationScopeKey) {
+      setIsLoading(false);
+      return;
+    }
 
     if (deleteError) {
       console.error("Failed to delete guest:", deleteError);
@@ -191,11 +248,11 @@ export default function AuthenticatedGuestView({ user }: AuthenticatedGuestViewP
       return;
     }
 
-    if (data) {
+    if (data && currentScopeKeyRef.current === operationScopeKey) {
       setGuests((prev) =>
         prev.map((guest) => (guest.id === id ? data : guest)),
       );
-      await refreshQuota();
+      await loadGuests({ silent: true });
     }
 
     setIsLoading(false);
@@ -210,8 +267,8 @@ export default function AuthenticatedGuestView({ user }: AuthenticatedGuestViewP
   const checkedGuests = filteredGuests.filter((g) => g.status === "checked");
   const activeGuestsCount = filteredGuests.filter((g) => g.status !== "deleted").length;
   
-  const effectiveLimit = quota?.effectiveLimit ?? user?.guest_limit ?? null;
-  const remaining = quota?.remaining ??
+  const effectiveLimit = displayQuota?.effectiveLimit ?? user?.guest_limit ?? null;
+  const remaining = displayQuota?.remaining ??
     (effectiveLimit === null ? null : Math.max(0, effectiveLimit - activeGuestsCount));
   const isAtLimit = remaining !== null && remaining <= 0;
 
@@ -226,6 +283,8 @@ export default function AuthenticatedGuestView({ user }: AuthenticatedGuestViewP
   };
 
   const handleExtraRequest = async () => {
+    const operationScopeKey = requestScopeKey;
+    pollingGuard.invalidateRequests();
     const extra = Number.parseInt(requestedExtra, 10);
     setIsRequestingExtra(true);
     setError(null);
@@ -234,6 +293,10 @@ export default function AuthenticatedGuestView({ user }: AuthenticatedGuestViewP
       requestedExtra: extra,
       reason: requestReason,
     });
+    if (currentScopeKeyRef.current !== operationScopeKey) {
+      setIsRequestingExtra(false);
+      return;
+    }
     if (requestError) {
       setError(
         requestError === "PENDING_REQUEST_EXISTS"
@@ -242,7 +305,7 @@ export default function AuthenticatedGuestView({ user }: AuthenticatedGuestViewP
       );
     } else {
       setRequestReason("");
-      await refreshQuota();
+      await loadGuests({ silent: true });
     }
     setIsRequestingExtra(false);
   };
@@ -376,19 +439,19 @@ export default function AuthenticatedGuestView({ user }: AuthenticatedGuestViewP
                     ) : (
                       <div className="border-l-2 border-status-danger bg-status-danger/10 px-3 py-2 text-sm text-status-danger">
                         {t("limitReached", {
-                          used: quota?.used ?? activeGuestsCount,
+                          used: displayQuota?.used ?? activeGuestsCount,
                           max: effectiveLimit ?? 0,
                         })}
                       </div>
                     )}
 
-                    {quota?.pendingRequest ? (
+                    {displayQuota?.pendingRequest ? (
                       <div className="mt-3 border border-status-waiting/60 bg-status-waiting/10 p-3 text-xs text-status-waiting">
                         {t("requestPending", {
-                          count: quota.pendingRequest.requestedExtra,
+                          count: displayQuota.pendingRequest.requestedExtra,
                         })}
                       </div>
-                    ) : quota?.canRequestExtra ? (
+                    ) : displayQuota?.canRequestExtra ? (
                       <details className="mt-3 border border-border-default bg-canvas p-3">
                         <summary className="cursor-pointer text-sm font-medium text-text-heading">
                           {t("requestExtra")}
@@ -452,7 +515,7 @@ export default function AuthenticatedGuestView({ user }: AuthenticatedGuestViewP
                       )
                     }
                     onRefresh={loadGuests}
-                    isLoading={isFetching}
+                    isLoading={isCurrentScopeFetching}
                   />
                   <GuestSearchInput
                     value={searchQuery}
@@ -484,7 +547,7 @@ export default function AuthenticatedGuestView({ user }: AuthenticatedGuestViewP
             <section
               className="main-content-panel"
               aria-labelledby="guest-list-title"
-              aria-busy={isFetching}
+              aria-busy={isCurrentScopeFetching}
             >
               <PanelHeader
                 title={t("todaysGuests")}
@@ -493,7 +556,7 @@ export default function AuthenticatedGuestView({ user }: AuthenticatedGuestViewP
                 count={displayGuests.length}
               />
 
-              {isFetching && displayDataGuests.length === 0 ? (
+              {isCurrentScopeFetching && displayDataGuests.length === 0 ? (
                 <Skeleton rows={5} />
               ) : displayGuests.length === 0 ? (
                 <EmptyState
@@ -507,7 +570,7 @@ export default function AuthenticatedGuestView({ user }: AuthenticatedGuestViewP
               ) : (
                 <div
                   className={`divide-y divide-border-subtle transition-opacity duration-200 ${
-                    isFetching ? "pointer-events-none opacity-50" : ""
+                    isCurrentScopeFetching ? "pointer-events-none opacity-50" : ""
                   }`}
                 >
                   {displayGuests.map((guest, index) => (

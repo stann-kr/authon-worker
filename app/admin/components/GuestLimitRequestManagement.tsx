@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Alert from "@/components/Alert";
 import EmptyState from "@/components/EmptyState";
 import PanelHeader from "@/components/PanelHeader";
@@ -12,7 +12,10 @@ import {
   fetchGuestLimitRequests,
 } from "@/lib/api/guest-limits";
 import type { GuestLimitRequestView } from "@/lib/api/types";
+import { useLatestRequestGuard } from "@/lib/hooks";
 import { useTranslations } from "next-intl";
+
+const EMPTY_REQUESTS: GuestLimitRequestView[] = [];
 
 export default function GuestLimitRequestManagement() {
   const t = useTranslations("GuestLimitAdmin");
@@ -27,41 +30,60 @@ export default function GuestLimitRequestManagement() {
   const [approvedAmounts, setApprovedAmounts] = useState<Record<string, number>>({});
   const [busyId, setBusyId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [loadedVenueId, setLoadedVenueId] = useState("");
   const [feedback, setFeedback] = useState<{
     type: "success" | "error";
     message: string;
   } | null>(null);
+  const requestGuard = useLatestRequestGuard();
+  const currentVenueIdRef = useRef(venueId);
+
+  useEffect(() => {
+    currentVenueIdRef.current = venueId;
+  }, [venueId]);
+
+  const scopedRequests = loadedVenueId === venueId ? requests : EMPTY_REQUESTS;
+  const isCurrentVenueLoading = isLoading || loadedVenueId !== venueId;
 
   const loadRequests = useCallback(async () => {
+    const requestedVenueId = venueId;
+    if (currentVenueIdRef.current !== requestedVenueId) return;
+    const isLatestRequest = requestGuard.beginRequest();
     if (!venueId) {
       setRequests([]);
+      setLoadedVenueId("");
       setIsLoading(false);
       return;
     }
     setIsLoading(true);
     const { data, error } = await fetchGuestLimitRequests(venueId);
+    if (!isLatestRequest() || currentVenueIdRef.current !== requestedVenueId) return;
     if (error) {
       setFeedback({ type: "error", message: t("loadFailed") });
-    } else if (data) {
-      setRequests(data);
+      setRequests([]);
+      setApprovedAmounts({});
+    } else {
+      const nextRequests = data ?? [];
+      setRequests(nextRequests);
       setApprovedAmounts(
-        Object.fromEntries(data.map((request) => [request.id, request.requestedExtra])),
+        Object.fromEntries(nextRequests.map((request) => [request.id, request.requestedExtra])),
       );
     }
+    setLoadedVenueId(requestedVenueId);
     setIsLoading(false);
-  }, [t, venueId]);
+  }, [requestGuard, t, venueId]);
 
   useEffect(() => {
     loadRequests();
   }, [loadRequests]);
 
   const pending = useMemo(
-    () => requests.filter((request) => request.status === "pending"),
-    [requests],
+    () => scopedRequests.filter((request) => request.status === "pending"),
+    [scopedRequests],
   );
   const decided = useMemo(
-    () => requests.filter((request) => request.status !== "pending"),
-    [requests],
+    () => scopedRequests.filter((request) => request.status !== "pending"),
+    [scopedRequests],
   );
 
   const handleDecision = async (
@@ -104,7 +126,7 @@ export default function GuestLimitRequestManagement() {
           headingId="guest-limit-requests-title"
           count={pending.length}
           onRefresh={loadRequests}
-          isLoading={isLoading}
+          isLoading={isCurrentVenueLoading}
         />
         <div className="space-y-4 p-4 sm:p-5">
           {feedback && <Alert type={feedback.type} message={feedback.message} />}
@@ -112,7 +134,7 @@ export default function GuestLimitRequestManagement() {
             <p className="border border-border-default bg-canvas p-4 text-sm text-text-muted">
               {t("selectVenue")}
             </p>
-          ) : isLoading && requests.length === 0 ? (
+          ) : isCurrentVenueLoading && scopedRequests.length === 0 ? (
             <Skeleton rows={4} />
           ) : pending.length === 0 ? (
             <EmptyState icon="user" message={t("noPending")} />
