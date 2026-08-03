@@ -63,15 +63,16 @@ export async function POST(request: Request) {
       !tenant.resolved ||
       !user ||
       !user.active ||
+      user.deletedAt ||
       (tenant.scope === "venue" && user.role !== "super_admin" && user.venueId !== tenant.venueId)
     ) {
       return invalidCredentialsResponse();
     }
 
-    if (
-      user.migrationStatus === "pending_reset" &&
-      !user.passwordSetAt
-    ) {
+    const isMatch = await verifyPassword(password, user.passwordHash);
+
+    if (user.migrationStatus === "pending_reset" && !user.passwordSetAt) {
+      if (!isMatch) return invalidCredentialsResponse();
       return NextResponse.json(
         {
           error: "First-time password setup is required.",
@@ -81,21 +82,22 @@ export async function POST(request: Request) {
       );
     }
 
-    const isMatch = await verifyPassword(password, user.passwordHash);
     if (!isMatch) {
       return invalidCredentialsResponse();
-    }
-
-    // bcrypt 해시 → PBKDF2 자동 재해시
-    if (needsRehash(user.passwordHash)) {
-      const newHash = await hashPassword(password);
-      await db.update(users).set({ passwordHash: newHash }).where(eq(users.id, user.id));
     }
 
     if (!env.JWT_SECRET) {
       console.error("JWT_SECRET is not configured");
       return NextResponse.json({ code: "SERVER_ERROR", error: "Unable to sign in right now." }, { status: 500 });
     }
+
+    // 성공한 로그인 시각 기록 + bcrypt 해시 → PBKDF2 자동 재해시
+    const loginUpdates: Partial<typeof users.$inferInsert> = {
+      lastLoginAt: new Date().toISOString(),
+    };
+    if (needsRehash(user.passwordHash)) loginUpdates.passwordHash = await hashPassword(password);
+    await db.update(users).set(loginUpdates).where(eq(users.id, user.id));
+
     const secret = new TextEncoder().encode(env.JWT_SECRET);
     const token = await new SignJWT({
       sub: user.id,

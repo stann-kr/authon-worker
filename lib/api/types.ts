@@ -28,6 +28,26 @@ export interface User {
   active: boolean;
   migrationStatus: "native" | "pending_reset" | "active";
   preferredLocale: "en" | "ko" | null;
+  passwordSetAt: string | null;
+  createdAt: string;
+  lastLoginAt: string | null;
+  deletedAt: string | null;
+}
+
+export interface UserDirectoryEntry {
+  id: string;
+  name: string;
+  role: User["role"];
+}
+
+export interface UserAuditEvent {
+  id: string;
+  venueId: string | null;
+  actorUserId: string | null;
+  targetUserId: string;
+  action: string;
+  details: Record<string, unknown> | null;
+  createdAt: string;
 }
 
 export interface Guest {

@@ -6,10 +6,9 @@ import { users } from "../db/schema";
 import { getDb } from "../db/client";
 import { getRequestTenantContext } from "../tenant/server";
 import { isLocale, type Locale } from "@/i18n/config";
+import { isRole, type Role } from "@/lib/users/policy";
 
-export type Role = "super_admin" | "venue_admin" | "door_staff" | "staff" | "dj";
-
-const VALID_ROLES: Role[] = ["super_admin", "venue_admin", "door_staff", "staff", "dj"];
+export type { Role } from "@/lib/users/policy";
 
 export interface SessionUser {
   id: string;
@@ -31,10 +30,6 @@ function parseStoredSession(raw: string): StoredSession | null {
   } catch {
     return null;
   }
-}
-
-function isRole(role: string | undefined): role is Role {
-  return !!role && VALID_ROLES.includes(role as Role);
 }
 
 /** JWT + KV 세션 + DB 사용자 상태 검증. 실패 시 Error throw. */
@@ -74,6 +69,7 @@ export async function requireAuth(): Promise<SessionUser> {
       role: users.role,
       venueId: users.venueId,
       active: users.active,
+      deletedAt: users.deletedAt,
       sessionVersion: users.sessionVersion,
       preferredLocale: users.preferredLocale,
     })
@@ -82,7 +78,7 @@ export async function requireAuth(): Promise<SessionUser> {
     .limit(1);
   const user = userRows[0];
 
-  if (!user || !user.active || !isRole(user.role)) {
+  if (!user || !user.active || user.deletedAt || !isRole(user.role)) {
     throw new Error("Unauthorized");
   }
 

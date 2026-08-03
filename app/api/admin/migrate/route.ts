@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { drizzle } from "drizzle-orm/d1";
 import { eq } from "drizzle-orm";
-import { users, passwordResetTokens } from "@/lib/db/schema";
+import { users, passwordResetTokens, userAuditEvents } from "@/lib/db/schema";
 import { escapeHtml, sendEmail } from "@/lib/api/email";
 import { hashPassword } from "@/lib/auth/password";
 import { requireRole } from "@/lib/auth/server";
@@ -26,7 +26,7 @@ function getAuthErrorStatus(error: unknown): number | null {
 export async function POST(request: Request) {
   try {
     const { env } = getCloudflareContext();
-    await requireRole(["super_admin"]);
+    const actor = await requireRole(["super_admin"]);
 
     const { users: legacyUsers } = await request.json();
 
@@ -60,21 +60,33 @@ export async function POST(request: Request) {
         const passwordHash = await hashPassword(initialPassword);
         const nowIso = new Date().toISOString();
 
-        await db.insert(users).values({
-          id: userId,
-          legacyAuthUserId: legacyUser.auth_user_id || legacyUser.legacy_auth_user_id || null,
-          email: normalizedEmail,
-          name: legacyUser.name,
-          passwordHash,
-          role,
-          venueId: legacyUser.venue_id || legacyUser.venueId || null,
-          guestLimit: legacyUser.guest_limit || 10,
-          active: legacyUser.active !== false,
-          migrationStatus: "pending_reset",
-          migratedAt: nowIso,
-          passwordSetAt: null,
-          createdAt: legacyUser.created_at || nowIso,
-        });
+        const venueId = legacyUser.venue_id || legacyUser.venueId || null;
+        await db.batch([
+          db.insert(users).values({
+            id: userId,
+            legacyAuthUserId: legacyUser.auth_user_id || legacyUser.legacy_auth_user_id || null,
+            email: normalizedEmail,
+            name: legacyUser.name,
+            passwordHash,
+            role,
+            venueId,
+            guestLimit: legacyUser.guest_limit || 10,
+            active: legacyUser.active !== false,
+            migrationStatus: "pending_reset",
+            migratedAt: nowIso,
+            passwordSetAt: null,
+            createdAt: legacyUser.created_at || nowIso,
+          }),
+          db.insert(userAuditEvents).values({
+            id: crypto.randomUUID(),
+            venueId,
+            actorUserId: actor.id,
+            targetUserId: userId,
+            action: "created",
+            details: JSON.stringify({ role, source: "legacy_migration" }),
+            createdAt: nowIso,
+          }),
+        ]);
 
         // 비밀번호 재설정 토큰 생성
         const token = generateResetToken();
@@ -92,7 +104,7 @@ export async function POST(request: Request) {
 
         // 이메일 발송 (실패해도 user 생성 롤백 없이 상태만 기록)
         const delivery = await getVenueDeliveryContext(
-          legacyUser.venue_id || legacyUser.venueId || null,
+          venueId,
           env.NEXT_PUBLIC_APP_URL,
         );
         const resetLink = `${delivery.baseUrl}/auth/reset-password?token=${token}`;

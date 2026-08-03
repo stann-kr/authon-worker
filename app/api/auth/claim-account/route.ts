@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
-import { hashPassword } from "@/lib/auth/password";
+import { hashPassword, verifyPassword } from "@/lib/auth/password";
 import { getPasswordPolicyErrorCode } from "@/lib/auth/password-policy";
 import {
   clearRateLimit,
@@ -10,22 +10,23 @@ import {
 import { getTenantContextForRequest } from "@/lib/tenant/server";
 
 /**
- * 이관 사용자 전용 1회성 비밀번호 설정.
- * 운영 전환 기간에만 사용하는 내부 계정 복구 예외이며, pending_reset 상태를
- * 원자적으로 소비해 동일 계정에서 두 번 실행할 수 없게 한다.
+ * 관리자 발급 설정 코드 또는 이관용 설정 코드의 1회성 비밀번호 설정.
+ * pending_reset 상태와 현재 설정 코드 hash를 함께 확인해 재사용을 막는다.
  */
 export async function POST(request: Request) {
   try {
     const { env } = getCloudflareContext();
-    const { email, newPassword } = await request.json();
+    const { email, setupCode, newPassword } = await request.json();
 
     if (
       typeof email !== "string" ||
       !email.trim() ||
+      typeof setupCode !== "string" ||
+      !setupCode ||
       typeof newPassword !== "string"
     ) {
       return NextResponse.json(
-        { code: "MISSING_SETUP_FIELDS", error: "Email and a new password are required." },
+        { code: "MISSING_SETUP_FIELDS", error: "Email, setup code, and a new password are required." },
         { status: 400 },
       );
     }
@@ -73,6 +74,30 @@ export async function POST(request: Request) {
       return NextResponse.json({ code: "UNKNOWN_VENUE", error: "Unknown venue." }, { status: 404 });
     }
 
+    const candidate = await env.DB.prepare(
+      `SELECT id, venue_id, password_hash
+       FROM users
+       WHERE email = ?
+         AND active = 1
+         AND deleted_at IS NULL
+         AND migration_status = 'pending_reset'
+         AND password_set_at IS NULL
+         AND (? IS NULL OR venue_id = ?)
+       LIMIT 1`,
+    )
+      .bind(normalizedEmail, expectedVenueId, expectedVenueId)
+      .first<{ id: string; venue_id: string | null; password_hash: string }>();
+
+    if (!candidate || !(await verifyPassword(setupCode, candidate.password_hash))) {
+      return NextResponse.json(
+        {
+          code: "ACCOUNT_NOT_ELIGIBLE",
+          error: "The setup code is invalid or this account is not eligible for first-time setup.",
+        },
+        { status: 400 },
+      );
+    }
+
     const [userResult] = await env.DB.batch<{ id: string } | { user_id: string }>([
       env.DB.prepare(
         `UPDATE users
@@ -80,21 +105,46 @@ export async function POST(request: Request) {
              migration_status = 'active',
              password_set_at = ?,
              session_version = session_version + 1
-         WHERE email = ?
+         WHERE id = ?
+           AND password_hash = ?
            AND active = 1
+           AND deleted_at IS NULL
            AND migration_status = 'pending_reset'
            AND password_set_at IS NULL
            AND (? IS NULL OR venue_id = ?)
          RETURNING id`,
-      ).bind(passwordHash, nowIso, normalizedEmail, expectedVenueId, expectedVenueId),
+      ).bind(
+        passwordHash,
+        nowIso,
+        candidate.id,
+        candidate.password_hash,
+        expectedVenueId,
+        expectedVenueId,
+      ),
       env.DB.prepare(
         `UPDATE password_reset_tokens
          SET used = 1
-         WHERE user_id = (SELECT id FROM users WHERE email = ?)
+         WHERE user_id = ?
            AND used = 0
            AND changes() = 1
          RETURNING user_id`,
-      ).bind(normalizedEmail),
+      ).bind(candidate.id),
+      env.DB.prepare(
+        `INSERT INTO user_audit_events (
+           id, venue_id, actor_user_id, target_user_id, action, details, created_at
+         )
+         SELECT ?, venue_id, id, id, 'password_setup_completed', ?, ?
+         FROM users
+         WHERE id = ?
+           AND migration_status = 'active'
+           AND password_set_at = ?`,
+      ).bind(
+        crypto.randomUUID(),
+        JSON.stringify({ method: "manual_setup_code" }),
+        nowIso,
+        candidate.id,
+        nowIso,
+      ),
     ]);
 
     const claimedUserId = (

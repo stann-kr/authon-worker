@@ -57,14 +57,15 @@ Client
 | External Link | 외부 DJ가 계정 없이 게스트를 등록하는 공개 링크 |
 | Check-in | 도어 운영자의 입장 확인 기록 |
 | Password Reset | 비밀번호 재설정 토큰과 메일 발송 흐름 |
-| Account Claim | 이관 대기 계정의 1회성 직접 비밀번호 설정 |
+| Account Setup | 관리자 또는 이관 절차가 발급한 1회용 설정 코드 기반 비밀번호 설정 |
+| User Audit | 계정 생성, Role·상태·비밀번호 설정과 삭제 작업 기록 |
 
 ## 역할과 접근 범위
 
 | 역할 | 주요 접근 범위 |
 |---|---|
 | `super_admin` | 전체 운영 관리 |
-| `venue_admin` | 특정 베뉴의 사용자·게스트·링크 관리 |
+| `venue_admin` | 특정 베뉴의 하위 사용자·게스트·링크 관리 |
 | `door_staff` | 도어 체크인과 게스트 확인 |
 | `staff` | 게스트 등록과 조회 |
 | `dj` | 본인/허용 범위의 게스트 등록 |
@@ -75,7 +76,7 @@ Client
 |---|---|---|
 | `/auth/login` | 공개 | 로그인 |
 | `/auth/reset-password` | 공개 | 비밀번호 재설정 |
-| `/api/auth/claim-account` | 공개 API | 이관 대기 계정 1회성 활성화 |
+| `/api/auth/claim-account` | 공개 API | 검증된 1회용 설정 코드로 비밀번호 설정 |
 | `/guest?token=...` | 공개 링크 | 외부 DJ 게스트 등록 |
 | `/` | 인증 필요 | 대시보드 |
 | `/guest` | 인증 필요 | 게스트 등록/관리 |
@@ -88,11 +89,15 @@ Client
 - 로그인 후 HTTP-only cookie 기반 JWT를 발급한다.
 - KV session을 함께 확인해 로그아웃과 세션 무효화를 반영한다.
 - 비밀번호 변경/재설정 이후 기존 세션을 무효화할 수 있도록 session version을 사용한다.
+- Role 변경, 비활성화·재활성화와 삭제 처리도 session version을 변경해 기존 세션의 재사용을 차단한다.
 - 신규 비밀번호 hash는 WebCrypto PBKDF2 계열을 기준으로 관리하고, 기존 hash는 점진 전환한다.
 - reset token 원문은 저장하지 않고 hash만 저장한다.
-- 이관 대기 계정의 직접 설정은 `pending_reset`이면서 아직 비밀번호를 설정하지 않은 활성 계정에만 허용한다.
-- 직접 설정 성공 시 migration 상태와 session version을 원자적으로 변경하고 기존 reset token을 모두 사용 처리한다.
-- 직접 설정 요청은 IP와 이메일 조합으로 rate limit하며, 한 번 활성화된 계정은 같은 경로를 다시 사용할 수 없다.
+- 최초 설정은 `pending_reset`이면서 아직 비밀번호를 설정하지 않은 활성 계정에만 허용하고, 관리자가 별도로 전달한 1회용 설정 코드 hash까지 확인한다.
+- 설정 성공 시 계정 상태와 session version을 원자적으로 변경하고 기존 reset token을 모두 사용 처리한다.
+- 설정 요청은 IP와 이메일 조합으로 rate limit하며, 완료된 설정 코드와 경로는 재사용할 수 없다.
+- 운영 화면의 사용자 디렉터리는 식별과 표시를 위한 최소 필드만 반환하고, 관리자 목록도 인증 내부 필드를 제외한 전용 DTO를 사용한다.
+- 사용자 삭제는 참조 무결성과 운영 감사 기록을 보존하는 soft delete이며, 비활성 계정에서만 실행하고 개인정보·인증 정보를 제거한다.
+- 자기 계정의 Role·상태·삭제·관리자 재설정과 베뉴 관리자의 권한 상승·베뉴 간 변경은 서버에서 거부한다.
 
 ## 데이터 모델 요약
 
@@ -100,7 +105,8 @@ Client
 |---|---|
 | `venues` | 베뉴 정보와 활성 상태 |
 | `venue_domains` | host, platform/venue scope, 베뉴별 대표 도메인과 기본 언어 |
-| `users` | 계정, role, venue scope, session/migration 상태와 선호 언어 |
+| `users` | 계정, role, venue scope, session/setup 상태, 최근 로그인, 삭제 처리와 선호 언어 |
+| `user_audit_events` | 사용자 계정 관리 작업의 actor, 대상, 작업 종류와 시각 |
 | `external_dj_links` | 외부 DJ 등록 링크, 정원/사용량, 생성 시각과 언어 모드 |
 | `guests` | 게스트 등록 정보와 체크인 전 상태 |
 | `check_ins` | 체크인 기록 |
@@ -111,7 +117,7 @@ Client
 | 변경 영역 | 함께 확인할 내용 |
 |---|---|
 | 인증/세션 | middleware, auth route, server auth helper, KV session invalidation |
-| 권한/role | route guard, Server Action guard, venue scoping |
+| 권한/role | route guard, Server Action guard, venue scoping, session 무효화, 자기 계정·권한 상승 방지 |
 | 도메인/브랜드 | host resolver, venue domain mapping, metadata, email/link canonical URL |
 | 게스트 등록 | external link flow, guest limit, date/status 계산 |
 | D1 schema | Drizzle schema, migration files, affected queries |

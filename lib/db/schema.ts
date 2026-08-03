@@ -1,5 +1,5 @@
 import { sql } from 'drizzle-orm';
-import { sqliteTable, text, integer, index, uniqueIndex } from 'drizzle-orm/sqlite-core';
+import { sqliteTable, text, integer, index, uniqueIndex, type AnySQLiteColumn } from 'drizzle-orm/sqlite-core';
 
 export const venues = sqliteTable('venues', {
   id: text('id').primaryKey(),
@@ -45,8 +45,27 @@ export const users = sqliteTable('users', {
   migratedAt: text('migrated_at'),
   passwordSetAt: text('password_set_at'),
   preferredLocale: text('preferred_locale'),
+  lastLoginAt: text('last_login_at'),
+  deletedAt: text('deleted_at'),
+  deletedBy: text('deleted_by').references((): AnySQLiteColumn => users.id),
   createdAt: text('created_at').notNull(),
-}, (t) => [index('idx_users_venue').on(t.venueId)]);
+}, (t) => [
+  index('idx_users_venue').on(t.venueId),
+  index('idx_users_venue_active_deleted').on(t.venueId, t.active, t.deletedAt),
+]);
+
+export const userAuditEvents = sqliteTable('user_audit_events', {
+  id: text('id').primaryKey(),
+  venueId: text('venue_id').references(() => venues.id),
+  actorUserId: text('actor_user_id').references(() => users.id),
+  targetUserId: text('target_user_id').notNull().references(() => users.id),
+  action: text('action').notNull(),
+  details: text('details'),
+  createdAt: text('created_at').notNull(),
+}, (t) => [
+  index('idx_user_audit_events_target_created').on(t.targetUserId, t.createdAt),
+  index('idx_user_audit_events_venue_created').on(t.venueId, t.createdAt),
+]);
 
 export const externalDjLinks = sqliteTable('external_dj_links', {
   id: text('id').primaryKey(),

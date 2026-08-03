@@ -64,13 +64,14 @@ export const login = async (
 
 export const claimMigratedAccount = async (
   email: string,
+  setupCode: string,
   newPassword: string,
 ): Promise<{ success: boolean; message?: string; code?: string }> => {
   try {
     const res = await fetch("/api/auth/claim-account", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, newPassword }),
+      body: JSON.stringify({ email, setupCode, newPassword }),
     });
     const data = await res.json().catch(() => ({}));
 

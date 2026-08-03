@@ -1,9 +1,14 @@
 "use server";
 
 import { getCloudflareContext } from "@opennextjs/cloudflare";
-import { eq, asc } from "drizzle-orm";
-import { users, passwordResetTokens } from "../db/schema";
-import { type User, type ApiResponse } from "./types";
+import { and, asc, desc, eq, isNull, ne, sql, type SQL } from "drizzle-orm";
+import { users, passwordResetTokens, userAuditEvents } from "../db/schema";
+import {
+  type User,
+  type UserAuditEvent,
+  type UserDirectoryEntry,
+  type ApiResponse,
+} from "./types";
 import { hashPassword } from "../auth/password";
 import { requireAuth, requireRole, type Role } from "../auth/server";
 import { getDb } from "../db/client";
@@ -13,36 +18,227 @@ import { getPasswordPolicyError } from "../auth/password-policy";
 import { getVenueDeliveryContext } from "../tenant/server";
 import { isLocale, type Locale } from "@/i18n/config";
 import { getTranslations } from "next-intl/server";
+import {
+  canManageTargetAccount,
+  canManageTargetRole,
+  isRole,
+  isVenueManagedRole,
+} from "@/lib/users/policy";
 
-export async function fetchUsersByVenue(venueId?: string | null): Promise<ApiResponse<User[]>> {
+type UserActionErrorCode =
+  | "CANNOT_MANAGE_SELF"
+  | "FORBIDDEN"
+  | "INVALID_INPUT"
+  | "INVALID_ROLE"
+  | "LAST_SUPER_ADMIN"
+  | "USER_DELETED"
+  | "USER_INACTIVE"
+  | "USER_MUST_BE_INACTIVE"
+  | "USER_NOT_FOUND"
+  | "UPDATE_FAILED";
+
+class UserActionError extends Error {
+  constructor(readonly code: UserActionErrorCode) {
+    super(code);
+  }
+}
+
+const managedUserFields = {
+  id: users.id,
+  venueId: users.venueId,
+  email: users.email,
+  name: users.name,
+  role: users.role,
+  guestLimit: users.guestLimit,
+  active: users.active,
+  migrationStatus: users.migrationStatus,
+  preferredLocale: users.preferredLocale,
+  passwordSetAt: users.passwordSetAt,
+  createdAt: users.createdAt,
+  lastLoginAt: users.lastLoginAt,
+  deletedAt: users.deletedAt,
+};
+
+function toUser(row: {
+  id: string;
+  venueId: string | null;
+  email: string;
+  name: string;
+  role: string;
+  guestLimit: number | null;
+  active: boolean;
+  migrationStatus: string;
+  preferredLocale: string | null;
+  passwordSetAt: string | null;
+  createdAt: string;
+  lastLoginAt: string | null;
+  deletedAt: string | null;
+}): User {
+  if (!isRole(row.role)) throw new UserActionError("INVALID_ROLE");
+  if (
+    row.migrationStatus !== "native" &&
+    row.migrationStatus !== "pending_reset" &&
+    row.migrationStatus !== "active"
+  ) {
+    throw new UserActionError("INVALID_INPUT");
+  }
+
+  return {
+    ...row,
+    role: row.role,
+    migrationStatus: row.migrationStatus,
+    preferredLocale: isLocale(row.preferredLocale) ? row.preferredLocale : null,
+  };
+}
+
+function parseAuditDetails(details: string | null): Record<string, unknown> | null {
+  if (!details) return null;
+  try {
+    const parsed = JSON.parse(details) as unknown;
+    return parsed && typeof parsed === "object"
+      ? (parsed as Record<string, unknown>)
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+function getUserActionError(error: unknown, fallback: UserActionErrorCode): string {
+  return error instanceof UserActionError ? error.code : fallback;
+}
+
+async function getTargetUser(userId: string) {
+  const db = getDb();
+  const [target] = await db
+    .select(managedUserFields)
+    .from(users)
+    .where(eq(users.id, userId))
+    .limit(1);
+
+  if (!target) throw new UserActionError("USER_NOT_FOUND");
+  return toUser(target);
+}
+
+function assertManagedTarget(
+  actor: Awaited<ReturnType<typeof requireAuth>>,
+  target: User,
+): void {
+  if (actor.id === target.id) throw new UserActionError("CANNOT_MANAGE_SELF");
+  if (target.deletedAt) throw new UserActionError("USER_DELETED");
+  if (!canManageTargetAccount(actor, target)) {
+    throw new UserActionError("FORBIDDEN");
+  }
+}
+
+async function assertAnotherActiveSuperAdmin(targetId: string): Promise<void> {
+  const db = getDb();
+  const [remaining] = await db
+    .select({ id: users.id })
+    .from(users)
+    .where(
+      and(
+        eq(users.role, "super_admin"),
+        eq(users.active, true),
+        isNull(users.deletedAt),
+        ne(users.id, targetId),
+      ),
+    )
+    .limit(1);
+
+  if (!remaining) throw new UserActionError("LAST_SUPER_ADMIN");
+}
+
+function generateSetupCode(): string {
+  const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  const bytes = crypto.getRandomValues(new Uint8Array(8));
+  const value = Array.from(bytes, (byte) => alphabet[byte % alphabet.length]).join("");
+  return `AUTH-${value.slice(0, 4)}-${value.slice(4)}`;
+}
+
+export async function fetchUsersByVenue(
+  venueId?: string | null,
+): Promise<ApiResponse<UserDirectoryEntry[]>> {
   try {
     const actor = await requireRole(["super_admin", "venue_admin", "door_staff", "staff", "dj"]);
     const db = getDb();
     const effectiveVenueId = actor.role === "super_admin" ? venueId : actor.venueId;
 
     if (actor.role !== "super_admin" && !effectiveVenueId) {
-      throw new Error("Forbidden");
+      throw new UserActionError("FORBIDDEN");
     }
 
-    let query = db.select().from(users).$dynamic();
+    let query = db
+      .select({ id: users.id, name: users.name, role: users.role })
+      .from(users)
+      .$dynamic();
 
-    if (effectiveVenueId) {
-      query = query.where(eq(users.venueId, effectiveVenueId));
-    }
+    if (effectiveVenueId) query = query.where(eq(users.venueId, effectiveVenueId));
 
     const result = await query.orderBy(asc(users.name));
     return {
-      data: result.map((user) => ({
-        ...user,
-        role: user.role as User["role"],
-        migrationStatus: user.migrationStatus as User["migrationStatus"],
-        preferredLocale: isLocale(user.preferredLocale) ? user.preferredLocale : null,
+      data: result.map((user) => {
+        if (!isRole(user.role)) throw new UserActionError("INVALID_ROLE");
+        return { ...user, role: user.role };
+      }),
+      error: null,
+    };
+  } catch (error: unknown) {
+    console.error("Failed to fetch user directory:", error);
+    return { data: null, error: "Unable to load users right now." };
+  }
+}
+
+export async function fetchManagedUsersByVenue(
+  venueId?: string | null,
+): Promise<ApiResponse<User[]>> {
+  try {
+    const actor = await requireRole(["super_admin", "venue_admin"]);
+    const db = getDb();
+    const effectiveVenueId = actor.role === "super_admin" ? venueId : actor.venueId;
+
+    if (actor.role !== "super_admin" && !effectiveVenueId) {
+      throw new UserActionError("FORBIDDEN");
+    }
+
+    let query = db.select(managedUserFields).from(users).$dynamic();
+    if (effectiveVenueId) query = query.where(eq(users.venueId, effectiveVenueId));
+
+    const result = await query.orderBy(asc(users.name));
+    return { data: result.map(toUser), error: null };
+  } catch (error: unknown) {
+    console.error("Failed to fetch managed users:", error);
+    return { data: null, error: "Unable to load users right now." };
+  }
+}
+
+export async function fetchUserAuditEvents(
+  venueId?: string | null,
+): Promise<ApiResponse<UserAuditEvent[]>> {
+  try {
+    const actor = await requireRole(["super_admin", "venue_admin"]);
+    const db = getDb();
+    const effectiveVenueId = actor.role === "super_admin" ? venueId : actor.venueId;
+
+    if (actor.role !== "super_admin" && !effectiveVenueId) {
+      throw new UserActionError("FORBIDDEN");
+    }
+
+    let query = db.select().from(userAuditEvents).$dynamic();
+    if (effectiveVenueId) {
+      query = query.where(eq(userAuditEvents.venueId, effectiveVenueId));
+    }
+
+    const result = await query.orderBy(desc(userAuditEvents.createdAt)).limit(50);
+    return {
+      data: result.map((event) => ({
+        ...event,
+        details: parseAuditDetails(event.details),
       })),
       error: null,
     };
   } catch (error: unknown) {
-    console.error("Failed to fetch users:", error);
-    return { data: null, error: "Unable to load users right now." };
+    console.error("Failed to fetch user audit events:", error);
+    return { data: null, error: "Unable to load user activity right now." };
   }
 }
 
@@ -52,60 +248,117 @@ export async function updateUserProfile(
     name?: string;
     guestLimit?: number | null;
     active?: boolean;
-    role?: string;
+    role?: Role;
   },
 ): Promise<ApiResponse<User>> {
   try {
     const actor = await requireAuth();
     const isSelfUpdate = actor.id === userId;
-    const isSuperAdmin = actor.role === "super_admin";
-    const isVenueAdmin = actor.role === "venue_admin";
+    const db = getDb();
+    const target = await getTargetUser(userId);
 
-    if (!isSelfUpdate && !isSuperAdmin && !isVenueAdmin) {
-      throw new Error("Forbidden");
+    if (isSelfUpdate) {
+      if (
+        updates.guestLimit !== undefined ||
+        updates.active !== undefined ||
+        updates.role !== undefined
+      ) {
+        throw new UserActionError("CANNOT_MANAGE_SELF");
+      }
+    } else {
+      assertManagedTarget(actor, target);
     }
 
-    const db = getDb();
+    const dbUpdates: Partial<Omit<typeof users.$inferInsert, "sessionVersion">> & {
+      sessionVersion?: number | SQL;
+    } = {};
+    const changedFields: string[] = [];
 
-    // venue_admin은 자신의 venue 소속 유저만 관리 가능 (venue 간 권한 침범 방지)
-    if (!isSelfUpdate && isVenueAdmin) {
-      const targetResult = await db.select({ venueId: users.venueId }).from(users).where(eq(users.id, userId)).limit(1);
-      if (targetResult[0]?.venueId !== actor.venueId) {
-        throw new Error("Forbidden");
+    if (updates.name !== undefined) {
+      const name = updates.name.trim();
+      if (!name || name.length > 100) throw new UserActionError("INVALID_INPUT");
+      if (name !== target.name) {
+        dbUpdates.name = name;
+        changedFields.push("name");
       }
     }
 
-    const dbUpdates: Partial<typeof users.$inferInsert> = {};
-
-    if (updates.name !== undefined) dbUpdates.name = updates.name;
-
-    if (isSuperAdmin || isVenueAdmin) {
-      if (updates.guestLimit !== undefined) dbUpdates.guestLimit = updates.guestLimit;
-      if (updates.active !== undefined) dbUpdates.active = updates.active;
+    if (updates.guestLimit !== undefined) {
+      if (isSelfUpdate) throw new UserActionError("CANNOT_MANAGE_SELF");
+      if (
+        updates.guestLimit !== null &&
+        (!Number.isInteger(updates.guestLimit) || updates.guestLimit < 0 || updates.guestLimit > 999)
+      ) {
+        throw new UserActionError("INVALID_INPUT");
+      }
+      if (updates.guestLimit !== target.guestLimit) {
+        dbUpdates.guestLimit = updates.guestLimit;
+        changedFields.push("guestLimit");
+      }
     }
 
-    // role 승격은 super_admin만 가능 (venue_admin의 권한 상승 방지)
     if (updates.role !== undefined) {
-      if (!isSuperAdmin) throw new Error("Forbidden");
-      dbUpdates.role = updates.role;
+      if (!isRole(updates.role) || !canManageTargetRole(actor.role, target.role, updates.role)) {
+        throw new UserActionError("INVALID_ROLE");
+      }
+      if (updates.role !== target.role) {
+        dbUpdates.role = updates.role;
+        dbUpdates.sessionVersion = sql`${users.sessionVersion} + 1`;
+        changedFields.push("role");
+      }
     }
 
-    await db.update(users).set(dbUpdates).where(eq(users.id, userId));
-    const result = await db.select().from(users).where(eq(users.id, userId));
-    return {
-      data: result[0]
-        ? {
-            ...result[0],
-            role: result[0].role as User["role"],
-            migrationStatus: result[0].migrationStatus as User["migrationStatus"],
-            preferredLocale: isLocale(result[0].preferredLocale) ? result[0].preferredLocale : null,
-          }
-        : null,
-      error: null,
-    };
+    if (updates.active !== undefined && updates.active !== target.active) {
+      if (isSelfUpdate) throw new UserActionError("CANNOT_MANAGE_SELF");
+      if (!updates.active && target.role === "super_admin") {
+        await assertAnotherActiveSuperAdmin(target.id);
+      }
+      dbUpdates.active = updates.active;
+      dbUpdates.sessionVersion = sql`${users.sessionVersion} + 1`;
+      changedFields.push("active");
+    }
+
+    if (changedFields.length === 0) return { data: target, error: null };
+
+    const updateStatement = db.update(users).set(dbUpdates).where(eq(users.id, userId));
+
+    if (!isSelfUpdate) {
+      const nowIso = new Date().toISOString();
+      const action =
+        changedFields.length === 1 && changedFields[0] === "role"
+          ? "role_changed"
+          : changedFields.length === 1 && changedFields[0] === "active"
+            ? updates.active
+              ? "reactivated"
+              : "deactivated"
+            : "user_updated";
+      const details = JSON.stringify({
+        fields: changedFields,
+        ...(changedFields.includes("role")
+          ? { previousRole: target.role, nextRole: updates.role }
+          : {}),
+      });
+
+      await db.batch([
+        updateStatement,
+        db.insert(userAuditEvents).values({
+          id: crypto.randomUUID(),
+          venueId: target.venueId,
+          actorUserId: actor.id,
+          targetUserId: target.id,
+          action,
+          details,
+          createdAt: nowIso,
+        }),
+      ]);
+    } else {
+      await updateStatement;
+    }
+
+    return { data: await getTargetUser(userId), error: null };
   } catch (error: unknown) {
     console.error("Failed to update user:", error);
-    return { data: null, error: "Unable to update user right now." };
+    return { data: null, error: getUserActionError(error, "UPDATE_FAILED") };
   }
 }
 
@@ -121,57 +374,171 @@ export async function createUserViaEdge(params: {
   try {
     const actor = await requireRole(["super_admin", "venue_admin"]);
 
-    if (!params.password) {
-      return { data: null, error: "비밀번호를 입력해주세요." };
-    }
+    if (!params.password) return { data: null, error: "INVALID_INPUT" };
 
     const passwordPolicyError = getPasswordPolicyError(params.password);
     if (passwordPolicyError) {
-      return { data: null, error: passwordPolicyError };
+      return { data: null, error: "INVALID_INPUT" };
     }
 
     const venueId = actor.role === "super_admin" ? params.venueId || null : actor.venueId;
     if (!venueId) {
-      throw new Error("Forbidden");
+      throw new UserActionError("FORBIDDEN");
     }
 
-    if (actor.role !== "super_admin" && (params.role === "super_admin" || params.role === "venue_admin")) {
-      throw new Error("Forbidden");
+    if (
+      params.role === "super_admin" ||
+      (actor.role !== "super_admin" && !isVenueManagedRole(params.role))
+    ) {
+      throw new UserActionError("INVALID_ROLE");
     }
 
     const db = getDb();
     const id = crypto.randomUUID();
     const passwordHash = await hashPassword(params.password);
+    const normalizedEmail = params.email.trim().toLowerCase();
+    const name = params.name.trim();
+    if (!normalizedEmail || !name || name.length > 100) {
+      throw new UserActionError("INVALID_INPUT");
+    }
+    if (
+      params.guestLimit !== undefined &&
+      (!Number.isInteger(params.guestLimit) || params.guestLimit < 0 || params.guestLimit > 999)
+    ) {
+      throw new UserActionError("INVALID_INPUT");
+    }
+    const nowIso = new Date().toISOString();
 
-    await db.insert(users).values({
-      id,
-      email: params.email,
-      name: params.name,
-      role: params.role,
-      venueId,
-      guestLimit: params.guestLimit || null,
-      passwordHash,
-      active: true,
-      preferredLocale: isLocale(params.preferredLocale) ? params.preferredLocale : null,
-      createdAt: new Date().toISOString(),
-    });
+    await db.batch([
+      db.insert(users).values({
+        id,
+        email: normalizedEmail,
+        name,
+        role: params.role,
+        venueId,
+        guestLimit: params.guestLimit ?? null,
+        passwordHash,
+        active: true,
+        migrationStatus: "pending_reset",
+        passwordSetAt: null,
+        preferredLocale: isLocale(params.preferredLocale) ? params.preferredLocale : null,
+        createdAt: nowIso,
+      }),
+      db.insert(userAuditEvents).values({
+        id: crypto.randomUUID(),
+        venueId,
+        actorUserId: actor.id,
+        targetUserId: id,
+        action: "created",
+        details: JSON.stringify({ role: params.role }),
+        createdAt: nowIso,
+      }),
+    ]);
 
     return { data: { id }, error: null };
   } catch (error: unknown) {
     console.error("Failed to create user:", error);
-    return { data: null, error: "Unable to create user right now." };
+    return { data: null, error: getUserActionError(error, "UPDATE_FAILED") };
+  }
+}
+
+export async function requireFirstLoginPasswordSetup(
+  userId: string,
+): Promise<ApiResponse<{ setupCode: string }>> {
+  try {
+    const actor = await requireRole(["super_admin", "venue_admin"]);
+    const target = await getTargetUser(userId);
+    assertManagedTarget(actor, target);
+    if (!target.active) throw new UserActionError("USER_INACTIVE");
+
+    const db = getDb();
+    const setupCode = generateSetupCode();
+    const passwordHash = await hashPassword(setupCode);
+    const nowIso = new Date().toISOString();
+
+    await db.batch([
+      db
+        .update(users)
+        .set({
+          passwordHash,
+          migrationStatus: "pending_reset",
+          passwordSetAt: null,
+          sessionVersion: sql`${users.sessionVersion} + 1`,
+        })
+        .where(eq(users.id, target.id)),
+      db
+        .update(passwordResetTokens)
+        .set({ used: true })
+        .where(eq(passwordResetTokens.userId, target.id)),
+      db.insert(userAuditEvents).values({
+        id: crypto.randomUUID(),
+        venueId: target.venueId,
+        actorUserId: actor.id,
+        targetUserId: target.id,
+        action: "password_reset_required",
+        details: JSON.stringify({ delivery: "manual_setup_code" }),
+        createdAt: nowIso,
+      }),
+    ]);
+
+    return { data: { setupCode }, error: null };
+  } catch (error: unknown) {
+    console.error("Failed to require first-login password setup:", error);
+    return { data: null, error: getUserActionError(error, "UPDATE_FAILED") };
   }
 }
 
 export async function deleteUserViaEdge(userId: string): Promise<{ error: string | null }> {
   try {
-    await requireRole(["super_admin"]);
+    const actor = await requireRole(["super_admin", "venue_admin"]);
+    const target = await getTargetUser(userId);
+    assertManagedTarget(actor, target);
+    if (target.active) throw new UserActionError("USER_MUST_BE_INACTIVE");
+    if (target.role === "super_admin") await assertAnotherActiveSuperAdmin(target.id);
+
     const db = getDb();
-    await db.delete(users).where(eq(users.id, userId));
+    const deletedAt = new Date().toISOString();
+    const passwordHash = await hashPassword(crypto.randomUUID());
+    const tombstoneEmail = `deleted+${target.id}@deleted.invalid`;
+
+    await db.batch([
+      db
+        .update(users)
+        .set({
+          legacyAuthUserId: null,
+          email: tombstoneEmail,
+          passwordHash,
+          name: "Deleted user",
+          guestLimit: null,
+          active: false,
+          sessionVersion: sql`${users.sessionVersion} + 1`,
+          migrationStatus: "active",
+          passwordSetAt: null,
+          preferredLocale: null,
+          lastLoginAt: null,
+          deletedAt,
+          deletedBy: actor.id,
+        })
+        .where(eq(users.id, target.id)),
+      db
+        .update(passwordResetTokens)
+        .set({ used: true })
+        .where(eq(passwordResetTokens.userId, target.id)),
+      db.insert(userAuditEvents).values({
+        id: crypto.randomUUID(),
+        venueId: target.venueId,
+        actorUserId: actor.id,
+        targetUserId: target.id,
+        action: "deleted",
+        details: JSON.stringify({ previousRole: target.role, personalDataRemoved: true }),
+        createdAt: deletedAt,
+      }),
+    ]);
+
     return { error: null };
   } catch (error: unknown) {
     console.error("Failed to delete user:", error);
-    return { error: "Unable to delete user right now." };
+    return { error: getUserActionError(error, "UPDATE_FAILED") };
   }
 }
 
@@ -179,6 +546,9 @@ export async function resendInvitationViaEdge(userId: string): Promise<{ error: 
   try {
     const { env } = getCloudflareContext();
     const actor = await requireRole(["super_admin", "venue_admin"]);
+    const user = await getTargetUser(userId);
+    assertManagedTarget(actor, user);
+    if (!user.active) throw new UserActionError("USER_INACTIVE");
 
     if (!isEmailConfigured(env)) {
       return {
@@ -188,14 +558,6 @@ export async function resendInvitationViaEdge(userId: string): Promise<{ error: 
     }
 
     const db = getDb();
-
-    const userResult = await db.select().from(users).where(eq(users.id, userId)).limit(1);
-    const user = userResult[0];
-
-    if (!user) return { error: "User not found." };
-    if (actor.role !== "super_admin" && user.venueId !== actor.venueId) {
-      throw new Error("Forbidden");
-    }
 
     const token = generateResetToken();
     const tokenHash = await hashResetToken(token);

@@ -23,7 +23,7 @@ import {
 } from "../../../lib/api/guests";
 import { fetchUsersByVenue } from "../../../lib/api/users";
 import { fetchExternalLinksByDate } from "../../../lib/api/external-links";
-import type { Guest, User, ExternalDJLink } from "../../../lib/api/types";
+import type { Guest, UserDirectoryEntry, ExternalDJLink } from "../../../lib/api/types";
 import { useLocale, useTranslations } from "next-intl";
 
 interface GuestListProps {
@@ -42,7 +42,7 @@ export default function GuestList({
   const [loadingStates, setLoadingStates] = useState<{
     [key: string]: boolean;
   }>({});
-  const [users, setUsers] = useState<User[]>([]);
+  const [users, setUsers] = useState<UserDirectoryEntry[]>([]);
   const [externalLinks, setExternalLinks] = useState<ExternalDJLink[]>([]);
   const [guests, setGuests] = useState<Guest[]>([]);
   const [isFetching, setIsFetching] = useState(true);
@@ -56,7 +56,7 @@ export default function GuestList({
   // 로딩 중 이전 데이터를 유지하여 화면 깜빡임 방지
   const displayCacheRef = useRef<{
     guests: Guest[];
-    users: User[];
+    users: UserDirectoryEntry[];
     externalLinks: ExternalDJLink[];
   }>({
     guests: [],

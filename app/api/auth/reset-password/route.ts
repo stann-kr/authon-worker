@@ -193,6 +193,22 @@ export async function PUT(request: Request) {
            AND changes() = 1
          RETURNING user_id`
       ).bind(tokenHash, nowIso),
+      env.DB.prepare(
+        `INSERT INTO user_audit_events (
+           id, venue_id, actor_user_id, target_user_id, action, details, created_at
+         )
+         SELECT ?, u.venue_id, u.id, u.id, 'password_reset_completed', ?, ?
+         FROM users u
+         JOIN password_reset_tokens prt ON prt.user_id = u.id
+         WHERE prt.token = ?
+           AND u.password_set_at = ?`,
+      ).bind(
+        crypto.randomUUID(),
+        JSON.stringify({ method: "email_token" }),
+        nowIso,
+        tokenHash,
+        nowIso,
+      ),
     ]);
 
     const updatedUserId = (passwordResult.results?.[0] as { id?: string } | undefined)?.id;

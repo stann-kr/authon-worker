@@ -136,13 +136,14 @@ export async function middleware(request: NextRequest) {
         role: users.role,
         venueId: users.venueId,
         active: users.active,
+        deletedAt: users.deletedAt,
         sessionVersion: users.sessionVersion,
       })
       .from(users)
       .where(eq(users.id, userId))
       .limit(1);
     const user = userRows[0];
-    if (!user?.active) {
+    if (!user?.active || user.deletedAt) {
       return NextResponse.redirect(new URL("/auth/login", request.url));
     }
 

@@ -22,6 +22,7 @@ export default function LoginPage() {
     password: "",
   });
   const [setupPassword, setSetupPassword] = useState("");
+  const [setupCode, setSetupCode] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [mode, setMode] = useState<LoginMode>("login");
   const [isLoading, setIsLoading] = useState(false);
@@ -65,6 +66,7 @@ export default function LoginPage() {
 
   const enterSetupMode = () => {
     setMode("setup");
+    setSetupCode(formData.password);
     setFormData((current) => ({ ...current, password: "" }));
     setSetupPassword("");
     setConfirmPassword("");
@@ -74,6 +76,7 @@ export default function LoginPage() {
   const returnToLogin = () => {
     setMode("login");
     setSetupPassword("");
+    setSetupCode("");
     setConfirmPassword("");
     setError("");
   };
@@ -123,6 +126,7 @@ export default function LoginPage() {
     try {
       const claimResult = await claimMigratedAccount(
         formData.email,
+        setupCode,
         setupPassword,
       );
       if (!claimResult.success) {
