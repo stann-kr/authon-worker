@@ -12,6 +12,7 @@ import {
   LOCALE_COOKIE_NAME,
   REQUEST_LOCALE_HEADER,
 } from "@/i18n/config";
+import { hasAccess, isAccountKind, isRole } from "@/lib/users/policy";
 
 function parseStoredSession(raw: string): { userId?: string; sessionVersion?: number } | null {
   try {
@@ -134,6 +135,8 @@ export async function middleware(request: NextRequest) {
     const userRows = await db
       .select({
         role: users.role,
+        accountKind: users.accountKind,
+        doorAccessEnabled: users.doorAccessEnabled,
         venueId: users.venueId,
         active: users.active,
         deletedAt: users.deletedAt,
@@ -143,9 +146,21 @@ export async function middleware(request: NextRequest) {
       .where(eq(users.id, userId))
       .limit(1);
     const user = userRows[0];
-    if (!user?.active || user.deletedAt) {
+    const currentRole = user?.role;
+    const currentAccountKind = user?.accountKind;
+    if (
+      !user?.active ||
+      user.deletedAt ||
+      !isRole(currentRole) ||
+      !isAccountKind(currentAccountKind)
+    ) {
       return NextResponse.redirect(new URL("/auth/login", request.url));
     }
+    const accessSubject = {
+      role: currentRole,
+      accountKind: currentAccountKind,
+      doorAccessEnabled: user.doorAccessEnabled,
+    };
 
     if (requestVenueId && user.role !== "super_admin" && user.venueId !== requestVenueId) {
       return NextResponse.redirect(new URL("/auth/login", request.url));
@@ -158,16 +173,14 @@ export async function middleware(request: NextRequest) {
 
     // ─── RBAC: /admin 경로는 super_admin, venue_admin만 접근 ──
     if (pathname.startsWith("/admin")) {
-      const allowedRoles = ["super_admin", "venue_admin"];
-      if (!allowedRoles.includes(user.role)) {
+      if (!hasAccess(accessSubject, ["admin"])) {
         return NextResponse.redirect(new URL("/door", request.url));
       }
     }
 
     // ─── RBAC: /door 경로는 door_staff, venue_admin, super_admin ──
     if (pathname.startsWith("/door")) {
-      const allowedRoles = ["super_admin", "venue_admin", "door_staff"];
-      if (!allowedRoles.includes(user.role)) {
+      if (!hasAccess(accessSubject, ["door"])) {
         return NextResponse.redirect(new URL("/guest", request.url));
       }
     }

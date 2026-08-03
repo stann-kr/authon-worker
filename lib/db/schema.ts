@@ -37,6 +37,8 @@ export const users = sqliteTable('users', {
   passwordHash: text('password_hash').notNull(),
   name: text('name').notNull(),
   role: text('role').notNull(),
+  accountKind: text('account_kind').notNull().default('personal'),
+  doorAccessEnabled: integer('door_access_enabled', { mode: 'boolean' }).notNull().default(false),
   venueId: text('venue_id').references(() => venues.id),
   guestLimit: integer('guest_limit'),
   active: integer('active', { mode: 'boolean' }).notNull().default(true),
@@ -94,6 +96,7 @@ export const guests = sqliteTable('guests', {
   instagram: text('instagram'),
   externalLinkId: text('external_link_id').references(() => externalDjLinks.id),
   createdByUserId: text('created_by_user_id').references(() => users.id),
+  registeredByName: text('registered_by_name'),
   terminalRequestId: text('terminal_request_id'),
   source: text('source').notNull().default('authon'),
   status: text('status').notNull().default('pending'),
@@ -113,6 +116,28 @@ export const checkIns = sqliteTable('check_ins', {
   checkedBy: text('checked_by').references(() => users.id),
   checkedAt: text('checked_at').notNull(),
 });
+
+export const guestLimitRequests = sqliteTable('guest_limit_requests', {
+  id: text('id').primaryKey(),
+  venueId: text('venue_id').notNull().references(() => venues.id),
+  userId: text('user_id').notNull().references(() => users.id),
+  date: text('date').notNull(),
+  requestedExtra: integer('requested_extra').notNull(),
+  approvedExtra: integer('approved_extra').notNull().default(0),
+  reason: text('reason'),
+  status: text('status').notNull().default('pending'),
+  decidedByUserId: text('decided_by_user_id').references(() => users.id),
+  decidedAt: text('decided_at'),
+  decisionNote: text('decision_note'),
+  createdAt: text('created_at').notNull(),
+  updatedAt: text('updated_at').notNull(),
+}, (t) => [
+  index('idx_guest_limit_requests_venue_status_date').on(t.venueId, t.status, t.date),
+  index('idx_guest_limit_requests_user_date').on(t.userId, t.date),
+  uniqueIndex('idx_guest_limit_requests_one_pending').on(t.userId, t.date).where(
+    sql`${t.status} = 'pending'`,
+  ),
+]);
 
 export const passwordResetTokens = sqliteTable('password_reset_tokens', {
   id: text('id').primaryKey(),

@@ -24,6 +24,8 @@ export interface User {
   email: string;
   name: string;
   role: "super_admin" | "venue_admin" | "door_staff" | "staff" | "dj";
+  accountKind: "personal" | "shared";
+  doorAccessEnabled: boolean;
   guestLimit: number | null;
   active: boolean;
   migrationStatus: "native" | "pending_reset" | "active";
@@ -38,6 +40,8 @@ export interface UserDirectoryEntry {
   id: string;
   name: string;
   role: User["role"];
+  accountKind: User["accountKind"];
+  doorAccessEnabled: boolean;
 }
 
 export interface UserAuditEvent {
@@ -58,11 +62,46 @@ export interface Guest {
   instagram?: string | null;
   externalLinkId?: string | null;
   createdByUserId?: string | null;
+  registeredByName?: string | null;
   status: "pending" | "checked" | "deleted";
   checkInTime?: string | null;
   date: string;
   createdAt: string;
   updatedAt: string;
+}
+
+export type GuestLimitRequestStatus = "pending" | "approved" | "rejected" | "cancelled";
+
+export interface GuestLimitRequest {
+  id: string;
+  venueId: string;
+  userId: string;
+  date: string;
+  requestedExtra: number;
+  approvedExtra: number;
+  reason: string | null;
+  status: GuestLimitRequestStatus;
+  decidedByUserId: string | null;
+  decidedAt: string | null;
+  decisionNote: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface GuestLimitRequestView extends GuestLimitRequest {
+  userName: string;
+  userRole: User["role"];
+}
+
+export interface GuestQuota {
+  date: string;
+  baseLimit: number | null;
+  approvedExtra: number;
+  effectiveLimit: number | null;
+  used: number;
+  remaining: number | null;
+  canRequestExtra: boolean;
+  pendingRequest: GuestLimitRequest | null;
 }
 
 export interface ExternalDJLink {

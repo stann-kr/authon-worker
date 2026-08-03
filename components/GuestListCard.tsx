@@ -23,6 +23,8 @@ interface GuestListCardProps {
   index: number;
   mode?: "registration" | "operations";
   djName?: string;
+  accountKind?: "personal" | "shared";
+  registeredByName?: string | null;
   showRegisteredAt?: boolean;
   onCheck?: () => void;
   onUndo?: () => void;
@@ -37,6 +39,8 @@ const GuestListCard: React.FC<GuestListCardProps> = ({
   index,
   mode = "registration",
   djName,
+  accountKind = "personal",
+  registeredByName,
   showRegisteredAt = false,
   onCheck,
   onUndo,
@@ -73,10 +77,20 @@ const GuestListCard: React.FC<GuestListCardProps> = ({
             <p className="type-row-title break-words">
               {guest.name}
             </p>
-            {djName && (
-              <p className="mt-0.5 text-xs text-text-muted">
-                {t("byName", { name: djName })}
-              </p>
+            {(djName || registeredByName) && (
+              <div className="mt-0.5 flex flex-wrap items-center gap-2 text-xs text-text-muted">
+                {accountKind === "shared" && (
+                  <span className="border border-border-strong bg-canvas px-1.5 py-0.5 font-mono uppercase tracking-wider text-text-heading">
+                    {t("sharedAccount")}
+                  </span>
+                )}
+                {djName ? (
+                  <span>{t("byName", { name: djName })}</span>
+                ) : null}
+                {registeredByName && (
+                  <span>{t("registeredByName", { name: registeredByName })}</span>
+                )}
+              </div>
             )}
 
             {((showRegisteredAt && guest.createdAt) || guest.checkInTime) && (

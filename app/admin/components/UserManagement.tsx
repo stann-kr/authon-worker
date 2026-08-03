@@ -14,6 +14,7 @@ import Alert from "../../../components/Alert";
 import Icon from "../../../components/Icon";
 import Skeleton from "../../../components/Skeleton";
 import OperationsLayout from "../../../components/OperationsLayout";
+import GuestLimitRequestManagement from "./GuestLimitRequestManagement";
 import {
   fetchManagedUsersByVenue,
   fetchUserAuditEvents,
@@ -32,7 +33,7 @@ type Feedback = { type: "success" | "error"; message: string } | null;
 export default function UserManagement() {
   const t = useTranslations("UserAdmin");
   const locale = useLocale();
-  const [activeTab, setActiveTab] = useLocalStorage<"create" | "users" | "migrate">(
+  const [activeTab, setActiveTab] = useLocalStorage<"create" | "users" | "requests" | "migrate">(
     "usermgmt:activeTab",
     "create",
   );
@@ -42,7 +43,7 @@ export default function UserManagement() {
   const [loadError, setLoadError] = useState("");
   const [feedback, setFeedback] = useState<Feedback>(null);
   const [searchQuery, setSearchQuery] = useState("");
-  const [roleFilter, setRoleFilter] = useState<"all" | User["role"]>("all");
+  const [roleFilter, setRoleFilter] = useState<"all" | "shared" | User["role"]>("all");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("current");
   const [busyUserId, setBusyUserId] = useState<string | null>(null);
   const [setupCredential, setSetupCredential] = useState<{
@@ -117,6 +118,8 @@ export default function UserManagement() {
       guestLimit?: number | null;
       active?: boolean;
       role?: User["role"];
+      accountKind?: User["accountKind"];
+      doorAccessEnabled?: boolean;
     },
   ): Promise<boolean> => {
     setBusyUserId(userId);
@@ -227,7 +230,9 @@ export default function UserManagement() {
         !normalizedQuery ||
         user.name.toLowerCase().includes(normalizedQuery) ||
         user.email.toLowerCase().includes(normalizedQuery);
-      const matchesRole = roleFilter === "all" || user.role === roleFilter;
+      const matchesRole =
+        roleFilter === "all" ||
+        (roleFilter === "shared" ? user.accountKind === "shared" : user.role === roleFilter);
       const isSetupPending =
         user.active && user.migrationStatus === "pending_reset" && !user.passwordSetAt;
       const matchesStatus =
@@ -290,6 +295,8 @@ export default function UserManagement() {
         };
       case "users":
         return { title: t("users"), description: t("usersDescription") };
+      case "requests":
+        return { title: t("limitRequests"), description: t("limitRequestsDescription") };
       case "migrate":
         return { title: t("migration"), description: t("migrationDescription") };
       default:
@@ -341,6 +348,17 @@ export default function UserManagement() {
               >
                 <Icon name="user" size={17} />
                 {t("users")}
+              </button>
+              <button
+                onClick={() => setActiveTab("requests")}
+                className={`flex w-full items-center gap-2 border p-3 text-left text-sm font-medium transition-colors ${
+                  activeTab === "requests"
+                    ? "border-border-default border-l-2 border-l-action-primary bg-surface-raised text-text-heading"
+                    : "border-border-default bg-surface-raised text-text-muted hover:text-text-heading"
+                }`}
+              >
+                <Icon name="users" size={17} />
+                {t("limitRequests")}
               </button>
               {isSuperAdmin && (
                 <button
@@ -436,6 +454,9 @@ export default function UserManagement() {
       <div className="min-w-0">
         {activeTab === "create" && <InviteUser />}
         {activeTab === "migrate" && <LegacyUserMigration />}
+        {activeTab === "requests" && (
+          <GuestLimitRequestManagement venueId={effectiveVenueId} />
+        )}
 
         {activeTab === "users" && (
           <div className="app-panel">
@@ -514,6 +535,7 @@ export default function UserManagement() {
                     <option value="door_staff">{t("roleDoorStaff")}</option>
                     <option value="staff">{t("roleStaff")}</option>
                     <option value="dj">{t("roleDj")}</option>
+                    <option value="shared">{t("roleSharedAccount")}</option>
                   </select>
                 </div>
                 <div>
@@ -624,6 +646,8 @@ function UserCard({
       name?: string;
       guestLimit?: number | null;
       role?: User["role"];
+      accountKind?: User["accountKind"];
+      doorAccessEnabled?: boolean;
     },
   ) => Promise<boolean>;
   onToggleActive: (user: User) => Promise<void>;
@@ -652,18 +676,39 @@ function UserCard({
   const [editData, setEditData] = useState({
     name: user.name,
     role: user.role,
+    accountKind: user.accountKind,
+    doorAccessEnabled: user.doorAccessEnabled,
     guestLimit: user.guestLimit,
   });
 
   useEffect(() => {
-    setEditData({ name: user.name, role: user.role, guestLimit: user.guestLimit });
-  }, [user.guestLimit, user.name, user.role]);
+    setEditData({
+      name: user.name,
+      role: user.role,
+      accountKind: user.accountKind,
+      doorAccessEnabled: user.doorAccessEnabled,
+      guestLimit: user.guestLimit,
+    });
+  }, [
+    user.accountKind,
+    user.doorAccessEnabled,
+    user.guestLimit,
+    user.name,
+    user.role,
+  ]);
 
   const handleSave = async () => {
     const saved = await onUpdate(user.id, {
       name: editData.name,
       guestLimit: editData.guestLimit,
-      ...(canEditRole ? { role: editData.role } : {}),
+      ...(canEditRole
+        ? {
+            role: editData.accountKind === "shared" ? "staff" : editData.role,
+            accountKind: editData.accountKind,
+            doorAccessEnabled:
+              editData.accountKind === "shared" && editData.doorAccessEnabled,
+          }
+        : {}),
     });
     if (saved) setIsEditing(false);
   };
@@ -713,7 +758,7 @@ function UserCard({
             </span>
           )}
           <span className="text-xs font-medium">
-            <RoleLabel role={user.role} colored />
+            <RoleLabel role={user.accountKind === "shared" ? "shared" : user.role} colored />
           </span>
         </div>
       </div>
@@ -735,6 +780,22 @@ function UserCard({
               </p>
               <p className={`font-mono text-xs sm:text-sm ${user.active && !isDeleted ? "text-text-heading" : "text-status-danger"}`}>
                 {statusLabel}
+              </p>
+            </div>
+            <div>
+              <p className="mb-1 text-xs text-text-dim">{t("accountType")}</p>
+              <p className="font-mono text-xs text-text-heading">
+                {user.accountKind === "shared" ? t("sharedAccount") : t("personalAccount")}
+              </p>
+            </div>
+            <div>
+              <p className="mb-1 text-xs text-text-dim">{t("doorAccess")}</p>
+              <p className="font-mono text-xs text-text-heading">
+                {user.accountKind === "shared"
+                  ? user.doorAccessEnabled
+                    ? t("enabled")
+                    : t("disabled")
+                  : t("roleBased")}
               </p>
             </div>
             <div>
@@ -825,6 +886,38 @@ function UserCard({
           </div>
           {canEditRole && (
             <fieldset>
+              <legend className="app-label">{t("accountType")}</legend>
+              <div className="grid grid-cols-2 gap-1">
+                {(["personal", "shared"] as const).map((accountKind) => (
+                  <button
+                    key={accountKind}
+                    type="button"
+                    aria-pressed={editData.accountKind === accountKind}
+                    onClick={() =>
+                      setEditData({
+                        ...editData,
+                        accountKind,
+                        role: accountKind === "shared" ? "staff" : editData.role,
+                        doorAccessEnabled:
+                          accountKind === "shared" ? editData.doorAccessEnabled : false,
+                      })
+                    }
+                    disabled={isBusy}
+                    className={`border p-2 text-xs font-medium transition-colors disabled:opacity-50 sm:p-3 ${
+                      editData.accountKind === accountKind
+                        ? "border-action-primary bg-action-primary text-action-text"
+                        : "border-border-strong bg-surface-raised text-text-muted hover:text-text-heading"
+                    }`}
+                  >
+                    {accountKind === "shared" ? t("sharedAccount") : t("personalAccount")}
+                  </button>
+                ))}
+              </div>
+            </fieldset>
+          )}
+
+          {canEditRole && editData.accountKind === "personal" && (
+            <fieldset>
               <legend className="app-label">
                 {t("role")}
               </legend>
@@ -849,6 +942,21 @@ function UserCard({
                 ))}
               </div>
             </fieldset>
+          )}
+
+          {canEditRole && editData.accountKind === "shared" && (
+            <label className="flex items-start gap-3 border border-border-default bg-surface-raised p-3">
+              <input
+                type="checkbox"
+                checked={editData.doorAccessEnabled}
+                onChange={(event) =>
+                  setEditData({ ...editData, doorAccessEnabled: event.target.checked })
+                }
+                disabled={isBusy}
+                className="mt-0.5 h-4 w-4"
+              />
+              <span className="text-sm text-text-heading">{t("doorAccess")}</span>
+            </label>
           )}
 
           <div>
@@ -889,6 +997,8 @@ function UserCard({
                 setEditData({
                   name: user.name,
                   role: user.role,
+                  accountKind: user.accountKind,
+                  doorAccessEnabled: user.doorAccessEnabled,
                   guestLimit: user.guestLimit,
                 });
               }}

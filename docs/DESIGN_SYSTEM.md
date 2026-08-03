@@ -98,7 +98,7 @@ Authon UI는 베뉴 현장에서 반복적으로 사용하는 운영 도구다. 
 
 - `Button`: primary, secondary, outline, danger, ghost variant와 loading state를 제공한다.
 - `PanelHeader`: count, sort, refresh, 추가 action의 위치를 통일한다.
-- `GuestListCard`: waiting, checked, removed 상태와 registration/operations 작업 모드별 action을 표현한다. checked 상태의 되돌리기는 해당 행 안에서 제공한다.
+- `GuestListCard`: waiting, checked, removed 상태와 registration/operations 작업 모드별 action을 표현한다. 공용 계정 게스트는 계정명과 실제 입력자를 함께 표시하고, checked 상태의 되돌리기는 해당 행 안에서 제공한다.
 - `StatusLabel`: 상태별 아이콘, 텍스트, 색상 규칙을 통일한다.
 - `Alert`: error와 success를 live region으로 전달한다.
 - `Skeleton`: list loading 중 레이아웃 공간을 예약한다.
@@ -112,6 +112,7 @@ Authon UI는 베뉴 현장에서 반복적으로 사용하는 운영 도구다. 
 - 되돌리기처럼 특정 guest 상태에 종속된 control은 전역 banner가 아니라 해당 guest 행 안에 표시한다.
 - guest row의 상태는 왼쪽 indicator와 metadata가 전달하고, 우측에는 현재 수행 가능한 action만 둔다. `CHECK IN`과 `UNDO`는 동일한 위치와 최소 폭을 사용한다.
 - 등록자처럼 선택적인 metadata는 값이 없을 때 공간을 예약하지 않는다. 행 본문과 우측 action은 전체 행 높이를 기준으로 수직 중앙 정렬한다.
+- 추가 게스트 요청은 요청 수량을 주요 control로 두고 선택 사유임을 label과 helper text에서 명확히 표시한다. 승인 목록은 요청값, 승인값과 처리 상태를 함께 보여준다.
 - 데이터가 적은 list panel에는 고정 최소 높이를 강제하지 않고 실제 행 수에 맞춰 높이를 결정한다.
 - 등록 시각은 감사 정보가 필요한 Admin guest 목록에서만 표시한다. 입장 시각은 checked 상태의 metadata로 표시한다.
 - panel과 tab group의 외곽선은 가장 바깥 container가 한 번만 그리며, 자식은 내부 구획선만 담당한다.

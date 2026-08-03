@@ -22,6 +22,7 @@ export default function RoleLabel({
     door_staff: t("roleDoorStaff"),
     staff: t("roleStaff"),
     dj: t("roleDj"),
+    shared: t("roleSharedAccount"),
   };
   return (
     <span className={[colorClass, className].filter(Boolean).join(" ")}>

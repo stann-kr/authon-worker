@@ -16,16 +16,8 @@ interface MenuItem {
   description: string;
   icon: IconName;
   href: string;
-  requiredAccess: string[];
+  requiredAccess: import("@/lib/users/policy").AccessScope[];
 }
-
-const roleMenuOrder: Record<User["role"], string[]> = {
-  dj: ["guest"],
-  staff: ["guest"],
-  door_staff: ["guest", "door"],
-  venue_admin: ["guest", "door", "admin"],
-  super_admin: ["guest", "door", "admin"],
-};
 
 export default function Home() {
   const t = useTranslations("Home");
@@ -74,12 +66,7 @@ export default function Home() {
     () =>
       user
         ? menuItems
-            .filter((item) => hasAccess(user.role, item.requiredAccess))
-            .sort(
-              (a, b) =>
-                roleMenuOrder[user.role].indexOf(a.id) -
-                roleMenuOrder[user.role].indexOf(b.id),
-            )
+            .filter((item) => hasAccess(user, item.requiredAccess))
         : [],
     [menuItems, user],
   );

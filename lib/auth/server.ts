@@ -6,7 +6,14 @@ import { users } from "../db/schema";
 import { getDb } from "../db/client";
 import { getRequestTenantContext } from "../tenant/server";
 import { isLocale, type Locale } from "@/i18n/config";
-import { isRole, type Role } from "@/lib/users/policy";
+import {
+  hasAccess,
+  isAccountKind,
+  isRole,
+  type AccessScope,
+  type AccountKind,
+  type Role,
+} from "@/lib/users/policy";
 
 export type { Role } from "@/lib/users/policy";
 
@@ -14,7 +21,10 @@ export interface SessionUser {
   id: string;
   email: string;
   role: Role;
+  accountKind: AccountKind;
+  doorAccessEnabled: boolean;
   venueId: string | null;
+  guestLimit: number | null;
   preferredLocale: Locale | null;
 }
 
@@ -67,7 +77,10 @@ export async function requireAuth(): Promise<SessionUser> {
       id: users.id,
       email: users.email,
       role: users.role,
+      accountKind: users.accountKind,
+      doorAccessEnabled: users.doorAccessEnabled,
       venueId: users.venueId,
+      guestLimit: users.guestLimit,
       active: users.active,
       deletedAt: users.deletedAt,
       sessionVersion: users.sessionVersion,
@@ -78,7 +91,13 @@ export async function requireAuth(): Promise<SessionUser> {
     .limit(1);
   const user = userRows[0];
 
-  if (!user || !user.active || user.deletedAt || !isRole(user.role)) {
+  if (
+    !user ||
+    !user.active ||
+    user.deletedAt ||
+    !isRole(user.role) ||
+    !isAccountKind(user.accountKind)
+  ) {
     throw new Error("Unauthorized");
   }
 
@@ -91,7 +110,10 @@ export async function requireAuth(): Promise<SessionUser> {
     id: user.id,
     email: user.email,
     role: user.role,
+    accountKind: user.accountKind,
+    doorAccessEnabled: user.doorAccessEnabled,
     venueId: user.venueId ?? null,
+    guestLimit: user.guestLimit ?? null,
     preferredLocale: isLocale(user.preferredLocale) ? user.preferredLocale : null,
   };
 
@@ -112,6 +134,13 @@ export async function requireAuth(): Promise<SessionUser> {
 export async function requireRole(roles: Role[]): Promise<SessionUser> {
   const user = await requireAuth();
   if (!roles.includes(user.role)) throw new Error("Forbidden");
+  return user;
+}
+
+/** requireAuth 후 account kind와 capability를 포함한 접근 scope 검증. */
+export async function requireAccess(access: AccessScope): Promise<SessionUser> {
+  const user = await requireAuth();
+  if (!hasAccess(user, [access])) throw new Error("Forbidden");
   return user;
 }
 

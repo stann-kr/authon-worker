@@ -20,6 +20,8 @@ export default function InviteUser() {
     email: "",
     name: "",
     role: "dj" as "venue_admin" | "door_staff" | "staff" | "dj",
+    account_kind: "personal" as "personal" | "shared",
+    door_access_enabled: false,
     guest_limit: "",
     venue_id: "",
     password: "",
@@ -96,7 +98,7 @@ export default function InviteUser() {
     // guest_limit 유효성 검사
     if (formData.role !== "venue_admin") {
       const limitVal = parseInt(String(formData.guest_limit));
-      if (isNaN(limitVal) || limitVal < 1) {
+      if (isNaN(limitVal) || limitVal < 0) {
         setError(t("guestLimitInvalid"));
         setIsLoading(false);
         return;
@@ -108,10 +110,13 @@ export default function InviteUser() {
         email: formData.email,
         name: formData.name,
         role: formData.role,
+        accountKind: formData.account_kind,
+        doorAccessEnabled:
+          formData.account_kind === "shared" && formData.door_access_enabled,
         venueId: formData.venue_id,
         guestLimit:
           formData.role === "venue_admin"
-            ? 999
+            ? null
             : parseInt(String(formData.guest_limit)),
         ...(createMode === "password" && formData.password
           ? { password: formData.password }
@@ -140,6 +145,8 @@ export default function InviteUser() {
           email: "",
           name: "",
           role: "dj",
+          account_kind: "personal",
+          door_access_enabled: false,
           guest_limit: "",
           password: "",
         }));
@@ -254,6 +261,41 @@ export default function InviteUser() {
           </div>
 
           <fieldset>
+            <legend className="app-label">{t("accountType")}</legend>
+            <div className="grid grid-cols-2 gap-2">
+              {(["personal", "shared"] as const).map((accountKind) => (
+                <button
+                  key={accountKind}
+                  type="button"
+                  aria-pressed={formData.account_kind === accountKind}
+                  onClick={() =>
+                    setFormData({
+                      ...formData,
+                      account_kind: accountKind,
+                      role: accountKind === "shared" ? "staff" : formData.role,
+                      door_access_enabled:
+                        accountKind === "shared" ? formData.door_access_enabled : false,
+                    })
+                  }
+                  className={`border p-3 text-xs font-medium transition-colors ${
+                    formData.account_kind === accountKind
+                      ? "border-action-primary bg-action-primary text-action-text"
+                      : "border-border-default bg-canvas text-text-muted hover:border-border-strong hover:text-text-heading"
+                  }`}
+                >
+                  {accountKind === "shared" ? t("sharedAccount") : t("personalAccount")}
+                </button>
+              ))}
+            </div>
+            <p className="app-helper">
+              {formData.account_kind === "shared"
+                ? t("sharedAccountHelp")
+                : t("personalAccountHelp")}
+            </p>
+          </fieldset>
+
+          {formData.account_kind === "personal" ? (
+          <fieldset>
             <legend className="app-label">
               {t("role")}
             </legend>
@@ -277,6 +319,32 @@ export default function InviteUser() {
               ))}
             </div>
           </fieldset>
+          ) : (
+            <div className="border border-border-default bg-surface-raised p-3 text-sm text-text-body">
+              <RoleLabel role="shared" />
+            </div>
+          )}
+
+          {formData.account_kind === "shared" && (
+            <label className="flex items-start gap-3 border border-border-default bg-canvas p-3">
+              <input
+                type="checkbox"
+                checked={formData.door_access_enabled}
+                onChange={(event) =>
+                  setFormData({ ...formData, door_access_enabled: event.target.checked })
+                }
+                className="mt-0.5 h-4 w-4"
+              />
+              <span>
+                <span className="block text-sm font-medium text-text-heading">
+                  {t("doorAccess")}
+                </span>
+                <span className="mt-1 block text-xs text-text-muted">
+                  {t("doorAccessHelp")}
+                </span>
+              </span>
+            </label>
+          )}
 
           {formData.role !== "venue_admin" && (
             <div>

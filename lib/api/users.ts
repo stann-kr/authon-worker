@@ -21,8 +21,10 @@ import { getTranslations } from "next-intl/server";
 import {
   canManageTargetAccount,
   canManageTargetRole,
+  isAccountKind,
   isRole,
   isVenueManagedRole,
+  type AccountKind,
 } from "@/lib/users/policy";
 
 type UserActionErrorCode =
@@ -49,6 +51,8 @@ const managedUserFields = {
   email: users.email,
   name: users.name,
   role: users.role,
+  accountKind: users.accountKind,
+  doorAccessEnabled: users.doorAccessEnabled,
   guestLimit: users.guestLimit,
   active: users.active,
   migrationStatus: users.migrationStatus,
@@ -65,6 +69,8 @@ function toUser(row: {
   email: string;
   name: string;
   role: string;
+  accountKind: string;
+  doorAccessEnabled: boolean;
   guestLimit: number | null;
   active: boolean;
   migrationStatus: string;
@@ -75,6 +81,7 @@ function toUser(row: {
   deletedAt: string | null;
 }): User {
   if (!isRole(row.role)) throw new UserActionError("INVALID_ROLE");
+  if (!isAccountKind(row.accountKind)) throw new UserActionError("INVALID_INPUT");
   if (
     row.migrationStatus !== "native" &&
     row.migrationStatus !== "pending_reset" &&
@@ -86,6 +93,7 @@ function toUser(row: {
   return {
     ...row,
     role: row.role,
+    accountKind: row.accountKind,
     migrationStatus: row.migrationStatus,
     preferredLocale: isLocale(row.preferredLocale) ? row.preferredLocale : null,
   };
@@ -168,7 +176,13 @@ export async function fetchUsersByVenue(
     }
 
     let query = db
-      .select({ id: users.id, name: users.name, role: users.role })
+      .select({
+        id: users.id,
+        name: users.name,
+        role: users.role,
+        accountKind: users.accountKind,
+        doorAccessEnabled: users.doorAccessEnabled,
+      })
       .from(users)
       .$dynamic();
 
@@ -177,8 +191,10 @@ export async function fetchUsersByVenue(
     const result = await query.orderBy(asc(users.name));
     return {
       data: result.map((user) => {
-        if (!isRole(user.role)) throw new UserActionError("INVALID_ROLE");
-        return { ...user, role: user.role };
+        if (!isRole(user.role) || !isAccountKind(user.accountKind)) {
+          throw new UserActionError("INVALID_ROLE");
+        }
+        return { ...user, role: user.role, accountKind: user.accountKind };
       }),
       error: null,
     };
@@ -249,6 +265,8 @@ export async function updateUserProfile(
     guestLimit?: number | null;
     active?: boolean;
     role?: Role;
+    accountKind?: AccountKind;
+    doorAccessEnabled?: boolean;
   },
 ): Promise<ApiResponse<User>> {
   try {
@@ -261,7 +279,9 @@ export async function updateUserProfile(
       if (
         updates.guestLimit !== undefined ||
         updates.active !== undefined ||
-        updates.role !== undefined
+        updates.role !== undefined ||
+        updates.accountKind !== undefined ||
+        updates.doorAccessEnabled !== undefined
       ) {
         throw new UserActionError("CANNOT_MANAGE_SELF");
       }
@@ -308,6 +328,33 @@ export async function updateUserProfile(
       }
     }
 
+    const nextRole = updates.role ?? target.role;
+    const nextAccountKind = updates.accountKind ?? target.accountKind;
+    const nextDoorAccessEnabled = updates.doorAccessEnabled ?? target.doorAccessEnabled;
+
+    if (!isAccountKind(nextAccountKind)) throw new UserActionError("INVALID_INPUT");
+    if (nextAccountKind === "shared" && nextRole !== "staff") {
+      throw new UserActionError("INVALID_ROLE");
+    }
+    if (nextAccountKind === "personal" && nextDoorAccessEnabled) {
+      throw new UserActionError("INVALID_INPUT");
+    }
+
+    if (updates.accountKind !== undefined && updates.accountKind !== target.accountKind) {
+      dbUpdates.accountKind = updates.accountKind;
+      dbUpdates.sessionVersion = sql`${users.sessionVersion} + 1`;
+      changedFields.push("accountKind");
+    }
+
+    if (
+      updates.doorAccessEnabled !== undefined &&
+      updates.doorAccessEnabled !== target.doorAccessEnabled
+    ) {
+      dbUpdates.doorAccessEnabled = updates.doorAccessEnabled;
+      dbUpdates.sessionVersion = sql`${users.sessionVersion} + 1`;
+      changedFields.push("doorAccessEnabled");
+    }
+
     if (updates.active !== undefined && updates.active !== target.active) {
       if (isSelfUpdate) throw new UserActionError("CANNOT_MANAGE_SELF");
       if (!updates.active && target.role === "super_admin") {
@@ -336,6 +383,9 @@ export async function updateUserProfile(
         fields: changedFields,
         ...(changedFields.includes("role")
           ? { previousRole: target.role, nextRole: updates.role }
+          : {}),
+        ...(changedFields.includes("accountKind")
+          ? { previousAccountKind: target.accountKind, nextAccountKind: updates.accountKind }
           : {}),
       });
 
@@ -367,9 +417,11 @@ export async function createUserViaEdge(params: {
   name: string;
   role: Role;
   venueId?: string | null;
-  guestLimit?: number;
+  guestLimit?: number | null;
   password?: string;
   preferredLocale?: Locale | null;
+  accountKind?: AccountKind;
+  doorAccessEnabled?: boolean;
 }): Promise<ApiResponse<{ id: string }>> {
   try {
     const actor = await requireRole(["super_admin", "venue_admin"]);
@@ -387,10 +439,21 @@ export async function createUserViaEdge(params: {
     }
 
     if (
+      !isRole(params.role) ||
       params.role === "super_admin" ||
       (actor.role !== "super_admin" && !isVenueManagedRole(params.role))
     ) {
       throw new UserActionError("INVALID_ROLE");
+    }
+
+    const accountKind = params.accountKind ?? "personal";
+    const doorAccessEnabled = params.doorAccessEnabled ?? false;
+    if (!isAccountKind(accountKind)) throw new UserActionError("INVALID_INPUT");
+    if (accountKind === "shared" && params.role !== "staff") {
+      throw new UserActionError("INVALID_ROLE");
+    }
+    if (accountKind === "personal" && doorAccessEnabled) {
+      throw new UserActionError("INVALID_INPUT");
     }
 
     const db = getDb();
@@ -403,6 +466,7 @@ export async function createUserViaEdge(params: {
     }
     if (
       params.guestLimit !== undefined &&
+      params.guestLimit !== null &&
       (!Number.isInteger(params.guestLimit) || params.guestLimit < 0 || params.guestLimit > 999)
     ) {
       throw new UserActionError("INVALID_INPUT");
@@ -415,6 +479,8 @@ export async function createUserViaEdge(params: {
         email: normalizedEmail,
         name,
         role: params.role,
+        accountKind,
+        doorAccessEnabled,
         venueId,
         guestLimit: params.guestLimit ?? null,
         passwordHash,
@@ -430,7 +496,7 @@ export async function createUserViaEdge(params: {
         actorUserId: actor.id,
         targetUserId: id,
         action: "created",
-        details: JSON.stringify({ role: params.role }),
+        details: JSON.stringify({ role: params.role, accountKind, doorAccessEnabled }),
         createdAt: nowIso,
       }),
     ]);
@@ -509,6 +575,8 @@ export async function deleteUserViaEdge(userId: string): Promise<{ error: string
           email: tombstoneEmail,
           passwordHash,
           name: "Deleted user",
+          accountKind: "personal",
+          doorAccessEnabled: false,
           guestLimit: null,
           active: false,
           sessionVersion: sql`${users.sessionVersion} + 1`,

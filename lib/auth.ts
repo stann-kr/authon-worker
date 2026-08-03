@@ -5,13 +5,22 @@
  * 이 파일은 클라이언트(localStorage) 기반 유저 정보 접근 및 로그인/로그아웃 유틸리티 제공.
  */
 
+import {
+  hasAccess as hasPolicyAccess,
+  isAccountKind,
+  isRole,
+  type AccessScope,
+} from "@/lib/users/policy";
+
 export interface User {
   id: string;
   venue_id?: string | null;
   email: string;
   name: string;
   role: "super_admin" | "venue_admin" | "door_staff" | "staff" | "dj";
-  guest_limit: number;
+  account_kind: "personal" | "shared";
+  door_access_enabled: boolean;
+  guest_limit: number | null;
   preferred_locale?: "en" | "ko" | null;
 }
 
@@ -49,7 +58,9 @@ export const login = async (
       email: user.email,
       name: user.name,
       role: user.role,
-      guest_limit: user.guestLimit || 0,
+      account_kind: user.accountKind === "shared" ? "shared" : "personal",
+      door_access_enabled: user.doorAccessEnabled === true,
+      guest_limit: typeof user.guestLimit === "number" ? user.guestLimit : null,
       preferred_locale: user.preferredLocale || null,
     };
 
@@ -104,6 +115,10 @@ export const logout = async () => {
   } finally {
     if (typeof window !== "undefined") {
       localStorage.removeItem("user");
+      for (let index = window.sessionStorage.length - 1; index >= 0; index -= 1) {
+        const key = window.sessionStorage.key(index);
+        if (key?.startsWith("shared-operator:")) window.sessionStorage.removeItem(key);
+      }
       window.location.href = "/auth/login";
     }
   }
@@ -120,7 +135,26 @@ export const getUser = (): User | null => {
   if (!userStr || userStr === "undefined" || userStr === "null") return null;
 
   try {
-    return JSON.parse(userStr);
+    const parsed = JSON.parse(userStr) as Partial<User>;
+    if (
+      typeof parsed.id !== "string" ||
+      typeof parsed.email !== "string" ||
+      typeof parsed.name !== "string" ||
+      !isRole(parsed.role)
+    ) {
+      return null;
+    }
+
+    return {
+      ...parsed,
+      id: parsed.id,
+      email: parsed.email,
+      name: parsed.name,
+      role: parsed.role,
+      account_kind: isAccountKind(parsed.account_kind) ? parsed.account_kind : "personal",
+      door_access_enabled: parsed.door_access_enabled === true,
+      guest_limit: typeof parsed.guest_limit === "number" ? parsed.guest_limit : null,
+    };
   } catch (e) {
     console.error("Failed to parse user from localStorage", e);
     return null;
@@ -133,16 +167,15 @@ export const getUser = (): User | null => {
  * @param requiredAccess - 필요한 접근 스코프 배열
  */
 export const hasAccess = (
-  userRole: string,
-  requiredAccess: string[],
+  user: Pick<User, "role" | "account_kind" | "door_access_enabled">,
+  requiredAccess: AccessScope[],
 ): boolean => {
-  const accessMap: Record<string, string[]> = {
-    super_admin: ["guest", "door", "admin", "venue"],
-    venue_admin: ["guest", "door", "admin"],
-    door_staff: ["door", "guest"],
-    staff: ["guest"],
-    dj: ["guest"],
-  };
-
-  return requiredAccess.some((access) => accessMap[userRole]?.includes(access));
+  return hasPolicyAccess(
+    {
+      role: user.role,
+      accountKind: user.account_kind,
+      doorAccessEnabled: user.door_access_enabled,
+    },
+    requiredAccess,
+  );
 };

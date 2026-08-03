@@ -11,6 +11,7 @@ export const roleColorMap: Record<string, string> = {
   door_staff: "text-text-muted",
   staff: "text-text-muted",
   dj: "text-text-muted",
+  shared: "text-text-heading",
 };
 
 export function getRoleColor(role?: string | null): string {

@@ -12,6 +12,7 @@ import {
   LOCALE_COOKIE_MAX_AGE,
   LOCALE_COOKIE_NAME,
 } from "@/i18n/config";
+import { isAccountKind, isRole } from "@/lib/users/policy";
 
 export async function POST(request: Request) {
   try {
@@ -64,6 +65,8 @@ export async function POST(request: Request) {
       !user ||
       !user.active ||
       user.deletedAt ||
+      !isRole(user.role) ||
+      !isAccountKind(user.accountKind) ||
       (tenant.scope === "venue" && user.role !== "super_admin" && user.venueId !== tenant.venueId)
     ) {
       return invalidCredentialsResponse();
@@ -127,9 +130,11 @@ export async function POST(request: Request) {
         id: user.id,
         email: user.email,
         role: user.role,
+        accountKind: user.accountKind,
+        doorAccessEnabled: user.doorAccessEnabled,
         name: user.name,
         venueId: user.venueId ?? null,
-        guestLimit: user.guestLimit ?? 0,
+        guestLimit: user.guestLimit ?? null,
         preferredLocale: isLocale(user.preferredLocale) ? user.preferredLocale : null,
       },
     });

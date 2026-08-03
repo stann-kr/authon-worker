@@ -3,12 +3,13 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { getUser, hasAccess, User } from "../lib/auth";
+import type { AccessScope } from "@/lib/users/policy";
 import Spinner from "./Spinner";
 import { useTranslations } from "next-intl";
 
 interface AuthGuardProps {
   children: React.ReactNode;
-  requiredAccess: string[];
+  requiredAccess: AccessScope[];
 }
 
 export default function AuthGuard({
@@ -34,7 +35,7 @@ export default function AuthGuard({
       }
 
       // 2. Check Role Access
-      if (!hasAccess(currentUser.role, requiredAccess)) {
+      if (!hasAccess(currentUser, requiredAccess)) {
         router.push("/");
         return;
       }

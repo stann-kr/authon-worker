@@ -144,19 +144,21 @@ function DoorPageContent() {
     setLoadingStates((prev) => ({ ...prev, [`${id}_${action}`]: false }));
   };
 
-  // Helper: get contributor name for a guest (user or external DJ)
-  const getContributorName = (guest: Guest): string | undefined => {
+  const getContributor = (guest: Guest): {
+    name?: string;
+    accountKind: "personal" | "shared";
+  } => {
     if (guest.createdByUserId) {
       const u = displayData.users.find((u) => u.id === guest.createdByUserId);
-      return u?.name;
+      return { name: u?.name, accountKind: u?.accountKind ?? "personal" };
     }
     if (guest.externalLinkId) {
       const link = displayData.externalLinks.find(
         (l) => l.id === guest.externalLinkId,
       );
-      return link ? `${link.djName} (EXT)` : undefined;
+      return { name: link ? `${link.djName} (EXT)` : undefined, accountKind: "personal" };
     }
-    return undefined;
+    return { accountKind: "personal" };
   };
 
   const filteredGuests =
@@ -345,8 +347,9 @@ function DoorPageContent() {
                     isFetching ? "pointer-events-none opacity-50" : ""
                   }`}
                 >
-                  {displayGuests.map((guest, index) => (
-                    <GuestListCard
+                  {displayGuests.map((guest, index) => {
+                    const contributor = getContributor(guest);
+                    return <GuestListCard
                       key={guest.id}
                       guest={{
                         id: guest.id,
@@ -357,7 +360,9 @@ function DoorPageContent() {
                       }}
                       index={index}
                       mode="operations"
-                      djName={getContributorName(guest)}
+                      djName={contributor.name}
+                      accountKind={contributor.accountKind}
+                      registeredByName={guest.registeredByName}
                       onCheck={() =>
                         handleStatusChange(guest.id, "checked", "check")
                       }
@@ -366,8 +371,8 @@ function DoorPageContent() {
                       }
                       isCheckLoading={loadingStates[`${guest.id}_check`]}
                       isUndoLoading={loadingStates[`${guest.id}_undo`]}
-                    />
-                  ))}
+                    />;
+                  })}
                 </div>
               )}
             </section>
