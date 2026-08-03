@@ -17,7 +17,7 @@
 
 #### 해결
 
-- locale query를 반영하는 URL 교체 navigation만 사용하고 중복 refresh를 제거한다.
+- History API로 locale query를 URL에 반영한 뒤 RSC refresh를 한 번만 실행한다.
 - 외부 link token 검증은 token이 바뀔 때만 실행하고 locale 변경과 분리한다.
 
 #### 검증
