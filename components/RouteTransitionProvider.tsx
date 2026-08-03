@@ -14,6 +14,7 @@ import { usePathname } from "next/navigation";
 import { useTranslations } from "next-intl";
 import {
   createRouteLoadingTracker,
+  getRouteLoadingCompletionDelay,
   shouldRegisterRouteLoadingTask,
 } from "@/lib/route-loading";
 import { announceRouteTransitionStart } from "@/lib/route-transition-events";
@@ -30,7 +31,6 @@ interface RouteTransitionContextValue {
 }
 
 const MINIMUM_VISIBLE_MS = 160;
-const TASK_HANDOFF_GRACE_MS = 80;
 const EXIT_DURATION_MS = 140;
 const TRANSITION_TIMEOUT_MS = 8_000;
 
@@ -99,7 +99,10 @@ export function RouteTransitionProvider({ children }: { children: ReactNode }) {
 
     clearTimer(completionTimerRef);
     const elapsed = performance.now() - visibleAtRef.current;
-    const remainingMinimum = Math.max(0, MINIMUM_VISIBLE_MS - elapsed);
+    const completionDelay = getRouteLoadingCompletionDelay(
+      elapsed,
+      MINIMUM_VISIBLE_MS,
+    );
 
     completionTimerRef.current = window.setTimeout(() => {
       completionTimerRef.current = null;
@@ -109,7 +112,7 @@ export function RouteTransitionProvider({ children }: { children: ReactNode }) {
       ) {
         finishTransition();
       }
-    }, Math.max(TASK_HANDOFF_GRACE_MS, remainingMinimum));
+    }, completionDelay);
   }, [clearTimer, finishTransition, loadingTracker]);
 
   const reconcileLoading = useCallback(() => {

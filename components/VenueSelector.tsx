@@ -1,13 +1,127 @@
 "use client";
 
-import { useState, useEffect, useId } from "react";
-import { useLatestRequestGuard, useLocalStorage } from "@/lib/hooks";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
+import { useLocalStorage } from "@/lib/hooks";
 import { fetchVenues } from "@/lib/api/venues";
 import type { Venue } from "@/lib/api/types";
 import { getUser } from "@/lib/auth";
 import Icon from "./Icon";
 import { useTranslations } from "next-intl";
 import { useSectionLoadingTask } from "./RouteTransitionProvider";
+
+type VenueDataStatus = "idle" | "loading" | "ready";
+
+interface VenueDataContextValue {
+  venues: Venue[];
+  status: VenueDataStatus;
+  selectedVenueId: string;
+  setSelectedVenueId: ReturnType<typeof useLocalStorage<string>>[1];
+  ensureVenues: () => Promise<void>;
+  refreshVenues: () => Promise<void>;
+}
+
+const VenueDataContext = createContext<VenueDataContextValue | null>(null);
+
+/**
+ * 인증 화면에서 사용하는 활성 베뉴 목록을 route 간에 공유합니다.
+ * 실제 조회는 useVenueSelector를 사용하는 화면이 처음 열릴 때만 시작합니다.
+ */
+export function VenueDataProvider({ children }: { children: ReactNode }) {
+  const [venues, setVenues] = useState<Venue[]>([]);
+  const [status, setStatus] = useState<VenueDataStatus>("idle");
+  const statusRef = useRef<VenueDataStatus>("idle");
+  const requestPromiseRef = useRef<Promise<void> | null>(null);
+  const requestIdRef = useRef(0);
+  const [selectedVenueId, setSelectedVenueId] = useLocalStorage<string>(
+    "admin:selectedVenueId",
+    "",
+  );
+  const loadVenues = useCallback(async (force: boolean) => {
+    if (!force) {
+      if (statusRef.current === "ready") return;
+      if (requestPromiseRef.current) return requestPromiseRef.current;
+    }
+
+    const requestId = ++requestIdRef.current;
+    const isLatestRequest = () => requestId === requestIdRef.current;
+    statusRef.current = "loading";
+    setStatus("loading");
+
+    const requestPromise = (async () => {
+      try {
+        const { data, error } = await fetchVenues();
+        if (!isLatestRequest()) return;
+        if (!data) {
+          if (error) console.error("Failed to load venues:", error);
+          return;
+        }
+
+        const nextVenues = data;
+        setVenues(nextVenues);
+        if (getUser()?.role === "super_admin") {
+          setSelectedVenueId((previousVenueId) => {
+            if (nextVenues.some((venue) => venue.id === previousVenueId)) {
+              return previousVenueId;
+            }
+            return nextVenues[0]?.id ?? "";
+          });
+        }
+      } catch (error: unknown) {
+        if (isLatestRequest()) {
+          console.error("Failed to load venues:", error);
+        }
+      } finally {
+        if (isLatestRequest()) {
+          statusRef.current = "ready";
+          setStatus("ready");
+        }
+      }
+    })();
+
+    requestPromiseRef.current = requestPromise;
+    await requestPromise;
+    if (requestPromiseRef.current === requestPromise) {
+      requestPromiseRef.current = null;
+    }
+  }, [setSelectedVenueId]);
+
+  const ensureVenues = useCallback(() => loadVenues(false), [loadVenues]);
+  const refreshVenues = useCallback(() => loadVenues(true), [loadVenues]);
+  const value = useMemo<VenueDataContextValue>(
+    () => ({
+      venues,
+      status,
+      selectedVenueId,
+      setSelectedVenueId,
+      ensureVenues,
+      refreshVenues,
+    }),
+    [
+      ensureVenues,
+      refreshVenues,
+      selectedVenueId,
+      setSelectedVenueId,
+      status,
+      venues,
+    ],
+  );
+
+  return (
+    <VenueDataContext.Provider value={value}>
+      {children}
+    </VenueDataContext.Provider>
+  );
+}
 
 /**
  * useVenueSelector — super_admin 베뉴 선택 로직 훅.
@@ -17,42 +131,26 @@ import { useSectionLoadingTask } from "./RouteTransitionProvider";
  * const { venueId, venues, selectedVenueId, setSelectedVenueId, isSuperAdmin } = useVenueSelector();
  */
 export function useVenueSelector() {
+  const context = useContext(VenueDataContext);
+  if (!context) {
+    throw new Error("useVenueSelector must be used within VenueDataProvider");
+  }
+
   const user = getUser();
   const isSuperAdmin = user?.role === "super_admin";
-  const [venues, setVenues] = useState<Venue[]>([]);
-  const [isLoadingVenues, setIsLoadingVenues] = useState(true);
-  const [selectedVenueId, setSelectedVenueId] = useLocalStorage<string>(
-    "admin:selectedVenueId",
-    "",
-  );
-  const requestGuard = useLatestRequestGuard();
-  useSectionLoadingTask(isLoadingVenues);
+  const {
+    venues,
+    status,
+    selectedVenueId,
+    setSelectedVenueId,
+    ensureVenues,
+    refreshVenues,
+  } = context;
+  useSectionLoadingTask(status !== "ready");
 
   useEffect(() => {
-    const isLatestRequest = requestGuard.beginRequest();
-    setIsLoadingVenues(true);
-
-    const loadVenues = async () => {
-      try {
-        const { data } = await fetchVenues();
-        if (!isLatestRequest()) return;
-        if (data) {
-          setVenues(data);
-          if (isSuperAdmin && data.length > 0) {
-            setSelectedVenueId((prev) => prev || data[0].id);
-          }
-        }
-      } catch (error: unknown) {
-        if (isLatestRequest()) {
-          console.error("Failed to load venues:", error);
-        }
-      } finally {
-        if (isLatestRequest()) setIsLoadingVenues(false);
-      }
-    };
-
-    loadVenues();
-  }, [isSuperAdmin, requestGuard, setSelectedVenueId]);
+    void ensureVenues();
+  }, [ensureVenues]);
 
   const venueId = isSuperAdmin ? selectedVenueId : (user?.venue_id ?? "");
   const currentVenue = venues.find((venue) => venue.id === venueId) ?? null;
@@ -65,6 +163,8 @@ export function useVenueSelector() {
     currentVenue,
     isSuperAdmin,
     user,
+    isLoadingVenues: status !== "ready",
+    refreshVenues,
   };
 }
 

@@ -22,7 +22,6 @@ import OperationsLayout from "@/components/OperationsLayout";
 import { useSectionLoadingTask } from "@/components/RouteTransitionProvider";
 import { getBusinessDate } from "@/lib/date";
 import {
-  fetchGuestsByDate,
   createGuest,
   deleteGuest,
 } from "@/lib/api/guests";
@@ -30,8 +29,8 @@ import type { Guest } from "@/lib/api/types";
 import type { GuestQuota } from "@/lib/api/types";
 import {
   createGuestLimitRequest,
-  fetchMyGuestQuota,
 } from "@/lib/api/guest-limits";
+import { fetchGuestWorkspaceSnapshot } from "@/lib/api/guest-snapshots";
 import { type User as AuthUser } from "@/lib/auth";
 import { useLocale, useTranslations } from "next-intl";
 
@@ -128,10 +127,10 @@ export default function AuthenticatedGuestView({ user }: AuthenticatedGuestViewP
     setError(null);
 
     try {
-      const [{ data, error: fetchError }, quotaResult] = await Promise.all([
-        fetchGuestsByDate(selectedDate, effectiveVenueId),
-        fetchMyGuestQuota(selectedDate),
-      ]);
+      const { data, error: fetchError } = await fetchGuestWorkspaceSnapshot(
+        selectedDate,
+        effectiveVenueId,
+      );
 
       if (!isLatestRequest()) return;
 
@@ -139,8 +138,8 @@ export default function AuthenticatedGuestView({ user }: AuthenticatedGuestViewP
         console.error("Failed to fetch guests:", fetchError);
         setError(t("loadFailed"));
       }
-      setGuests(data ?? []);
-      setQuota(quotaResult.data ?? null);
+      setGuests(data?.guests ?? []);
+      setQuota(data?.quota ?? null);
       setLoadedScopeKey(requestScopeKey);
     } catch (loadError) {
       if (!isLatestRequest()) return;
@@ -162,13 +161,19 @@ export default function AuthenticatedGuestView({ user }: AuthenticatedGuestViewP
   const pollGuests = useCallback(async () => {
     if (!effectiveVenueId || loadedScopeKey !== requestScopeKey) return;
     const isLatestRequest = pollingGuard.beginRequest();
-    const [{ data }, quotaResult] = await Promise.all([
-      fetchGuestsByDate(selectedDate, effectiveVenueId),
-      fetchMyGuestQuota(selectedDate),
-    ]);
+    const { data } = await fetchGuestWorkspaceSnapshot(
+      selectedDate,
+      effectiveVenueId,
+    );
     if (isLatestRequest() && loadedScopeKey === requestScopeKey) {
-      if (data) setGuests(data);
-      if (quotaResult.data) setQuota(quotaResult.data);
+      if (data) {
+        if (!data.failedSections.includes("guests")) {
+          setGuests(data.guests);
+        }
+        if (!data.failedSections.includes("quota")) {
+          setQuota(data.quota);
+        }
+      }
     }
   }, [effectiveVenueId, loadedScopeKey, pollingGuard, requestScopeKey, selectedDate]);
 

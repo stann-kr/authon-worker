@@ -26,8 +26,7 @@ import {
   updateGuestStatus,
   deleteGuest,
 } from "../../../lib/api/guests";
-import { fetchUsersByVenue } from "../../../lib/api/users";
-import { fetchExternalLinksByDate } from "../../../lib/api/external-links";
+import { fetchGuestOperationsSnapshot } from "../../../lib/api/guest-snapshots";
 import type { Guest, UserDirectoryEntry, ExternalDJLink } from "../../../lib/api/types";
 import { useLocale, useTranslations } from "next-intl";
 
@@ -125,18 +124,22 @@ export default function GuestList({
     setIsFetching(true);
     setFeedback(null);
     try {
-      const [guestRes, userRes, linkRes] = await Promise.all([
-        fetchGuestsByDate(selectedDate, venueId),
-        fetchUsersByVenue(venueId),
-        fetchExternalLinksByDate(venueId, selectedDate),
-      ]);
+      const { data, error } = await fetchGuestOperationsSnapshot(
+        selectedDate,
+        venueId,
+      );
       if (!isLatestRequest()) return;
-      if (guestRes.error || userRes.error || linkRes.error) {
-        setFeedback(doorT("partialLoadFailed"));
+      if (!data) {
+        setGuests([]);
+        setUsers([]);
+        setExternalLinks([]);
+        setFeedback(doorT("loadFailed"));
+      } else {
+        if (error) setFeedback(doorT("partialLoadFailed"));
+        setGuests(data.guests);
+        setUsers(data.users);
+        setExternalLinks(data.externalLinks);
       }
-      setGuests(guestRes.data ?? []);
-      setUsers(userRes.data ?? []);
-      setExternalLinks(linkRes.data ?? []);
       setLoadedScopeKey(requestScopeKey);
     } catch (err) {
       if (!isLatestRequest()) return;

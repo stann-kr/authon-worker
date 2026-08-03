@@ -18,6 +18,7 @@ import { useSectionLoadingTask } from "../../../components/RouteTransitionProvid
 import { useLatestRequestGuard } from "../../../lib/hooks";
 import { getVenueTypeColor } from "../../../lib/colors";
 import { useTranslations } from "next-intl";
+import { useVenueSelector } from "../../../components/VenueSelector";
 import {
   DEFAULT_CLOSING_TIME,
   DEFAULT_OPENING_TIME,
@@ -76,6 +77,7 @@ export default function VenueManagement() {
   const [formSuccess, setFormSuccess] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [listError, setListError] = useState("");
+  const { refreshVenues: refreshActiveVenues } = useVenueSelector();
   const requestGuard = useLatestRequestGuard();
   useSectionLoadingTask(isLoading);
 
@@ -154,7 +156,7 @@ export default function VenueManagement() {
         openingTime: DEFAULT_OPENING_TIME,
         closingTime: DEFAULT_CLOSING_TIME,
       });
-      loadVenues();
+      await Promise.all([loadVenues(), refreshActiveVenues()]);
     }
     setIsSubmitting(false);
   };
@@ -165,7 +167,7 @@ export default function VenueManagement() {
       console.error("Failed to update venue:", error);
       setListError(t("updateFailed"));
     } else {
-      loadVenues();
+      await Promise.all([loadVenues(), refreshActiveVenues()]);
     }
   };
 
@@ -525,7 +527,7 @@ export default function VenueManagement() {
                         const { error } = await updateVenue(id, updates);
                         if (!error) {
                           setListError("");
-                          loadVenues();
+                          await Promise.all([loadVenues(), refreshActiveVenues()]);
                         } else {
                           setListError(
                             error === "INVALID_TIMEZONE"
