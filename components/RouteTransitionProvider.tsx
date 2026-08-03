@@ -10,6 +10,7 @@ import {
   type ReactNode,
 } from "react";
 import { usePathname } from "next/navigation";
+import { useTranslations } from "next-intl";
 import Spinner from "./Spinner";
 
 type TransitionPhase = "idle" | "visible" | "leaving";
@@ -27,6 +28,7 @@ const RouteTransitionContext = createContext<RouteTransitionContextValue | null>
 );
 
 export function RouteTransitionProvider({ children }: { children: ReactNode }) {
+  const t = useTranslations("Common");
   const pathname = usePathname();
   const previousPathnameRef = useRef(pathname);
   const phaseRef = useRef<TransitionPhase>("idle");
@@ -112,7 +114,7 @@ export function RouteTransitionProvider({ children }: { children: ReactNode }) {
           data-state={phase}
           aria-busy={phase === "visible"}
         >
-          <Spinner mode="fullscreen" text="Loading workspace" />
+          <Spinner mode="content" text={t("loading")} />
         </div>
       )}
     </RouteTransitionContext.Provider>

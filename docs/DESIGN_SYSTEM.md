@@ -75,7 +75,7 @@ Authon UI는 베뉴 현장에서 반복적으로 사용하는 운영 도구다. 
 
 ## 상태 표현
 
-- 인증 화면 사이의 route loading은 공통 fullscreen spinner를 사용하고, 목적지 화면이 준비된 뒤 짧게 fade-out한다.
+- 로그인 후 작업 화면 사이의 route loading은 현재 header와 footer를 유지하고 콘텐츠 영역에 공통 spinner를 표시한다. 최초 진입과 인증 확인은 fullscreen spinner를 사용한다.
 - 초기 data loading은 최종 행 구조와 같은 skeleton을 사용한다.
 - button loading은 label 위치를 유지하는 작은 progress indicator를 사용한다.
 - empty state는 원인과 다음 행동을 함께 제시할 수 있어야 한다.
@@ -87,7 +87,7 @@ Authon UI는 베뉴 현장에서 반복적으로 사용하는 운영 도구다. 
 ## 모션
 
 - 일반 UI 전환은 `140-200ms` 범위로 제한한다.
-- route loading overlay는 최소 `160ms` 동안 상태를 명확히 전달하고 `140ms` ease-out으로 종료한다.
+- route loading overlay는 header 아래 콘텐츠 영역에서 최소 `160ms` 동안 상태를 명확히 전달하고 `140ms` ease-out으로 종료한다.
 - enter와 직접 피드백은 강한 ease-out 곡선을 사용한다.
 - 버튼 press는 위치나 크기를 움직이지 않고 substrate 밝기만 바꾼다.
 - keyboard shortcut, tab 전환, 반복 check-in에는 장식 animation을 사용하지 않는다.

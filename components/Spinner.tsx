@@ -5,19 +5,21 @@ import { useTranslations } from "next-intl";
 /**
  * Spinner — 로딩 스피너 컴포넌트.
  *
- * 3가지 모드:
+ * 4가지 모드:
  * - fullscreen: 전체 화면 로딩 (페이지 초기 로딩)
+ * - content: 앱 프레임 안의 콘텐츠 로딩 (route 전환)
  * - inline: 콘텐츠 영역 내 로딩 (패널 내부)
  * - button: 버튼 내부 스피너 (submit 버튼 등)
  *
  * 사용 예:
  * <Spinner mode="fullscreen" text="LOADING..." />
+ * <Spinner mode="content" text="LOADING..." />
  * <Spinner mode="inline" />
  * <Spinner mode="button" color="black" />
  */
 
 interface SpinnerProps {
-  mode?: "fullscreen" | "inline" | "button";
+  mode?: "fullscreen" | "content" | "inline" | "button";
   text?: string;
   /** 스피너 테두리 색상. 기본: 'white' */
   color?: "white" | "black" | "gray";
@@ -35,9 +37,15 @@ export default function Spinner({
   color = "white",
 }: SpinnerProps) {
   const t = useTranslations("Common");
-  if (mode === "fullscreen") {
+  if (mode === "fullscreen" || mode === "content") {
     return (
-      <div className="flex min-h-[100dvh] items-center justify-center bg-canvas" role="status" aria-live="polite">
+      <div
+        className={`flex w-full items-center justify-center bg-canvas ${
+          mode === "fullscreen" ? "min-h-[100dvh]" : "h-full"
+        }`}
+        role="status"
+        aria-live="polite"
+      >
         <div className="text-center">
           <div
             className={`mx-auto mb-4 h-8 w-8 rounded-full border-2 ${colorMap[color]} animate-spin`}

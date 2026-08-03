@@ -20,8 +20,8 @@ export default function AdminHeader() {
   const { brand } = useVenueBrand();
 
   return (
-    <header className="fixed inset-x-0 top-0 z-50 border-b border-border-default bg-canvas">
-      <div className="mx-auto flex h-16 w-full max-w-[1440px] items-center justify-between px-4 sm:px-6 lg:px-10">
+    <header className="fixed inset-x-0 top-0 z-[var(--app-z-chrome)] border-b border-border-default bg-canvas">
+      <div className="mx-auto flex h-[var(--app-header-height)] w-full max-w-[1440px] items-center justify-between px-4 sm:px-6 lg:px-10">
         <TransitionLink
           href="/"
           className="pressable flex min-w-0 items-center gap-3 rounded-control focus-visible:outline-none"

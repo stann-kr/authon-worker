@@ -9,7 +9,9 @@ interface FooterProps {
 
 export default function Footer({ compact = false }: FooterProps) {
   const { brand } = useVenueBrand();
-  const footerClassName = compact ? "flex-shrink-0" : "flex-shrink-0 mt-auto";
+  const footerClassName = compact
+    ? "relative z-[var(--app-z-chrome)] flex-shrink-0 bg-canvas"
+    : "relative z-[var(--app-z-chrome)] mt-auto flex-shrink-0 bg-canvas";
 
   return (
     <footer className={footerClassName}>
