@@ -197,7 +197,9 @@
     "doorTitle": "도어 체크인",
     "doorDescription": "도착한 게스트를 검색하고 빠르게 입장을 확인합니다.",
     "adminTitle": "관리자",
-    "adminDescription": "게스트, 링크, 사용자와 베뉴 운영을 관리합니다."
+    "adminDescription": "게스트, 링크, 사용자와 베뉴 운영을 관리합니다.",
+    "pendingGuestRequests": "추가 게스트 요청 {count}건이 대기 중입니다",
+    "pendingGuestRequestsDescription": "요청을 검토하고 승인하려면 Admin으로 이동하세요."
   },
   "GuestOperations": {
     "title": "게스트 등록",
@@ -251,6 +253,7 @@
   "AdminNav": {
     "sections": "관리자 섹션",
     "guests": "게스트",
+    "requests": "추가 요청",
     "links": "링크",
     "users": "사용자",
     "venues": "베뉴"
@@ -418,8 +421,6 @@
     "createDescription": "새 스태프 계정 생성",
     "users": "사용자",
     "usersDescription": "기존 사용자 관리",
-    "limitRequests": "추가 요청",
-    "limitRequestsDescription": "운영일별 추가 게스트 요청 검토",
     "migration": "마이그레이션",
     "migrationDescription": "기존 사용자 데이터 가져오기",
     "allVenues": "모든 베뉴",

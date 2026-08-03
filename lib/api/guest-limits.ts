@@ -171,6 +171,28 @@ export async function fetchGuestLimitRequests(
   }
 }
 
+export async function fetchMyVenuePendingGuestLimitRequestCount(): Promise<ApiResponse<number>> {
+  try {
+    const actor = await requireRole(["venue_admin"]);
+    if (!actor.venueId) throw new Error("FORBIDDEN");
+    const db = getDb();
+    const rows = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(guestLimitRequests)
+      .where(
+        and(
+          eq(guestLimitRequests.venueId, actor.venueId),
+          eq(guestLimitRequests.status, "pending"),
+        ),
+      );
+
+    return { data: Number(rows[0]?.count ?? 0), error: null };
+  } catch (error: unknown) {
+    console.error("Failed to load pending guest limit request count:", error);
+    return { data: null, error: "Unable to load pending guest limit requests right now." };
+  }
+}
+
 export async function decideGuestLimitRequest(params: {
   requestId: string;
   decision: "approve" | "reject";

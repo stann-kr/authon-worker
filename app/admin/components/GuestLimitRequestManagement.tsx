@@ -6,6 +6,7 @@ import EmptyState from "@/components/EmptyState";
 import PanelHeader from "@/components/PanelHeader";
 import RoleLabel from "@/components/RoleLabel";
 import Skeleton from "@/components/Skeleton";
+import VenueSelector, { useVenueSelector } from "@/components/VenueSelector";
 import {
   decideGuestLimitRequest,
   fetchGuestLimitRequests,
@@ -13,14 +14,15 @@ import {
 import type { GuestLimitRequestView } from "@/lib/api/types";
 import { useTranslations } from "next-intl";
 
-interface GuestLimitRequestManagementProps {
-  venueId?: string | null;
-}
-
-export default function GuestLimitRequestManagement({
-  venueId,
-}: GuestLimitRequestManagementProps) {
+export default function GuestLimitRequestManagement() {
   const t = useTranslations("GuestLimitAdmin");
+  const {
+    venueId,
+    venues,
+    selectedVenueId,
+    setSelectedVenueId,
+    isSuperAdmin,
+  } = useVenueSelector();
   const [requests, setRequests] = useState<GuestLimitRequestView[]>([]);
   const [approvedAmounts, setApprovedAmounts] = useState<Record<string, number>>({});
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -87,28 +89,37 @@ export default function GuestLimitRequestManagement({
   };
 
   return (
-    <section className="app-panel" aria-labelledby="guest-limit-requests-title">
-      <PanelHeader
-        title={t("title")}
-        headingId="guest-limit-requests-title"
-        count={pending.length}
-        onRefresh={loadRequests}
-        isLoading={isLoading}
-      />
-      <div className="space-y-4 p-4 sm:p-5">
-        {feedback && <Alert type={feedback.type} message={feedback.message} />}
-        {!venueId ? (
-          <p className="border border-border-default bg-canvas p-4 text-sm text-text-muted">
-            {t("selectVenue")}
-          </p>
-        ) : isLoading && requests.length === 0 ? (
-          <Skeleton rows={4} />
-        ) : pending.length === 0 ? (
-          <EmptyState icon="user" message={t("noPending")} />
-        ) : (
-          <div className="grid gap-3 lg:grid-cols-2">
-            {pending.map((request) => (
-              <article key={request.id} className="border border-border-default bg-canvas p-4">
+    <div className="space-y-4">
+      {isSuperAdmin && venues.length > 0 && (
+        <VenueSelector
+          venues={venues}
+          selectedVenueId={selectedVenueId}
+          onVenueChange={setSelectedVenueId}
+          className="app-panel p-4 sm:p-5"
+        />
+      )}
+      <section className="app-panel" aria-labelledby="guest-limit-requests-title">
+        <PanelHeader
+          title={t("title")}
+          headingId="guest-limit-requests-title"
+          count={pending.length}
+          onRefresh={loadRequests}
+          isLoading={isLoading}
+        />
+        <div className="space-y-4 p-4 sm:p-5">
+          {feedback && <Alert type={feedback.type} message={feedback.message} />}
+          {!venueId ? (
+            <p className="border border-border-default bg-canvas p-4 text-sm text-text-muted">
+              {t("selectVenue")}
+            </p>
+          ) : isLoading && requests.length === 0 ? (
+            <Skeleton rows={4} />
+          ) : pending.length === 0 ? (
+            <EmptyState icon="user" message={t("noPending")} />
+          ) : (
+            <div className="grid gap-3 lg:grid-cols-2">
+              {pending.map((request) => (
+                <article key={request.id} className="border border-border-default bg-canvas p-4">
                 <div className="flex items-start justify-between gap-3">
                   <div>
                     <h3 className="type-row-title">{request.userName}</h3>
@@ -166,13 +177,13 @@ export default function GuestLimitRequestManagement({
                     {t("reject")}
                   </button>
                 </div>
-              </article>
-            ))}
-          </div>
-        )}
+                </article>
+              ))}
+            </div>
+          )}
 
-        {decided.length > 0 && (
-          <details className="border-t border-border-default pt-4">
+          {decided.length > 0 && (
+            <details className="border-t border-border-default pt-4">
             <summary className="cursor-pointer text-sm font-medium text-text-heading">
               {t("history", { count: decided.length })}
             </summary>
@@ -190,9 +201,10 @@ export default function GuestLimitRequestManagement({
                 </div>
               ))}
             </div>
-          </details>
-        )}
-      </div>
-    </section>
+            </details>
+          )}
+        </div>
+      </section>
+    </div>
   );
 }

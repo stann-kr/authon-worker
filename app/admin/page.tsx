@@ -8,12 +8,22 @@ import GuestList from "./components/GuestList";
 import LinkManagement from "./components/LinkManagement";
 import UserManagement from "./components/UserManagement";
 import VenueManagement from "./components/VenueManagement";
+import GuestLimitRequestManagement from "./components/GuestLimitRequestManagement";
 import AuthGuard from "../../components/AuthGuard";
 import Footer from "../../components/Footer";
 import { getBusinessDate } from "../../lib/date";
 import { getUser } from "../../lib/auth";
 import Icon, { type IconName } from "../../components/Icon";
 import { useTranslations } from "next-intl";
+
+type AdminTab = "guests" | "requests" | "links" | "users" | "venues";
+
+interface AdminTabDefinition {
+  id: AdminTab;
+  label: string;
+  icon: IconName;
+  shortcut: string;
+}
 
 export default function AdminPage() {
   return (
@@ -26,7 +36,7 @@ export default function AdminPage() {
 function AdminPageContent() {
   const t = useTranslations("AdminNav");
   const router = useRouter();
-  const [activeTab, setActiveTab] = useLocalStorage(
+  const [activeTab, setActiveTab] = useLocalStorage<AdminTab>(
     "admin:activeTab",
     "guests",
   );
@@ -43,13 +53,14 @@ function AdminPageContent() {
     setIsRoleReady(true);
   }, []);
 
-  const tabs = useMemo(
+  const tabs = useMemo<AdminTabDefinition[]>(
     () => [
       { id: "guests", label: t("guests"), icon: "users" as IconName, shortcut: "1" },
-      { id: "links", label: t("links"), icon: "link" as IconName, shortcut: "2" },
-      { id: "users", label: t("users"), icon: "user-admin" as IconName, shortcut: "3" },
+      { id: "requests", label: t("requests"), icon: "warning" as IconName, shortcut: "2" },
+      { id: "links", label: t("links"), icon: "link" as IconName, shortcut: "3" },
+      { id: "users", label: t("users"), icon: "user-admin" as IconName, shortcut: "4" },
       ...(isSuperAdmin
-        ? [{ id: "venues", label: t("venues"), icon: "store" as IconName, shortcut: "4" }]
+        ? [{ id: "venues" as const, label: t("venues"), icon: "store" as IconName, shortcut: "5" }]
         : []),
     ],
     [isSuperAdmin, t],
@@ -60,6 +71,13 @@ function AdminPageContent() {
       setActiveTab("guests");
     }
   }, [activeTab, isRoleReady, setActiveTab, tabs]);
+
+  useEffect(() => {
+    if (!isRoleReady) return;
+    const requestedTab = new URLSearchParams(window.location.search).get("tab");
+    const matchingTab = tabs.find((tab) => tab.id === requestedTab);
+    if (matchingTab) setActiveTab(matchingTab.id);
+  }, [isRoleReady, setActiveTab, tabs]);
 
   // Keyboard shortcut listener for tab switching & home return
   useEffect(() => {
@@ -77,14 +95,11 @@ function AdminPageContent() {
 
       if (e.key === "Escape") {
         router.push("/");
-      } else if (e.key === "1" && tabs[0]) {
-        setActiveTab(tabs[0].id);
-      } else if (e.key === "2" && tabs[1]) {
-        setActiveTab(tabs[1].id);
-      } else if (e.key === "3" && tabs[2]) {
-        setActiveTab(tabs[2].id);
-      } else if (e.key === "4" && tabs[3]) {
-        setActiveTab(tabs[3].id);
+      } else {
+        const shortcutIndex = Number.parseInt(e.key, 10) - 1;
+        if (!Number.isNaN(shortcutIndex) && tabs[shortcutIndex]) {
+          setActiveTab(tabs[shortcutIndex].id);
+        }
       }
     };
 
@@ -126,7 +141,7 @@ function AdminPageContent() {
               role="tablist"
               aria-label={t("sections")}
               aria-orientation="horizontal"
-              className={`grid ${tabs.length === 4 ? "grid-cols-4" : "grid-cols-3"} divide-x divide-border-subtle border border-border-subtle bg-surface`}
+              className={`grid ${tabs.length === 5 ? "grid-cols-5" : "grid-cols-4"} divide-x divide-border-subtle border border-border-subtle bg-surface`}
             >
               {tabs.map((tab, tabIndex) => {
                 const isActive = activeTab === tab.id;
@@ -146,7 +161,7 @@ function AdminPageContent() {
                         : "bg-surface text-text-muted after:bg-transparent hover:bg-surface-raised hover:text-text-heading"
                     }`}
                   >
-                    <div className="flex items-center justify-center gap-2">
+                    <div className="flex flex-col items-center justify-center gap-1 sm:flex-row sm:gap-2">
                       <Icon name={tab.icon} size={18} />
                       <span className="text-xs sm:text-sm">{tab.label}</span>
                       <span className="ml-1 hidden border border-border-default px-1 py-0.5 font-mono text-xs text-text-dim lg:inline-block">
@@ -172,6 +187,7 @@ function AdminPageContent() {
                 onDateChange={setSelectedDate}
               />
             )}
+            {activeTab === "requests" && <GuestLimitRequestManagement />}
             {activeTab === "links" && (
               <LinkManagement
                 selectedDate={selectedDate}

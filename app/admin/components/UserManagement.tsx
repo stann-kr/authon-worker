@@ -14,7 +14,6 @@ import Alert from "../../../components/Alert";
 import Icon from "../../../components/Icon";
 import Skeleton from "../../../components/Skeleton";
 import OperationsLayout from "../../../components/OperationsLayout";
-import GuestLimitRequestManagement from "./GuestLimitRequestManagement";
 import {
   fetchManagedUsersByVenue,
   fetchUserAuditEvents,
@@ -33,7 +32,7 @@ type Feedback = { type: "success" | "error"; message: string } | null;
 export default function UserManagement() {
   const t = useTranslations("UserAdmin");
   const locale = useLocale();
-  const [activeTab, setActiveTab] = useLocalStorage<"create" | "users" | "requests" | "migrate">(
+  const [activeTab, setActiveTab] = useLocalStorage<"create" | "users" | "migrate">(
     "usermgmt:activeTab",
     "create",
   );
@@ -64,7 +63,8 @@ export default function UserManagement() {
     : currentUser?.venue_id;
 
   useEffect(() => {
-    if (!isSuperAdmin && activeTab === "migrate") {
+    const isKnownTab = ["create", "users", "migrate"].includes(activeTab as string);
+    if (!isKnownTab || (!isSuperAdmin && activeTab === "migrate")) {
       setActiveTab("create");
     }
   }, [activeTab, isSuperAdmin, setActiveTab]);
@@ -295,8 +295,6 @@ export default function UserManagement() {
         };
       case "users":
         return { title: t("users"), description: t("usersDescription") };
-      case "requests":
-        return { title: t("limitRequests"), description: t("limitRequestsDescription") };
       case "migrate":
         return { title: t("migration"), description: t("migrationDescription") };
       default:
@@ -348,17 +346,6 @@ export default function UserManagement() {
               >
                 <Icon name="user" size={17} />
                 {t("users")}
-              </button>
-              <button
-                onClick={() => setActiveTab("requests")}
-                className={`flex w-full items-center gap-2 border p-3 text-left text-sm font-medium transition-colors ${
-                  activeTab === "requests"
-                    ? "border-border-default border-l-2 border-l-action-primary bg-surface-raised text-text-heading"
-                    : "border-border-default bg-surface-raised text-text-muted hover:text-text-heading"
-                }`}
-              >
-                <Icon name="users" size={17} />
-                {t("limitRequests")}
               </button>
               {isSuperAdmin && (
                 <button
@@ -454,10 +441,6 @@ export default function UserManagement() {
       <div className="min-w-0">
         {activeTab === "create" && <InviteUser />}
         {activeTab === "migrate" && <LegacyUserMigration />}
-        {activeTab === "requests" && (
-          <GuestLimitRequestManagement venueId={effectiveVenueId} />
-        )}
-
         {activeTab === "users" && (
           <div className="app-panel">
             <PanelHeader

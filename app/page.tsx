@@ -8,6 +8,7 @@ import Spinner from "@/components/Spinner";
 import Icon, { type IconName } from "@/components/Icon";
 import TransitionLink from "@/components/TransitionLink";
 import AdminHeader from "@/app/admin/components/AdminHeader";
+import { fetchMyVenuePendingGuestLimitRequestCount } from "@/lib/api/guest-limits";
 import { useTranslations } from "next-intl";
 
 interface MenuItem {
@@ -22,6 +23,7 @@ interface MenuItem {
 export default function Home() {
   const t = useTranslations("Home");
   const [user, setUser] = useState<User | null>(null);
+  const [pendingGuestRequestCount, setPendingGuestRequestCount] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const router = useRouter();
   const menuItems: MenuItem[] = useMemo(() => [
@@ -60,6 +62,16 @@ export default function Home() {
 
     setUser(currentUser);
     setIsLoading(false);
+
+    if (currentUser.role === "venue_admin") {
+      fetchMyVenuePendingGuestLimitRequestCount().then(({ data, error }) => {
+        if (error) {
+          console.error("Failed to load pending guest request count:", error);
+          return;
+        }
+        setPendingGuestRequestCount(data ?? 0);
+      });
+    }
   }, []);
 
   const accessibleMenus = useMemo(
@@ -107,6 +119,29 @@ export default function Home() {
       <AdminHeader />
 
       <main className="mx-auto flex w-full max-w-[1040px] flex-1 flex-col justify-center px-4 pb-8 pt-20 sm:px-6 sm:pt-24 lg:px-10">
+        {user.role === "venue_admin" && pendingGuestRequestCount > 0 && (
+          <TransitionLink
+            href="/admin?tab=requests"
+            className="group mb-4 grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-4 border border-status-waiting/70 bg-status-waiting/10 px-4 py-4 text-status-waiting hover:border-status-waiting focus-visible:outline-none sm:px-5"
+          >
+            <Icon name="warning" size={22} />
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-text-heading">
+                {t("pendingGuestRequests", { count: pendingGuestRequestCount })}
+              </p>
+              <p className="mt-1 text-xs text-text-muted">
+                {t("pendingGuestRequestsDescription")}
+              </p>
+            </div>
+            <span className="flex items-center gap-3">
+              <span className="border border-status-waiting/70 bg-canvas px-2 py-1 font-mono text-sm tabular-nums">
+                {pendingGuestRequestCount}
+              </span>
+              <Icon name="arrow-right" size={18} />
+            </span>
+          </TransitionLink>
+        )}
+
         {accessibleMenus.length > 0 && (
           <nav
             aria-label={t("availableWorkspaces")}

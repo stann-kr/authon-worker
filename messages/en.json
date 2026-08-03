@@ -197,7 +197,9 @@
     "doorTitle": "Door check-in",
     "doorDescription": "Find arriving guests and confirm entry without delay.",
     "adminTitle": "Administration",
-    "adminDescription": "Manage guests, links, users and venue operations."
+    "adminDescription": "Manage guests, links, users and venue operations.",
+    "pendingGuestRequests": "{count} additional guest requests pending",
+    "pendingGuestRequestsDescription": "Open Admin to review and approve these requests."
   },
   "GuestOperations": {
     "title": "Guest registration",
@@ -251,6 +253,7 @@
   "AdminNav": {
     "sections": "Admin sections",
     "guests": "Guests",
+    "requests": "Requests",
     "links": "Links",
     "users": "Users",
     "venues": "Venues"
@@ -418,8 +421,6 @@
     "createDescription": "Create new staff accounts",
     "users": "Users",
     "usersDescription": "Manage existing users",
-    "limitRequests": "Limit requests",
-    "limitRequestsDescription": "Review date-specific additional guest requests",
     "migration": "Migration",
     "migrationDescription": "Legacy user data import",
     "allVenues": "All venues",
