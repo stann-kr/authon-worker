@@ -4,6 +4,18 @@
 
 ## 2026-08-03
 
+### 포트폴리오 데모 공개 배포
+
+#### Added
+
+- `authon-demo` Worker를 배포하고 `https://demo.authon.stann.kr` Custom Domain과 HTTPS 인증서를 연결했다.
+- 공개 URL에서 가상 계정 로그인과 역할별 샌드박스를 바로 체험할 수 있게 했다.
+
+#### Security
+
+- 공개 배포의 실제 binding이 정적 Assets와 데모 모드·기준 URL 변수만 포함하고 D1, KV, 운영 secret을 포함하지 않는지 확인했다.
+- Custom Domain에서 운영 화면과 인증·관리·내부 API가 요청 방식과 관계없이 `404`로 차단되는지 검증했다.
+
 ### 포트폴리오 데모 전용 Worker 격리
 
 #### Added

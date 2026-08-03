@@ -3,7 +3,7 @@
 클럽/바/라운지 등 베뉴의 게스트 리스트 관리 시스템.
 DJ 게스트 등록 → Door 스태프 체크인 → Admin 전체 관리를 단일 플랫폼에서 처리.
 
-운영 계정 없이 제품의 핵심 흐름을 살펴보려면 실행 후 `/demo`의 인터랙티브 포트폴리오 샌드박스를 사용할 수 있다. 가상 계정으로 로그인해 역할별 화면을 체험하며, 데모 변경은 브라우저에만 저장되고 운영 API와 데이터베이스에 연결되지 않는다.
+운영 계정 없이 제품의 핵심 흐름을 살펴보려면 [공개 포트폴리오 데모](https://demo.authon.stann.kr)를 사용할 수 있다. 가상 계정으로 로그인해 역할별 화면을 체험하며, 데모 변경은 브라우저에만 저장되고 운영 API와 데이터베이스에 연결되지 않는다.
 
 **스택:** Next.js 16 (App Router) · Cloudflare Workers + D1 + KV · Drizzle ORM · JWT 자체 인증 · AWS SES
 
@@ -25,7 +25,9 @@ docker compose run --rm web npm run db:migrate:local
 
 접속: http://localhost:3000
 
-포트폴리오 데모: http://localhost:3000/demo
+포트폴리오 데모: https://demo.authon.stann.kr
+
+로컬 데모: http://localhost:3000/demo
 
 Demo branch의 Worker 명령은 운영 Worker가 아니라 별도 `authon-demo` 설정을 사용하며, 배포 대상 Custom Domain은 `demo.authon.stann.kr`이다.
 
