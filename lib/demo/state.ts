@@ -6,6 +6,7 @@ export interface DemoGuest {
   name: string;
   host: string;
   partySize: number;
+  date?: string;
   status: DemoGuestStatus;
   createdAt: string;
   checkedInAt: string | null;
@@ -72,6 +73,7 @@ export function createDemoState(): DemoState {
         name: "Mina Park",
         host: "Resident DJ",
         partySize: 2,
+        date: "2026-08-03",
         status: "waiting",
         createdAt: "2026-08-03T12:32:00.000Z",
         checkedInAt: null,
@@ -81,6 +83,7 @@ export function createDemoState(): DemoState {
         name: "Alex Chen",
         host: "Studio Mondo",
         partySize: 1,
+        date: "2026-08-03",
         status: "waiting",
         createdAt: "2026-08-03T12:26:00.000Z",
         checkedInAt: null,
@@ -90,6 +93,7 @@ export function createDemoState(): DemoState {
         name: "Rina Sato",
         host: "Resident DJ",
         partySize: 3,
+        date: "2026-08-03",
         status: "checked_in",
         createdAt: "2026-08-03T12:08:00.000Z",
         checkedInAt: "2026-08-03T12:51:00.000Z",
@@ -99,6 +103,7 @@ export function createDemoState(): DemoState {
         name: "Theo Martins",
         host: "Night Service",
         partySize: 2,
+        date: "2026-08-03",
         status: "checked_in",
         createdAt: "2026-08-03T11:54:00.000Z",
         checkedInAt: "2026-08-03T12:44:00.000Z",
@@ -188,7 +193,7 @@ function addActivity(
 
 export function addDemoGuest(
   state: DemoState,
-  input: { name: string; host: string; partySize: number },
+  input: { name: string; host: string; partySize: number; date?: string },
   createdAt = new Date().toISOString(),
 ): DemoState {
   const name = input.name.trim().slice(0, 60);
@@ -201,6 +206,7 @@ export function addDemoGuest(
     name,
     host,
     partySize,
+    ...(input.date ? { date: input.date } : {}),
     status: "waiting",
     createdAt,
     checkedInAt: null,
@@ -212,6 +218,14 @@ export function addDemoGuest(
     guests: [guest, ...state.guests],
     activity: addActivity(state, "guest_added", name, createdAt),
     completedSteps: { ...state.completedSteps, guestAdded: true },
+  };
+}
+
+export function deleteDemoGuest(state: DemoState, guestId: string): DemoState {
+  if (!state.guests.some((guest) => guest.id === guestId)) return state;
+  return {
+    ...state,
+    guests: state.guests.filter((guest) => guest.id !== guestId),
   };
 }
 
@@ -254,12 +268,24 @@ export function decideDemoRequest(
   state: DemoState,
   requestId: string,
   decision: "approved" | "declined",
-  createdAt = new Date().toISOString(),
+  options: string | { createdAt?: string; approvedCount?: number } = {},
 ): DemoState {
   const request = state.requests.find((candidate) => candidate.id === requestId);
   if (!request || request.status !== "pending") return state;
 
-  const approvedCount = decision === "approved" ? request.requestedCount : 0;
+  const createdAt =
+    typeof options === "string"
+      ? options
+      : (options.createdAt ?? new Date().toISOString());
+  const requestedApprovedCount =
+    typeof options === "string" ? request.requestedCount : options.approvedCount;
+  const approvedCount =
+    decision === "approved"
+      ? Math.min(
+          request.requestedCount,
+          Math.max(1, Math.floor(requestedApprovedCount ?? request.requestedCount)),
+        )
+      : 0;
   return {
     ...state,
     nextSequence: state.nextSequence + 1,
@@ -331,6 +357,7 @@ function isDemoGuest(value: unknown): value is DemoGuest {
     typeof candidate.name === "string" &&
     typeof candidate.host === "string" &&
     typeof candidate.partySize === "number" &&
+    (candidate.date === undefined || typeof candidate.date === "string") &&
     (candidate.status === "waiting" || candidate.status === "checked_in") &&
     typeof candidate.createdAt === "string" &&
     (candidate.checkedInAt === null || typeof candidate.checkedInAt === "string")

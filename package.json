@@ -2,6 +2,7 @@
   "name": "authon-worker",
   "version": "0.1.0",
   "private": true,
+  "packageManager": "npm@10.9.8",
   "scripts": {
     "dev": "cross-env NODE_ENV=development next dev -H 0.0.0.0 -p 3000",
     "dev:reset": "rm -rf .wrangler && npm run db:migrate:local && npm run dev",
@@ -29,6 +30,7 @@
     "@carbon/icons-react": "^11.85.0",
     "@carbon/react": "^1.113.0",
     "@opennextjs/cloudflare": "^1.20.2",
+    "@swc/helpers": "0.5.23",
     "aws4fetch": "^1.0.20",
     "bcryptjs": "^2.4.3",
     "drizzle-orm": "^0.45.2",

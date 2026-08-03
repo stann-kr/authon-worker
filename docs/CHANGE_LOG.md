@@ -4,6 +4,19 @@
 
 ## 2026-08-04
 
+### Demo 작업 화면의 실제 서비스 UI 통합
+
+#### Changed
+
+- `/demo/workspace`의 홈, Guest, Door, Admin 정보 구조를 실제 서비스와 같은 고정 헤더, 역할별 업무 메뉴, 운영 도구와 목록의 2열 레이아웃으로 통일했다.
+- 실제 서비스와 Demo가 같은 App Header, Workspace Menu, 날짜 선택, 검색, 통계, 게스트 행 컴포넌트를 사용하도록 공통 경계를 정리했다.
+- Demo의 Guest 등록, Door 체크인, 추가 한도 승인, 링크 생성과 사용자 조회를 실제 서비스의 화면 흐름과 필드 구성에 맞췄다.
+
+#### Fixed
+
+- 실제 서비스에 없는 좌측 사이드바, 영업 상태 strip, 별도 Overview 화면과 Host·Party Size 중심 등록 흐름을 작업 화면에서 제거했다.
+- `next-intl`의 SWC helper peer 요구사항을 명시적 dependency로 고정하고 npm 버전을 선언해 install 때마다 `package-lock.json`이 달라지던 문제를 해소했다.
+
 ### 실제 앱 구성의 데모 작업 화면
 
 #### Added
