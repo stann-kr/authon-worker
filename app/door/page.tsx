@@ -346,6 +346,7 @@ function DoorPageContent() {
                     onChange={setSearchQuery}
                   />
                   <StatGrid
+                    isLoading={!hasCurrentScopeData}
                     items={[
                       {
                         label: t("waiting"),

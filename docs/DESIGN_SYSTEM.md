@@ -75,8 +75,8 @@ Authon UI는 베뉴 현장에서 반복적으로 사용하는 운영 도구다. 
 
 ## 상태 표현
 
-- 로그인 후 작업 화면 사이의 route loading은 현재 header와 footer를 유지하고 콘텐츠 영역에 공통 spinner를 표시한다. 최초 진입과 인증 확인은 fullscreen spinner를 사용한다.
-- 초기 data loading은 최종 행 구조와 같은 skeleton을 사용한다.
+- 로그인 후 작업 화면 사이의 route loading은 현재 header와 footer를 유지하고 목적지의 접근 권한 확인까지 콘텐츠 영역에 공통 spinner 하나를 표시한다. 최초 진입의 인증 확인은 fullscreen spinner를 사용한다.
+- 초기 data loading은 최종 행 구조와 같은 skeleton을 사용하고, 현재 조회 범위의 집계가 준비되기 전 통계 수치는 `—`로 표시한다.
 - button loading은 label 위치를 유지하는 작은 progress indicator를 사용한다.
 - empty state는 원인과 다음 행동을 함께 제시할 수 있어야 한다.
 - error는 영향받는 section 가까이에 표시하고 재시도가 가능한 경우 action을 제공한다.
@@ -98,6 +98,7 @@ Authon UI는 베뉴 현장에서 반복적으로 사용하는 운영 도구다. 
 
 - `Button`: primary, secondary, outline, danger, ghost variant와 loading state를 제공한다.
 - `PanelHeader`: count, sort, refresh, 추가 action의 위치를 통일한다.
+- `StatGrid`: 통계 수치와 label을 카드 중앙에 정렬하고 현재 조회 범위의 loading 상태를 함께 표현한다.
 - `GuestListCard`: waiting, checked, removed 상태와 registration/operations 작업 모드별 action을 표현한다. 공용 계정 게스트는 계정명과 실제 입력자를 함께 표시하고, checked 상태의 되돌리기는 해당 행 안에서 제공한다.
 - `StatusLabel`: 상태별 아이콘, 텍스트, 색상 규칙을 통일한다.
 - `Alert`: error와 success를 live region으로 전달한다.

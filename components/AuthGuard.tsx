@@ -6,6 +6,8 @@ import { getUser, hasAccess, User } from "../lib/auth";
 import type { AccessScope } from "@/lib/users/policy";
 import Spinner from "./Spinner";
 import { useTranslations } from "next-intl";
+import { useRouteTransition } from "./RouteTransitionProvider";
+import RouteLoadingShell from "./RouteLoadingShell";
 
 interface AuthGuardProps {
   children: React.ReactNode;
@@ -20,6 +22,7 @@ export default function AuthGuard({
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const router = useRouter();
+  const { isRouteTransitionActive } = useRouteTransition();
 
   useEffect(() => {
     const checkAuth = () => {
@@ -48,6 +51,10 @@ export default function AuthGuard({
   }, [router, requiredAccess]);
 
   if (isLoading) {
+    if (isRouteTransitionActive) {
+      return <RouteLoadingShell />;
+    }
+
     return <Spinner mode="fullscreen" text={t("verifyingAccess")} />;
   }
 

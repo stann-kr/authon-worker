@@ -18,11 +18,17 @@ interface StatItem {
 
 interface StatGridProps {
   items: StatItem[];
+  /** 현재 범위의 통계가 준비되지 않았으면 숫자 대신 dash를 표시한다. */
+  isLoading?: boolean;
   /** 라벨 텍스트 크기 오버라이드 (기본: 'text-xs') */
   labelClassName?: string;
 }
 
-export default function StatGrid({ items, labelClassName }: StatGridProps) {
+export default function StatGrid({
+  items,
+  isLoading = false,
+  labelClassName,
+}: StatGridProps) {
   const colsClass =
     items.length === 1
       ? "grid-cols-1"
@@ -33,12 +39,15 @@ export default function StatGrid({ items, labelClassName }: StatGridProps) {
           : "grid-cols-4";
 
   return (
-    <dl className={`grid ${colsClass} divide-x divide-border-subtle border-y border-border-subtle`}>
+    <dl
+      className={`grid ${colsClass} divide-x divide-border-subtle border-y border-border-subtle`}
+      aria-busy={isLoading}
+    >
       {items.map((item) => {
         return (
           <div
             key={item.label}
-            className="flex min-w-0 flex-col bg-surface px-3 py-2.5 text-left sm:px-4"
+            className="flex min-w-0 flex-col items-center bg-surface px-3 py-2.5 text-center sm:px-4"
           >
             <dt
               className={`${statLabelColorMap[item.color ?? "default"]} order-2 mt-0.5 font-medium leading-tight ${labelClassName ?? "text-xs"}`}
@@ -48,7 +57,7 @@ export default function StatGrid({ items, labelClassName }: StatGridProps) {
             <dd
               className={`order-1 font-mono text-lg sm:text-xl ${statColorMap[item.color ?? "default"]}`}
             >
-              {item.value}
+              {isLoading ? "—" : item.value}
             </dd>
           </div>
         );
