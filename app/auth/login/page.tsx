@@ -115,18 +115,16 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen bg-black flex items-center justify-center px-4 sm:px-6 lg:px-8">
+    <div className="flex min-h-[100dvh] items-center justify-center bg-canvas px-4 py-10 sm:px-6 lg:px-8">
       <div className="w-full max-w-sm sm:max-w-md">
-        <div className="bg-surface/60 border border-border-subtle p-6 sm:p-8 lg:p-10 shadow-[0_0_0_1px_rgba(255,255,255,0.02)]">
-          <div className="text-center mb-8 sm:mb-9">
-            <div className="flex items-center justify-center gap-2 mb-4">
-              <div className="w-2 h-2 bg-white" aria-hidden="true"></div>
-              <div className="w-2 h-2 bg-white" aria-hidden="true"></div>
-              <div className="w-2 h-2 bg-white" aria-hidden="true"></div>
+        <div className="app-panel p-6 sm:p-8 lg:p-10">
+          <div className="mb-8 text-center sm:mb-9">
+            <div className="mx-auto mb-5 grid h-11 w-11 place-items-center border border-border-strong bg-surface font-mono text-sm font-semibold text-text-heading">
+              A
             </div>
-            <h1 className="font-mono text-xl sm:text-2xl lg:text-3xl tracking-wider text-white uppercase mb-2">{BRAND_NAME}</h1>
-            <p className="text-xs sm:text-sm text-gray-400 tracking-widest font-mono uppercase">
-              {mode === "login" ? "USER ACCESS" : "FIRST-TIME SETUP"}
+            <h1 className="mb-2 text-2xl font-semibold tracking-[-0.03em] text-text-heading sm:text-3xl">{BRAND_NAME}</h1>
+            <p className="text-sm text-text-muted">
+              {mode === "login" ? "Sign in to your workspace" : "Complete your account setup"}
             </p>
           </div>
 
@@ -136,11 +134,11 @@ export default function LoginPage() {
             aria-busy={isLoading}
           >
             {mode === "setup" && (
-              <div className="border border-cyan-900/60 bg-cyan-950/20 p-4" role="note">
-                <p className="font-mono text-[10px] tracking-[0.2em] uppercase text-cyan-200 mb-2">
-                  ONE-TIME ACCOUNT SETUP
+              <div className="rounded-control border border-border-default bg-surface-raised p-4" role="note">
+                <p className="mb-2 text-sm font-semibold text-text-heading">
+                  One-time account setup
                 </p>
-                <p className="font-mono text-[10px] tracking-[0.08em] leading-relaxed text-gray-400">
+                <p className="text-sm leading-relaxed text-text-muted">
                   Migrated accounts can set a password once without email verification. After completion, this setup path is permanently disabled for the account.
                 </p>
               </div>
@@ -149,7 +147,7 @@ export default function LoginPage() {
             <div>
               <label
                 htmlFor="email"
-                className="block text-text-muted font-mono text-xs sm:text-sm tracking-wider uppercase mb-2"
+                className="app-label"
               >
                 EMAIL ADDRESS
               </label>
@@ -158,7 +156,7 @@ export default function LoginPage() {
                 type="email"
                 value={formData.email}
                 onChange={(e) => setFormData({...formData, email: e.target.value})}
-                className="w-full bg-surface border border-border-default px-4 py-3 sm:py-4 text-white font-mono text-sm tracking-wider focus:outline-none focus:border-border-focus transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                className="app-field"
                 placeholder="name@example.com"
                 autoComplete="email"
                 required
@@ -168,7 +166,7 @@ export default function LoginPage() {
                 aria-describedby={`email-helper${error ? " auth-error" : ""}`}
                 aria-invalid={error ? "true" : "false"}
               />
-              <p id="email-helper" className="text-text-dim font-mono text-[10px] tracking-[0.08em] mt-2 leading-relaxed">
+              <p id="email-helper" className="app-helper">
                 {mode === "login"
                   ? "Use the email address registered to your account."
                   : "This email identifies the migrated account being activated."}
@@ -179,7 +177,7 @@ export default function LoginPage() {
               <div className="space-y-2">
                 <label
                   htmlFor="password"
-                  className="block text-text-muted font-mono text-xs sm:text-sm tracking-wider uppercase"
+                  className="app-label"
                 >
                   PASSWORD
                 </label>
@@ -187,7 +185,7 @@ export default function LoginPage() {
                   id="password"
                   value={formData.password}
                   onChange={(e) => setFormData({...formData, password: e.target.value})}
-                  inputClassName="w-full bg-surface border border-border-default px-4 py-3 sm:py-4 pr-12 text-white font-mono text-sm tracking-wider focus:outline-none focus:border-border-focus transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  inputClassName="app-field pr-12"
                   placeholder="••••••••"
                   autoComplete="current-password"
                   required
@@ -195,41 +193,41 @@ export default function LoginPage() {
                   aria-describedby={`password-helper password-support${error ? " auth-error" : ""}`}
                   aria-invalid={error ? "true" : "false"}
                 />
-                <p id="password-helper" className="text-text-dim font-mono text-[10px] tracking-[0.08em] leading-relaxed">
+                <p id="password-helper" className="app-helper">
                   Case-sensitive. Migrated users will be guided to first-time setup automatically.
                 </p>
               </div>
             ) : (
               <div className="space-y-5">
                 <div>
-                  <label htmlFor="setup-password" className="block text-text-muted font-mono text-xs sm:text-sm tracking-wider uppercase mb-2">
+                  <label htmlFor="setup-password" className="app-label">
                     NEW PASSWORD
                   </label>
                   <PasswordInput
                     id="setup-password"
                     value={setupPassword}
                     onChange={(event) => setSetupPassword(event.target.value)}
-                    inputClassName="w-full bg-surface border border-border-default px-4 py-3 sm:py-4 pr-12 text-white font-mono text-sm tracking-wider focus:outline-none focus:border-border-focus transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    inputClassName="app-field pr-12"
                     autoComplete="new-password"
                     required
                     disabled={isLoading}
                     aria-describedby={`setup-password-policy${error ? " auth-error" : ""}`}
                     aria-invalid={error ? "true" : "false"}
                   />
-                  <p id="setup-password-policy" className="text-text-dim font-mono text-[10px] tracking-[0.08em] mt-2 leading-relaxed">
+                  <p id="setup-password-policy" className="app-helper">
                     {PASSWORD_POLICY_HINT}
                   </p>
                 </div>
 
                 <div>
-                  <label htmlFor="setup-password-confirm" className="block text-text-muted font-mono text-xs sm:text-sm tracking-wider uppercase mb-2">
+                  <label htmlFor="setup-password-confirm" className="app-label">
                     CONFIRM PASSWORD
                   </label>
                   <PasswordInput
                     id="setup-password-confirm"
                     value={confirmPassword}
                     onChange={(event) => setConfirmPassword(event.target.value)}
-                    inputClassName="w-full bg-surface border border-border-default px-4 py-3 sm:py-4 pr-12 text-white font-mono text-sm tracking-wider focus:outline-none focus:border-border-focus transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    inputClassName="app-field pr-12"
                     autoComplete="new-password"
                     required
                     disabled={isLoading}
@@ -260,17 +258,17 @@ export default function LoginPage() {
                 type="button"
                 onClick={returnToLogin}
                 disabled={isLoading}
-                className="w-full text-gray-400 font-mono text-[10px] tracking-[0.2em] uppercase hover:text-white transition-colors disabled:opacity-50"
+                className="pressable w-full rounded-control py-2 text-sm font-medium text-text-muted hover:bg-surface-hover hover:text-text-heading disabled:opacity-50"
               >
                 BACK TO SIGN IN
               </button>
             )}
 
-            <div className="border border-white/10 bg-black/30 px-4 py-3 space-y-1.5">
-              <p className="text-white font-mono text-[10px] tracking-[0.22em] uppercase">
-                {mode === "login" ? "MIGRATED ACCOUNT?" : "INTERNAL SETUP WINDOW"}
+            <div className="space-y-1.5 rounded-control border border-border-default bg-canvas px-4 py-3">
+              <p className="text-sm font-semibold text-text-heading">
+                {mode === "login" ? "Migrated account?" : "Internal setup window"}
               </p>
-              <p id="password-support" className="text-text-dim font-mono text-[10px] tracking-[0.08em] leading-relaxed">
+              <p id="password-support" className="text-xs leading-relaxed text-text-dim">
                 {mode === "login"
                   ? "Migrated users can enter any password once. Accounts awaiting setup will continue to the new password step automatically."
                   : "Only accounts awaiting migration setup can use this flow. Active accounts must sign in normally or contact an administrator."}

@@ -29,7 +29,8 @@ docker compose run --rm web npm run db:migrate:local
 
 | 문서 | 내용 |
 |------|------|
-| [기술 명세서](.docs/TECH_SPEC.md) | 아키텍처, 스키마, 환경변수, 개발 명령어 전체 |
-| [배포 가이드](.docs/DEPLOYMENT.md) | Workers 배포 절차, D1 마이그레이션, 운영 환경 설정 |
-| [트러블슈팅](.docs/TROUBLESHOOTING.md) | 이슈 해결 이력 |
-| [변경 이력](.docs/CHANGE_LOG.md) | 릴리스 이력 |
+| [문서 안내](docs/README.md) | 공개 문서 구성과 읽는 순서 |
+| [기술 명세서](docs/TECH_SPEC.md) | 아키텍처, 스키마, 환경변수, 개발 명령어 전체 |
+| [디자인 시스템](docs/DESIGN_SYSTEM.md) | UI 원칙, 타이포그래피, 색상과 공용 컴포넌트 규칙 |
+| [트러블슈팅](docs/TROUBLESHOOTING.md) | 이슈 해결 이력 |
+| [변경 이력](docs/CHANGE_LOG.md) | 릴리스 이력 |

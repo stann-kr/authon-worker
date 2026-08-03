@@ -1,5 +1,7 @@
 import React from "react";
 import Button from "./Button";
+import Icon from "./Icon";
+import StatusLabel from "./StatusLabel";
 
 export interface Guest {
   id: string;
@@ -18,62 +20,85 @@ const formatTime = (timeStr: string) => {
 interface GuestListCardProps {
   guest: Guest;
   index: number;
-  variant?: "user" | "admin";
+  mode?: "registration" | "operations";
   djName?: string;
+  showRegisteredAt?: boolean;
   onCheck?: () => void;
+  onUndo?: () => void;
   onDelete?: () => void;
   isCheckLoading?: boolean;
+  isUndoLoading?: boolean;
   isDeleteLoading?: boolean;
 }
 
 const GuestListCard: React.FC<GuestListCardProps> = ({
   guest,
   index,
-  variant = "user",
+  mode = "registration",
   djName,
+  showRegisteredAt = false,
   onCheck,
+  onUndo,
   onDelete,
   isCheckLoading = false,
+  isUndoLoading = false,
   isDeleteLoading = false,
 }) => {
-  const handleCheck = () => {
-    if (!onCheck) return;
-    if (!confirm("Mark this guest as checked in?")) return;
-    onCheck();
+  const rowTone = index % 2 === 0 ? "bg-surface" : "bg-surface-raised";
+  const indicatorTone =
+    guest.status === "checked"
+      ? "before:bg-status-checked"
+      : guest.status === "deleted"
+        ? "before:bg-border-strong"
+        : "before:bg-status-waiting";
+  const handleDelete = () => {
+    if (!onDelete || !window.confirm("Remove this guest from the list?")) return;
+    onDelete();
   };
 
   return (
     <article
-      className={`p-4 overflow-hidden ${index % 2 === 1 ? "bg-surface-hover/30" : ""} ${guest.status === "checked" ? "opacity-50" : ""}`}
+      className={`guest-list-row relative overflow-hidden px-4 py-3 before:absolute before:inset-y-0 before:left-0 before:w-0.5 sm:px-5 ${rowTone} ${indicatorTone} ${
+        guest.status === "deleted" ? "opacity-60" : ""
+      }`}
     >
-      <div className="flex items-start justify-between gap-2">
-        <div className="flex items-start gap-3 sm:gap-4 min-w-0 flex-1">
-          <div
-            className={`w-8 h-8 sm:w-10 sm:h-10 border flex items-center justify-center shrink-0 mt-0.5 ${guest.status === "checked" ? "border-brand-green/50" : "border-border-default"}`}
-          >
-            <span className="text-xs sm:text-sm font-mono text-text-muted">
-              {String(index + 1).padStart(2, "0")}
-            </span>
-          </div>
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex min-w-0 flex-1 items-start gap-3 sm:gap-4">
+          <span className="mt-0.5 w-7 shrink-0 font-mono text-xs tabular-nums text-text-dim">
+            {String(index + 1).padStart(2, "0")}
+          </span>
           <div className="min-w-0">
-            <p className="font-mono font-semibold text-sm sm:text-base tracking-widest text-white uppercase">
+            <p className="type-row-title break-words">
               {guest.name}
             </p>
-            {(djName || guest.checkInTime || guest.createdAt) && (
-              <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 mt-0.5">
-                {djName && (
-                  <span className="text-xs font-mono text-text-muted">
-                    BY: {djName}
-                  </span>
-                )}
-                {guest.createdAt && (
-                  <span className="text-xs font-mono text-text-dim">
-                    {formatTime(guest.createdAt)}
+            {djName && (
+              <p className="mt-0.5 text-xs text-text-muted">
+                By {djName}
+              </p>
+            )}
+
+            {((showRegisteredAt && guest.createdAt) || guest.checkInTime) && (
+              <div className="mt-1.5 flex flex-wrap items-center gap-x-5 gap-y-1">
+                {showRegisteredAt && guest.createdAt && (
+                  <span className="flex items-baseline gap-2 text-xs text-text-dim">
+                    <span>REGISTERED</span>
+                    <time
+                      dateTime={guest.createdAt}
+                      className="font-mono tabular-nums text-text-muted"
+                    >
+                      {formatTime(guest.createdAt)}
+                    </time>
                   </span>
                 )}
                 {guest.checkInTime && (
-                  <span className="text-xs font-mono text-brand-green">
-                    IN: {formatTime(guest.checkInTime)}
+                  <span className="flex items-baseline gap-2 text-xs text-status-checked">
+                    <span>CHECKED IN</span>
+                    <time
+                      dateTime={guest.checkInTime}
+                      className="font-mono tabular-nums"
+                    >
+                      {formatTime(guest.checkInTime)}
+                    </time>
                   </span>
                 )}
               </div>
@@ -81,69 +106,90 @@ const GuestListCard: React.FC<GuestListCardProps> = ({
           </div>
         </div>
 
-        <div className="flex items-start gap-2 flex-shrink-0">
+        <div className="flex flex-shrink-0 flex-wrap items-center justify-end gap-2">
           {guest.status === "pending" && (
             <>
-              {variant === "admin" && onCheck && (
+              <span className="sr-only">Status: waiting.</span>
+              {onCheck && (
                 <Button
-                  onClick={handleCheck}
+                  onClick={onCheck}
                   isLoading={isCheckLoading}
-                  variant="outline"
+                  variant="confirm"
                   size="md"
-                  className="px-4 sm:px-6"
+                  className="w-32 px-2 sm:w-36 sm:px-4"
                 >
-                  CHECK
+                  CHECK IN
                 </Button>
               )}
 
-              {variant === "user" && onDelete && (
+              {mode === "registration" && onDelete && (
                 <Button
-                  onClick={onDelete}
+                  onClick={handleDelete}
                   isLoading={isDeleteLoading}
                   variant="danger"
-                  className="bg-red-600 text-white border-none hover:bg-red-700 px-3 sm:px-4"
+                  className="px-3 sm:px-4"
                 >
                   DELETE
                 </Button>
               )}
 
-              {variant === "admin" && onDelete && (
+              {mode === "operations" && onDelete && (
                 <Button
-                  onClick={onDelete}
+                  onClick={handleDelete}
                   isLoading={isDeleteLoading}
                   variant="ghost"
                   className="px-3 sm:px-4 border border-border-default text-text-muted"
                   aria-label="Delete Guest"
                 >
-                  <i className="ri-close-line" aria-hidden="true"></i>
+                  <Icon name="close" size={16} />
                 </Button>
               )}
             </>
           )}
 
           {guest.status === "checked" && (
-            <div className="flex items-center gap-2">
-              <span className="px-4 sm:px-6 py-2 sm:py-3 bg-brand-green/20 border border-brand-green text-brand-green font-mono text-xs tracking-wider uppercase">
-                CHECKED IN
-              </span>
-              {variant === "admin" && onDelete && (
+            <>
+              <span className="sr-only">Status: checked in.</span>
+              {onUndo && (
                 <Button
-                  onClick={onDelete}
+                  onClick={onUndo}
+                  isLoading={isUndoLoading}
+                  variant="outline"
+                  size="md"
+                  leftIcon={<Icon name="undo" size={16} />}
+                  className="w-32 px-2 sm:w-36 sm:px-4"
+                  aria-label={`Undo check-in for ${guest.name}`}
+                >
+                  UNDO
+                </Button>
+              )}
+              {!onUndo && (
+                <StatusLabel
+                  tone="checked"
+                  appearance="inline"
+                  className="whitespace-nowrap"
+                >
+                  CHECKED IN
+                </StatusLabel>
+              )}
+              {mode === "operations" && onDelete && (
+                <Button
+                  onClick={handleDelete}
                   isLoading={isDeleteLoading}
                   variant="ghost"
                   className="w-8 h-8 sm:w-10 sm:h-10 p-0 border border-border-default text-text-muted"
                   aria-label="Remove Guest"
                 >
-                  <i className="ri-close-line text-sm" aria-hidden="true"></i>
+                  <Icon name="close" size={16} />
                 </Button>
               )}
-            </div>
+            </>
           )}
 
           {guest.status === "deleted" && (
-            <span className="px-4 sm:px-6 py-2 sm:py-3 bg-surface-hover text-text-dim font-mono text-xs tracking-wider uppercase">
+            <StatusLabel tone="neutral">
               REMOVED
-            </span>
+            </StatusLabel>
           )}
         </div>
       </div>

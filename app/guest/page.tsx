@@ -19,21 +19,12 @@ export default function GuestPage() {
   return (
     <Suspense
       fallback={
-        <div className="min-h-screen bg-black flex flex-col">
+        <div className="min-h-[100dvh] bg-canvas flex flex-col">
           <AdminHeader />
           <div className="flex-1 overflow-x-hidden pt-20 sm:pt-24 flex flex-col">
-            <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-10 w-full lg:flex-1 lg:min-h-0 flex flex-col">
-              <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 lg:gap-6 lg:flex-1 lg:min-h-0">
-                <div className="lg:col-span-1 space-y-4">
-                  <div className="bg-surface border border-border-subtle p-4 sm:p-5 min-h-[200px]">
-                    <Spinner mode="inline" text="LOADING..." />
-                  </div>
-                </div>
-                <div className="lg:col-span-3 flex flex-col lg:min-h-0">
-                  <div className="main-content-panel lg:min-h-0 lg:max-h-full">
-                    <Spinner mode="inline" text="LOADING..." />
-                  </div>
-                </div>
+            <div className="mx-auto flex w-full max-w-[1440px] flex-col px-4 sm:px-6 lg:min-h-0 lg:flex-1 lg:px-10">
+              <div className="main-content-panel lg:min-h-0">
+                <Spinner mode="inline" text="Loading guest workspace" />
               </div>
             </div>
             <Footer />

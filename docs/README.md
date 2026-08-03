@@ -24,6 +24,7 @@
 ## 문서 목록
 
 - [기술 명세](TECH_SPEC.md) — 아키텍처, 데이터 모델, 인증/권한 경계, 주요 런타임 구조
+- [디자인 시스템](DESIGN_SYSTEM.md) — UI token, component, 상태, 모션, 접근성 규칙
 - [변경 이력](CHANGE_LOG.md) — 공개 가능한 결과 중심 변경 요약
 - [트러블슈팅](TROUBLESHOOTING.md) — 공개해도 무방하고 재발 가능성이 있는 이슈만 정리
 

@@ -1,26 +1,61 @@
-@import url("https://cdnjs.cloudflare.com/ajax/libs/remixicon/4.5.0/remixicon.min.css");
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 :root {
-  font-size: 16px; /* 모바일: 기존 14px에서 1단계 상향 */
-}
-
-@media (min-width: 640px) {
-  :root {
-    font-size: 15px; /* 데스크탑: 기존 14px에서 1단계 상향 */
-  }
+  color-scheme: dark;
+  font-size: 16px;
+  --app-canvas: #0a0b0c;
+  --app-surface: #111315;
+  --app-surface-raised: #181b1e;
+  --app-surface-hover: #202428;
+  --app-border-subtle: #2a2e32;
+  --app-border: #42484e;
+  --app-text: #f4f5f5;
+  --app-text-body: #d4d7d9;
+  --app-text-muted: #aab0b5;
+  --app-action: #e7eaec;
+  --app-focus: #f4f5f5;
+  --app-ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --app-ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
+  --app-duration-fast: 140ms;
+  --app-duration-standard: 200ms;
 }
 
 html,
 body {
-  @apply bg-black;
+  @apply bg-canvas text-text-body;
   overflow-x: hidden;
 }
 
-html {
-  color-scheme: dark;
+body,
+button,
+input,
+select,
+textarea {
+  font-family: var(--font-geist-sans), sans-serif;
+}
+
+button,
+input,
+select,
+textarea {
+  border-radius: 0;
+}
+
+button {
+  touch-action: manipulation;
+}
+
+button:not(:disabled) {
+  cursor: pointer;
+}
+
+code,
+kbd,
+pre,
+.font-mono {
+  font-family: var(--font-geist-mono), monospace;
 }
 
 /* iOS Safari: min-h-screen을 dvh로 오버라이드 (주소창 동적 높이 대응) */
@@ -43,9 +78,16 @@ input[type="date"] {
   color-scheme: dark;
 }
 
+.guest-search-input::-webkit-search-cancel-button,
+.guest-search-input::-webkit-search-decoration {
+  appearance: none;
+  -webkit-appearance: none;
+}
+
 @layer components {
   .skip-link {
-    @apply fixed left-4 top-3 z-[100] -translate-y-24 bg-white px-4 py-3 font-mono text-xs font-bold uppercase tracking-wider text-black transition-transform;
+    @apply fixed left-4 top-3 z-[100] -translate-y-24 rounded-control bg-action-primary px-4 py-3 text-xs font-semibold text-action-text;
+    transition: transform var(--app-duration-fast) var(--app-ease-out);
   }
 
   .skip-link:focus {
@@ -53,7 +95,7 @@ input[type="date"] {
   }
 
   .page-shell {
-    @apply flex flex-col bg-black;
+    @apply flex flex-col bg-canvas;
     min-height: 100dvh;
   }
 
@@ -62,18 +104,152 @@ input[type="date"] {
   }
 
   .page-container {
-    @apply max-w-[1200px] mx-auto px-4 sm:px-6 lg:px-10 w-full lg:flex-1 lg:min-h-0 flex flex-col;
+    @apply mx-auto flex w-full max-w-[1440px] flex-col px-4 sm:px-6 lg:min-h-0 lg:flex-1 lg:px-10;
   }
 
   .main-content-panel {
-    @apply bg-gray-900 border border-gray-700 flex flex-col min-h-0 lg:min-h-[520px];
+    @apply flex min-h-0 flex-col overflow-hidden border border-border-subtle bg-surface;
+  }
+
+  .app-panel {
+    @apply border border-border-subtle bg-surface;
+  }
+
+  .context-bar {
+    @apply grid gap-3 border border-border-subtle bg-surface px-4 py-2.5 sm:px-5;
+    grid-template-columns: minmax(0, 1fr);
+    align-items: end;
+  }
+
+  .operational-date-control {
+    container-name: operational-date;
+    container-type: inline-size;
+  }
+
+  .operational-date-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0.5rem;
+  }
+
+  .operational-date-quick {
+    width: 100%;
+  }
+
+  .context-filter-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 18rem), 1fr));
+    align-items: end;
+    gap: 0.75rem;
+  }
+
+  .adaptive-panel-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 20rem), 1fr));
+    align-items: start;
+    gap: 1rem;
+  }
+
+  .operations-layout {
+    @apply grid min-w-0 grid-cols-1 items-start gap-4;
+  }
+
+  .guest-list-row {
+    content-visibility: auto;
+    contain-intrinsic-size: 80px;
+  }
+
+  .app-field {
+    @apply w-full rounded-control border border-border-default bg-surface-raised px-4 py-3 text-sm text-text-heading outline-none placeholder:text-text-dim disabled:cursor-not-allowed disabled:opacity-50;
+    transition: border-color var(--app-duration-fast) ease,
+      background-color var(--app-duration-fast) ease;
+  }
+
+  .app-field:focus {
+    @apply border-border-focus;
+    box-shadow: 0 0 0 1px var(--app-focus);
+  }
+
+  .app-label {
+    @apply mb-2 block text-sm font-medium leading-tight text-text-muted;
+  }
+
+  .type-context-title {
+    @apply mb-2 block text-sm font-semibold leading-tight text-text-muted;
+  }
+
+  .type-section-title {
+    @apply text-lg font-semibold leading-tight text-text-heading;
+  }
+
+  .type-panel-title {
+    @apply text-base font-semibold leading-tight text-text-heading;
+  }
+
+  .type-row-title {
+    @apply text-sm font-semibold leading-tight text-text-heading sm:text-base;
+  }
+
+  .type-body {
+    @apply text-sm leading-normal text-text-body;
+  }
+
+  .type-meta {
+    @apply text-xs leading-normal text-text-muted;
+  }
+
+  .app-helper {
+    @apply mt-2 text-xs leading-relaxed text-text-dim;
+  }
+
+  .operational-label {
+    @apply text-xs font-medium text-text-muted;
+  }
+
+  .pressable {
+    transition: color var(--app-duration-fast) ease,
+      background-color var(--app-duration-fast) ease,
+      border-color var(--app-duration-fast) ease,
+      opacity var(--app-duration-fast) ease;
+  }
+
+  .pressable:active:not(:disabled) {
+    @apply bg-surface-active;
+  }
+}
+
+@container operational-date (min-width: 40rem) {
+  .operational-date-layout {
+    grid-template-columns: minmax(0, 1fr) 15.25rem;
+  }
+}
+
+@media (min-width: 768px) {
+  .operations-layout {
+    grid-template-columns: minmax(17rem, 20rem) minmax(0, 1fr);
+  }
+}
+
+@media (min-width: 1024px) {
+  .operations-layout {
+    grid-template-columns: minmax(20rem, 24rem) minmax(0, 1fr);
   }
 }
 
 /* Global focus-visible accessibility polish */
 *:focus-visible {
-  outline: 2px solid #ffffff;
+  outline: 2px solid var(--app-focus);
   outline-offset: 3px;
+}
+
+.cds--g100 {
+  --cds-background: var(--app-canvas);
+  --cds-layer: var(--app-surface);
+  --cds-layer-01: var(--app-surface);
+  --cds-layer-02: var(--app-surface-raised);
+  --cds-focus: var(--app-focus);
+  --cds-interactive: var(--app-action);
+  min-height: 100dvh;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -85,4 +261,5 @@ input[type="date"] {
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
   }
+
 }

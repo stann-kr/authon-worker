@@ -4,7 +4,7 @@
  * 사용 예:
  * <StatGrid items={[
  *   { label: 'WAITING', value: 5 },
- *   { label: 'CHECKED', value: 3, color: 'green' },
+ *   { label: 'CHECKED', value: 3, color: 'default' },
  * ]} />
  */
 
@@ -18,39 +18,41 @@ interface StatItem {
 
 interface StatGridProps {
   items: StatItem[];
-  /** 라벨 텍스트 크기 오버라이드 (기본: 'text-[10px] sm:text-xs') */
+  /** 라벨 텍스트 크기 오버라이드 (기본: 'text-xs') */
   labelClassName?: string;
 }
 
 export default function StatGrid({ items, labelClassName }: StatGridProps) {
-  const colsClass = items.length <= 1 ? "grid-cols-1" : "grid-cols-2";
+  const colsClass =
+    items.length === 1
+      ? "grid-cols-1"
+      : items.length === 2
+        ? "grid-cols-2"
+        : items.length === 3
+          ? "grid-cols-3"
+          : "grid-cols-4";
 
   return (
-    <div className={`grid ${colsClass} gap-px bg-gray-700`}>
-      {items.map((item, index) => {
-        const isLastOddItem =
-          items.length > 1 &&
-          items.length % 2 === 1 &&
-          index === items.length - 1;
-
+    <dl className={`grid ${colsClass} divide-x divide-border-subtle border-y border-border-subtle`}>
+      {items.map((item) => {
         return (
           <div
             key={item.label}
-            className={`bg-gray-800 p-3 text-center min-w-0 ${isLastOddItem ? "col-span-2" : ""}`}
+            className="flex min-w-0 flex-col bg-surface px-3 py-2.5 text-left sm:px-4"
           >
-            <div
-              className={`font-mono text-sm sm:text-xl tracking-wider ${statColorMap[item.color ?? "white"]}`}
-            >
-              {item.value}
-            </div>
-            <div
-              className={`${statLabelColorMap[item.color ?? "white"]} font-mono tracking-wide uppercase leading-tight whitespace-normal break-words px-1 ${labelClassName ?? "text-[10px] sm:text-xs"}`}
+            <dt
+              className={`${statLabelColorMap[item.color ?? "default"]} order-2 mt-0.5 font-medium leading-tight ${labelClassName ?? "text-xs"}`}
             >
               {item.label}
-            </div>
+            </dt>
+            <dd
+              className={`order-1 font-mono text-lg sm:text-xl ${statColorMap[item.color ?? "default"]}`}
+            >
+              {item.value}
+            </dd>
           </div>
         );
       })}
-    </div>
+    </dl>
   );
 }

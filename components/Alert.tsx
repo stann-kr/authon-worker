@@ -1,3 +1,5 @@
+import Icon from "./Icon";
+
 /**
  * Alert — 에러/성공 알림 메시지 컴포넌트.
  *
@@ -16,24 +18,19 @@ export default function Alert({ type, message, className = '' }: AlertProps) {
   if (!message) return null;
 
   const styles = {
-    error: 'bg-red-900/30 border-red-700 text-red-400',
-    success: 'bg-green-900/30 border-green-700 text-green-400',
-  };
-
-  const icons = {
-    error: 'ri-error-warning-line',
-    success: 'ri-check-line',
+    error: "border-status-danger/70 bg-status-danger/10 text-status-danger",
+    success: "border-status-checked/70 bg-status-checked/10 text-status-checked",
   };
 
   return (
     <div
-      className={`border p-4 ${styles[type]} ${className}`}
+      className={`rounded-control border p-4 ${styles[type]} ${className}`}
       role={type === 'error' ? 'alert' : 'status'}
       aria-live={type === 'error' ? 'assertive' : 'polite'}
     >
       <div className="flex items-center gap-3">
-        <i className={`${icons[type]} flex-shrink-0`} aria-hidden="true"></i>
-        <p className="font-mono text-xs sm:text-sm tracking-wider">{message}</p>
+        <Icon name={type === "error" ? "warning" : "check"} className="shrink-0" />
+        <p className="text-sm leading-relaxed">{message}</p>
       </div>
     </div>
   );

@@ -7,6 +7,7 @@ import { fetchVenues } from "../../../lib/api/venues";
 import type { Venue } from "../../../lib/api/types";
 import PasswordInput from "../../../components/PasswordInput";
 import Alert from "../../../components/Alert";
+import Icon from "../../../components/Icon";
 import { getPasswordPolicyError, PASSWORD_POLICY_HINT } from "../../../lib/auth/password-policy";
 
 export default function InviteUser() {
@@ -136,47 +137,47 @@ export default function InviteUser() {
 
   return (
     <div className="space-y-6">
-      <div className="bg-gray-900 border border-gray-700 p-4 sm:p-5">
-        <h2 className="font-mono text-lg tracking-wider text-white uppercase mb-4">
+      <div className="app-panel p-4 sm:p-5">
+        <h2 className="type-section-title mb-4">
           CREATE USER
         </h2>
 
-        <div className="grid grid-cols-2 gap-px bg-gray-700 mb-4">
+        <div className="grid grid-cols-2 gap-px bg-surface-active mb-4">
           <button
             type="button"
             disabled
             aria-disabled="true"
             title="Available after the email service is connected"
-            className={`p-3 font-mono text-xs tracking-wider uppercase transition-colors ${
+            className={`p-3 text-xs font-medium transition-colors ${
               createMode === "invite"
-                ? "bg-white text-black"
-                : "bg-black text-gray-600 cursor-not-allowed"
+                ? "border border-border-default border-l-2 border-l-action-primary bg-surface-raised text-text-heading"
+                : "bg-canvas text-text-dim cursor-not-allowed"
             }`}
           >
-            <i className="ri-mail-send-line mr-1" aria-hidden="true"></i> EMAIL LATER
+            <Icon name="email" size={16} /> EMAIL LATER
           </button>
           <button
             type="button"
             onClick={() => setCreateMode("password")}
             aria-pressed={createMode === "password"}
-            className={`p-3 font-mono text-xs tracking-wider uppercase transition-colors ${
+            className={`p-3 text-xs font-medium transition-colors ${
               createMode === "password"
-                ? "bg-white text-black"
-                : "bg-black text-gray-400 hover:text-white"
+                ? "border border-border-default border-l-2 border-l-action-primary bg-surface-raised text-text-heading"
+                : "bg-canvas text-text-muted hover:text-text-heading"
             }`}
           >
-            <i className="ri-key-line mr-1" aria-hidden="true"></i> TEMP PASSWORD
+            <Icon name="key" size={16} /> TEMP PASSWORD
           </button>
         </div>
 
-        <p className="mb-4 border border-amber-900/60 bg-amber-950/20 p-3 font-mono text-[10px] leading-relaxed tracking-[0.12em] text-amber-200" role="note">
+        <p className="mb-4 border border-border-strong bg-surface-raised p-3 font-mono text-xs leading-relaxed tracking-[0.12em] text-text-muted" role="note">
           EMAIL INVITES ARE TEMPORARILY UNAVAILABLE. CREATE THE ACCOUNT WITH A TEMPORARY PASSWORD AND SHARE IT SECURELY.
         </p>
 
         <form onSubmit={handleSubmit} className="space-y-4" aria-busy={isLoading}>
           {isSuperAdmin && venues.length > 0 && (
             <div>
-              <label htmlFor="invite-venue" className="block text-gray-400 font-mono text-xs tracking-wider uppercase mb-2">
+              <label htmlFor="invite-venue" className="app-label">
                 VENUE
               </label>
               <div className="relative">
@@ -186,7 +187,7 @@ export default function InviteUser() {
                   onChange={(e) =>
                     setFormData({ ...formData, venue_id: e.target.value })
                   }
-                  className="w-full appearance-none bg-black border border-gray-700 px-4 py-3 pr-10 text-white font-mono text-sm tracking-wider focus:outline-none focus:border-white"
+                  className="w-full appearance-none bg-canvas border border-border-default px-4 py-3 pr-10 text-text-heading text-sm focus:outline-none focus:border-border-focus"
                   required
                 >
                   <option value="">SELECT VENUE</option>
@@ -196,13 +197,13 @@ export default function InviteUser() {
                     </option>
                   ))}
                 </select>
-                <i className="ri-arrow-down-s-line absolute right-3 top-1/2 -translate-y-1/2 text-base text-gray-400 pointer-events-none" aria-hidden="true"></i>
+                <Icon name="chevron-down" size={18} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-text-muted" />
               </div>
             </div>
           )}
 
           <div>
-            <label htmlFor="invite-email" className="block text-gray-400 font-mono text-xs tracking-wider uppercase mb-2">
+            <label htmlFor="invite-email" className="app-label">
               EMAIL ADDRESS
             </label>
             <input
@@ -212,14 +213,14 @@ export default function InviteUser() {
               onChange={(e) =>
                 setFormData({ ...formData, email: e.target.value })
               }
-              className="w-full bg-black border border-gray-700 px-4 py-3 text-white font-mono text-sm tracking-wider focus:outline-none focus:border-white"
+              className="w-full bg-canvas border border-border-default px-4 py-3 text-text-heading text-sm focus:outline-none focus:border-border-focus"
               placeholder="user@example.com"
               required
             />
           </div>
 
           <div>
-            <label htmlFor="invite-name" className="block text-gray-400 font-mono text-xs tracking-wider uppercase mb-2">
+            <label htmlFor="invite-name" className="app-label">
               NAME
             </label>
             <input
@@ -229,14 +230,14 @@ export default function InviteUser() {
               onChange={(e) =>
                 setFormData({ ...formData, name: e.target.value })
               }
-              className="w-full bg-black border border-gray-700 px-4 py-3 text-white font-mono text-sm tracking-wider focus:outline-none focus:border-white"
+              className="w-full bg-canvas border border-border-default px-4 py-3 text-text-heading text-sm focus:outline-none focus:border-border-focus"
               placeholder="Enter full name"
               required
             />
           </div>
 
           <fieldset>
-            <legend className="block text-gray-400 font-mono text-xs tracking-wider uppercase mb-2">
+            <legend className="app-label">
               ROLE
             </legend>
             <div className="grid grid-cols-4 gap-2">
@@ -248,10 +249,10 @@ export default function InviteUser() {
                   onClick={() =>
                     setFormData({ ...formData, role: opt.value as typeof formData.role })
                   }
-                  className={`p-3 border font-mono text-xs tracking-wider uppercase transition-colors ${
+                  className={`p-3 border text-xs font-medium transition-colors ${
                     formData.role === opt.value
-                      ? "bg-white text-black border-white"
-                      : "bg-black text-gray-400 border-gray-700 hover:text-white hover:border-gray-500"
+                      ? "border-action-primary bg-action-primary text-action-text"
+                      : "bg-canvas text-text-muted border-border-default hover:text-text-heading hover:border-border-strong"
                   }`}
                 >
                   {opt.label}
@@ -262,7 +263,7 @@ export default function InviteUser() {
 
           {formData.role !== "venue_admin" && (
             <div>
-              <label htmlFor="invite-guest-limit" className="block text-gray-400 font-mono text-xs tracking-wider uppercase mb-2">
+              <label htmlFor="invite-guest-limit" className="app-label">
                 GUEST LIMIT
               </label>
               <input
@@ -275,7 +276,7 @@ export default function InviteUser() {
                   const val = e.target.value.replace(/[^0-9]/g, "");
                   setFormData({ ...formData, guest_limit: val });
                 }}
-                className="w-full bg-black border border-gray-700 px-4 py-3 text-white font-mono text-sm tracking-wider focus:outline-none focus:border-white"
+                className="w-full bg-canvas border border-border-default px-4 py-3 text-text-heading text-sm focus:outline-none focus:border-border-focus"
                 placeholder="Enter guest limit"
               />
             </div>
@@ -283,7 +284,7 @@ export default function InviteUser() {
 
           {createMode === "password" && (
             <div>
-              <label htmlFor="invite-password" className="block text-gray-400 font-mono text-xs tracking-wider uppercase mb-2">
+              <label htmlFor="invite-password" className="app-label">
                 TEMPORARY PASSWORD
               </label>
               <PasswordInput
@@ -292,13 +293,13 @@ export default function InviteUser() {
                 onChange={(e) =>
                   setFormData({ ...formData, password: e.target.value })
                 }
-                inputClassName="w-full bg-black border border-gray-700 px-4 py-3 pr-12 text-white font-mono text-sm tracking-wider focus:outline-none focus:border-white"
+                inputClassName="w-full bg-canvas border border-border-default px-4 py-3 pr-12 text-text-heading text-sm focus:outline-none focus:border-border-focus"
                 placeholder="Create a temporary password"
                 autoComplete="new-password"
                 aria-describedby="invite-password-help"
                 required
               />
-              <p id="invite-password-help" className="text-gray-500 font-mono text-xs mt-1 tracking-wider">
+              <p id="invite-password-help" className="text-text-dim font-mono text-xs mt-1 tracking-wider">
                 {PASSWORD_POLICY_HINT} Share it securely and ask the user to change it after first login.
               </p>
             </div>
@@ -307,16 +308,16 @@ export default function InviteUser() {
           {error && <Alert type="error" message={error} />}
 
           {success && (
-            <div className="bg-green-900/30 border border-green-700 p-4 space-y-2" role="status" aria-live="polite">
-              <p className="text-green-400 font-mono text-xs tracking-wider uppercase">
+            <div className="bg-surface-raised border border-border-strong p-4 space-y-2" role="status" aria-live="polite">
+              <p className="text-text-heading text-xs font-medium">
                 {tempPassword ? "ACCOUNT CREATED" : "INVITATION SENT"}
               </p>
-              <p className="text-green-300 font-mono text-xs tracking-wider">
+              <p className="text-text-heading font-mono text-xs tracking-wider">
                 {success}
               </p>
               {tempPassword && (
-                <div className="mt-2 border border-green-800 p-2 flex items-center justify-between gap-2">
-                  <span className="font-mono text-xs text-green-200 tracking-wider">
+                <div className="mt-2 border border-border-strong p-2 flex items-center justify-between gap-2">
+                  <span className="font-mono text-xs text-text-heading tracking-wider">
                     TEMP PASSWORD:{" "}
                     <span className="select-all">
                       {showTempPassword ? tempPassword : "•".repeat(tempPassword.length)}
@@ -326,14 +327,14 @@ export default function InviteUser() {
                     <button
                       type="button"
                       onClick={() => setShowTempPassword((v) => !v)}
-                      className="text-green-400 hover:text-white font-mono text-[10px] uppercase"
+                      className="text-text-heading hover:text-xs text-text-heading"
                     >
                       {showTempPassword ? "HIDE" : "SHOW"}
                     </button>
                     <button
                       type="button"
                       onClick={() => navigator.clipboard.writeText(tempPassword)}
-                      className="text-green-400 hover:text-white font-mono text-[10px] uppercase"
+                      className="text-text-heading hover:text-xs text-text-heading"
                     >
                       COPY
                     </button>
@@ -346,11 +347,11 @@ export default function InviteUser() {
           <button
             type="submit"
             disabled={isLoading}
-            className="w-full bg-white text-black py-3 font-mono text-sm tracking-wider uppercase hover:bg-gray-200 transition-colors disabled:opacity-50"
+            className="w-full bg-action-primary py-3 text-sm font-semibold text-action-text transition-colors hover:bg-action-hover disabled:opacity-50"
           >
             {isLoading ? (
               <div className="flex items-center justify-center gap-2">
-                <div className="w-4 h-4 border border-black border-t-transparent rounded-full animate-spin"></div>
+                <div className="w-4 h-4 border border-canvas border-t-transparent rounded-full animate-spin"></div>
                 <span>
                   {createMode === "password" ? "CREATING..." : "SENDING..."}
                 </span>

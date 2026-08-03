@@ -45,11 +45,11 @@ export default function AuthGuard({
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-black flex items-center justify-center">
-        <div className="text-center">
-          <div className="w-8 h-8 border border-white border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-          <p className="text-white font-mono text-sm tracking-wider uppercase">
-            LOADING...
+      <div className="flex min-h-[100dvh] items-center justify-center bg-canvas">
+        <div className="text-center" role="status" aria-live="polite">
+          <div className="mx-auto mb-4 h-8 w-8 animate-spin rounded-full border-2 border-action-primary border-t-transparent" aria-hidden="true"></div>
+          <p className="text-sm text-text-muted">
+            Verifying access
           </p>
         </div>
       </div>

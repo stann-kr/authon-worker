@@ -6,7 +6,6 @@ import AdminHeader from "../../admin/components/AdminHeader";
 import Footer from "@/components/Footer";
 import StatGrid from "@/components/StatGrid";
 import PanelHeader from "@/components/PanelHeader";
-import Spinner from "@/components/Spinner";
 import EmptyState from "@/components/EmptyState";
 import Alert from "@/components/Alert";
 import VenueSelector, { useVenueSelector } from "@/components/VenueSelector";
@@ -14,7 +13,9 @@ import DatePicker from "@/components/DatePicker";
 import Button from "@/components/Button";
 import GuestListCard from "@/components/GuestListCard";
 import GuestSearchInput from "@/components/GuestSearchInput";
-import { getBusinessDate, formatDateDisplay } from "@/lib/date";
+import Skeleton from "@/components/Skeleton";
+import OperationsLayout from "@/components/OperationsLayout";
+import { getBusinessDate } from "@/lib/date";
 import {
   fetchGuestsByDate,
   createGuest,
@@ -200,169 +201,180 @@ export default function AuthenticatedGuestView({ user }: AuthenticatedGuestViewP
     : sortedGuests;
 
   return (
-    <div className="min-h-screen bg-black flex flex-col">
+    <div className="flex min-h-[100dvh] flex-col bg-canvas">
       <AdminHeader />
-      <div className="flex-1 overflow-x-hidden pt-20 sm:pt-24 flex flex-col">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-10 w-full lg:flex-1 lg:min-h-0 flex flex-col">
-          <div className="mb-4 lg:mb-6 flex-shrink-0 flex flex-col sm:flex-row gap-4">
-            {isSuperAdmin && (
-              <VenueSelector
-                venues={venues}
-                selectedVenueId={selectedVenueId}
-                onVenueChange={setSelectedVenueId}
-                className="flex-1"
-              />
-            )}
-            <DatePicker
-              value={selectedDate}
-              onChange={setSelectedDate}
-              className="flex-1"
-            />
-          </div>
-
-          {error && <Alert type="error" message={error} className="mb-6" />}
-
-          <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 lg:gap-6 lg:flex-1 lg:min-h-0">
-            <div className="lg:col-span-1 space-y-4 lg:overflow-y-auto">
-              <div className="bg-surface border border-border-subtle p-4 sm:p-5">
-                <div className="mb-4">
-                  <h2 className="font-mono text-base sm:text-lg tracking-wider text-white uppercase mb-1 break-words">
-                    GUEST REGISTRATION
-                  </h2>
-                  <p className="text-text-muted font-mono text-xs tracking-wider mb-1 break-words">
-                    SELF SERVICE PORTAL
-                  </p>
-                  <p className="text-text-muted font-mono text-xs tracking-wider break-words">
-                    {formatDateDisplay(selectedDate)}
-                  </p>
-                </div>
-                <div className="text-center mb-4">
-                  <div className="text-white font-mono text-3xl sm:text-4xl tracking-wider">
-                    {activeGuestsCount}
-                  </div>
-                  <div className="text-brand-cyan text-xs font-mono tracking-wider uppercase">
-                    TOTAL GUESTS
-                  </div>
-                </div>
-
-                <StatGrid
-                  items={[
-                    {
-                      label: "WAITING",
-                      value: pendingGuests.length,
-                      color: "yellow",
-                    },
-                    {
-                      label: "CHECKED",
-                      value: checkedGuests.length,
-                      color: "green",
-                    },
-                    {
-                      label: "REMAINING",
-                      value:
-                        guestLimit > 0 ? guestLimit - activeGuestsCount : "∞",
-                      color: isAtLimit ? "red" : "cyan",
-                    },
-                  ]}
-                  labelClassName="text-[10px] sm:text-xs"
-                />
-              </div>
-            </div>
-
-            <div className="lg:col-span-3 flex flex-col lg:min-h-0">
-              <div className="main-content-panel lg:min-h-0 lg:max-h-full">
-                <PanelHeader
-                  title="GUEST LIST"
-                  count={displayGuests.length}
-                  sortMode={sortMode}
-                  onSortToggle={() =>
-                    setSortMode((prev) =>
-                      prev === "default" ? "alpha" : "default",
-                    )
-                  }
-                  onRefresh={loadGuests}
-                  isLoading={isFetching}
-                />
-
-                <GuestSearchInput
-                  value={searchQuery}
-                  onChange={setSearchQuery}
-                />
-
-                {isFetching && displayDataGuests.length === 0 ? (
-                  <Spinner mode="inline" text="LOADING..." />
-                ) : displayGuests.length === 0 ? (
-                  <EmptyState
-                    icon="ri-user-add-line"
-                    message={searchQuery ? "NO GUESTS MATCH THIS SEARCH" : "NO GUESTS REGISTERED FOR THIS DATE"}
+      <div className="flex flex-1 flex-col overflow-x-hidden pt-20 sm:pt-24">
+        <div className="page-container">
+          <OperationsLayout
+            title="Guest registration"
+            dashboard={
+              <>
+                <div className="context-bar">
+                  <DatePicker
+                    value={selectedDate}
+                    onChange={setSelectedDate}
                   />
-                ) : (
-                  <div
-                    className={`divide-y divide-border-subtle lg:overflow-y-auto transition-opacity duration-200 ${isFetching ? "opacity-50 pointer-events-none" : ""}`}
-                  >
-                    {displayGuests.map((guest, index) => (
-                      <GuestListCard
-                        key={guest.id}
-                        guest={guest}
-                        index={index}
-                        variant="user"
-                        onDelete={
-                          guest.status === "pending"
-                            ? () => handleDelete(guest.id)
-                            : undefined
-                        }
-                        isDeleteLoading={isLoading}
+                  {isSuperAdmin && (
+                    <div className="context-filter-grid">
+                      <VenueSelector
+                        venues={venues}
+                        selectedVenueId={selectedVenueId}
+                        onVenueChange={setSelectedVenueId}
                       />
-                    ))}
-                  </div>
-                )}
-
-                {!isAtLimit ? (
-                  <div className="p-4 border-t-2 border-border-default">
-                    <div className="flex items-center gap-3 sm:gap-4 min-w-0">
-                      <div className="w-8 h-8 sm:w-10 sm:h-10 border border-border-default flex items-center justify-center">
-                        <span className="text-xs sm:text-sm font-mono text-text-muted">
-                          {String(activeGuestsCount + 1).padStart(2, "0")}
-                        </span>
-                      </div>
-
-                      <label htmlFor="authenticated-guest-name" className="sr-only">
-                        게스트 이름
-                      </label>
-                      <input
-                        id="authenticated-guest-name"
-                        type="text"
-                        value={guestName}
-                        onChange={(e) => setGuestName(e.target.value)}
-                        placeholder="Enter guest full name"
-                        className="flex-1 min-w-0 bg-transparent border-none outline-none text-white font-mono text-sm tracking-wider placeholder-text-dim"
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter") {
-                            handleSave();
-                          }
-                        }}
-                      />
-
-                      <Button
-                        onClick={handleSave}
-                        disabled={!guestName.trim()}
-                        isLoading={isLoading}
-                        size="md"
-                      >
-                        SAVE
-                      </Button>
                     </div>
+                  )}
+                </div>
+
+                {error && <Alert type="error" message={error} />}
+
+                <section className="app-panel" aria-labelledby="add-guest-title">
+                  <div className="px-4 py-4 sm:px-5">
+                    <div className="mb-3 flex items-end justify-between gap-4">
+                      <div>
+                        <h2 id="add-guest-title" className="type-panel-title">
+                          Add guest
+                        </h2>
+                        <p className="mt-1 text-sm text-text-muted">
+                          Add one full name at a time.
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <div className="font-mono text-lg tabular-nums text-text-heading">
+                          {guestLimit > 0 ? guestLimit - activeGuestsCount : "∞"}
+                        </div>
+                        <div className="text-xs text-text-muted">Remaining</div>
+                      </div>
+                    </div>
+
+                    {!isAtLimit ? (
+                      <form
+                        className="flex flex-col gap-2"
+                        onSubmit={(event) => {
+                          event.preventDefault();
+                          handleSave();
+                        }}
+                      >
+                        <div className="min-w-0 flex-1">
+                          <label htmlFor="authenticated-guest-name" className="app-label">
+                            Guest name
+                          </label>
+                          <input
+                            id="authenticated-guest-name"
+                            name="guest-name"
+                            type="text"
+                            value={guestName}
+                            onChange={(event) => setGuestName(event.target.value)}
+                            placeholder="Enter full name…"
+                            autoComplete="off"
+                            className="app-field min-h-11"
+                          />
+                        </div>
+                        <Button
+                          type="submit"
+                          disabled={!guestName.trim()}
+                          isLoading={isLoading}
+                          size="lg"
+                          fullWidth
+                        >
+                          Add Guest
+                        </Button>
+                      </form>
+                    ) : (
+                      <div className="border-l-2 border-status-danger bg-status-danger/10 px-3 py-2 text-sm text-status-danger">
+                        Guest limit reached ({guestLimit}/{guestLimit})
+                      </div>
+                    )}
                   </div>
-                ) : (
-                  <div className="p-4 border-t-2 border-border-default text-center">
-                    <p className="text-brand-yellow font-mono text-xs tracking-wider uppercase">
-                      GUEST LIMIT REACHED ({guestLimit}/{guestLimit})
-                    </p>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
+                </section>
+
+                <section className="app-panel" aria-labelledby="guest-tools-title">
+                  <PanelHeader
+                    title="Guest list tools"
+                    headingLevel={2}
+                    headingId="guest-tools-title"
+                    sortMode={sortMode}
+                    onSortToggle={() =>
+                      setSortMode((prev) =>
+                        prev === "default" ? "alpha" : "default",
+                      )
+                    }
+                    onRefresh={loadGuests}
+                    isLoading={isFetching}
+                  />
+                  <GuestSearchInput
+                    value={searchQuery}
+                    onChange={setSearchQuery}
+                  />
+                  <StatGrid
+                    items={[
+                      {
+                        label: "WAITING",
+                        value: pendingGuests.length,
+                        color: "waiting",
+                      },
+                      {
+                        label: "CHECKED IN",
+                        value: checkedGuests.length,
+                        color: "checked",
+                      },
+                      {
+                        label: "TOTAL",
+                        value: activeGuestsCount,
+                        color: "default",
+                      },
+                    ]}
+                  />
+                </section>
+              </>
+            }
+          >
+            <section
+              className="main-content-panel"
+              aria-labelledby="guest-list-title"
+              aria-busy={isFetching}
+            >
+              <PanelHeader
+                title="Today's guests"
+                headingLevel={2}
+                headingId="guest-list-title"
+                count={displayGuests.length}
+              />
+
+              {isFetching && displayDataGuests.length === 0 ? (
+                <Skeleton rows={5} />
+              ) : displayGuests.length === 0 ? (
+                <EmptyState
+                  icon="user-add"
+                  message={
+                    searchQuery
+                      ? "No guests match this search"
+                      : "No guests registered for this date"
+                  }
+                />
+              ) : (
+                <div
+                  className={`divide-y divide-border-subtle transition-opacity duration-200 ${
+                    isFetching ? "pointer-events-none opacity-50" : ""
+                  }`}
+                >
+                  {displayGuests.map((guest, index) => (
+                    <GuestListCard
+                      key={guest.id}
+                      guest={guest}
+                      index={index}
+                      mode="registration"
+                      onDelete={
+                        guest.status === "pending"
+                          ? () => handleDelete(guest.id)
+                          : undefined
+                      }
+                      isDeleteLoading={isLoading}
+                    />
+                  ))}
+                </div>
+              )}
+            </section>
+          </OperationsLayout>
         </div>
         <Footer />
       </div>

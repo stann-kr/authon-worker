@@ -4,6 +4,7 @@ import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Footer from '@/components/Footer';
 import Link from 'next/link';
+import Icon from '@/components/Icon';
 
 /**
  * Register page is no longer available.
@@ -21,38 +22,32 @@ export default function RegisterPage() {
   }, [router]);
 
   return (
-    <div className="min-h-screen bg-black flex flex-col">
+    <div className="flex min-h-[100dvh] flex-col bg-canvas">
       <div className="flex-1 flex items-center justify-center px-4">
-        <div className="w-full max-w-sm text-center">
+        <div className="app-panel w-full max-w-sm p-7 text-center sm:p-9">
           <div className="mb-8">
-            <div className="flex items-center justify-center gap-2 mb-6">
-              <div className="w-2 h-2 bg-white"></div>
-              <div className="w-2 h-2 bg-white"></div>
-              <div className="w-2 h-2 bg-white"></div>
+            <div className="mx-auto mb-5 grid h-12 w-12 place-items-center rounded-panel border border-border-default bg-surface-raised text-text-muted">
+              <Icon name="locked" size={22} />
             </div>
 
-            <div className="w-16 h-16 border-2 border-gray-600 mx-auto mb-4 flex items-center justify-center">
-              <i className="ri-lock-line text-gray-400 text-2xl"></i>
-            </div>
-
-            <h1 className="font-mono text-xl tracking-wider text-white uppercase mb-4">
-              REGISTRATION CLOSED
+            <h1 className="mb-3 text-xl font-semibold text-text-heading">
+              Registration is closed
             </h1>
-            <p className="text-gray-400 font-mono text-xs tracking-wider leading-relaxed">
-              Registration is available only through an administrator.<br />
+            <p className="text-sm leading-relaxed text-text-muted">
+              Registration is available only through an administrator.{' '}
               If you need an account, please contact your venue admin.
             </p>
           </div>
 
-          <p className="text-gray-600 font-mono text-xs tracking-wider mb-6">
+          <p className="mb-6 text-xs text-text-dim">
             Redirecting to login in 3 seconds...
           </p>
           
           <Link 
             href="/auth/login"
-            className="inline-block w-full bg-white text-black py-3 font-mono text-sm tracking-wider uppercase hover:bg-gray-200 transition-colors text-center"
+            className="pressable inline-flex min-h-11 w-full items-center justify-center rounded-control bg-action-primary px-4 py-3 text-center text-sm font-semibold text-action-text hover:bg-action-hover"
           >
-            GO TO LOGIN
+            Go to login
           </Link>
         </div>
       </div>

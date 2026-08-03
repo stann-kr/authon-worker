@@ -1,14 +1,10 @@
 export type ManageFilter =
   | "all"
   | "active"
-  | "inactive"
-  | "expired"
-  | "expiring-soon"
-  | "full";
+  | "attention";
 
 export type ManageSort =
   | "expiresSoonest"
-  | "highestUsage"
   | "newest"
   | "djName";
 
@@ -83,10 +79,18 @@ export function formatRelativeExpiry(expiresAt?: string | null, now = Date.now()
 }
 
 export function formatExpiryTimestamp(expiresAt?: string | null): string {
-  if (!expiresAt) return "No expiry";
+  return formatTimestamp(expiresAt, "No expiry", "Invalid expiry");
+}
 
-  const date = new Date(expiresAt);
-  if (Number.isNaN(date.getTime())) return "Invalid expiry";
+export function formatTimestamp(
+  value?: string | null,
+  emptyLabel = "Unknown",
+  invalidLabel = "Invalid timestamp",
+): string {
+  if (!value) return emptyLabel;
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return invalidLabel;
 
   return new Intl.DateTimeFormat("en-US", {
     year: "numeric",
@@ -128,6 +132,8 @@ export function getDashboardStats<T extends LinkStatusInput>(
   return links.reduce(
     (stats, link) => {
       const status = deriveLinkStatus(link, now);
+      const needsAttention =
+        status.inactive || status.expired || status.expiringSoon || status.full;
       return {
         total: stats.total + 1,
         active: stats.active + (status.active ? 1 : 0),
@@ -135,6 +141,7 @@ export function getDashboardStats<T extends LinkStatusInput>(
         expired: stats.expired + (status.expired ? 1 : 0),
         expiringSoon: stats.expiringSoon + (status.expiringSoon ? 1 : 0),
         full: stats.full + (status.full ? 1 : 0),
+        attention: stats.attention + (needsAttention ? 1 : 0),
       };
     },
     {
@@ -144,6 +151,7 @@ export function getDashboardStats<T extends LinkStatusInput>(
       expired: 0,
       expiringSoon: 0,
       full: 0,
+      attention: 0,
     },
   );
 }
@@ -157,26 +165,22 @@ export function filterLinksByManageFilter<T extends LinkStatusInput>(
 
   return links.filter((link) => {
     const status = deriveLinkStatus(link, now);
-    return status[manageFilter === "expiring-soon" ? "expiringSoon" : manageFilter];
+    if (manageFilter === "active") return status.active;
+    return status.inactive || status.expired || status.expiringSoon || status.full;
   });
 }
 
 export function sortLinks<T extends LinkStatusInput>(
   links: T[],
   sortBy: ManageSort,
-  now = Date.now(),
 ): T[] {
   return [...links].sort((a, b) => {
-    const statusA = deriveLinkStatus(a, now);
-    const statusB = deriveLinkStatus(b, now);
     const expiryA = getExpiryTime(a.expiresAt) ?? Number.POSITIVE_INFINITY;
     const expiryB = getExpiryTime(b.expiresAt) ?? Number.POSITIVE_INFINITY;
 
     switch (sortBy) {
       case "expiresSoonest":
         return expiryA - expiryB;
-      case "highestUsage":
-        return statusB.usagePercent - statusA.usagePercent || expiryA - expiryB;
       case "newest":
         return getCreatedTime(b.createdAt) - getCreatedTime(a.createdAt);
       case "djName":

@@ -4,32 +4,45 @@ module.exports = {
   theme: {
     extend: {
       colors: {
+        canvas: "#0A0B0C",
         surface: {
-          DEFAULT: "#111827", // gray-900
-          hover: "#1f2937",   // gray-800
-          active: "#374151",  // gray-700
-          black: "#000000",
+          DEFAULT: "#111315",
+          raised: "#181B1E",
+          hover: "#202428",
+          active: "#292E33",
+          black: "#0A0B0C",
         },
         border: {
-          subtle: "#1f2937",  // gray-800
-          default: "#374151", // gray-700
-          focus: "#ffffff",
+          subtle: "#2A2E32",
+          default: "#42484E",
+          strong: "#626B73",
+          focus: "#F4F5F5",
         },
-        brand: {
-          cyan: "#22d3ee",    // cyan-400
-          green: "#4ade80",   // green-400
-          red: "#f87171",     // red-400
-          yellow: "#fbbf24",  // yellow-400
+        action: {
+          primary: "#E7EAEC",
+          hover: "#F4F5F5",
+          text: "#111315",
+        },
+        status: {
+          checked: "#86A98D",
+          waiting: "#C2A56C",
+          danger: "#CC7770",
         },
         text: {
-          muted: "#9ca3af",   // gray-400
-          dim: "#6b7280",     // gray-500
-          body: "#d1d5db",    // gray-300
-          heading: "#f3f4f6", // gray-100
+          muted: "#AAB0B5",
+          dim: "#7D858C",
+          body: "#D4D7D9",
+          heading: "#F4F5F5",
         }
+      },
+      borderRadius: {
+        control: "0",
+        panel: "0",
+      },
+      boxShadow: {
+        panel: "none",
       }
     },
   },
   plugins: [],
 }
-

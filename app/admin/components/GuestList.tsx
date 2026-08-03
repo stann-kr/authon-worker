@@ -6,9 +6,12 @@ import GuestListCard from "../../../components/GuestListCard";
 import GuestSearchInput from "../../../components/GuestSearchInput";
 import StatGrid from "../../../components/StatGrid";
 import PanelHeader from "../../../components/PanelHeader";
-import Spinner from "../../../components/Spinner";
 import EmptyState from "../../../components/EmptyState";
 import Alert from "../../../components/Alert";
+import Icon from "../../../components/Icon";
+import Skeleton from "../../../components/Skeleton";
+import DatePicker from "../../../components/DatePicker";
+import OperationsLayout from "../../../components/OperationsLayout";
 import VenueSelector, {
   useVenueSelector,
 } from "../../../components/VenueSelector";
@@ -24,9 +27,13 @@ import type { Guest, User, ExternalDJLink } from "../../../lib/api/types";
 
 interface GuestListProps {
   selectedDate: string;
+  onDateChange: (date: string) => void;
 }
 
-export default function GuestList({ selectedDate }: GuestListProps) {
+export default function GuestList({
+  selectedDate,
+  onDateChange,
+}: GuestListProps) {
   const [selectedDJ, setSelectedDJ] = useState<string>("all");
   const [loadingStates, setLoadingStates] = useState<{
     [key: string]: boolean;
@@ -181,7 +188,7 @@ export default function GuestList({ selectedDate }: GuestListProps) {
 
   const getSelectedDJInfo = () => {
     if (selectedDJ === "all")
-      return { name: "ALL USERS", event: "TOTAL OVERVIEW" };
+      return { name: "All users", event: "Total overview" };
     if (selectedDJ.startsWith("ext:")) {
       const link = displayData.externalLinks.find(
         (l) => l.id === selectedDJ.replace("ext:", ""),
@@ -213,42 +220,48 @@ export default function GuestList({ selectedDate }: GuestListProps) {
   );
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 lg:gap-6 lg:flex-1 lg:min-h-0">
-      <div className="lg:col-span-1 space-y-4 lg:overflow-y-auto">
+    <OperationsLayout
+      title="Admin guest management"
+      dashboard={
+        <>
+        <div className="context-bar">
+          <DatePicker value={selectedDate} onChange={onDateChange} />
+        </div>
         {feedback && <Alert type="error" message={feedback} />}
         {isSuperAdmin && (
           <VenueSelector
             venues={venues}
             selectedVenueId={selectedVenueId}
             onVenueChange={setSelectedVenueId}
+            className="app-panel p-4 sm:p-5"
           />
         )}
-        <div className="bg-gray-900 border border-gray-700 p-4 sm:p-5">
+        <div className="app-panel p-4 sm:p-5">
           <div className="mb-4">
-            <label htmlFor="admin-guest-user-filter" className="block font-mono text-xs sm:text-sm tracking-wider text-gray-400 uppercase mb-3">
-              SELECT USER
+            <label htmlFor="admin-guest-user-filter" className="type-context-title mb-3">
+              User filter
             </label>
             <div className="space-y-2">
               <button
                 onClick={() => setSelectedDJ("all")}
-                className={`w-full p-3 font-mono text-xs tracking-wider uppercase transition-colors ${
+                className={`w-full p-3 text-sm font-medium transition-colors ${
                   selectedDJ === "all"
-                    ? "bg-white text-black"
-                    : "bg-gray-800 text-gray-400 hover:text-white border border-gray-700"
+                    ? "border border-border-default border-l-2 border-l-action-primary bg-surface-raised text-text-heading"
+                    : "bg-surface-raised text-text-muted hover:text-text-heading border border-border-default"
                 }`}
               >
-                ALL USERS
+                All users
               </button>
               <div className="relative">
                 <select
                   id="admin-guest-user-filter"
                   value={selectedDJ === "all" ? "" : selectedDJ}
                   onChange={(e) => setSelectedDJ(e.target.value || "all")}
-                  className="w-full appearance-none bg-gray-800 border border-gray-700 px-4 py-4 pr-10 text-white font-mono text-sm tracking-wider uppercase focus:outline-none focus:border-white min-h-[52px]"
+                  className="w-full appearance-none bg-surface-raised border border-border-default px-4 py-4 pr-10 text-text-heading text-sm font-medium focus:outline-none focus:border-border-focus min-h-[52px]"
                 >
                   <option value="">SELECT USER</option>
                   {filteredUsers.map((u) => (
-                    <option key={u.id} value={u.id} className="bg-gray-900">
+                    <option key={u.id} value={u.id} className="bg-surface">
                       {u.name}
                     </option>
                   ))}
@@ -256,35 +269,35 @@ export default function GuestList({ selectedDate }: GuestListProps) {
                     <option
                       key={`ext:${link.id}`}
                       value={`ext:${link.id}`}
-                      className="bg-gray-900"
+                      className="bg-surface"
                     >
                       {link.djName} (EXT)
                     </option>
                   ))}
                 </select>
-                <i className="ri-arrow-down-s-line absolute right-3 top-1/2 -translate-y-1/2 text-base text-gray-400 pointer-events-none" aria-hidden="true"></i>
+                <Icon name="chevron-down" size={18} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-text-muted" />
               </div>
             </div>
           </div>
         </div>
 
-        <div className="bg-gray-900 border border-gray-700 p-4 sm:p-5">
+        <div className="app-panel p-4 sm:p-5">
           <div className="mb-4">
-            <h2 className="font-mono text-base sm:text-lg tracking-wider text-white uppercase mb-1">
+            <h2 className="type-panel-title mb-1">
               {selectedDJInfo.name}
             </h2>
-            <p className="text-gray-400 font-mono text-xs tracking-wider mb-1">
+            <p className="text-sm text-text-muted mb-1">
               {selectedDJInfo.event}
             </p>
-            <p className="text-gray-400 font-mono text-xs tracking-wider">
+            <p className="text-sm text-text-muted">
               {formatDateDisplay(selectedDate)}
             </p>
           </div>
           <div className="text-center mb-4">
-            <div className="text-white font-mono text-3xl sm:text-4xl tracking-wider">
+            <div className="text-text-heading font-mono text-3xl sm:text-4xl tracking-wider">
               {pendingGuests.length + checkedGuests.length}
             </div>
-            <div className="text-cyan-300 text-xs font-mono tracking-wider uppercase">
+            <div className="text-xs font-medium text-text-muted">
               TOTAL GUESTS
             </div>
           </div>
@@ -294,18 +307,20 @@ export default function GuestList({ selectedDate }: GuestListProps) {
               {
                 label: "WAITING",
                 value: pendingGuests.length,
-                color: "yellow",
+                color: "waiting",
               },
-              { label: "CHECKED", value: checkedGuests.length, color: "green" },
+              { label: "CHECKED", value: checkedGuests.length, color: "checked" },
             ]}
           />
         </div>
-      </div>
+        </>
+      }
+    >
 
-      <div className="lg:col-span-3 flex flex-col lg:min-h-0">
+      <div className="flex min-w-0 flex-col lg:min-h-0">
         <div className="main-content-panel lg:min-h-0 lg:max-h-full">
           <PanelHeader
-            title="GUEST LIST"
+            title="Guest list"
             count={displayGuests.length}
             sortMode={sortMode}
             onSortToggle={() =>
@@ -321,12 +336,12 @@ export default function GuestList({ selectedDate }: GuestListProps) {
           />
 
           {isFetching && displayData.guests.length === 0 ? (
-            <Spinner mode="inline" text="LOADING..." />
+            <Skeleton rows={6} />
           ) : displayGuests.length === 0 ? (
-            <EmptyState icon="ri-user-line" message={searchQuery ? "NO GUESTS MATCH THIS SEARCH" : "NO GUESTS FOR THIS DATE"} />
+            <EmptyState icon="user" message={searchQuery ? "NO GUESTS MATCH THIS SEARCH" : "NO GUESTS FOR THIS DATE"} />
           ) : (
             <div
-              className={`divide-y divide-gray-700 lg:overflow-y-auto transition-opacity duration-200 ${isFetching ? "opacity-50 pointer-events-none" : ""}`}
+              className={`divide-y divide-border-default lg:overflow-y-auto transition-opacity duration-200 ${isFetching ? "opacity-50 pointer-events-none" : ""}`}
             >
               {displayGuests.map((guest, index) => {
                 return (
@@ -340,15 +355,20 @@ export default function GuestList({ selectedDate }: GuestListProps) {
                       createdAt: guest.createdAt || undefined,
                     }}
                     index={index}
-                    variant="admin"
+                    mode="operations"
                     djName={getContributorName(guest)}
+                    showRegisteredAt
                     onCheck={() =>
                       handleStatusChange(guest.id, "checked", "check")
                     }
                     onDelete={() =>
                       handleStatusChange(guest.id, "deleted", "remove")
                     }
+                    onUndo={() =>
+                      handleStatusChange(guest.id, "pending", "undo")
+                    }
                     isCheckLoading={loadingStates[`${guest.id}_check`]}
+                    isUndoLoading={loadingStates[`${guest.id}_undo`]}
                     isDeleteLoading={loadingStates[`${guest.id}_remove`]}
                   />
                 );
@@ -357,6 +377,6 @@ export default function GuestList({ selectedDate }: GuestListProps) {
           )}
         </div>
       </div>
-    </div>
+    </OperationsLayout>
   );
 }

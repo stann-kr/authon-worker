@@ -3,12 +3,55 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { getUser, logout, hasAccess, User } from "../lib/auth";
+import { getUser, logout, hasAccess, type User } from "../lib/auth";
 import Footer from "@/components/Footer";
 import Spinner from "@/components/Spinner";
-import RoleLabel from "@/components/RoleLabel";
-import Button from "@/components/Button";
-import { BRAND_NAME, BRAND_TAGLINE } from "@/lib/brand";
+import Icon, { type IconName } from "@/components/Icon";
+import AdminHeader from "@/app/admin/components/AdminHeader";
+
+interface MenuItem {
+  id: string;
+  title: string;
+  description: string;
+  icon: IconName;
+  href: string;
+  requiredAccess: string[];
+}
+
+const menuItems: MenuItem[] = [
+  {
+    id: "guest",
+    title: "Guest registration",
+    description: "Add names, review limits and manage your guest list.",
+    icon: "user-add",
+    href: "/guest",
+    requiredAccess: ["guest"],
+  },
+  {
+    id: "door",
+    title: "Door check-in",
+    description: "Find arriving guests and confirm entry without delay.",
+    icon: "login",
+    href: "/door",
+    requiredAccess: ["door"],
+  },
+  {
+    id: "admin",
+    title: "Administration",
+    description: "Manage guests, links, users and venue operations.",
+    icon: "settings",
+    href: "/admin",
+    requiredAccess: ["admin"],
+  },
+];
+
+const roleMenuOrder: Record<User["role"], string[]> = {
+  dj: ["guest"],
+  staff: ["guest"],
+  door_staff: ["guest", "door"],
+  venue_admin: ["guest", "door", "admin"],
+  super_admin: ["guest", "door", "admin"],
+};
 
 export default function Home() {
   const [user, setUser] = useState<User | null>(null);
@@ -24,60 +67,27 @@ export default function Home() {
 
     setUser(currentUser);
     setIsLoading(false);
-  }, [router]);
-
-  const menuItems = useMemo(
-    () => [
-      {
-        id: "guest",
-        title: "GUEST",
-        subtitle: "ACCESS REGISTRATION",
-        description: "REGISTER FOR EVENT ACCESS",
-        icon: "ri-user-line",
-        href: "/guest",
-        bgColor: "from-blue-900 to-blue-800",
-        requiredAccess: ["guest"],
-        shortcut: "1",
-      },
-      {
-        id: "door",
-        title: "DOOR",
-        subtitle: "ENTRANCE CONTROL",
-        description: "CHECK GUEST VERIFICATION",
-        icon: "ri-door-open-line",
-        href: "/door",
-        bgColor: "from-purple-900 to-purple-800",
-        requiredAccess: ["door"],
-        shortcut: "2",
-      },
-      {
-        id: "admin",
-        title: "ADMIN",
-        subtitle: "SYSTEM MANAGEMENT",
-        description: "GUEST CONTROL SYSTEM",
-        icon: "ri-settings-line",
-        href: "/admin",
-        bgColor: "from-gray-900 to-black",
-        requiredAccess: ["admin"],
-        shortcut: "3",
-      },
-    ],
-    [],
-  );
+  }, []);
 
   const accessibleMenus = useMemo(
     () =>
       user
-        ? menuItems.filter((item) => hasAccess(user.role, item.requiredAccess))
+        ? menuItems
+            .filter((item) => hasAccess(user.role, item.requiredAccess))
+            .sort(
+              (a, b) =>
+                roleMenuOrder[user.role].indexOf(a.id) -
+                roleMenuOrder[user.role].indexOf(b.id),
+            )
         : [],
-    [menuItems, user],
+    [user],
   );
 
   useEffect(() => {
     if (!user || accessibleMenus.length === 0) return;
 
-    const handleKeyDown = (e: KeyboardEvent) => {
-      const target = e.target as HTMLElement | null;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null;
       if (
         target &&
         (target.tagName === "INPUT" ||
@@ -88,153 +98,73 @@ export default function Home() {
         return;
       }
 
-      const keyIndex = parseInt(e.key, 10) - 1;
-      if (!isNaN(keyIndex) && accessibleMenus[keyIndex]) {
+      const keyIndex = Number.parseInt(event.key, 10) - 1;
+      if (!Number.isNaN(keyIndex) && accessibleMenus[keyIndex]) {
         router.push(accessibleMenus[keyIndex].href);
       }
     };
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [user, accessibleMenus, router]);
+  }, [accessibleMenus, router, user]);
 
   if (isLoading) {
-    return <Spinner mode="fullscreen" text="LOADING..." />;
+    return <Spinner mode="fullscreen" text="Loading workspace" />;
   }
 
-  if (!user) {
-    return null;
-  }
+  if (!user) return null;
 
   return (
-    <div className="min-h-screen bg-black flex flex-col">
-      <div className="w-full max-w-6xl mx-auto flex flex-col flex-1">
-        <div className="px-4 sm:px-6 lg:px-8 py-6">
-          <div className="flex items-center justify-between mb-6 lg:mb-8">
-            <div className="text-left flex-1">
-              <div className="flex items-center gap-2 mb-3">
-                <div className="w-2 h-2 bg-white" aria-hidden="true"></div>
-                <div className="w-2 h-2 bg-white" aria-hidden="true"></div>
-                <div className="w-2 h-2 bg-white" aria-hidden="true"></div>
-              </div>
-              <h1 className="font-mono text-xl sm:text-2xl lg:text-3xl tracking-wider text-white uppercase mb-1">
-                {BRAND_NAME}
-              </h1>
-              <p className="text-xs sm:text-sm text-gray-400 tracking-widest font-mono uppercase">
-                {BRAND_TAGLINE}
-              </p>
-            </div>
+    <div className="flex min-h-[100dvh] flex-col bg-canvas">
+      <AdminHeader />
 
-            <Button
-              onClick={logout}
-              variant="ghost"
-              className="w-8 h-8 sm:w-10 sm:h-10 p-0 border border-border-default text-text-muted hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-white"
-              aria-label="Logout of System"
-              title="Logout"
-            >
-              <i className="ri-logout-box-line text-sm sm:text-base" aria-hidden="true"></i>
-            </Button>
-          </div>
-
-          <div className="bg-surface border border-border-subtle p-4 lg:p-6 mb-2">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="font-mono text-sm sm:text-base lg:text-lg tracking-wider text-white uppercase">
-                  {user.name}
-                </p>
-                <p className="text-xs sm:text-sm text-text-muted font-mono tracking-wider">
-                  ROLE: <RoleLabel role={user.role} /> • LIMIT:{" "}
-                  {user.guest_limit}
-                </p>
-              </div>
-              <Link
-                href="/profile"
-                className="w-8 h-8 sm:w-10 sm:h-10 p-0 border border-border-default text-text-muted hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-white bg-transparent hover:text-white hover:bg-white/5 font-mono tracking-wider uppercase transition-all duration-150 ease-out flex items-center justify-center gap-2 active:scale-[0.98] active:opacity-90"
-                aria-label="Edit Profile Settings"
-                title="Edit Profile"
-              >
-                <i className="ri-user-settings-line text-sm sm:text-base" aria-hidden="true"></i>
-              </Link>
-            </div>
-          </div>
-
-          {/* Quick Nav Shortcut Helper */}
-          <div className="flex items-center justify-between text-[11px] font-mono text-gray-500 px-1 py-1">
-            <span className="flex items-center gap-1.5">
-              <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse" aria-hidden="true"></span>
-              SYSTEM ONLINE
-            </span>
-            <span className="hidden sm:inline-block">
-              TIP: PRESS [1-{accessibleMenus.length}] KEY TO QUICK NAVIGATE
-            </span>
-          </div>
-        </div>
-
-        <div className="flex-1 px-4 sm:px-6 lg:px-8 flex flex-col">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 lg:gap-6 flex-1 content-start">
+      <main className="mx-auto flex w-full max-w-[1040px] flex-1 flex-col justify-center px-4 pb-8 pt-20 sm:px-6 sm:pt-24 lg:px-10">
+        {accessibleMenus.length > 0 && (
+          <nav
+            aria-label="Available workspaces"
+            className="mx-auto w-full border-y border-border-default"
+          >
             {accessibleMenus.map((item, index) => (
-              <Link key={item.id} href={item.href} className="block group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-black">
-                <div
-                  className={`bg-gradient-to-br ${item.bgColor} border border-border-subtle p-5 sm:p-6 group-hover:border-border-focus transition-all duration-300 h-full flex flex-col justify-between min-h-[180px] lg:min-h-[200px] active:scale-[0.99]`}
-                >
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 sm:w-12 sm:h-12 border border-border-default bg-surface-black/50 flex items-center justify-center group-hover:border-border-focus transition-colors">
-                        <i
-                          className={`${item.icon} text-white text-base sm:text-lg`}
-                          aria-hidden="true"
-                        ></i>
-                      </div>
-                      <div>
-                        <h2 className="font-mono text-base sm:text-lg tracking-wider text-white uppercase mb-1">
-                          {item.title}
-                        </h2>
-                        <p className="text-text-body font-mono text-xs tracking-wider uppercase">
-                          {item.subtitle}
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="text-right flex items-center gap-1.5">
-                      <span className="hidden sm:inline-block text-[10px] font-mono text-gray-400 border border-gray-700 px-1 py-0.5 rounded">
-                        KEY {index + 1}
-                      </span>
-                      <div className="w-6 h-6 border border-border-default flex items-center justify-center group-hover:border-border-focus transition-colors">
-                        <span className="text-xs font-mono text-text-muted group-hover:text-white">
-                          {String(index + 1).padStart(2, "0")}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="mb-4">
-                    <p className="text-text-muted font-mono text-xs sm:text-sm tracking-wider uppercase">
-                      {item.description}
-                    </p>
-                  </div>
-
-                  <div className="flex items-center justify-between">
-                    <div className="flex gap-2">
-                      <div className="w-1 h-1 bg-border-subtle group-hover:bg-white transition-colors" aria-hidden="true"></div>
-                      <div className="w-1 h-1 bg-border-subtle group-hover:bg-white transition-colors" aria-hidden="true"></div>
-                      <div className="w-1 h-1 bg-border-subtle group-hover:bg-white transition-colors" aria-hidden="true"></div>
-                    </div>
-
-                    <div className="flex items-center gap-2">
-                      <span className="font-mono text-xs tracking-wider text-text-muted group-hover:text-white transition-colors">
-                        ACCESS
-                      </span>
-                      <i className="ri-arrow-right-line text-text-muted text-sm group-hover:text-white transition-colors" aria-hidden="true"></i>
-                    </div>
-                  </div>
-                </div>
-              </Link>
+              <WorkspaceLink key={item.id} item={item} index={index} />
             ))}
-          </div>
-        </div>
-      </div>
+          </nav>
+        )}
+      </main>
 
       <Footer />
     </div>
+  );
+}
+
+function WorkspaceLink({
+  item,
+  index,
+}: {
+  item: MenuItem;
+  index: number;
+}) {
+  return (
+    <Link
+      href={item.href}
+      className="pressable group relative grid min-h-[88px] grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-4 border-b border-border-subtle px-4 py-4 last:border-b-0 hover:bg-surface-raised focus-visible:bg-surface-raised focus-visible:outline-none sm:min-h-[104px] sm:gap-5 sm:px-5 before:absolute before:inset-y-0 before:left-0 before:w-0.5 before:bg-action-primary before:opacity-0 before:transition-opacity hover:before:opacity-100 focus-visible:before:opacity-100"
+    >
+      <Icon name={item.icon} size={22} className="text-text-muted group-hover:text-text-heading" />
+
+      <div className="min-w-0">
+        <h2 className="text-base font-semibold tracking-[-0.015em] text-text-heading sm:text-lg">
+          {item.title}
+        </h2>
+        <p className="mt-1 max-w-2xl text-sm leading-relaxed text-text-muted">
+          {item.description}
+        </p>
+      </div>
+
+      <span className="flex items-center gap-3 text-text-muted group-hover:text-text-heading">
+        <kbd className="hidden border border-border-default bg-canvas px-2 py-1 font-mono text-xs text-text-dim sm:inline-block">
+          {index + 1}
+        </kbd>
+        <Icon name="arrow-right" size={18} />
+      </span>
+    </Link>
   );
 }

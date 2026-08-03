@@ -37,7 +37,11 @@ export const externalDjLinks = sqliteTable('external_dj_links', {
   active: integer('active', { mode: 'boolean' }).notNull().default(true),
   expiresAt: text('expires_at'),
   createdBy: text('created_by').references(() => users.id),
-}, (t) => [index('idx_external_dj_links_venue').on(t.venueId)]);
+  createdAt: text('created_at'),
+}, (t) => [
+  index('idx_external_dj_links_venue').on(t.venueId),
+  index('idx_external_links_venue_created').on(t.venueId, t.createdAt),
+]);
 
 export const guests = sqliteTable('guests', {
   id: text('id').primaryKey(),

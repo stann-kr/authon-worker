@@ -6,12 +6,16 @@ import VenueSelector, {
 } from "../../../components/VenueSelector";
 import StatGrid from "../../../components/StatGrid";
 import PanelHeader from "../../../components/PanelHeader";
-import Spinner from "../../../components/Spinner";
 import EmptyState from "../../../components/EmptyState";
 import Alert from "../../../components/Alert";
+import Icon from "../../../components/Icon";
+import Skeleton from "../../../components/Skeleton";
+import DatePicker from "../../../components/DatePicker";
+import OperationsLayout from "../../../components/OperationsLayout";
 import { formatDateDisplay } from "../../../lib/date";
 import {
   fetchExternalLinksByDate,
+  fetchRecentExternalLinks,
   createExternalLink,
   deleteExternalLink,
   deactivateExternalLink,
@@ -21,8 +25,8 @@ import type { ExternalDJLink } from "../../../lib/api/types";
 import {
   deriveLinkStatus,
   filterLinksByManageFilter,
-  formatExpiryTimestamp,
   formatRelativeExpiry,
+  formatTimestamp,
   getDashboardStats,
   sortLinks,
   type ManageFilter,
@@ -31,12 +35,18 @@ import {
 
 interface LinkManagementProps {
   selectedDate: string;
+  onDateChange: (date: string) => void;
 }
 
-export default function LinkManagement({ selectedDate }: LinkManagementProps) {
+export default function LinkManagement({
+  selectedDate,
+  onDateChange,
+}: LinkManagementProps) {
   const [activeTab, setActiveTab] = useState<"create" | "manage">("create");
+  const [manageScope, setManageScope] = useState<"date" | "recent">("date");
+  const [recentLimit, setRecentLimit] = useState<5 | 10>(5);
   const [manageFilter, setManageFilter] = useState<ManageFilter>("all");
-  const [manageSort, setManageSort] = useState<ManageSort>("expiresSoonest");
+  const [manageSort, setManageSort] = useState<ManageSort>("newest");
   const [now, setNow] = useState(() => Date.now());
   const [formData, setFormData] = useState({
     date: selectedDate,
@@ -52,6 +62,7 @@ export default function LinkManagement({ selectedDate }: LinkManagementProps) {
   const [links, setLinks] = useState<ExternalDJLink[]>([]);
   const [isFetching, setIsFetching] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [visibleLinkId, setVisibleLinkId] = useState<string | null>(null);
   const [loadingStates, setLoadingStates] = useState<{
     [key: string]: boolean;
   }>({});
@@ -91,22 +102,25 @@ export default function LinkManagement({ selectedDate }: LinkManagementProps) {
   const loadLinks = useCallback(async () => {
     if (!venueId) return;
     setIsFetching(true);
+    setError(null);
     try {
-      const { data, error } = await fetchExternalLinksByDate(
-        venueId,
-        selectedDate,
-      );
+      const { data, error } =
+        manageScope === "recent"
+          ? await fetchRecentExternalLinks(venueId, recentLimit)
+          : await fetchExternalLinksByDate(venueId, selectedDate);
       if (error) {
         console.error("Failed to load links:", error);
+        setError(error);
       } else if (data) {
         setLinks(data);
       }
     } catch (err) {
       console.error("Failed to load links:", err);
+      setError("Unable to load links right now.");
     } finally {
       setIsFetching(false);
     }
-  }, [venueId, selectedDate]);
+  }, [manageScope, recentLimit, selectedDate, venueId]);
 
   useEffect(() => {
     if (activeTab === "manage") {
@@ -287,19 +301,19 @@ export default function LinkManagement({ selectedDate }: LinkManagementProps) {
   );
 
   const sortedLinks = useMemo(
-    () => sortLinks(filteredLinks, manageSort, now),
-    [filteredLinks, manageSort, now],
+    () => sortLinks(filteredLinks, manageScope === "recent" ? "newest" : manageSort),
+    [filteredLinks, manageScope, manageSort],
   );
 
   const getTabInfo = () => {
     switch (activeTab) {
       case "create":
         return {
-          title: "CREATE LINK",
+          title: "Create link",
           description: "Generate new access code",
         };
       case "manage":
-        return { title: "MANAGE LINKS", description: "View and manage codes" };
+        return { title: "Manage links", description: "View and manage codes" };
       default:
         return { title: "", description: "" };
     }
@@ -309,87 +323,140 @@ export default function LinkManagement({ selectedDate }: LinkManagementProps) {
 
   return (
     <>
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 lg:gap-6">
-      <div className="lg:col-span-1 space-y-4">
+      <OperationsLayout
+        title="Admin link management"
+        dashboard={
+          <>
+        {(activeTab === "create" || manageScope === "date") && (
+          <div className="context-bar">
+            <DatePicker value={selectedDate} onChange={onDateChange} />
+          </div>
+        )}
         {/* Venue selector for super_admin */}
         {isSuperAdmin && venues.length > 0 && (
           <VenueSelector
             venues={venues}
             selectedVenueId={selectedVenueId}
             onVenueChange={setSelectedVenueId}
+            className="app-panel p-4 sm:p-5"
           />
         )}
-        <div className="bg-gray-900 border border-gray-700 p-4 sm:p-5">
+        <div className="app-panel p-4 sm:p-5">
           <div className="mb-4">
-            <h3 className="font-mono text-xs sm:text-sm tracking-wider text-gray-400 uppercase mb-3">
-              SELECT MENU
+            <h3 className="type-context-title mb-3">
+              Section
             </h3>
             <div className="space-y-2">
               <button
                 onClick={() => setActiveTab("create")}
-                className={`w-full p-3 font-mono text-xs tracking-wider uppercase transition-colors text-left ${
+                className={`flex w-full items-center gap-2 p-3 text-left text-sm font-medium transition-colors ${
                   activeTab === "create"
-                    ? "bg-white text-black"
-                    : "bg-gray-800 text-gray-400 hover:text-white border border-gray-700"
+                    ? "border border-border-default border-l-2 border-l-action-primary bg-surface-raised text-text-heading"
+                    : "bg-surface-raised text-text-muted hover:text-text-heading border border-border-default"
                 }`}
               >
-                <i className="ri-add-line mr-2"></i>
-                CREATE
+                <Icon name="add" size={17} />
+                Create
               </button>
               <button
                 onClick={() => setActiveTab("manage")}
-                className={`w-full p-3 font-mono text-xs tracking-wider uppercase transition-colors text-left ${
+                className={`flex w-full items-center gap-2 p-3 text-left text-sm font-medium transition-colors ${
                   activeTab === "manage"
-                    ? "bg-white text-black"
-                    : "bg-gray-800 text-gray-400 hover:text-white border border-gray-700"
+                    ? "border border-border-default border-l-2 border-l-action-primary bg-surface-raised text-text-heading"
+                    : "bg-surface-raised text-text-muted hover:text-text-heading border border-border-default"
                 }`}
               >
-                <i className="ri-link mr-2"></i>
-                MANAGE
+                <Icon name="link" size={17} />
+                Manage
               </button>
             </div>
+            {activeTab === "manage" && (
+              <div className="mt-4 border-t border-border-subtle pt-4">
+                <p className="app-label">View</p>
+                <div className="grid grid-cols-2 gap-2">
+                  {(["date", "recent"] as const).map((scope) => (
+                    <button
+                      key={scope}
+                      type="button"
+                      aria-pressed={manageScope === scope}
+                      onClick={() => {
+                        setManageScope(scope);
+                        setManageFilter("all");
+                      }}
+                      className={`min-h-11 border px-3 py-2 text-xs font-medium uppercase ${
+                        manageScope === scope
+                          ? "border-action-primary bg-action-primary text-action-text"
+                          : "border-border-default bg-surface-raised text-text-muted"
+                      }`}
+                    >
+                      {scope === "date" ? "By date" : "Recent"}
+                    </button>
+                  ))}
+                </div>
+                {manageScope === "recent" && (
+                  <div className="mt-3">
+                    <p className="app-label">Items</p>
+                    <div className="grid grid-cols-2 gap-2">
+                      {([5, 10] as const).map((limit) => (
+                        <button
+                          key={limit}
+                          type="button"
+                          aria-pressed={recentLimit === limit}
+                          onClick={() => setRecentLimit(limit)}
+                          className={`min-h-11 border px-3 py-2 font-mono text-xs ${
+                            recentLimit === limit
+                              ? "border-action-primary bg-action-primary text-action-text"
+                              : "border-border-default bg-surface-raised text-text-muted"
+                          }`}
+                        >
+                          {limit}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
 
-        <div className="bg-gray-900 border border-gray-700 p-4 sm:p-5">
+        <div className="app-panel p-4 sm:p-5">
           <div className="mb-4">
-            <h2 className="font-mono text-base sm:text-lg tracking-wider text-white uppercase mb-1">
+            <h2 className="type-panel-title mb-1">
               {tabInfo.title}
             </h2>
-            <p className="text-gray-400 font-mono text-xs tracking-wider">
+            <p className="text-sm text-text-muted">
               {tabInfo.description}
             </p>
-            <p className="text-gray-400 font-mono text-xs tracking-wider mt-1">
-              {formatDateDisplay(selectedDate)}
+            <p className="text-sm text-text-muted mt-1">
+              {activeTab === "manage" && manageScope === "recent"
+                ? `Latest ${recentLimit} created links`
+                : formatDateDisplay(selectedDate)}
             </p>
           </div>
-          <div className="text-center mb-4">
-            <div className="text-white font-mono text-3xl sm:text-4xl tracking-wider">
-              {dashboardStats.total}
-            </div>
-            <div className="text-cyan-300 text-xs font-mono tracking-wider uppercase">
-              TOTAL LINKS
-            </div>
-          </div>
-
-          <StatGrid
-            items={[
-              { label: "ACTIVE", value: dashboardStats.active, color: "green" },
-              { label: "INACTIVE", value: dashboardStats.inactive, color: "red" },
-            ]}
-          />
+          {activeTab === "manage" && (
+            <StatGrid
+              items={[
+                { label: "TOTAL", value: dashboardStats.total, color: "default" },
+                { label: "ACTIVE", value: dashboardStats.active, color: "checked" },
+                { label: "ATTENTION", value: dashboardStats.attention, color: "danger" },
+              ]}
+            />
+          )}
         </div>
-      </div>
+          </>
+        }
+      >
 
-      <div className="lg:col-span-3">
+      <div className="min-w-0">
         {activeTab === "create" && (
           <div className="space-y-6">
-            <div className="bg-gray-900 border border-gray-700 p-4 sm:p-6">
+            <div className="app-panel p-4 sm:p-6">
               <div className="mb-6">
-                <h2 className="font-mono text-sm sm:text-base tracking-wider text-white uppercase mb-1">
+                <h2 className="type-panel-title font-mono uppercase tracking-wider mb-1">
                   CREATE ACCESS LINK
                 </h2>
-                <p className="text-gray-400 font-mono text-xs tracking-wider uppercase">
+                <p className="text-text-muted text-xs font-medium">
                   GENERATE NEW GUEST CODE FOR EXTERNAL DJ
                 </p>
               </div>
@@ -399,16 +466,16 @@ export default function LinkManagement({ selectedDate }: LinkManagementProps) {
               <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-6">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
                   <div>
-                    <label htmlFor="link-date" className="block font-mono text-xs tracking-wider text-gray-400 uppercase mb-2">
+                    <label htmlFor="link-date" className="app-label">
                       DATE
                     </label>
                     <div className="relative h-[46px] group">
                       {/* Mirroring UI Layer */}
-                      <div className="absolute inset-0 bg-black border border-gray-600 px-4 py-3 flex items-center justify-between pointer-events-none group-focus-within:border-white transition-colors">
-                        <span className="text-white font-mono text-sm tracking-wider">
+                      <div className="absolute inset-0 bg-canvas border border-border-strong px-4 py-3 flex items-center justify-between pointer-events-none group-focus-within:border-border-focus transition-colors">
+                        <span className="text-text-heading text-sm">
                           {formatDateDisplay(formData.date)}
                         </span>
-                        <i className="ri-calendar-line text-gray-400"></i>
+                        <Icon name="calendar" size={18} className="text-text-muted" />
                       </div>
 
                       {/* Hidden Native Input */}
@@ -427,7 +494,7 @@ export default function LinkManagement({ selectedDate }: LinkManagementProps) {
                   </div>
 
                   <div>
-                    <label htmlFor="link-dj-name" className="block font-mono text-xs tracking-wider text-gray-400 uppercase mb-2">
+                    <label htmlFor="link-dj-name" className="app-label">
                       DJ NAME
                     </label>
                     <input
@@ -440,7 +507,7 @@ export default function LinkManagement({ selectedDate }: LinkManagementProps) {
                           dj: e.target.value.toUpperCase(),
                         })
                       }
-                      className="w-full bg-black border border-gray-600 px-4 py-3 text-white font-mono text-sm tracking-wider focus:outline-none focus:border-white uppercase"
+                      className="w-full bg-canvas border border-border-strong px-4 py-3 text-text-heading text-sm focus:outline-none focus:border-border-focus uppercase"
                       placeholder="DJ NAME"
                       required
                     />
@@ -448,7 +515,7 @@ export default function LinkManagement({ selectedDate }: LinkManagementProps) {
                 </div>
 
                 <div>
-                  <label htmlFor="link-event-name" className="block font-mono text-xs tracking-wider text-gray-400 uppercase mb-2">
+                  <label htmlFor="link-event-name" className="app-label">
                     EVENT NAME
                   </label>
                   <input
@@ -461,14 +528,14 @@ export default function LinkManagement({ selectedDate }: LinkManagementProps) {
                         event: e.target.value.toUpperCase(),
                       })
                     }
-                    className="w-full bg-black border border-gray-600 px-4 py-3 text-white font-mono text-sm tracking-wider focus:outline-none focus:border-white uppercase"
+                    className="w-full bg-canvas border border-border-strong px-4 py-3 text-text-heading text-sm focus:outline-none focus:border-border-focus uppercase"
                     placeholder="EVENT NAME"
                     required
                   />
                 </div>
 
                 <div>
-                  <label htmlFor="link-max-guests" className="block font-mono text-xs tracking-wider text-gray-400 uppercase mb-2">
+                  <label htmlFor="link-max-guests" className="app-label">
                     MAX GUESTS
                   </label>
                   <input
@@ -483,18 +550,18 @@ export default function LinkManagement({ selectedDate }: LinkManagementProps) {
                         maxGuests: parseInt(e.target.value),
                       })
                     }
-                    className="w-full bg-black border border-gray-600 px-4 py-3 text-white font-mono text-sm tracking-wider focus:outline-none focus:border-white"
+                    className="w-full bg-canvas border border-border-strong px-4 py-3 text-text-heading text-sm focus:outline-none focus:border-border-focus"
                   />
                 </div>
 
                 <button
                   type="submit"
                   disabled={isGenerating}
-                  className="w-full bg-white text-black py-3 sm:py-4 font-mono text-sm tracking-wider uppercase hover:bg-gray-200 transition-colors disabled:bg-gray-600 disabled:text-gray-400 disabled:opacity-50"
+                  className="w-full bg-action-primary py-3 text-sm font-semibold text-action-text transition-colors hover:bg-action-hover disabled:bg-border-strong disabled:text-text-muted disabled:opacity-50 sm:py-4"
                 >
                   {isGenerating ? (
                     <div className="flex items-center justify-center gap-2">
-                      <div className="w-4 h-4 border-2 border-black border-t-transparent rounded-full animate-spin"></div>
+                      <div className="w-4 h-4 border-2 border-canvas border-t-transparent rounded-full animate-spin"></div>
                       GENERATING...
                     </div>
                   ) : (
@@ -505,22 +572,22 @@ export default function LinkManagement({ selectedDate }: LinkManagementProps) {
             </div>
 
             {generatedLink && (
-              <div className="bg-gray-900 border border-gray-700 p-4 sm:p-6">
+              <div className="app-panel p-4 sm:p-6">
                 <div className="mb-4">
-                  <h3 className="font-mono text-sm tracking-wider text-white uppercase mb-2">
+                  <h3 className="type-panel-title mb-2">
                     GENERATED ACCESS LINK
                   </h3>
-                  <p className="text-gray-400 font-mono text-xs">
-                    {generatedLink.djName} — {generatedLink.event} | MAX:{" "}
+                  <p className="text-text-muted font-mono text-xs">
+                    {generatedLink.djName} / {generatedLink.event} | MAX:{" "}
                     {generatedLink.maxGuests}
                   </p>
                 </div>
 
-                <div className="bg-black border border-gray-700 p-4 mb-4">
-                  <div className="font-mono text-xs tracking-wider text-gray-400 mb-1">
+                <div className="bg-canvas border border-border-default p-4 mb-4">
+                  <div className="font-mono text-xs tracking-wider text-text-muted mb-1">
                     GUEST URL
                   </div>
-                  <div className="font-mono text-sm tracking-wider text-white break-all">
+                  <div className="font-mono text-sm tracking-wider text-text-heading break-all">
                     {getGuestPageUrl(generatedLink.token)}
                   </div>
                 </div>
@@ -530,11 +597,11 @@ export default function LinkManagement({ selectedDate }: LinkManagementProps) {
                     copyToClipboard(getGuestPageUrl(generatedLink.token))
                   }
                   disabled={isCopying}
-                  className="w-full bg-white text-black py-3 font-mono text-xs tracking-wider uppercase hover:bg-gray-200 transition-colors disabled:opacity-50"
+                  className="w-full bg-action-primary py-3 text-xs font-semibold text-action-text transition-colors hover:bg-action-hover disabled:opacity-50"
                 >
                   {isCopying ? (
                     <div className="flex items-center justify-center gap-2">
-                      <div className="w-3 h-3 border-2 border-black border-t-transparent rounded-full animate-spin"></div>
+                      <div className="w-3 h-3 border-2 border-canvas border-t-transparent rounded-full animate-spin"></div>
                       COPYING...
                     </div>
                   ) : (
@@ -551,224 +618,232 @@ export default function LinkManagement({ selectedDate }: LinkManagementProps) {
             {error && <Alert type="error" message={error} />}
             {success && <Alert type="success" message={success} />}
 
-            <div className="bg-gray-900 border border-gray-700">
+            <div className="app-panel">
               <PanelHeader
-                title="LINK LIST"
+                title="Link list"
                 count={sortedLinks.length}
                 onRefresh={loadLinks}
                 isLoading={isFetching}
               />
 
-              <div className="border-t border-gray-700 p-4 sm:p-5 space-y-4">
-                <div className="grid grid-cols-2 xl:grid-cols-6 gap-3">
-                  {[
-                    { label: "TOTAL", value: dashboardStats.total, tone: "text-white border-gray-700" },
-                    { label: "ACTIVE", value: dashboardStats.active, tone: "text-green-400 border-green-900/60" },
-                    { label: "INACTIVE", value: dashboardStats.inactive, tone: "text-gray-300 border-gray-700" },
-                    { label: "EXPIRED", value: dashboardStats.expired, tone: "text-red-400 border-red-900/60" },
-                    { label: "24H", value: dashboardStats.expiringSoon, tone: "text-yellow-300 border-yellow-900/60" },
-                    { label: "FULL", value: dashboardStats.full, tone: "text-cyan-300 border-cyan-900/60" },
-                  ].map((item) => (
-                    <div key={item.label} className={`bg-black border p-3 ${item.tone}`}>
-                      <div className="font-mono text-[10px] tracking-[0.25em] uppercase text-gray-500 mb-2">
-                        {item.label}
-                      </div>
-                      <div className="font-mono text-2xl tracking-wider">
-                        {item.value}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-
+              <div className="border-b border-border-subtle p-4 sm:p-5">
                 <div className="flex flex-wrap items-end justify-between gap-3">
                   <div className="flex flex-wrap gap-2">
                     {[
-                      { key: "all", label: "ALL", count: dashboardStats.total },
-                      { key: "active", label: "ACTIVE", count: dashboardStats.active },
-                      { key: "inactive", label: "INACTIVE", count: dashboardStats.inactive },
-                      { key: "expired", label: "EXPIRED", count: dashboardStats.expired },
-                      { key: "expiring-soon", label: "24H", count: dashboardStats.expiringSoon },
-                      { key: "full", label: "FULL", count: dashboardStats.full },
+                      { key: "all", label: "All", count: dashboardStats.total },
+                      { key: "active", label: "Active", count: dashboardStats.active },
+                      { key: "attention", label: "Attention", count: dashboardStats.attention },
                     ].map((filter) => (
                       <button
                         key={filter.key}
+                        type="button"
                         onClick={() => setManageFilter(filter.key as ManageFilter)}
                         aria-pressed={manageFilter === filter.key}
-                        className={`px-3 py-2 border font-mono text-[10px] tracking-[0.25em] uppercase transition-colors ${
+                        className={`min-h-11 border px-3 py-2 text-xs font-medium uppercase transition-colors ${
                           manageFilter === filter.key
-                            ? "bg-white text-black border-white"
-                            : "bg-black text-gray-400 border-gray-700 hover:text-white hover:border-gray-500"
+                            ? "border-action-primary bg-action-primary text-action-text"
+                            : "border-border-default bg-canvas text-text-muted hover:border-border-strong hover:text-text-heading"
                         }`}
                       >
-                        {filter.label} ({filter.count})
+                        {filter.label} {filter.count}
                       </button>
                     ))}
                   </div>
 
-                  <div className="min-w-[220px] ml-auto">
-                    <label htmlFor="link-sort" className="block mb-2 text-gray-500 font-mono text-[10px] tracking-[0.22em] uppercase">
-                      SORT BY
-                    </label>
-                    <select
-                      id="link-sort"
-                      value={manageSort}
-                      onChange={(e) => setManageSort(e.target.value as ManageSort)}
-                      className="w-full bg-black border border-gray-700 px-3 py-2.5 text-white font-mono text-xs tracking-[0.16em] uppercase focus:outline-none focus:border-white transition-colors"
-                    >
-                      <option value="expiresSoonest">EXPIRES SOONEST</option>
-                      <option value="highestUsage">HIGHEST USAGE</option>
-                      <option value="newest">NEWEST CREATED</option>
-                      <option value="djName">DJ NAME</option>
-                    </select>
-                  </div>
+                  {manageScope === "date" && (
+                    <div className="min-w-[190px]">
+                      <label htmlFor="link-sort" className="app-label">
+                        Sort
+                      </label>
+                      <div className="relative">
+                        <select
+                          id="link-sort"
+                          value={manageSort}
+                          onChange={(event) =>
+                            setManageSort(event.target.value as ManageSort)
+                          }
+                          className="app-field min-h-11 appearance-none py-2.5 pl-4 pr-12 text-xs uppercase"
+                        >
+                          <option value="newest">Newest created</option>
+                          <option value="expiresSoonest">Expires soonest</option>
+                          <option value="djName">DJ name</option>
+                        </select>
+                        <Icon
+                          name="chevron-down"
+                          size={16}
+                          className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-text-muted"
+                        />
+                      </div>
+                    </div>
+                  )}
                 </div>
 
-                <p className="text-gray-500 font-mono text-[10px] tracking-[0.22em] uppercase">
-                  SHOWING {sortedLinks.length} OF {dashboardStats.total} LINKS FOR {formatDateDisplay(selectedDate)}
+                <p className="mt-3 text-xs text-text-dim">
+                  {manageScope === "recent"
+                    ? `Latest ${recentLimit} created links`
+                    : formatDateDisplay(selectedDate)}
+                  {manageFilter !== "all" ? ` · ${manageFilter}` : ""}
                 </p>
               </div>
 
               {isFetching && sortedLinks.length === 0 ? (
-                <Spinner mode="inline" text="LOADING..." />
+                <Skeleton rows={5} />
               ) : (
                 <div
-                  className={`divide-y divide-gray-700 lg:overflow-y-auto transition-opacity duration-200 ${isFetching ? "opacity-50 pointer-events-none" : ""}`}
+                  className={`divide-y divide-border-default lg:overflow-y-auto transition-opacity duration-200 ${isFetching ? "opacity-50 pointer-events-none" : ""}`}
                 >
                   {sortedLinks.length === 0 ? (
                     <EmptyState
-                      icon="ri-link"
+                      icon="link"
                       message="NO LINKS MATCH THIS FILTER"
                     />
                   ) : (
                     sortedLinks.map((link, index) => {
                       const status = deriveLinkStatus(link, now);
+                      const guestPageUrl = getGuestPageUrl(link.token);
+                      const isLinkVisible = visibleLinkId === link.id;
                       const usageTone = status.full
-                        ? "bg-red-500"
+                        ? "bg-status-danger"
                         : status.usagePercent >= 80
-                          ? "bg-yellow-400"
-                          : "bg-green-500";
+                          ? "bg-text-muted"
+                          : "bg-text-heading";
 
-                      const statusBadges = [
-                        status.expired
-                          ? { label: "EXPIRED", className: "text-red-400 border-red-900/70 bg-red-950/30" }
-                          : status.active
-                            ? { label: "ACTIVE", className: "text-green-400 border-green-900/70 bg-green-950/30" }
-                            : { label: "INACTIVE", className: "text-gray-300 border-gray-700 bg-gray-900/60" },
-                        status.expiringSoon
-                          ? { label: "EXPIRING SOON", className: "text-yellow-300 border-yellow-900/70 bg-yellow-950/30" }
-                          : null,
-                        status.full
-                          ? { label: "FULL", className: "text-cyan-300 border-cyan-900/70 bg-cyan-950/30" }
-                          : null,
-                      ].filter(Boolean) as { label: string; className: string }[];
+                      const primaryStatus = status.expired
+                        ? { label: "EXPIRED", tone: "border-status-danger text-status-danger", indicator: "before:bg-status-danger" }
+                        : status.inactive
+                          ? { label: "INACTIVE", tone: "border-border-strong text-text-muted", indicator: "before:bg-border-strong" }
+                          : status.full
+                            ? { label: "FULL", tone: "border-status-danger text-status-danger", indicator: "before:bg-status-danger" }
+                            : status.expiringSoon
+                              ? { label: "EXPIRING", tone: "border-status-waiting text-status-waiting", indicator: "before:bg-status-waiting" }
+                              : { label: "ACTIVE", tone: "border-status-checked text-status-checked", indicator: "before:bg-status-checked" };
 
                       return (
-                      <div
+                      <article
                         key={link.id}
-                        className={`p-4 ${(!link.active && !status.expired) ? "opacity-70" : ""} ${index % 2 === 1 ? "bg-gray-800/60" : ""}`}
+                        className={`relative px-4 py-3.5 before:absolute before:inset-y-0 before:left-0 before:w-0.5 ${primaryStatus.indicator} ${index % 2 === 1 ? "bg-surface-raised" : "bg-surface"}`}
                       >
-                        <div className="flex items-center justify-between mb-4">
-                          <div className="flex items-center gap-3">
-                            <div className="w-6 h-6 sm:w-8 sm:h-8 border border-gray-600 flex items-center justify-center">
-                              <span className="text-xs font-mono text-gray-400">
-                                {String(index + 1).padStart(2, "0")}
-                              </span>
-                            </div>
-                            <div>
-                              <p className="font-mono text-sm tracking-wider text-white uppercase">
-                                {link.djName} - {link.event}
-                              </p>
-                              <div className="mt-1 flex flex-wrap gap-2">
-                                {statusBadges.map((badge) => (
-                                  <span
-                                    key={badge.label}
-                                    className={`px-2 py-1 border font-mono text-[10px] tracking-[0.22em] uppercase ${badge.className}`}
-                                  >
-                                    {badge.label}
-                                  </span>
-                                ))}
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
-                          <div className="bg-black border border-gray-700 p-3">
-                            <div className="font-mono text-[10px] tracking-[0.25em] uppercase text-gray-500 mb-1">
-                              Usage
-                            </div>
-                            <div className="font-mono text-sm tracking-wider text-white">
-                              {link.usedGuests}/{link.maxGuests}
-                            </div>
-                          </div>
-                          <div className="bg-black border border-gray-700 p-3">
-                            <div className="font-mono text-[10px] tracking-[0.25em] uppercase text-gray-500 mb-1">
-                              Expires At
-                            </div>
-                            <div className="font-mono text-sm tracking-wider text-white">
-                              {formatExpiryTimestamp(link.expiresAt)}
-                            </div>
-                          </div>
-                          <div className="bg-black border border-gray-700 p-3">
-                            <div className="font-mono text-[10px] tracking-[0.25em] uppercase text-gray-500 mb-1">
-                              Countdown
-                            </div>
-                            <div className={`font-mono text-sm tracking-wider ${status.expired ? "text-red-400" : status.expiringSoon ? "text-yellow-300" : "text-white"}`}>
-                              {formatRelativeExpiry(link.expiresAt, now)}
-                            </div>
-                          </div>
-                        </div>
-
-                        <details className="mb-4 border border-gray-700 bg-black/70 group">
-                          <summary className="flex cursor-pointer items-center justify-between px-3 py-3 list-none">
-                            <div>
-                              <span className="font-mono text-[10px] tracking-[0.22em] uppercase text-gray-400">
-                                GUEST URL
-                              </span>
-                              <p className="mt-1 font-mono text-[10px] tracking-[0.16em] uppercase text-gray-600">
-                                Hidden by default for faster scanning. Expand only when needed.
-                              </p>
-                            </div>
-                            <i className="ri-add-line text-gray-500 group-open:hidden"></i>
-                            <i className="ri-subtract-line text-gray-500 hidden group-open:block"></i>
-                          </summary>
-                          <div className="border-t border-gray-800 px-3 py-3 font-mono text-xs tracking-[0.12em] text-white break-all">
-                            {getGuestPageUrl(link.token)}
-                          </div>
-                        </details>
-
-                        {/* Usage progress bar */}
-                        <div className="mb-4">
-                          <div className="flex justify-between text-xs font-mono text-gray-400 mb-1">
-                            <span>USAGE</span>
-                            <span>
-                              {link.usedGuests}/{link.maxGuests}
+                        <div className="flex flex-wrap items-start justify-between gap-3">
+                          <div className="flex min-w-0 items-start gap-3">
+                            <span className="w-7 shrink-0 font-mono text-xs tabular-nums text-text-dim">
+                              {String(index + 1).padStart(2, "0")}
                             </span>
+                            <div className="min-w-0">
+                              <h3 className="type-row-title break-words">
+                                {link.djName}
+                              </h3>
+                              <p className="mt-0.5 break-words text-xs text-text-muted">
+                                {link.event || "Untitled event"}
+                              </p>
+                            </div>
                           </div>
-                          <div className="w-full bg-gray-800 h-1">
+                          <span className={`inline-flex min-h-7 items-center border-l-2 pl-2 text-xs font-semibold ${primaryStatus.tone}`}>
+                            {primaryStatus.label}
+                          </span>
+                        </div>
+
+                        <dl className="mt-3 flex flex-wrap gap-x-6 gap-y-2 pl-10 sm:pl-11">
+                          <div>
+                            <dt className="text-xs text-text-dim">EVENT DATE</dt>
+                            <dd className="mt-0.5 font-mono text-xs text-text-muted">
+                              {link.date ? formatDateDisplay(link.date) : "No date"}
+                            </dd>
+                          </div>
+                          {manageScope === "recent" && (
+                            <div>
+                              <dt className="text-xs text-text-dim">CREATED</dt>
+                              <dd className="mt-0.5 font-mono text-xs text-text-muted">
+                                {formatTimestamp(link.createdAt)}
+                              </dd>
+                            </div>
+                          )}
+                          <div>
+                            <dt className="text-xs text-text-dim">USAGE</dt>
+                            <dd className="mt-0.5 font-mono text-xs text-text-heading">
+                              {link.usedGuests}/{link.maxGuests}
+                            </dd>
+                          </div>
+                          <div>
+                            <dt className="text-xs text-text-dim">EXPIRY</dt>
+                            <dd className={`mt-0.5 font-mono text-xs ${status.expired ? "text-status-danger" : "text-text-muted"}`}>
+                              {formatRelativeExpiry(link.expiresAt, now)}
+                            </dd>
+                          </div>
+                        </dl>
+
+                        <div className="mt-3 pl-10 sm:pl-11">
+                          <div className="h-1 w-full bg-surface-active">
                             <div
-                              className={`h-1 transition-all ${usageTone}`}
-                              style={{
-                                width: `${status.usagePercent}%`,
-                              }}
-                            ></div>
+                              className={`h-1 ${usageTone}`}
+                              style={{ width: `${status.usagePercent}%` }}
+                            />
                           </div>
                         </div>
 
-                        <div className="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] gap-2">
+                        {isLinkVisible && (
+                          <div
+                            id={`link-url-panel-${link.id}`}
+                            className="mt-3 border border-border-default bg-canvas p-3 ml-10 sm:ml-11"
+                          >
+                            <label
+                              htmlFor={`link-url-${link.id}`}
+                              className="app-label"
+                            >
+                              Guest URL
+                            </label>
+                            <div className="flex flex-col gap-2 sm:flex-row">
+                              <input
+                                id={`link-url-${link.id}`}
+                                type="text"
+                                readOnly
+                                value={guestPageUrl}
+                                onFocus={(event) => event.currentTarget.select()}
+                                onClick={(event) => event.currentTarget.select()}
+                                className="app-field min-h-11 min-w-0 flex-1 font-mono text-xs"
+                              />
+                              <a
+                                href={guestPageUrl}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="pressable inline-flex min-h-11 items-center justify-center border border-border-default bg-surface-raised px-4 text-xs font-semibold text-text-heading hover:border-border-strong hover:bg-surface-hover"
+                              >
+                                OPEN
+                              </a>
+                            </div>
+                            <p className="app-helper">
+                              Select the URL manually or open it in a new tab.
+                            </p>
+                          </div>
+                        )}
+
+                        <div className="mt-3 flex flex-wrap justify-end gap-2 pl-10 sm:pl-11">
                           <button
+                            type="button"
                             onClick={() =>
-                              copyToClipboard(
-                                getGuestPageUrl(link.token),
-                                link.id,
+                              setVisibleLinkId((current) =>
+                                current === link.id ? null : link.id,
                               )
                             }
+                            aria-expanded={isLinkVisible}
+                            aria-controls={`link-url-panel-${link.id}`}
+                            className="inline-flex min-h-11 items-center gap-2 border border-border-default bg-surface px-3 py-2 text-xs font-medium text-text-heading hover:bg-surface-raised"
+                          >
+                            <Icon
+                              name={isLinkVisible ? "view-off" : "view"}
+                              size={16}
+                            />
+                            {isLinkVisible ? "HIDE" : "VIEW"}
+                          </button>
+                          <button
+                            onClick={() =>
+                              copyToClipboard(guestPageUrl, link.id)
+                            }
                             disabled={loadingStates[`copy_${link.id}`]}
-                            className="bg-white text-black py-3 px-3 font-mono text-xs tracking-wider uppercase hover:bg-gray-200 transition-colors disabled:opacity-50"
+                            className="min-h-11 bg-action-primary px-4 py-2 text-xs font-semibold text-action-text transition-colors hover:bg-action-hover disabled:opacity-50"
                           >
                             {loadingStates[`copy_${link.id}`] ? (
                               <div className="flex items-center justify-center">
-                                <div className="w-3 h-3 border-2 border-black border-t-transparent rounded-full animate-spin"></div>
+                                <div className="w-3 h-3 border-2 border-canvas border-t-transparent rounded-full animate-spin"></div>
                               </div>
                             ) : copiedId === link.id ? (
                               "COPIED"
@@ -777,17 +852,14 @@ export default function LinkManagement({ selectedDate }: LinkManagementProps) {
                             )}
                           </button>
                           {status.expired ? (
-                            <button
-                              disabled
-                              className="bg-gray-900 border border-gray-600 text-red-400 py-3 px-3 font-mono text-xs tracking-wider uppercase transition-colors disabled:opacity-50"
-                            >
+                            <span className="inline-flex min-h-11 items-center border border-status-danger/70 px-3 text-xs text-status-danger">
                               EXPIRED
-                            </button>
+                            </span>
                           ) : link.active ? (
                             <button
                               onClick={() => handleDeactivateLink(link.id)}
                               disabled={loadingStates[`deactivate_${link.id}`]}
-                              className="bg-gray-900 border border-gray-600 text-yellow-400 py-3 px-3 font-mono text-xs tracking-wider uppercase hover:bg-gray-800 transition-colors disabled:opacity-50"
+                              className="min-h-11 border border-border-default bg-surface px-3 py-2 text-xs font-medium text-text-muted hover:bg-surface-raised disabled:opacity-50"
                             >
                               {loadingStates[`deactivate_${link.id}`]
                                 ? "..."
@@ -797,7 +869,7 @@ export default function LinkManagement({ selectedDate }: LinkManagementProps) {
                             <button
                               onClick={() => handleActivateLink(link.id)}
                               disabled={loadingStates[`activate_${link.id}`]}
-                              className="bg-gray-900 border border-gray-600 text-green-400 py-3 px-3 font-mono text-xs tracking-wider uppercase hover:bg-gray-800 transition-colors disabled:opacity-50"
+                              className="min-h-11 border border-border-default bg-surface px-3 py-2 text-xs font-medium text-text-heading hover:bg-surface-raised disabled:opacity-50"
                             >
                               {loadingStates[`activate_${link.id}`]
                                 ? "..."
@@ -807,18 +879,18 @@ export default function LinkManagement({ selectedDate }: LinkManagementProps) {
                           <button
                             onClick={() => requestDeleteLink(link)}
                             disabled={loadingStates[`delete_${link.id}`]}
-                            className="bg-red-950/30 border border-red-800 text-red-300 py-3 px-4 font-mono text-xs tracking-wider uppercase hover:bg-red-950/50 transition-colors disabled:opacity-50"
+                            className="min-h-11 border border-status-danger/70 bg-status-danger/10 px-3 py-2 text-xs font-medium text-status-danger hover:bg-status-danger/20 disabled:opacity-50"
                           >
                             {loadingStates[`delete_${link.id}`] ? (
                               <div className="flex items-center justify-center">
-                                <div className="w-3 h-3 border-2 border-red-300 border-t-transparent rounded-full animate-spin"></div>
+                                <div className="h-3 w-3 animate-spin rounded-full border-2 border-status-danger border-t-transparent"></div>
                               </div>
                             ) : (
                               "DELETE"
                             )}
                           </button>
                         </div>
-                      </div>
+                      </article>
                     )})
                   )}
                 </div>
@@ -827,21 +899,21 @@ export default function LinkManagement({ selectedDate }: LinkManagementProps) {
           </div>
         )}
       </div>
-    </div>
+      </OperationsLayout>
 
       {copyToast && (
-        <div className="fixed bottom-5 right-5 z-40 border border-green-700/70 bg-green-950/80 px-4 py-3 text-green-200 shadow-lg backdrop-blur-sm" role="status" aria-live="polite">
-          <p className="font-mono text-[10px] tracking-[0.22em] uppercase">
+        <div className="fixed bottom-5 right-5 z-40 border border-border-strong bg-surface-raised px-4 py-3 text-text-heading" role="status" aria-live="polite">
+          <p className="text-xs font-medium uppercase tracking-[0.05em]">
             {copyToast}
           </p>
         </div>
       )}
 
       {pendingDeleteLink && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 px-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-canvas/80 px-4">
           <div
             ref={deleteDialogRef}
-            className="w-full max-w-md border border-red-900/70 bg-gray-950 p-5 sm:p-6 shadow-2xl"
+            className="w-full max-w-md border border-status-danger/70 bg-canvas p-5 sm:p-6"
             role="dialog"
             aria-modal="true"
             aria-labelledby="delete-link-title"
@@ -849,32 +921,32 @@ export default function LinkManagement({ selectedDate }: LinkManagementProps) {
           >
             <div className="flex items-start justify-between gap-4 mb-4">
               <div>
-                <p className="font-mono text-[10px] tracking-[0.24em] uppercase text-red-300 mb-2">
+                <p className="mb-2 font-mono text-xs uppercase tracking-[0.24em] text-status-danger">
                   Destructive action
                 </p>
-                <h3 id="delete-link-title" className="font-mono text-sm sm:text-base tracking-[0.18em] uppercase text-white">
+                <h3 id="delete-link-title" className="type-panel-title font-mono uppercase tracking-[0.18em]">
                   Delete guest link?
                 </h3>
               </div>
               <button
                 type="button"
                 onClick={() => setPendingDeleteLink(null)}
-                className="text-gray-500 hover:text-white transition-colors"
+                className="text-text-dim hover:text-text-heading transition-colors"
                 aria-label="Close delete confirmation"
               >
-                <i className="ri-close-line text-lg" aria-hidden="true"></i>
+                <Icon name="close" size={18} />
               </button>
             </div>
 
             <div className="space-y-3 mb-6">
-              <p id="delete-link-description" className="font-mono text-[10px] tracking-[0.16em] uppercase text-gray-400 leading-relaxed">
+              <p id="delete-link-description" className="text-xs font-medium uppercase tracking-[0.05em] text-text-muted leading-relaxed">
                 This action is permanent and will immediately invalidate the active guest link.
               </p>
-              <div className="border border-gray-800 bg-black/50 p-3">
-                <p className="font-mono text-xs tracking-[0.18em] uppercase text-white break-words">
-                  {pendingDeleteLink.djName} — {pendingDeleteLink.event}
+              <div className="border border-border-default bg-canvas p-3">
+                <p className="text-xs font-medium uppercase tracking-[0.05em] text-text-heading break-words">
+                  {pendingDeleteLink.djName} / {pendingDeleteLink.event}
                 </p>
-                <p className="mt-2 font-mono text-[10px] tracking-[0.16em] uppercase text-gray-500">
+                <p className="mt-2 text-xs font-medium uppercase tracking-[0.05em] text-text-dim">
                   Usage {pendingDeleteLink.usedGuests}/{pendingDeleteLink.maxGuests}
                 </p>
               </div>
@@ -885,7 +957,7 @@ export default function LinkManagement({ selectedDate }: LinkManagementProps) {
                 ref={deleteCancelRef}
                 type="button"
                 onClick={() => setPendingDeleteLink(null)}
-                className="bg-black border border-gray-700 text-gray-300 py-3 px-4 font-mono text-xs tracking-[0.22em] uppercase hover:text-white hover:border-gray-500 transition-colors"
+                className="bg-canvas border border-border-default text-text-body py-3 px-4 text-xs font-medium uppercase tracking-[0.05em] hover:text-text-heading hover:border-border-strong transition-colors"
               >
                 Cancel
               </button>
@@ -893,7 +965,7 @@ export default function LinkManagement({ selectedDate }: LinkManagementProps) {
                 type="button"
                 onClick={() => handleDeleteLink(pendingDeleteLink.id)}
                 disabled={loadingStates[`delete_${pendingDeleteLink.id}`]}
-                className="bg-red-950/40 border border-red-800 text-red-200 py-3 px-4 font-mono text-xs tracking-[0.22em] uppercase hover:bg-red-950/60 transition-colors disabled:opacity-50"
+                className="border border-status-danger/70 bg-status-danger/10 px-4 py-3 font-mono text-xs uppercase tracking-[0.22em] text-status-danger transition-colors hover:bg-status-danger/20 disabled:opacity-50"
               >
                 {loadingStates[`delete_${pendingDeleteLink.id}`]
                   ? "Deleting..."

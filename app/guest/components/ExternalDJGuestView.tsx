@@ -12,6 +12,7 @@ import Button from "@/components/Button";
 import { BRAND_NAME } from "@/lib/brand";
 import GuestListCard from "@/components/GuestListCard";
 import GuestSearchInput from "@/components/GuestSearchInput";
+import Icon from "@/components/Icon";
 import { formatDateDisplay } from "@/lib/date";
 import {
   validateExternalToken,
@@ -118,16 +119,16 @@ export default function ExternalDJGuestView({ token }: ExternalDJGuestViewProps)
   };
 
   const externalHeader = (
-    <div className="fixed top-0 left-0 right-0 z-50 bg-black border-b border-border-subtle">
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-10 py-3 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <div className="w-2 h-2 bg-white"></div>
-          <span className="font-mono text-sm tracking-wider text-white uppercase">
+    <div className="fixed inset-x-0 top-0 z-50 border-b border-border-default bg-canvas">
+      <div className="mx-auto flex h-16 w-full max-w-[1440px] items-center justify-between px-4 sm:px-6 lg:px-10">
+        <div className="flex items-center gap-3">
+          <div className="grid h-8 w-8 place-items-center border border-border-strong bg-surface font-mono text-xs font-semibold text-text-heading">A</div>
+          <span className="text-sm font-semibold text-text-heading">
             {BRAND_NAME}
           </span>
         </div>
-        <span className="font-mono text-xs tracking-wider text-text-muted uppercase">
-          GUEST ACCESS
+        <span className="operational-label">
+          Guest access
         </span>
       </div>
     </div>
@@ -135,23 +136,12 @@ export default function ExternalDJGuestView({ token }: ExternalDJGuestViewProps)
 
   if (isValidating) {
     return (
-      <div className="min-h-screen bg-black flex flex-col">
+      <div className="min-h-[100dvh] bg-canvas flex flex-col">
         {externalHeader}
         <div className="flex-1 overflow-x-hidden pt-16 sm:pt-20 flex flex-col">
-          <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-10 w-full lg:flex-1 lg:min-h-0 flex flex-col">
-            <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 lg:gap-6 lg:flex-1 lg:min-h-0">
-              <div className="lg:col-span-1 space-y-4">
-                <div className="bg-surface border border-border-subtle p-4 sm:p-5 min-h-[200px]">
-                  <Spinner mode="inline" text="LOADING..." />
-                </div>
-              </div>
-              <div className="lg:col-span-3 flex flex-col lg:min-h-0">
-                <div className="main-content-panel lg:min-h-0 lg:max-h-full">
-                  <PanelHeader title="GUEST LIST" count={0} sortMode={sortMode} onSortToggle={() => {}} />
-                  <GuestSearchInput value={searchQuery} onChange={setSearchQuery} />
-                  <Spinner mode="inline" text="VALIDATING LINK..." />
-                </div>
-              </div>
+          <div className="page-container">
+            <div className="main-content-panel">
+              <Spinner mode="inline" text="Validating guest access" />
             </div>
           </div>
           <Footer />
@@ -162,15 +152,15 @@ export default function ExternalDJGuestView({ token }: ExternalDJGuestViewProps)
 
   if (validationError) {
     return (
-      <div className="min-h-screen bg-black flex items-center justify-center px-4">
-        <div className="text-center max-w-sm">
-          <div className="w-16 h-16 border-2 border-red-600 mx-auto mb-4 flex items-center justify-center">
-            <i className="ri-error-warning-line text-red-400 text-2xl"></i>
+      <div className="min-h-[100dvh] bg-canvas flex items-center justify-center px-4">
+        <div className="app-panel max-w-sm p-7 text-center">
+          <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center border border-status-danger/70 bg-status-danger/10">
+            <Icon name="warning" size={24} className="text-status-danger" />
           </div>
-          <h1 className="font-mono text-xl tracking-wider text-white uppercase mb-2">
-            INVALID LINK
+          <h1 className="mb-2 text-xl font-semibold text-text-heading">
+            Invalid link
           </h1>
-          <p className="text-text-muted font-mono text-xs tracking-wider mb-6">
+          <p className="mb-6 text-sm leading-relaxed text-text-muted">
             {validationError}
           </p>
           <Footer compact />
@@ -192,142 +182,147 @@ export default function ExternalDJGuestView({ token }: ExternalDJGuestViewProps)
     : sortedGuests;
 
   return (
-    <div className="min-h-screen bg-black flex flex-col">
+    <div className="min-h-[100dvh] bg-canvas flex flex-col">
       {externalHeader}
       <div className="flex-1 overflow-x-hidden pt-16 sm:pt-20 flex flex-col">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-10 w-full lg:flex-1 lg:min-h-0 flex flex-col">
-          <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 lg:gap-6 lg:flex-1 lg:min-h-0">
-            <div className="lg:col-span-1 space-y-4 lg:overflow-y-auto">
-              <div className="bg-surface border border-border-subtle p-4 sm:p-5">
-                <div className="mb-4">
-                  <h2 className="font-mono text-base sm:text-lg tracking-wider text-white uppercase mb-1 break-words">
-                    {linkInfo?.djName}
-                  </h2>
-                  <p className="text-text-muted font-mono text-xs tracking-wider mb-1 break-words">
-                    {linkInfo?.event}
-                  </p>
-                  {venueInfo && (
-                    <p className="text-text-dim font-mono text-xs tracking-wider mb-1 break-words">
-                      {venueInfo.name}
-                    </p>
-                  )}
-                  <p className="text-text-muted font-mono text-xs tracking-wider break-words">
-                    {linkInfo ? formatDateDisplay(linkInfo.date || "") : ""}
-                  </p>
-                </div>
-                <div className="text-center mb-4">
-                  <div className="text-white font-mono text-3xl sm:text-4xl tracking-wider">
-                    {guests.length}
-                  </div>
-                  <div className="text-brand-cyan text-xs font-mono tracking-wider uppercase">
-                    REGISTERED
-                  </div>
-                </div>
-
-                <StatGrid
-                  items={[
-                    { label: "REMAINING", value: remaining, color: "cyan" },
-                    {
-                      label: "MAX",
-                      value: linkInfo?.maxGuests ?? 0,
-                      color: "blue",
-                    },
-                  ]}
-                />
+        <div className="page-container">
+          <div className="context-bar mb-4 sm:grid-cols-2 lg:grid-cols-4">
+            <div>
+              <div className="type-context-title">Guest owner</div>
+              <div className="text-sm font-medium text-text-heading">
+                {linkInfo?.djName}
               </div>
             </div>
-
-            <div className="lg:col-span-3 flex flex-col lg:min-h-0">
-              {error && <Alert type="error" message={error} className="mb-4" />}
-
-              <div className="main-content-panel lg:min-h-0 lg:max-h-full">
-                <PanelHeader
-                  title="GUEST LIST"
-                  count={displayGuests.length}
-                  sortMode={sortMode}
-                  onSortToggle={() =>
-                    setSortMode((prev) =>
-                      prev === "default" ? "alpha" : "default",
-                    )
-                  }
-                />
-
-                <GuestSearchInput
-                  value={searchQuery}
-                  onChange={setSearchQuery}
-                />
-
-                {displayGuests.length === 0 ? (
-                  <EmptyState
-                    icon="ri-user-add-line"
-                    message={searchQuery ? "NO GUESTS MATCH THIS SEARCH" : "ADD YOUR GUESTS BELOW"}
-                  />
-                ) : (
-                  <div className="divide-y divide-border-subtle lg:overflow-y-auto">
-                    {displayGuests.map((guest, index) => (
-                      <GuestListCard
-                        key={guest.id}
-                        guest={guest}
-                        index={index}
-                        variant="user"
-                        onDelete={
-                          guest.status === "pending"
-                            ? () => handleDelete(guest.id)
-                            : undefined
-                        }
-                        isDeleteLoading={deletingId === guest.id}
-                      />
-                    ))}
-                  </div>
-                )}
-
-                {!isAtLimit && (
-                  <div className="p-4 border-t-2 border-border-default">
-                    <div className="flex items-center gap-3 sm:gap-4 min-w-0">
-                      <div className="w-8 h-8 sm:w-10 sm:h-10 border border-border-default flex items-center justify-center">
-                        <span className="text-xs sm:text-sm font-mono text-text-muted">
-                          {String(guests.length + 1).padStart(2, "0")}
-                        </span>
-                      </div>
-
-                      <label htmlFor="external-guest-name" className="sr-only">
-                        게스트 이름
-                      </label>
-                      <input
-                        id="external-guest-name"
-                        type="text"
-                        value={guestName}
-                        onChange={(e) => setGuestName(e.target.value)}
-                        placeholder="Enter guest full name"
-                        className="flex-1 min-w-0 bg-transparent border-none outline-none text-white font-mono text-sm tracking-wider placeholder-text-dim"
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter") handleSave();
-                        }}
-                      />
-
-                      <Button
-                        onClick={handleSave}
-                        disabled={!guestName.trim()}
-                        isLoading={isLoading}
-                        size="md"
-                      >
-                        SAVE
-                      </Button>
-                    </div>
-                  </div>
-                )}
-
-                {isAtLimit && (
-                  <div className="p-4 border-t-2 border-border-default text-center">
-                    <p className="text-brand-yellow font-mono text-xs tracking-wider uppercase">
-                      GUEST LIMIT REACHED ({linkInfo?.maxGuests}/
-                      {linkInfo?.maxGuests})
-                    </p>
-                  </div>
-                )}
+            <div>
+              <div className="type-context-title">Event</div>
+              <div className="text-sm text-text-body">{linkInfo?.event}</div>
+            </div>
+            <div>
+              <div className="type-context-title">Venue</div>
+              <div className="text-sm text-text-body">
+                {venueInfo?.name ?? "-"}
+              </div>
+            </div>
+            <div>
+              <div className="type-context-title">Operational date</div>
+              <div className="font-mono text-sm text-text-body">
+                {linkInfo ? formatDateDisplay(linkInfo.date || "") : "-"}
               </div>
             </div>
           </div>
+
+          {error && <Alert type="error" message={error} className="mb-4" />}
+
+          <section className="main-content-panel lg:min-h-0 lg:max-h-[calc(100dvh-10.5rem)]">
+            <div className="border-b border-border-subtle px-4 py-4 sm:px-5">
+              <div className="mb-3 flex items-end justify-between gap-4">
+                <div>
+                  <h1 className="type-panel-title">
+                    Add guest
+                  </h1>
+                  <p className="mt-1 text-sm text-text-muted">
+                    Add one full name at a time.
+                  </p>
+                </div>
+                <div className="text-right">
+                  <div className="font-mono text-lg tabular-nums text-text-heading">
+                    {remaining}
+                  </div>
+                  <div className="text-xs text-text-muted">Remaining</div>
+                </div>
+              </div>
+
+              {!isAtLimit ? (
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
+                  <div className="min-w-0 flex-1">
+                    <label htmlFor="external-guest-name" className="app-label">
+                      Guest name
+                    </label>
+                    <input
+                      id="external-guest-name"
+                      type="text"
+                      value={guestName}
+                      onChange={(event) => setGuestName(event.target.value)}
+                      placeholder="Enter full name"
+                      className="app-field min-h-11"
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter") handleSave();
+                      }}
+                    />
+                  </div>
+                  <Button
+                    onClick={handleSave}
+                    disabled={!guestName.trim()}
+                    isLoading={isLoading}
+                    size="lg"
+                    className="sm:min-w-32"
+                  >
+                    ADD GUEST
+                  </Button>
+                </div>
+              ) : (
+                <div className="border-l-2 border-status-danger bg-status-danger/10 px-3 py-2 text-sm text-status-danger">
+                  Guest limit reached ({linkInfo?.maxGuests}/{linkInfo?.maxGuests})
+                </div>
+              )}
+            </div>
+
+            <StatGrid
+              items={[
+                { label: "REGISTERED", value: guests.length, color: "default" },
+                { label: "REMAINING", value: remaining, color: "default" },
+                {
+                  label: "MAX",
+                  value: linkInfo?.maxGuests ?? 0,
+                  color: "default",
+                },
+              ]}
+            />
+
+            <PanelHeader
+              title="Guest list"
+              count={displayGuests.length}
+              sortMode={sortMode}
+              onSortToggle={() =>
+                setSortMode((prev) =>
+                  prev === "default" ? "alpha" : "default",
+                )
+              }
+            />
+
+            <GuestSearchInput
+              value={searchQuery}
+              onChange={setSearchQuery}
+            />
+
+            {displayGuests.length === 0 ? (
+              <EmptyState
+                icon="user-add"
+                message={
+                  searchQuery
+                    ? "No guests match this search"
+                    : "No guests registered yet"
+                }
+              />
+            ) : (
+              <div className="divide-y divide-border-subtle overflow-y-auto">
+                {displayGuests.map((guest, index) => (
+                  <GuestListCard
+                    key={guest.id}
+                    guest={guest}
+                    index={index}
+                    mode="registration"
+                    onDelete={
+                      guest.status === "pending"
+                        ? () => handleDelete(guest.id)
+                        : undefined
+                    }
+                    isDeleteLoading={deletingId === guest.id}
+                  />
+                ))}
+              </div>
+            )}
+          </section>
         </div>
         <Footer />
       </div>

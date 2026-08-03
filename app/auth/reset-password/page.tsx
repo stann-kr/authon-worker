@@ -7,27 +7,29 @@ import { BRAND_NAME } from "@/lib/brand";
 import Spinner from "@/components/Spinner";
 import Alert from "@/components/Alert";
 import PasswordInput from "@/components/PasswordInput";
+import Button from "@/components/Button";
+import Icon from "@/components/Icon";
 import { getPasswordPolicyError, PASSWORD_POLICY_HINT } from "@/lib/auth/password-policy";
 
 const STEP_ITEMS = ["REQUEST", "EMAIL", "RESET", "DONE"] as const;
 
 function StepIndicator({ currentStep }: { currentStep: 0 | 1 | 2 | 3 }) {
   return (
-    <div className="mb-8">
+    <div className="mb-8" aria-label={`Password reset progress: ${STEP_ITEMS[currentStep]}`}>
       <div className="grid grid-cols-4 gap-2">
         {STEP_ITEMS.map((label, index) => {
           const active = index === currentStep;
           const complete = index < currentStep;
           return (
-            <div key={label} className="space-y-2">
+            <div key={label} className="space-y-2" aria-current={active ? "step" : undefined}>
               <div
                 className={`h-1 ${
-                  complete || active ? "bg-white" : "bg-gray-800"
+                  complete || active ? "bg-action-primary" : "bg-border-subtle"
                 }`}
               />
               <p
-                className={`font-mono text-[9px] tracking-[0.24em] uppercase ${
-                  active ? "text-white" : complete ? "text-gray-300" : "text-gray-600"
+                className={`font-mono text-xs ${
+                  active ? "text-text-heading" : complete ? "text-text-muted" : "text-text-dim"
                 }`}
               >
                 {label}
@@ -146,30 +148,28 @@ function ResetPasswordContent() {
   };
 
   return (
-    <div className="min-h-screen bg-black flex items-center justify-center px-4 sm:px-6 lg:px-8 py-10">
+    <div className="flex min-h-[100dvh] items-center justify-center bg-canvas px-4 py-10 sm:px-6 lg:px-8">
       <div className="w-full max-w-sm sm:max-w-md">
-        <div className="bg-gray-900/60 border border-gray-800 p-6 sm:p-8 lg:p-10 shadow-[0_0_0_1px_rgba(255,255,255,0.02)]">
-          <div className="text-center mb-8">
-            <div className="flex items-center justify-center gap-2 mb-4">
-              <div className="w-2 h-2 bg-white" aria-hidden="true"></div>
-              <div className="w-2 h-2 bg-white" aria-hidden="true"></div>
-              <div className="w-2 h-2 bg-white" aria-hidden="true"></div>
+        <div className="app-panel p-6 sm:p-8 lg:p-10">
+          <div className="mb-8 text-center">
+            <div className="mx-auto mb-5 grid h-11 w-11 place-items-center border border-border-strong bg-surface font-mono text-sm font-semibold text-text-heading">
+              A
             </div>
-            <h1 className="font-mono text-xl sm:text-2xl lg:text-3xl tracking-wider text-white uppercase mb-2">
+            <h1 className="mb-2 text-2xl font-semibold tracking-[-0.03em] text-text-heading sm:text-3xl">
               {BRAND_NAME}
             </h1>
-            <p className="text-xs sm:text-sm text-gray-400 tracking-widest font-mono uppercase">
-              PASSWORD RESET
+            <p className="text-sm text-text-muted">
+              Reset your password securely
             </p>
           </div>
 
           <StepIndicator currentStep={stepIndex} />
 
-          <div className="mb-6 border border-white/10 bg-black/30 p-4">
-            <p className="font-mono text-[10px] tracking-[0.24em] uppercase text-white mb-2">
+          <div className="mb-6 rounded-control border border-border-default bg-canvas p-4">
+            <p className="mb-2 text-sm font-semibold text-text-heading">
               Secure recovery flow
             </p>
-            <p className="font-mono text-[10px] tracking-[0.08em] text-gray-400 leading-relaxed">
+            <p className="text-xs leading-relaxed text-text-muted">
               Reset links are single-use, time-limited, and only work for registered accounts.
             </p>
           </div>
@@ -183,7 +183,7 @@ function ResetPasswordContent() {
           {step === "request" && (
             <form onSubmit={handleRequest} className="space-y-6" aria-busy={loading}>
               <div>
-                <label htmlFor="email" className="block text-gray-400 font-mono text-[10px] tracking-widest uppercase mb-2">
+                <label htmlFor="email" className="app-label">
                   EMAIL ADDRESS
                 </label>
                 <input
@@ -193,49 +193,30 @@ function ResetPasswordContent() {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   disabled={loading}
-                  className="w-full bg-black border border-gray-800 text-white p-3 font-mono text-sm focus:outline-none focus:border-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="app-field"
                   placeholder="name@example.com"
                   aria-describedby="email-helper request-helper"
                   aria-invalid={message?.type === "error" ? "true" : "false"}
                 />
-                <p id="email-helper" className="text-gray-500 font-mono text-[10px] tracking-[0.08em] mt-2 leading-relaxed">
+                <p id="email-helper" className="app-helper">
                   Use the email address registered to your account.
                 </p>
               </div>
 
-              <div className="grid grid-cols-3 gap-3 text-center">
-                <div className="border border-gray-800 bg-black/40 p-3">
-                  <p className="font-mono text-[10px] tracking-[0.2em] uppercase text-white mb-1">1</p>
-                  <p className="font-mono text-[10px] tracking-[0.16em] uppercase text-gray-500">Request</p>
-                </div>
-                <div className="border border-gray-800 bg-black/40 p-3">
-                  <p className="font-mono text-[10px] tracking-[0.2em] uppercase text-white mb-1">2</p>
-                  <p className="font-mono text-[10px] tracking-[0.16em] uppercase text-gray-500">Check inbox</p>
-                </div>
-                <div className="border border-gray-800 bg-black/40 p-3">
-                  <p className="font-mono text-[10px] tracking-[0.2em] uppercase text-white mb-1">3</p>
-                  <p className="font-mono text-[10px] tracking-[0.16em] uppercase text-gray-500">Set password</p>
-                </div>
-              </div>
-
-              <p id="request-helper" className="text-gray-500 font-mono text-[10px] tracking-[0.08em] leading-relaxed">
+              <p id="request-helper" className="text-xs leading-relaxed text-text-dim">
                 For security, we do not confirm whether an email is registered during the request step.
               </p>
 
-              <button
-                type="submit"
-                disabled={loading}
-                className="w-full bg-white text-black py-3 sm:py-4 font-mono text-sm tracking-wider uppercase hover:bg-gray-200 transition-colors disabled:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-              >
-                {loading ? <Spinner mode="button" /> : "SEND RESET LINK"}
-              </button>
+              <Button type="submit" isLoading={loading} fullWidth size="lg">
+                Send reset link
+              </Button>
             </form>
           )}
 
           {step === "reset" && (
             <form onSubmit={handleReset} className="space-y-6" aria-busy={loading}>
               <div>
-                <label htmlFor="new-password" className="block text-gray-400 font-mono text-[10px] tracking-widest uppercase mb-2">
+                <label htmlFor="new-password" className="app-label">
                   NEW PASSWORD
                 </label>
                 <PasswordInput
@@ -245,18 +226,18 @@ function ResetPasswordContent() {
                   value={newPassword}
                   onChange={(e) => setNewPassword(e.target.value)}
                   disabled={loading}
-                  inputClassName="w-full bg-black border border-gray-800 text-white p-3 pr-12 font-mono text-sm focus:outline-none focus:border-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  inputClassName="app-field pr-12"
                   placeholder="Create a new password"
                   aria-describedby="password-policy"
                   aria-invalid={message?.type === "error" ? "true" : "false"}
                 />
-                <p id="password-policy" className="text-gray-500 font-mono text-[10px] tracking-[0.08em] mt-2 leading-relaxed">
+                <p id="password-policy" className="app-helper">
                   {PASSWORD_POLICY_HINT}
                 </p>
               </div>
 
               <div>
-                <label htmlFor="confirm-password" className="block text-gray-400 font-mono text-[10px] tracking-widest uppercase mb-2">
+                <label htmlFor="confirm-password" className="app-label">
                   CONFIRM PASSWORD
                 </label>
                 <PasswordInput
@@ -266,80 +247,70 @@ function ResetPasswordContent() {
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
                   disabled={loading}
-                  inputClassName="w-full bg-black border border-gray-800 text-white p-3 pr-12 font-mono text-sm focus:outline-none focus:border-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  inputClassName="app-field pr-12"
                   placeholder="Re-enter your new password"
                   aria-describedby="confirm-helper"
                   aria-invalid={message?.type === "error" ? "true" : "false"}
                 />
-                <p id="confirm-helper" className="text-gray-500 font-mono text-[10px] tracking-[0.08em] mt-2 leading-relaxed">
+                <p id="confirm-helper" className="app-helper">
                   Re-enter the same password to confirm it before submission.
                 </p>
               </div>
 
-              <button
-                type="submit"
-                disabled={loading}
-                className="w-full bg-white text-black py-3 sm:py-4 font-mono text-sm tracking-wider uppercase hover:bg-gray-200 transition-colors disabled:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-              >
-                {loading ? <Spinner mode="button" /> : "UPDATE PASSWORD"}
-              </button>
+              <Button type="submit" isLoading={loading} fullWidth size="lg">
+                Update password
+              </Button>
             </form>
           )}
 
           {step === "requestSent" && (
             <div className="text-center space-y-6">
-              <div className="w-16 h-16 border border-green-500 bg-green-950/20 flex items-center justify-center mx-auto">
-                <i className="ri-mail-check-line text-green-500 text-3xl" aria-hidden="true"></i>
+              <div className="mx-auto grid h-14 w-14 place-items-center rounded-panel border border-border-strong bg-surface-raised text-text-heading">
+                <Icon name="email" size={24} />
               </div>
 
               <div className="space-y-3">
-                <p className="text-gray-300 font-mono text-xs tracking-[0.08em] leading-relaxed">
+                <p className="text-sm leading-relaxed text-text-body">
                   A secure reset link has been sent to your email.
                 </p>
-                <p className="text-gray-500 font-mono text-[10px] tracking-[0.08em] leading-relaxed">
+                <p className="text-xs leading-relaxed text-text-dim">
                   The link is valid for 1 hour. If it does not arrive, check your spam folder or contact your administrator/support team.
                 </p>
               </div>
 
-              <button
-                onClick={() => router.push("/auth/login")}
-                className="w-full bg-white text-black py-3 sm:py-4 font-mono text-sm tracking-wider uppercase hover:bg-gray-200 transition-colors"
-              >
-                RETURN TO LOGIN
-              </button>
+              <Button onClick={() => router.push("/auth/login")} fullWidth size="lg">
+                Return to login
+              </Button>
             </div>
           )}
 
           {step === "resetComplete" && (
             <div className="text-center space-y-6">
-              <div className="w-16 h-16 border border-green-500 bg-green-950/20 flex items-center justify-center mx-auto">
-                <i className="ri-check-line text-green-500 text-3xl" aria-hidden="true"></i>
+              <div className="mx-auto grid h-14 w-14 place-items-center rounded-panel border border-border-strong bg-surface-raised text-text-heading">
+                <Icon name="check" size={24} />
               </div>
 
               <div className="space-y-3">
-                <p className="text-gray-300 font-mono text-xs tracking-[0.08em] leading-relaxed">
+                <p className="text-sm leading-relaxed text-text-body">
                   Your password has been updated successfully.
                 </p>
-                <p className="text-gray-500 font-mono text-[10px] tracking-[0.08em] leading-relaxed">
+                <p className="text-xs leading-relaxed text-text-dim">
                   Redirecting you back to login so you can sign in with the new password.
                 </p>
               </div>
 
-              <button
-                onClick={() => router.push("/auth/login")}
-                className="w-full bg-white text-black py-3 sm:py-4 font-mono text-sm tracking-wider uppercase hover:bg-gray-200 transition-colors"
-              >
-                RETURN TO LOGIN
-              </button>
+              <Button onClick={() => router.push("/auth/login")} fullWidth size="lg">
+                Return to login
+              </Button>
             </div>
           )}
 
           <div className="mt-8 text-center">
             <button
               onClick={() => router.push("/auth/login")}
-              className="text-gray-500 font-mono text-[10px] tracking-widest uppercase hover:text-white transition-colors"
+              className="pressable rounded-control px-3 py-2 text-sm font-medium text-text-muted hover:bg-surface-hover hover:text-text-heading"
             >
-              BACK TO LOGIN
+              Back to login
             </button>
           </div>
 
@@ -354,7 +325,7 @@ export default function ResetPasswordPage() {
   return (
     <Suspense
       fallback={
-        <div className="min-h-screen bg-black flex items-center justify-center">
+        <div className="flex min-h-[100dvh] items-center justify-center bg-canvas">
           <Spinner mode="inline" text="LOADING..." />
         </div>
       }

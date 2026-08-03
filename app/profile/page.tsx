@@ -2,12 +2,14 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
 import Footer from "@/components/Footer";
 import Spinner from "@/components/Spinner";
 import Alert from "@/components/Alert";
 import RoleLabel from "@/components/RoleLabel";
 import PasswordInput from "@/components/PasswordInput";
+import Icon from "@/components/Icon";
+import Button from "@/components/Button";
+import AdminHeader from "@/app/admin/components/AdminHeader";
 import { getUser, User } from "@/lib/auth";
 import { updateUserProfile } from "@/lib/api/users";
 import { getPasswordPolicyError, PASSWORD_POLICY_HINT } from "@/lib/auth/password-policy";
@@ -93,86 +95,61 @@ export default function ProfilePage() {
 
   if (!user) return null;
 
-  const profileHeader = (
-    <div className="fixed top-0 left-0 right-0 z-50 bg-black border-b border-gray-800">
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-10">
-        <div className="flex items-center justify-between h-16 sm:h-20">
-          <div className="flex items-center gap-4">
-            <Link
-              href="/"
-              className="w-8 h-8 sm:w-10 sm:h-10 border border-gray-600 bg-black hover:bg-gray-900 transition-colors flex items-center justify-center"
-            >
-              <i className="ri-arrow-left-line text-gray-400 text-sm sm:text-base"></i>
-            </Link>
-            <div>
-              <h1 className="font-mono text-base sm:text-lg tracking-wider text-white uppercase">
-                PROFILE
-              </h1>
-              <p className="text-xs text-gray-500 font-mono tracking-wider uppercase hidden sm:block">
-                EDIT YOUR INFORMATION
-              </p>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-
   return (
-    <div className="min-h-screen bg-black flex flex-col">
-      {profileHeader}
+    <div className="min-h-[100dvh] bg-canvas flex flex-col">
+      <AdminHeader />
       <div className="flex-1 overflow-x-hidden pt-20 sm:pt-24 flex flex-col">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-10 w-full lg:flex-1 lg:min-h-0 flex flex-col">
+        <div className="page-container">
           <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
             <div className="lg:col-span-1 space-y-4">
-              <div className="bg-gray-900 border border-gray-700 p-4 sm:p-5">
+              <div className="app-panel p-4 sm:p-5">
                 <div className="flex flex-col items-center text-center">
-                  <div className="w-20 h-20 sm:w-24 sm:h-24 border border-gray-600 bg-black flex items-center justify-center mb-4">
-                    <i className="ri-user-line text-gray-400 text-3xl sm:text-4xl"></i>
+                  <div className="mb-4 flex h-20 w-20 items-center justify-center rounded-panel border border-border-default bg-surface-raised sm:h-24 sm:w-24">
+                    <Icon name="user" size={30} className="text-text-muted" />
                   </div>
-                  <h2 className="font-mono text-base sm:text-lg tracking-wider text-white uppercase mb-1">
+                  <h2 className="mb-1 text-base font-semibold text-text-heading sm:text-lg">
                     {user.name}
                   </h2>
-                  <p className="text-gray-400 font-mono text-xs tracking-[0.16em] break-all mb-3">
+                  <p className="mb-3 break-all text-xs text-text-muted">
                     {user.email}
                   </p>
                   <div className="flex flex-wrap items-center justify-center gap-2">
-                    <span className="px-2 py-1 bg-black border border-gray-600 text-xs font-mono text-gray-300 uppercase">
+                    <span className="px-2 py-1 bg-canvas border border-border-strong text-xs font-mono text-text-body uppercase">
                       <RoleLabel role={user.role} />
                     </span>
-                    <span className="px-2 py-1 bg-black border border-gray-600 text-xs font-mono text-gray-300">
+                    <span className="px-2 py-1 bg-canvas border border-border-strong text-xs font-mono text-text-body">
                       LIMIT: {user.guest_limit}
                     </span>
                   </div>
                 </div>
               </div>
 
-              <div className="bg-gray-900 border border-gray-700 p-4 sm:p-5">
-                <h3 className="font-mono text-xs sm:text-sm tracking-wider text-gray-400 uppercase mb-3">
+              <div className="app-panel p-4 sm:p-5">
+                <h3 className="text-xs font-medium text-text-muted sm:text-sm mb-3">
                   ACCOUNT INFO
                 </h3>
                 <div className="space-y-3">
                   <div className="flex justify-between items-center gap-3">
-                    <span className="text-gray-500 font-mono text-xs uppercase">
+                    <span className="text-xs text-text-dim">
                       Role
                     </span>
-                    <span className="text-white font-mono text-xs uppercase text-right">
+                    <span className="text-xs text-text-heading text-right">
                       <RoleLabel role={user.role} />
                     </span>
                   </div>
                   <div className="flex justify-between items-center gap-3">
-                    <span className="text-gray-500 font-mono text-xs uppercase">
+                    <span className="text-xs text-text-dim">
                       Guest Limit
                     </span>
-                    <span className="text-white font-mono text-xs">
+                    <span className="text-text-heading font-mono text-xs">
                       {user.guest_limit}
                     </span>
                   </div>
                   <div className="flex justify-between items-center gap-3">
-                    <span className="text-gray-500 font-mono text-xs uppercase">
+                    <span className="text-xs text-text-dim">
                       Status
                     </span>
-                    <span className="text-green-400 font-mono text-xs uppercase">
+                    <span className="text-xs text-text-heading">
                       ACTIVE
                     </span>
                   </div>
@@ -191,13 +168,13 @@ export default function ProfilePage() {
 
               {error && <Alert type="error" message={error} className="mb-6" />}
 
-              <div className="bg-gray-900 border border-gray-700 overflow-hidden">
-                <div className="border-b border-gray-700 p-4 space-y-4">
+              <div className="app-panel overflow-hidden">
+                <div className="border-b border-border-default p-4 space-y-4">
                   <div>
-                    <h3 className="font-mono text-xs sm:text-sm tracking-wider text-white uppercase">
-                      ACCOUNT SETTINGS
+                    <h3 className="text-sm font-semibold text-text-heading">
+                      Account settings
                     </h3>
-                    <p className="mt-2 text-gray-500 font-mono text-[10px] tracking-[0.08em] leading-relaxed">
+                    <p className="mt-2 text-sm leading-relaxed text-text-muted">
                       Keep profile details and security actions separated so each task is easier to review on desktop and mobile.
                     </p>
                   </div>
@@ -207,41 +184,41 @@ export default function ProfilePage() {
                       type="button"
                       onClick={() => setActiveSection("profile")}
                       aria-pressed={activeSection === "profile"}
-                      className={`px-4 py-3.5 border font-mono text-[10px] sm:text-xs tracking-[0.22em] uppercase transition-colors ${
+                      className={`min-h-11 rounded-control border px-4 py-3 text-sm font-medium ${
                         activeSection === "profile"
-                          ? "bg-white text-black border-white"
-                          : "bg-black text-gray-400 border-gray-700 hover:text-white hover:border-gray-500"
+                          ? "border-action-primary bg-action-primary text-action-text"
+                          : "bg-canvas text-text-muted border-border-default hover:text-text-heading hover:border-border-strong"
                       }`}
                     >
-                      BASIC INFO
+                      Basic info
                     </button>
                     <button
                       type="button"
                       onClick={() => setActiveSection("security")}
                       aria-pressed={activeSection === "security"}
-                      className={`px-4 py-3.5 border font-mono text-[10px] sm:text-xs tracking-[0.22em] uppercase transition-colors ${
+                      className={`min-h-11 rounded-control border px-4 py-3 text-sm font-medium ${
                         activeSection === "security"
-                          ? "bg-white text-black border-white"
-                          : "bg-black text-gray-400 border-gray-700 hover:text-white hover:border-gray-500"
+                          ? "border-action-primary bg-action-primary text-action-text"
+                          : "bg-canvas text-text-muted border-border-default hover:text-text-heading hover:border-border-strong"
                       }`}
                     >
-                      SECURITY
+                      Security
                     </button>
                   </div>
                 </div>
 
                 {activeSection === "profile" ? (
                   <div>
-                    <div className="border-b border-gray-700 p-4">
-                      <h3 className="font-mono text-xs sm:text-sm tracking-wider text-white uppercase">
+                    <div className="border-b border-border-default p-4">
+                      <h3 className="text-xs font-semibold text-text-heading sm:text-sm">
                         EDIT PROFILE
                       </h3>
                     </div>
 
                     <form onSubmit={handleSubmit} className="p-4 sm:p-6 space-y-6" aria-busy={isSaving}>
                       <div>
-                        <label htmlFor="profile-name" className="block text-xs sm:text-sm text-gray-400 font-mono tracking-wider uppercase mb-2">
-                          NAME
+                        <label htmlFor="profile-name" className="app-label">
+                          Name
                         </label>
                         <input
                           id="profile-name"
@@ -251,39 +228,25 @@ export default function ProfilePage() {
                             setFormData({ ...formData, name: e.target.value })
                           }
                           disabled={isSaving}
-                          className="w-full bg-black border border-gray-600 px-4 py-3 text-white font-mono text-sm tracking-wider focus:outline-none focus:border-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                          className="app-field"
                           required
                           aria-describedby="profile-name-helper"
                           aria-invalid={error ? "true" : "false"}
                         />
-                        <p id="profile-name-helper" className="text-gray-500 font-mono text-[10px] tracking-[0.08em] mt-2 leading-relaxed">
+                        <p id="profile-name-helper" className="app-helper">
                           Your display name or identifier within this context.
                         </p>
                       </div>
 
-                      <button
-                        type="submit"
-                        disabled={isSaving}
-                        className="w-full bg-white text-black font-mono text-sm tracking-wider uppercase py-3 sm:py-4 hover:bg-gray-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                      >
-                        {isSaving ? (
-                          <>
-                            <div className="w-4 h-4 border-2 border-black border-t-transparent rounded-full animate-spin"></div>
-                            SAVING...
-                          </>
-                        ) : (
-                          <>
-                            <i className="ri-save-line"></i>
-                            SAVE CHANGES
-                          </>
-                        )}
-                      </button>
+                      <Button type="submit" isLoading={isSaving} fullWidth size="lg" leftIcon={<Icon name="save" size={17} />}>
+                        Save changes
+                      </Button>
                     </form>
                   </div>
                 ) : (
                   <div>
-                    <div className="border-b border-gray-700 p-4">
-                      <h3 className="font-mono text-xs sm:text-sm tracking-wider text-white uppercase">
+                    <div className="border-b border-border-default p-4">
+                      <h3 className="text-xs font-semibold text-text-heading sm:text-sm">
                         CHANGE PASSWORD
                       </h3>
                     </div>
@@ -363,19 +326,19 @@ function PasswordChangeForm() {
       {passwordError && <Alert type="error" message={passwordError} className="mb-4" />}
       {passwordSuccess && <Alert type="success" message={passwordSuccess} className="mb-4" />}
 
-      <div className="border border-yellow-700/60 bg-yellow-950/20 p-4 space-y-2">
-        <div className="flex items-center gap-2 text-yellow-300 font-mono text-[10px] tracking-[0.24em] uppercase">
-          <i className="ri-alert-line"></i>
+      <div className="border border-border-strong bg-surface-raised p-4 space-y-2">
+        <div className="flex items-center gap-2 text-text-muted font-mono text-xs tracking-[0.24em] uppercase">
+          <Icon name="warning" size={16} />
           Security warning
         </div>
-        <p id="password-warning-msg" className="text-yellow-100/80 font-mono text-[10px] sm:text-xs tracking-[0.08em] leading-relaxed">
+        <p id="password-warning-msg" className="text-text-muted font-mono text-xs sm:text-xs tracking-[0.08em] leading-relaxed">
           Changing your password will immediately sign you out. You will need to log in again on this device.
         </p>
       </div>
 
       <div>
-        <label htmlFor="current-password" className="block text-xs sm:text-sm text-gray-400 font-mono tracking-wider uppercase mb-2">
-          CURRENT PASSWORD
+        <label htmlFor="current-password" className="app-label">
+          Current password
         </label>
         <PasswordInput
           id="current-password"
@@ -390,8 +353,8 @@ function PasswordChangeForm() {
       </div>
 
       <div>
-        <label htmlFor="new-password" className="block text-xs sm:text-sm text-gray-400 font-mono tracking-wider uppercase mb-2">
-          NEW PASSWORD
+        <label htmlFor="new-password" className="app-label">
+          New password
         </label>
         <PasswordInput
           id="new-password"
@@ -404,14 +367,14 @@ function PasswordChangeForm() {
           aria-describedby="new-password-policy"
           aria-invalid={passwordError ? "true" : "false"}
         />
-        <p id="new-password-policy" className="text-gray-500 font-mono text-[10px] tracking-[0.08em] mt-2 leading-relaxed">
+        <p id="new-password-policy" className="app-helper">
           {PASSWORD_POLICY_HINT}
         </p>
       </div>
 
       <div>
-        <label htmlFor="confirm-password" className="block text-xs sm:text-sm text-gray-400 font-mono tracking-wider uppercase mb-2">
-          CONFIRM NEW PASSWORD
+        <label htmlFor="confirm-password" className="app-label">
+          Confirm new password
         </label>
         <PasswordInput
           id="confirm-password"
@@ -424,33 +387,21 @@ function PasswordChangeForm() {
           aria-describedby="confirm-password-helper"
           aria-invalid={passwordError ? "true" : "false"}
         />
-        <p id="confirm-password-helper" className="text-gray-500 font-mono text-[10px] tracking-[0.08em] mt-2 leading-relaxed">
+        <p id="confirm-password-helper" className="app-helper">
           Re-enter your new password to confirm accuracy before saving.
         </p>
       </div>
 
-      <button
+      <Button
         type="submit"
-        disabled={isUpdating || isRedirecting}
-        className="w-full bg-white text-black font-mono text-sm tracking-wider uppercase py-3 sm:py-4 hover:bg-gray-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+        disabled={isRedirecting}
+        isLoading={isUpdating || isRedirecting}
+        fullWidth
+        size="lg"
+        leftIcon={<Icon name="key" size={17} />}
       >
-        {isRedirecting ? (
-          <>
-            <div className="w-4 h-4 border-2 border-black border-t-transparent rounded-full animate-spin"></div>
-            REDIRECTING TO LOGIN...
-          </>
-        ) : isUpdating ? (
-          <>
-            <div className="w-4 h-4 border-2 border-black border-t-transparent rounded-full animate-spin"></div>
-            UPDATING...
-          </>
-        ) : (
-          <>
-            <i className="ri-key-line"></i>
-            UPDATE PASSWORD
-          </>
-        )}
-      </button>
+        {isRedirecting ? "Redirecting to login" : "Update password"}
+      </Button>
     </form>
   );
 }

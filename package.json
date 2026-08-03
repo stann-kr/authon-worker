@@ -3,11 +3,12 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "rm -rf .wrangler && cross-env NODE_ENV=development next dev -H 0.0.0.0 -p 3000",
-    "build": "rm -rf .wrangler && cross-env NODE_ENV=production next build",
-    "build:worker": "rm -rf .wrangler && opennextjs-cloudflare build",
+    "dev": "cross-env NODE_ENV=development next dev -H 0.0.0.0 -p 3000",
+    "dev:reset": "rm -rf .wrangler && npm run db:migrate:local && npm run dev",
+    "build": "cross-env NODE_ENV=production next build",
+    "build:worker": "opennextjs-cloudflare build",
     "deploy": "opennextjs-cloudflare deploy",
-    "cf:preview": "rm -rf .wrangler && opennextjs-cloudflare preview",
+    "cf:preview": "opennextjs-cloudflare preview",
     "lint": "eslint .",
     "db:generate": "drizzle-kit generate",
     "db:migrate:local": "wrangler d1 migrations apply authon-db --local",
@@ -17,16 +18,18 @@
     "migration:generate:d1-import": "node scripts/migration/generate-d1-import-sql.mjs"
   },
   "dependencies": {
+    "@carbon/icons-react": "^11.85.0",
+    "@carbon/react": "^1.113.0",
     "@opennextjs/cloudflare": "^1.20.2",
     "aws4fetch": "^1.0.20",
     "bcryptjs": "^2.4.3",
     "drizzle-orm": "^0.45.2",
     "jose": "^5.9.6",
-    "lucide-react": "0.539.0",
     "next": "^16.2.12",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "recharts": "^3.0.2"
+    "recharts": "^3.0.2",
+    "sass": "^1.102.0"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^5.20260727.1",

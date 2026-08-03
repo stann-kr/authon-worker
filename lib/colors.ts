@@ -6,66 +6,64 @@
 
 // ─── Role 색상 ───────────────────────────────────────────────
 export const roleColorMap: Record<string, string> = {
-  super_admin: "text-purple-400",
-  venue_admin: "text-red-400",
-  door_staff: "text-blue-400",
-  staff: "text-cyan-400",
-  dj: "text-green-400",
+  super_admin: "text-text-heading",
+  venue_admin: "text-text-muted",
+  door_staff: "text-text-muted",
+  staff: "text-text-muted",
+  dj: "text-text-muted",
 };
 
 export function getRoleColor(role?: string | null): string {
-  if (!role) return "text-gray-400";
-  return roleColorMap[role] ?? "text-gray-400";
+  if (!role) return "text-text-muted";
+  return roleColorMap[role] ?? "text-text-muted";
 }
 
 // ─── 활성/비활성 상태 색상 ────────────────────────────────────
 export function getActiveColor(active: boolean): string {
-  return active ? "text-green-400" : "text-red-400";
+  return active ? "text-status-checked" : "text-status-danger";
 }
 
 // ─── 게스트 상태 색상 ─────────────────────────────────────────
 export const guestStatusColorMap: Record<string, string> = {
-  pending: "text-yellow-400",
-  checked: "text-green-400",
-  deleted: "text-gray-500",
+  pending: "text-status-waiting",
+  checked: "text-status-checked",
+  deleted: "text-text-dim",
 };
 
 export function getGuestStatusColor(status?: string | null): string {
-  if (!status) return "text-gray-400";
-  return guestStatusColorMap[status] ?? "text-gray-400";
+  if (!status) return "text-text-muted";
+  return guestStatusColorMap[status] ?? "text-text-muted";
 }
 
 // ─── 베뉴 타입 색상 ───────────────────────────────────────────
 export const venueTypeColorMap: Record<string, string> = {
-  club: "text-purple-400",
-  bar: "text-amber-400",
-  lounge: "text-cyan-400",
-  festival: "text-pink-400",
-  private: "text-gray-400",
+  club: "text-text-heading",
+  bar: "text-text-muted",
+  lounge: "text-text-muted",
+  festival: "text-text-muted",
+  private: "text-text-dim",
 };
 
 export function getVenueTypeColor(type?: string | null): string {
-  if (!type) return "text-gray-400";
-  return venueTypeColorMap[type] ?? "text-gray-400";
+  if (!type) return "text-text-muted";
+  return venueTypeColorMap[type] ?? "text-text-muted";
 }
 
 // ─── StatGrid 색상 ────────────────────────────────────────────
-export type StatColor = "white" | "green" | "red" | "cyan" | "blue" | "yellow";
+export type StatColor = "default" | "muted" | "danger" | "checked" | "waiting";
 
 export const statColorMap: Record<StatColor, string> = {
-  white: "text-white",
-  green: "text-green-400",
-  red: "text-red-400",
-  cyan: "text-cyan-400",
-  blue: "text-blue-400",
-  yellow: "text-yellow-400",
+  default: "text-text-heading",
+  muted: "text-text-muted",
+  danger: "text-status-danger",
+  checked: "text-status-checked",
+  waiting: "text-status-waiting",
 };
 
 export const statLabelColorMap: Record<StatColor, string> = {
-  white: "text-gray-400",
-  green: "text-green-300",
-  red: "text-red-300",
-  cyan: "text-cyan-300",
-  blue: "text-blue-300",
-  yellow: "text-yellow-300",
+  default: "text-text-muted",
+  muted: "text-text-dim",
+  danger: "text-status-danger",
+  checked: "text-status-checked",
+  waiting: "text-status-waiting",
 };

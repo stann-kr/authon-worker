@@ -4,6 +4,47 @@
 
 ## Unreleased
 
+### 운영 UI 디자인 시스템 개편
+
+#### Added
+
+- cool black과 off-white 기반 semantic token, 절제된 green·amber·red 상태색, Carbon icon, 공통 panel·field·button·skeleton 체계를 추가했다.
+- UI token, component 상태, 모션, 반응형, 접근성 규칙을 디자인 시스템 문서로 정리했다.
+
+#### Changed
+
+- 홈을 환영 문구와 대형 카드 없이 역할별 핵심 작업이 우선되는 command list 구조로 개편했다.
+- 로그인, 비밀번호 재설정, 프로필, Guest, Door, Admin 화면의 typography, spacing, focus, 상태 대비를 통일했다.
+- Door 화면은 검색과 check-in을 우선하고, waiting과 checked-in을 색상·아이콘·텍스트로 구분하며 마지막 check-in 실행 취소를 guest list 가까이에서 제공하도록 개편했다.
+- Guest 화면은 quota, 게스트 입력, 오늘의 목록이 하나의 선형 흐름으로 이어지도록 정리했다.
+- Admin의 역할별 보조 메뉴를 상단 반응형 구조로 이동해 메뉴 수가 달라져도 비정상적인 빈 공간이 생기지 않도록 했다.
+- Guest와 Admin의 운영 날짜 선택 구조를 통일하고, Admin 날짜 이동 기능을 한 줄 quick control로 압축했다.
+- 넓은 운영 화면의 content 폭을 확장하고 역할별 보조 panel이 실제 개수에 맞춰 폭과 높이를 사용하도록 조정했다.
+- 홈의 작업 순서를 Guest, Door, Admin으로 통일하고 Guest와 Door에도 동일한 날짜 이동 control을 제공한다.
+- guest row에 교차 배경과 행별 상태 indicator를 적용하고, 등록 시각은 Admin에서만, 입장 시각은 해당 상태의 목록에서 metadata로 표시한다.
+- Door의 목록 header를 검색 영역 위로 이동해 검색 panel 상단의 불필요한 빈 공간을 제거했다.
+- Guest와 Door는 태블릿 이상에서 좌측 운영 dashboard와 우측 guest list를 사용하는 2열 구조로 변경했다.
+- Door의 sticky toolbar가 첫 번째 guest row를 가리던 문제를 제거하고 페이지 scroll 흐름을 단순화했다.
+- 운영 날짜의 반응형 기준을 viewport breakpoint에서 component container query로 변경해 모바일과 좁은 dashboard 열의 겹침을 방지했다.
+- 좌우 column의 첫 panel 시작선을 맞추고 Door의 중복 연결·waiting 표시를 제거해 핵심 check-in 행동의 위계를 명확히 했다.
+- Guest·Door·Admin·외부 등록의 공통 guest row에서 waiting label을 제거하고 checked-in 되돌리기를 해당 행의 action으로 통합했다.
+- 데이터가 적은 guest list panel의 강제 최소 높이를 제거하고 공통 행 간격을 압축했다.
+- 공통 정렬, 새로고침, 검색 초기화 control의 touch target을 최소 44px로 확대했다.
+- 데이터 목록의 초기 loading을 spinner에서 최종 행 구조를 반영한 skeleton으로 변경했다.
+- 기존 Remix Icon CDN과 미사용 icon 의존성을 제거하고 Carbon icon 한 계열로 통일했다.
+- Tactical Telemetry의 직각 grid와 가시적 구획선을 적용하고 radius, soft shadow, glass surface를 제거했다.
+- 일반적인 dev·build·preview 실행에서는 로컬 D1 상태를 보존하고, 명시적인 `dev:reset` 실행에서만 로컬 상태를 초기화하도록 개발 명령을 분리했다.
+- Admin의 Guest, Links, Users, Venues 작업 화면을 태블릿 이상에서 좌측 운영 도구와 우측 작업 목록을 사용하는 공통 2열 구조로 통일했다.
+- Links 관리 화면의 중복 상태·사용량·만료 정보를 정리하고, 날짜별 보기와 최근 생성 링크 5개·10개 보기를 제공한다.
+- 외부 링크 생성 시각을 D1에 보존하고 최근 링크 조회 기준으로 사용하며, 기존 Supabase snapshot의 생성 시각도 import 과정에서 유지한다.
+- guest row의 본문과 우측 action을 행 높이 기준으로 중앙 정렬하고, `CHECK IN`과 `UNDO`를 같은 action 위치·크기로 통일했다.
+- 등록자 정보가 없는 guest row는 빈 보조 줄을 만들지 않으며, Links 정렬 select는 사용자 정의 화살표와 충분한 우측 여백을 사용한다.
+- Admin tab과 운영 날짜 panel의 border 책임을 바깥 container 하나로 통일하고, search input의 native clear button을 제거해 공통 초기화 action과 중복되지 않게 했다.
+- Links 관리 카드에 필요할 때만 전체 URL을 펼치는 `VIEW` action을 추가하고, clipboard를 사용할 수 없을 때 직접 선택하거나 새 탭으로 열 수 있게 했다.
+- 운영 UI의 typography를 section 18px, panel 16px, field·body 14px, status·metadata 12px의 semantic scale로 정리하고 Guest, Door, Admin의 공통 heading과 label에 적용했다.
+- typography weight를 제목·주요 action 600, label·보조 action 500, 본문·숫자·metadata 400으로 제한하고 guest row action 폭을 한 단계 축소했다.
+- Operational date, Guest owner, User filter, Section 같은 dashboard context title은 panel title과 같은 600 weight를 사용하도록 별도 semantic role로 분리했다.
+
 ### Docs
 
 - 공개 문서 범위를 README, 기술 명세, 변경 이력, 재발 가능한 트러블슈팅으로 정리했다.

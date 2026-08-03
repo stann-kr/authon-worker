@@ -185,8 +185,9 @@ npm run db:migrate:local
 - 이전 프로세스의 local emulator state 또는 SQLite lock이 남아 있을 수 있다.
 
 #### 해결
-- local emulator state를 정리한 뒤 dev/build를 다시 실행한다.
-- 재발이 잦으면 dev/build script에서 local state cleanup이 필요한지 검토한다.
+- 먼저 기존 dev/preview 프로세스를 종료한 뒤 다시 실행한다.
+- lock이 계속 남아 있고 로컬 데이터 삭제가 허용되는 경우에만 `npm run dev:reset`으로 local emulator state를 명시적으로 초기화한다.
+- 일반적인 `npm run dev`, build, preview 명령은 테스트 계정과 로컬 D1 데이터를 보존한다.
 
 #### 검증
 ```bash

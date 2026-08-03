@@ -48,7 +48,7 @@ export async function fetchExternalLinks(venueId: string): Promise<ApiResponse<E
     const effectiveVenueId = scopedVenueId(user, venueId);
     const result = await db.select().from(externalDjLinks)
       .where(eq(externalDjLinks.venueId, effectiveVenueId))
-      .orderBy(desc(externalDjLinks.date));
+      .orderBy(desc(externalDjLinks.createdAt), desc(externalDjLinks.date));
     return { data: result, error: null };
   } catch (error: unknown) {
     console.error("Failed to fetch external links:", error);
@@ -63,11 +63,33 @@ export async function fetchExternalLinksByDate(venueId: string, date: string): P
     const effectiveVenueId = scopedVenueId(user, venueId);
     const result = await db.select().from(externalDjLinks)
       .where(and(eq(externalDjLinks.venueId, effectiveVenueId), eq(externalDjLinks.date, date)))
-      .orderBy(desc(externalDjLinks.id));
+      .orderBy(desc(externalDjLinks.createdAt));
     return { data: result, error: null };
   } catch (error: unknown) {
     console.error("Failed to fetch external links by date:", error);
     return { data: null, error: "Unable to load external links right now." };
+  }
+}
+
+export async function fetchRecentExternalLinks(
+  venueId: string,
+  limit: 5 | 10,
+): Promise<ApiResponse<ExternalDJLink[]>> {
+  try {
+    const user = await requireRole(["super_admin", "venue_admin", "door_staff", "staff"]);
+    const db = getDb();
+    const effectiveVenueId = scopedVenueId(user, venueId);
+    const normalizedLimit = limit === 10 ? 10 : 5;
+    const result = await db
+      .select()
+      .from(externalDjLinks)
+      .where(eq(externalDjLinks.venueId, effectiveVenueId))
+      .orderBy(desc(externalDjLinks.createdAt), desc(externalDjLinks.date))
+      .limit(normalizedLimit);
+    return { data: result, error: null };
+  } catch (error: unknown) {
+    console.error("Failed to fetch recent external links:", error);
+    return { data: null, error: "Unable to load recent external links right now." };
   }
 }
 
@@ -86,6 +108,7 @@ export async function createExternalLink(link: {
     const expiresAt = defaultExternalLinkExpiresAt(link.date);
     const id = crypto.randomUUID();
     const token = crypto.randomUUID();
+    const createdAt = new Date().toISOString();
     await db.insert(externalDjLinks).values({
       id,
       venueId: effectiveVenueId,
@@ -98,6 +121,7 @@ export async function createExternalLink(link: {
       active: true,
       expiresAt,
       createdBy: user.role === "super_admin" ? (link.createdBy || user.id) : user.id,
+      createdAt,
     });
     const result = await db.select().from(externalDjLinks).where(eq(externalDjLinks.id, id));
     return { data: result[0] ? { ...result[0] } : null, error: null };

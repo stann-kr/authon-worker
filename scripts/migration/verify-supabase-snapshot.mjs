@@ -23,6 +23,16 @@ const venueIds = ids(tables.venues);
 const userIds = ids(tables.users);
 const externalLinkIds = ids(tables.external_dj_links);
 
+function invalidTimestampRows(rows, field) {
+  return (rows || []).flatMap((row) => {
+    const value = row[field];
+    if (typeof value !== 'string' || Number.isNaN(new Date(value).getTime())) {
+      return [{ id: row.id, [field]: value ?? null }];
+    }
+    return [];
+  });
+}
+
 const findings = {
   counts: {
     venues: (tables.venues || []).length,
@@ -42,6 +52,12 @@ const findings = {
   missingExternalLinkRefs: {
     guests_external_link_id: countMissing(tables.guests, 'external_link_id', externalLinkIds, true),
   },
+  invalidTimestamps: {
+    external_dj_links_created_at: invalidTimestampRows(
+      tables.external_dj_links,
+      'created_at',
+    ),
+  },
   usedGuestsDrift: [],
 };
 
@@ -58,6 +74,7 @@ console.log(JSON.stringify(findings, null, 2));
 const hasFailures = Object.values(findings.missingVenueRefs).some((arr) => arr.length > 0)
   || Object.values(findings.missingUserRefs).some((arr) => arr.length > 0)
   || Object.values(findings.missingExternalLinkRefs).some((arr) => arr.length > 0)
+  || Object.values(findings.invalidTimestamps).some((arr) => arr.length > 0)
   || findings.usedGuestsDrift.length > 0;
 
 if (hasFailures) process.exit(1);

@@ -5,6 +5,7 @@ import { useLocalStorage } from "@/lib/hooks";
 import { fetchVenues } from "@/lib/api/venues";
 import type { Venue } from "@/lib/api/types";
 import { getUser } from "@/lib/auth";
+import Icon from "./Icon";
 
 /**
  * useVenueSelector — super_admin 베뉴 선택 로직 훅.
@@ -69,20 +70,16 @@ export default function VenueSelector({
   const selectId = useId();
 
   return (
-    <div
-      className={`bg-gray-900 border border-gray-700 p-4 sm:p-5 ${className}`}
-    >
-      <div className="mb-2">
-        <label htmlFor={selectId} className="font-mono text-xs sm:text-sm tracking-wider text-gray-400 uppercase">
-          SELECT VENUE
-        </label>
-      </div>
+    <div className={`min-w-0 ${className}`}>
+      <label htmlFor={selectId} className="type-context-title">
+        Venue
+      </label>
       <div className="relative">
         <select
           id={selectId}
           value={selectedVenueId}
           onChange={(e) => onVenueChange(e.target.value)}
-          className="w-full appearance-none bg-black border border-gray-600 px-4 py-3 pr-10 text-white font-mono text-sm tracking-wider focus:outline-none focus:border-white"
+          className="app-field appearance-none pr-10"
         >
           <option value="">{placeholder}</option>
           {venues.map((v) => (
@@ -91,7 +88,7 @@ export default function VenueSelector({
             </option>
           ))}
         </select>
-        <i className="ri-arrow-down-s-line absolute right-3 top-1/2 -translate-y-1/2 text-base text-gray-400 pointer-events-none" aria-hidden="true"></i>
+        <Icon name="chevron-down" size={18} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-text-muted" />
       </div>
     </div>
   );

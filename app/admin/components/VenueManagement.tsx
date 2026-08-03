@@ -9,9 +9,11 @@ import {
 import type { Venue } from "../../../lib/api/types";
 import StatGrid from "../../../components/StatGrid";
 import PanelHeader from "../../../components/PanelHeader";
-import Spinner from "../../../components/Spinner";
 import Alert from "../../../components/Alert";
 import EmptyState from "../../../components/EmptyState";
+import Icon from "../../../components/Icon";
+import Skeleton from "../../../components/Skeleton";
+import OperationsLayout from "../../../components/OperationsLayout";
 import { getVenueTypeColor } from "../../../lib/colors";
 
 const VENUE_TYPES = [
@@ -95,9 +97,9 @@ export default function VenueManagement() {
   const getTabInfo = () => {
     switch (activeTab) {
       case "create":
-        return { title: "CREATE VENUE", description: "Register a new venue" };
+        return { title: "Create venue", description: "Register a new venue" };
       case "list":
-        return { title: "VENUE LIST", description: "Manage all venues" };
+        return { title: "Venues", description: "Manage all venues" };
       default:
         return { title: "", description: "" };
     }
@@ -106,55 +108,56 @@ export default function VenueManagement() {
   const tabInfo = getTabInfo();
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 lg:gap-6">
-      {/* Sidebar */}
-      <div className="lg:col-span-1 space-y-4">
-        <div className="bg-gray-900 border border-gray-700 p-4 sm:p-5">
+    <OperationsLayout
+      title="Admin venue management"
+      dashboard={
+        <>
+        <div className="app-panel p-4 sm:p-5">
           <div className="mb-4">
-            <h3 className="font-mono text-xs sm:text-sm tracking-wider text-gray-400 uppercase mb-3">
-              SELECT MENU
+            <h3 className="type-context-title mb-3">
+              Section
             </h3>
             <div className="space-y-2">
               <button
                 onClick={() => setActiveTab("create")}
-                className={`w-full p-3 font-mono text-xs tracking-wider uppercase transition-colors text-left ${
+                className={`flex w-full items-center gap-2 p-3 text-left text-sm font-medium transition-colors ${
                   activeTab === "create"
-                    ? "bg-white text-black"
-                    : "bg-gray-800 text-gray-400 hover:text-white border border-gray-700"
+                    ? "border border-border-default border-l-2 border-l-action-primary bg-surface-raised text-text-heading"
+                    : "bg-surface-raised text-text-muted hover:text-text-heading border border-border-default"
                 }`}
               >
-                <i className="ri-add-line mr-2"></i>
-                CREATE
+                <Icon name="add" size={17} />
+                Create
               </button>
               <button
                 onClick={() => setActiveTab("list")}
-                className={`w-full p-3 font-mono text-xs tracking-wider uppercase transition-colors text-left ${
+                className={`flex w-full items-center gap-2 p-3 text-left text-sm font-medium transition-colors ${
                   activeTab === "list"
-                    ? "bg-white text-black"
-                    : "bg-gray-800 text-gray-400 hover:text-white border border-gray-700"
+                    ? "border border-border-default border-l-2 border-l-action-primary bg-surface-raised text-text-heading"
+                    : "bg-surface-raised text-text-muted hover:text-text-heading border border-border-default"
                 }`}
               >
-                <i className="ri-store-2-line mr-2"></i>
-                VENUES
+                <Icon name="store" size={17} />
+                Venues
               </button>
             </div>
           </div>
         </div>
 
-        <div className="bg-gray-900 border border-gray-700 p-4 sm:p-5">
+        <div className="app-panel p-4 sm:p-5">
           <div className="mb-4">
-            <h2 className="font-mono text-base sm:text-lg tracking-wider text-white uppercase mb-1">
+            <h2 className="type-panel-title mb-1">
               {tabInfo.title}
             </h2>
-            <p className="text-gray-400 font-mono text-xs tracking-wider">
+            <p className="text-sm text-text-muted">
               {tabInfo.description}
             </p>
           </div>
           <div className="text-center mb-4">
-            <div className="text-white font-mono text-3xl sm:text-4xl tracking-wider">
+            <div className="text-text-heading font-mono text-3xl sm:text-4xl tracking-wider">
               {activeTab === "list" ? venues.length : "-"}
             </div>
-            <div className="text-cyan-300 text-xs font-mono tracking-wider uppercase">
+            <div className="text-xs font-medium text-text-muted">
               {activeTab === "list" ? "TOTAL VENUES" : ""}
             </div>
           </div>
@@ -165,31 +168,33 @@ export default function VenueManagement() {
                 {
                   label: "ACTIVE",
                   value: venues.filter((v) => v.active).length,
-                  color: "green",
+                  color: "default",
                 },
                 {
                   label: "INACTIVE",
                   value: venues.filter((v) => !v.active).length,
-                  color: "red",
+                  color: "danger",
                 },
               ]}
             />
           )}
         </div>
-      </div>
+        </>
+      }
+    >
 
       {/* Main content */}
-      <div className="lg:col-span-3">
+      <div className="min-w-0">
         {activeTab === "create" && (
           <div className="space-y-6">
-            <div className="bg-gray-900 border border-gray-700 p-4 sm:p-5">
-              <h2 className="font-mono text-lg tracking-wider text-white uppercase mb-4">
+            <div className="app-panel p-4 sm:p-5">
+              <h2 className="type-section-title mb-4">
                 CREATE NEW VENUE
               </h2>
 
               <form onSubmit={handleCreate} className="space-y-4">
                 <div>
-                  <label htmlFor="venue-create-name" className="block text-gray-400 font-mono text-xs tracking-wider uppercase mb-2">
+                  <label htmlFor="venue-create-name" className="app-label">
                     VENUE NAME
                   </label>
                   <input
@@ -199,14 +204,14 @@ export default function VenueManagement() {
                     onChange={(e) =>
                       setFormData({ ...formData, name: e.target.value })
                     }
-                    className="w-full bg-black border border-gray-700 px-4 py-3 text-white font-mono text-sm tracking-wider focus:outline-none focus:border-white"
+                    className="w-full bg-canvas border border-border-default px-4 py-3 text-text-heading text-sm focus:outline-none focus:border-border-focus"
                     placeholder="Club Name"
                     required
                   />
                 </div>
 
                 <fieldset>
-                  <legend className="block text-gray-400 font-mono text-xs tracking-wider uppercase mb-2">
+                  <legend className="app-label">
                     TYPE
                   </legend>
                   <div className="grid grid-cols-5 gap-2">
@@ -221,10 +226,10 @@ export default function VenueManagement() {
                             type: opt.value as Venue["type"],
                           })
                         }
-                        className={`p-3 border font-mono text-xs tracking-wider uppercase transition-colors ${
+                        className={`p-3 border text-xs font-medium transition-colors ${
                           formData.type === opt.value
-                            ? "bg-white text-black border-white"
-                            : "bg-black text-gray-400 border-gray-700 hover:text-white hover:border-gray-500"
+                            ? "border-action-primary bg-action-primary text-action-text"
+                            : "bg-canvas text-text-muted border-border-default hover:text-text-heading hover:border-border-strong"
                         }`}
                       >
                         {opt.label}
@@ -234,8 +239,8 @@ export default function VenueManagement() {
                 </fieldset>
 
                 <div>
-                  <label htmlFor="venue-create-address" className="block text-gray-400 font-mono text-xs tracking-wider uppercase mb-2">
-                    ADDRESS <span className="text-gray-600">(OPTIONAL)</span>
+                  <label htmlFor="venue-create-address" className="app-label">
+                    ADDRESS <span className="text-text-dim">(OPTIONAL)</span>
                   </label>
                   <input
                     id="venue-create-address"
@@ -244,15 +249,15 @@ export default function VenueManagement() {
                     onChange={(e) =>
                       setFormData({ ...formData, address: e.target.value })
                     }
-                    className="w-full bg-black border border-gray-700 px-4 py-3 text-white font-mono text-sm tracking-wider focus:outline-none focus:border-white"
+                    className="w-full bg-canvas border border-border-default px-4 py-3 text-text-heading text-sm focus:outline-none focus:border-border-focus"
                     placeholder="Gangnam-gu, Seoul..."
                   />
                 </div>
 
                 <div>
-                  <label htmlFor="venue-create-description" className="block text-gray-400 font-mono text-xs tracking-wider uppercase mb-2">
+                  <label htmlFor="venue-create-description" className="app-label">
                     DESCRIPTION{" "}
-                    <span className="text-gray-600">(OPTIONAL)</span>
+                    <span className="text-text-dim">(OPTIONAL)</span>
                   </label>
                   <textarea
                     id="venue-create-description"
@@ -260,7 +265,7 @@ export default function VenueManagement() {
                     onChange={(e) =>
                       setFormData({ ...formData, description: e.target.value })
                     }
-                    className="w-full bg-black border border-gray-700 px-4 py-3 text-white font-mono text-sm tracking-wider focus:outline-none focus:border-white resize-none"
+                    className="w-full bg-canvas border border-border-default px-4 py-3 text-text-heading text-sm focus:outline-none focus:border-border-focus resize-none"
                     rows={3}
                     placeholder="Venue description..."
                   />
@@ -273,11 +278,11 @@ export default function VenueManagement() {
                 <button
                   type="submit"
                   disabled={isSubmitting}
-                  className="w-full bg-white text-black py-3 font-mono text-sm tracking-wider uppercase hover:bg-gray-200 transition-colors disabled:opacity-50"
+                  className="w-full bg-action-primary py-3 text-sm font-semibold text-action-text transition-colors hover:bg-action-hover disabled:opacity-50"
                 >
                   {isSubmitting ? (
                     <div className="flex items-center justify-center gap-2">
-                      <div className="w-4 h-4 border border-black border-t-transparent rounded-full animate-spin"></div>
+                      <div className="w-4 h-4 border border-canvas border-t-transparent rounded-full animate-spin"></div>
                       <span>CREATING...</span>
                     </div>
                   ) : (
@@ -290,9 +295,9 @@ export default function VenueManagement() {
         )}
 
         {activeTab === "list" && (
-          <div className="bg-gray-900 border border-gray-700">
+          <div className="app-panel">
             <PanelHeader
-              title="VENUE LIST"
+              title="Venue list"
               count={venues.length}
               onRefresh={loadVenues}
               isLoading={isLoading}
@@ -300,9 +305,9 @@ export default function VenueManagement() {
             <div className="p-4">
               {listError && <Alert type="error" message={listError} className="mb-4" />}
               {isLoading && venues.length === 0 ? (
-                <Spinner mode="inline" text="LOADING..." />
+                <Skeleton rows={4} />
               ) : venues.length === 0 ? (
-                <EmptyState icon="ri-store-2-line" message="NO VENUES FOUND" />
+                <EmptyState icon="store" message="NO VENUES FOUND" />
               ) : (
                 <div
                   className={`grid grid-cols-1 md:grid-cols-2 gap-4 transition-opacity duration-200 ${isLoading ? "opacity-50 pointer-events-none" : ""}`}
@@ -325,7 +330,7 @@ export default function VenueManagement() {
           </div>
         )}
       </div>
-    </div>
+    </OperationsLayout>
   );
 }
 
@@ -365,27 +370,27 @@ function VenueCard({
 
   return (
     <div
-      className={`bg-gray-900 border border-gray-700 p-4 sm:p-5 transition-opacity duration-200 ${!venue.active ? "opacity-60" : ""}`}
+      className={`app-panel p-4 sm:p-5 transition-opacity duration-200 ${!venue.active ? "opacity-60" : ""}`}
     >
       <div className="flex justify-between items-start mb-3">
         <div>
-          <h3 className="text-white font-mono text-sm sm:text-base tracking-wider">
+          <h3 className="type-row-title font-mono tracking-wider">
             {venue.name}
           </h3>
           {venue.address && (
-            <p className="text-gray-500 font-mono text-xs mt-1">
+            <p className="text-text-dim font-mono text-xs mt-1">
               {venue.address}
             </p>
           )}
         </div>
         <div className="flex items-center gap-2">
           <span
-            className={`font-mono text-xs tracking-wider uppercase ${getVenueTypeColor(venue.type)}`}
+            className={`text-xs font-medium ${getVenueTypeColor(venue.type)}`}
           >
             {venue.type.toUpperCase()}
           </span>
           {!venue.active && (
-            <span className="bg-red-600 text-white px-2 py-1 font-mono text-xs tracking-wider uppercase">
+            <span className="border border-status-danger/70 bg-status-danger/10 px-2 py-1 font-mono text-xs uppercase tracking-wider text-status-danger">
               INACTIVE
             </span>
           )}
@@ -395,23 +400,23 @@ function VenueCard({
       {!isEditing ? (
         <div>
           {venue.description && (
-            <p className="text-gray-400 font-mono text-xs mb-3">
+            <p className="text-text-muted font-mono text-xs mb-3">
               {venue.description}
             </p>
           )}
           <div className="grid grid-cols-2 gap-2 mb-3">
             <div>
-              <p className="text-gray-500 font-mono text-xs uppercase mb-1">
+              <p className="text-xs text-text-dim mb-1">
                 STATUS
               </p>
               <p
-                className={`font-mono text-xs sm:text-sm ${venue.active ? "text-green-400" : "text-red-400"}`}
+                className={`font-mono text-xs sm:text-sm ${venue.active ? "text-text-heading" : "text-status-danger"}`}
               >
                 {venue.active ? "ACTIVE" : "INACTIVE"}
               </p>
             </div>
             <div>
-              <p className="text-gray-500 font-mono text-xs uppercase mb-1">
+              <p className="text-xs text-text-dim mb-1">
                 Type
               </p>
               <p
@@ -424,16 +429,16 @@ function VenueCard({
           <div className="grid grid-cols-2 gap-2">
             <button
               onClick={() => setIsEditing(true)}
-              className="bg-gray-700 hover:bg-gray-600 text-white font-mono text-xs tracking-wider uppercase py-2 sm:py-3 transition-colors"
+              className="bg-surface-active hover:bg-border-strong text-text-heading text-xs font-medium py-2 sm:py-3 transition-colors"
             >
               EDIT
             </button>
             <button
               onClick={() => onToggleActive(venue)}
-              className={`font-mono text-xs tracking-wider uppercase py-2 sm:py-3 transition-colors border ${
+              className={`text-xs font-medium py-2 sm:py-3 transition-colors border ${
                 venue.active
-                  ? "bg-red-900/30 hover:bg-red-900/50 text-red-400 border-red-700"
-                  : "bg-green-900/30 hover:bg-green-900/50 text-green-400 border-green-700"
+                  ? "border-status-danger/70 bg-status-danger/10 text-status-danger hover:bg-status-danger/20"
+                  : "bg-surface-raised hover:bg-surface-raised text-text-heading border-border-strong"
               }`}
             >
               {venue.active ? "DEACTIVATE" : "ACTIVATE"}
@@ -443,7 +448,7 @@ function VenueCard({
       ) : (
         <div className="space-y-3">
           <div>
-            <label htmlFor={`venue-name-${venue.id}`} className="block text-gray-400 font-mono text-xs tracking-wider uppercase mb-2">
+            <label htmlFor={`venue-name-${venue.id}`} className="app-label">
               Name
             </label>
             <input
@@ -453,12 +458,12 @@ function VenueCard({
               onChange={(e) =>
                 setEditData({ ...editData, name: e.target.value })
               }
-              className="w-full bg-gray-800 border border-gray-600 px-3 py-2 sm:py-3 text-white font-mono text-sm focus:outline-none focus:border-white"
+              className="w-full bg-surface-raised border border-border-strong px-3 py-2 sm:py-3 text-text-heading font-mono text-sm focus:outline-none focus:border-border-focus"
             />
           </div>
 
           <fieldset>
-            <legend className="block text-gray-400 font-mono text-xs tracking-wider uppercase mb-2">
+            <legend className="app-label">
               Type
             </legend>
             <div className="grid grid-cols-5 gap-1">
@@ -473,10 +478,10 @@ function VenueCard({
                       type: opt.value as Venue["type"],
                     })
                   }
-                  className={`p-2 border font-mono text-xs tracking-wider uppercase transition-colors ${
+                  className={`p-2 border text-xs font-medium transition-colors ${
                     editData.type === opt.value
-                      ? "bg-white text-black border-white"
-                      : "bg-gray-800 text-gray-400 border-gray-600 hover:text-white hover:border-gray-500"
+                      ? "border-action-primary bg-action-primary text-action-text"
+                      : "bg-surface-raised text-text-muted border-border-strong hover:text-text-heading hover:border-border-strong"
                   }`}
                 >
                   {opt.label}
@@ -486,7 +491,7 @@ function VenueCard({
           </fieldset>
 
           <div>
-            <label htmlFor={`venue-address-${venue.id}`} className="block text-gray-400 font-mono text-xs tracking-wider uppercase mb-2">
+            <label htmlFor={`venue-address-${venue.id}`} className="app-label">
               Address
             </label>
             <input
@@ -496,12 +501,12 @@ function VenueCard({
               onChange={(e) =>
                 setEditData({ ...editData, address: e.target.value })
               }
-              className="w-full bg-gray-800 border border-gray-600 px-3 py-2 sm:py-3 text-white font-mono text-sm focus:outline-none focus:border-white"
+              className="w-full bg-surface-raised border border-border-strong px-3 py-2 sm:py-3 text-text-heading font-mono text-sm focus:outline-none focus:border-border-focus"
             />
           </div>
 
           <div>
-            <label htmlFor={`venue-description-${venue.id}`} className="block text-gray-400 font-mono text-xs tracking-wider uppercase mb-2">
+            <label htmlFor={`venue-description-${venue.id}`} className="app-label">
               Description
             </label>
             <textarea
@@ -510,7 +515,7 @@ function VenueCard({
               onChange={(e) =>
                 setEditData({ ...editData, description: e.target.value })
               }
-              className="w-full bg-gray-800 border border-gray-600 px-3 py-2 sm:py-3 text-white font-mono text-sm focus:outline-none focus:border-white resize-none"
+              className="w-full bg-surface-raised border border-border-strong px-3 py-2 sm:py-3 text-text-heading font-mono text-sm focus:outline-none focus:border-border-focus resize-none"
               rows={2}
             />
           </div>
@@ -518,7 +523,7 @@ function VenueCard({
           <div className="grid grid-cols-2 gap-2">
             <button
               onClick={handleSave}
-              className="bg-green-600 hover:bg-green-700 text-white font-mono text-xs tracking-wider uppercase py-2 sm:py-3 transition-colors"
+              className="bg-text-heading hover:bg-text-body text-canvas text-xs font-medium py-2 sm:py-3 transition-colors"
             >
               SAVE
             </button>
@@ -532,7 +537,7 @@ function VenueCard({
                   description: venue.description || "",
                 });
               }}
-              className="bg-gray-700 hover:bg-gray-600 text-white font-mono text-xs tracking-wider uppercase py-2 sm:py-3 transition-colors"
+              className="bg-surface-active hover:bg-border-strong text-text-heading text-xs font-medium py-2 sm:py-3 transition-colors"
             >
               CANCEL
             </button>

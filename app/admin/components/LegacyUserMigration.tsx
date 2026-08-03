@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Spinner from "@/components/Spinner";
 import Alert from "@/components/Alert";
+import Icon from "@/components/Icon";
 
 interface MigrationResult {
   email: string;
@@ -50,20 +51,20 @@ export default function LegacyUserMigration() {
   };
 
   return (
-    <div className="bg-gray-900 border border-gray-700 p-6 sm:p-8">
+    <div className="app-panel p-6 sm:p-8">
       <div className="flex items-center gap-3 mb-6">
-        <div className="w-10 h-10 border border-cyan-500 flex items-center justify-center">
-          <i className="ri-database-2-line text-cyan-500 text-xl"></i>
+        <div className="flex h-10 w-10 items-center justify-center border border-border-strong">
+          <Icon name="database" size={22} className="text-text-heading" />
         </div>
         <div>
-          <h2 className="font-mono text-lg tracking-wider text-white uppercase">LEGACY USER MIGRATION</h2>
-          <p className="text-gray-400 font-mono text-xs tracking-wider uppercase">이전 시스템 유저를 D1 데이터베이스로 이관합니다.</p>
+          <h2 className="type-section-title">LEGACY USER MIGRATION</h2>
+          <p className="text-text-muted text-xs font-medium">이전 시스템 유저를 D1 데이터베이스로 이관합니다.</p>
         </div>
       </div>
 
-      <div className="bg-black/50 border border-gray-800 p-4 mb-8">
-        <h3 className="font-mono text-xs text-gray-500 uppercase mb-3 tracking-widest">주의사항</h3>
-        <ul className="text-gray-400 font-mono text-[11px] space-y-2 list-inside list-disc tracking-tight">
+      <div className="bg-canvas border border-border-default p-4 mb-8">
+        <h3 className="font-mono text-xs text-text-dim uppercase mb-3 tracking-widest">주의사항</h3>
+        <ul className="text-text-muted font-mono text-xs space-y-2 list-inside list-disc tracking-tight">
           <li>`public/local-users.json` 파일의 데이터를 기반으로 처리됩니다.</li>
           <li>이미 존재하는 이메일은 마이그레이션 되지 않습니다.</li>
           <li>이관된 유저에게는 초기 비밀번호 설정을 위한 AWS SES 메일이 즉시 발송됩니다.</li>
@@ -78,30 +79,30 @@ export default function LegacyUserMigration() {
           <button
             onClick={runMigration}
             disabled={loading}
-            className="px-8 py-4 bg-cyan-600 hover:bg-cyan-700 text-white font-mono text-sm tracking-wider uppercase transition-colors disabled:opacity-50 flex items-center gap-2"
+            className="flex items-center gap-2 bg-action-primary px-8 py-4 text-sm font-semibold text-action-text transition-colors hover:bg-action-hover disabled:opacity-50"
           >
-            {loading ? <Spinner mode="button" /> : <><i className="ri-play-fill"></i> START MIGRATION</>}
+            {loading ? <Spinner mode="button" /> : <><Icon name="play" size={17} /> START MIGRATION</>}
           </button>
         )}
       </div>
 
       {results && (
         <div className="mt-8 space-y-4">
-          <div className="flex items-center justify-between border-b border-gray-800 pb-2">
-            <h3 className="font-mono text-sm text-white uppercase tracking-wider">MIGRATION RESULTS</h3>
-            <span className="font-mono text-[10px] text-gray-500">{results.length} USERS PROCESSED</span>
+          <div className="flex items-center justify-between border-b border-border-subtle pb-2">
+            <h3 className="type-panel-title font-mono uppercase tracking-wider">MIGRATION RESULTS</h3>
+            <span className="font-mono text-xs text-text-dim">{results.length} USERS PROCESSED</span>
           </div>
           
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-80 overflow-y-auto pr-2 custom-scrollbar">
             {results.map((res, idx) => (
-              <div key={idx} className="bg-black/30 border border-gray-800 p-3 flex items-center justify-between">
+              <div key={idx} className="bg-canvas border border-border-default p-3 flex items-center justify-between">
                 <div>
-                  <p className="text-white font-mono text-[11px] truncate w-40">{res.email}</p>
+                  <p className="text-text-heading font-mono text-xs truncate w-40">{res.email}</p>
                 </div>
                 <div className="flex items-center gap-2">
-                  {res.status === "success" && <span className="text-green-500 text-[10px] font-mono font-bold uppercase border border-green-500 px-2 py-0.5">SUCCESS</span>}
-                  {res.status === "skipped" && <span className="text-yellow-500 text-[10px] font-mono font-bold uppercase border border-yellow-500 px-2 py-0.5">SKIPPED</span>}
-                  {res.status === "failed" && <span className="text-red-500 text-[10px] font-mono font-bold uppercase border border-red-500 px-2 py-0.5">FAILED</span>}
+                  {res.status === "success" && <span className="text-text-heading text-xs font-mono font-semibold uppercase border border-border-strong px-2 py-0.5">SUCCESS</span>}
+                  {res.status === "skipped" && <span className="text-text-muted text-xs font-mono font-semibold uppercase border border-border-strong px-2 py-0.5">SKIPPED</span>}
+                  {res.status === "failed" && <span className="border border-status-danger/70 px-2 py-0.5 font-mono text-xs font-semibold uppercase text-status-danger">FAILED</span>}
                 </div>
               </div>
             ))}
@@ -109,7 +110,7 @@ export default function LegacyUserMigration() {
 
           <button
             onClick={() => setResults(null)}
-            className="w-full py-3 border border-gray-700 text-gray-500 font-mono text-xs uppercase hover:text-white hover:border-white transition-colors"
+            className="w-full border border-border-default py-3 font-mono text-xs uppercase text-text-dim transition-colors hover:border-border-strong hover:text-text-heading"
           >
             RESET
           </button>

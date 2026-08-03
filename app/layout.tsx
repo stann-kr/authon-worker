@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { BRAND_DESCRIPTION, BRAND_NAME } from "@/lib/brand";
+import DesignSystemProvider from "@/components/DesignSystemProvider";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -22,6 +23,7 @@ export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover",
+  themeColor: "#0A0B0C",
 };
 
 export default function RootLayout({
@@ -32,15 +34,17 @@ export default function RootLayout({
   return (
     <html lang="ko" suppressHydrationWarning={true}>
       <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased bg-black`}
+        className={`${geistSans.variable} ${geistMono.variable} antialiased bg-canvas text-text-body`}
         style={{ minHeight: "100dvh" }}
       >
-        <a href="#main-content" className="skip-link">
-          본문으로 건너뛰기
-        </a>
-        <div id="main-content" tabIndex={-1}>
-          {children}
-        </div>
+        <DesignSystemProvider>
+          <a href="#main-content" className="skip-link">
+            본문으로 건너뛰기
+          </a>
+          <div id="main-content" tabIndex={-1}>
+            {children}
+          </div>
+        </DesignSystemProvider>
       </body>
     </html>
   );

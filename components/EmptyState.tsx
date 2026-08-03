@@ -1,24 +1,39 @@
+import Icon, { type IconName } from "./Icon";
+
 /**
  * EmptyState — 데이터가 없을 때 표시하는 빈 상태 컴포넌트.
  *
  * 사용 예:
- * <EmptyState icon="ri-user-line" message="NO GUESTS FOR THIS DATE" />
+ * <EmptyState icon="user" message="NO GUESTS FOR THIS DATE" />
  */
 
 interface EmptyStateProps {
-  icon: string;
+  icon?: IconName;
   message: string;
+  description?: string;
+  action?: React.ReactNode;
 }
 
-export default function EmptyState({ icon, message }: EmptyStateProps) {
+export default function EmptyState({
+  icon = "user",
+  message,
+  description,
+  action,
+}: EmptyStateProps) {
   return (
-    <div className="p-8 text-center" role="status">
-      <div className="w-16 h-16 border border-gray-600 mx-auto mb-4 flex items-center justify-center">
-        <i className={`${icon} text-gray-400 text-2xl`} aria-hidden="true"></i>
+    <div className="px-6 py-12 text-center" role="status">
+      <div className="mx-auto mb-4 flex h-10 w-10 items-center justify-center text-text-muted">
+        <Icon name={icon} size={22} />
       </div>
-      <p className="text-gray-400 font-mono text-sm tracking-wider uppercase">
+      <p className="text-sm font-semibold text-text-heading">
         {message}
       </p>
+      {description && (
+        <p className="mx-auto mt-2 max-w-sm text-sm leading-relaxed text-text-muted">
+          {description}
+        </p>
+      )}
+      {action && <div className="mt-5 flex justify-center">{action}</div>}
     </div>
   );
 }

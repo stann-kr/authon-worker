@@ -27,7 +27,7 @@ Client
 | Framework | Next.js App Router |
 | Runtime | Cloudflare Workers / OpenNext |
 | Language | TypeScript |
-| Styling | Tailwind CSS |
+| Styling | Carbon theme/icons + Tailwind CSS semantic tokens |
 | Database | Cloudflare D1 / SQLite |
 | ORM | Drizzle ORM |
 | Session | Cloudflare KV |
@@ -87,7 +87,7 @@ Client
 |---|---|
 | `venues` | 베뉴 정보와 활성 상태 |
 | `users` | 계정, role, venue scope, session/migration 상태 |
-| `external_dj_links` | 외부 DJ 등록 링크와 정원/사용량 |
+| `external_dj_links` | 외부 DJ 등록 링크, 정원/사용량, 생성 시각 |
 | `guests` | 게스트 등록 정보와 체크인 전 상태 |
 | `check_ins` | 체크인 기록 |
 | `password_reset_tokens` | 비밀번호 재설정 token hash와 만료/사용 상태 |
@@ -102,3 +102,5 @@ Client
 | D1 schema | Drizzle schema, migration files, affected queries |
 | 배포 runtime | OpenNext compatibility, Worker build result |
 | 이메일 | reset-password route, SES sender configuration, public error message |
+
+외부 링크의 최근 목록은 `created_at` 내림차순으로 조회한다. Supabase snapshot을 D1으로 이전할 때도 원본 `created_at`을 보존하므로 컷오버 전에 생성된 링크가 최근 목록에서 누락되지 않는다.

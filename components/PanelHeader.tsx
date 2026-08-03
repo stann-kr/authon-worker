@@ -1,5 +1,7 @@
 "use client";
 
+import Icon from "./Icon";
+
 /**
  * PanelHeader — 리스트 패널(main-content-panel 등)의 공통 헤더.
  * border-b 구분선, 제목, 그리고 Sort / Refresh 등 액션 버튼을 통일.
@@ -17,6 +19,8 @@
 interface PanelHeaderProps {
   title: string;
   count?: number;
+  headingLevel?: 1 | 2 | 3;
+  headingId?: string;
   /** 정렬 모드. 전달하지 않으면 Sort 버튼 숨김 */
   sortMode?: "default" | "alpha";
   onSortToggle?: () => void;
@@ -31,32 +35,39 @@ interface PanelHeaderProps {
 export default function PanelHeader({
   title,
   count,
+  headingLevel = 3,
+  headingId,
   sortMode,
   onSortToggle,
   onRefresh,
   isLoading,
   actions,
 }: PanelHeaderProps) {
-  const displayTitle = count !== undefined ? `${title} (${count})` : title;
   const hasButtons =
     (sortMode !== undefined && onSortToggle) || onRefresh || actions;
+  const Heading = headingLevel === 1 ? "h1" : headingLevel === 2 ? "h2" : "h3";
 
   return (
-    <div className="border-b border-gray-700 px-4 pt-4 pb-3 flex-shrink-0">
-      <div className="flex items-center justify-between">
-        <h3 className="font-mono text-xs sm:text-sm tracking-wider text-white uppercase">
-          {displayTitle}
-        </h3>
-      </div>
+    <div className="flex flex-shrink-0 flex-wrap items-center justify-between gap-3 border-b border-border-subtle px-4 py-3 sm:px-5">
+      <Heading id={headingId} className="type-panel-title">
+        {title}
+        {count !== undefined && (
+          <span className="ml-2 font-mono text-xs font-normal tabular-nums text-text-dim">
+            {count}
+          </span>
+        )}
+      </Heading>
       {hasButtons && (
-        <div className="flex items-center gap-2 mt-2">
+        <div className="flex flex-wrap items-center justify-end gap-2">
           {sortMode !== undefined && onSortToggle && (
             <button
               type="button"
               onClick={onSortToggle}
-              className="flex-1 py-2 bg-gray-800 text-gray-400 font-mono text-xs tracking-wider uppercase hover:text-white transition-colors border border-gray-700 whitespace-nowrap text-center"
+              aria-pressed={sortMode === "alpha"}
+              aria-label={sortMode === "alpha" ? "Sort by creation time" : "Sort alphabetically"}
+              className="pressable min-h-11 touch-manipulation whitespace-nowrap rounded-control border border-border-default bg-surface-raised px-3 py-2 text-center text-xs font-medium text-text-muted hover:border-border-strong hover:text-text-heading"
             >
-              SORT: {sortMode === "alpha" ? "ABC" : "DEFAULT"}
+              {sortMode === "alpha" ? "A-Z" : "Created"}
             </button>
           )}
           {onRefresh && (
@@ -64,13 +75,10 @@ export default function PanelHeader({
               type="button"
               onClick={onRefresh}
               disabled={isLoading}
-              className="flex-1 py-2 bg-gray-800 text-gray-400 font-mono text-xs tracking-wider uppercase hover:text-white transition-colors border border-gray-700 disabled:opacity-50"
+              className="pressable flex min-h-11 touch-manipulation items-center justify-center gap-1.5 rounded-control border border-border-default bg-surface-raised px-3 py-2 text-xs font-medium text-text-muted hover:border-border-strong hover:text-text-heading disabled:opacity-50"
             >
-              <i
-                className={`ri-refresh-line mr-1 ${isLoading ? "animate-spin inline-block" : ""}`}
-                aria-hidden="true"
-              ></i>
-              REFRESH
+              <Icon name="refresh" size={16} className={isLoading ? "animate-spin" : ""} />
+              Refresh
             </button>
           )}
           {actions}

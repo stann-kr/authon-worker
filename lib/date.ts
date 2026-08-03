@@ -43,8 +43,11 @@ export function formatDateDisplay(dateString: string): string {
     const [, year, month, day] = ymdMatch;
     const date = new Date(`${year}-${month}-${day}T00:00:00`);
     if (!Number.isNaN(date.getTime())) {
-      const days = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"];
-      const dayName = days[date.getDay()];
+      const dayName = new Intl.DateTimeFormat("en-US", {
+        weekday: "short",
+      })
+        .format(date)
+        .toUpperCase();
       return `${year}.${month}.${day} (${dayName})`;
     }
     return `${year}.${month}.${day}`;
@@ -55,7 +58,8 @@ export function formatDateDisplay(dateString: string): string {
     return dateString;
   }
 
-  const days = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"];
-  const dayName = days[date.getDay()];
+  const dayName = new Intl.DateTimeFormat("en-US", { weekday: "short" })
+    .format(date)
+    .toUpperCase();
   return `${date.getFullYear()}.${String(date.getMonth() + 1).padStart(2, "0")}.${String(date.getDate()).padStart(2, "0")} (${dayName})`;
 }

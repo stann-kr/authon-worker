@@ -10,8 +10,8 @@ export default function Footer({ compact = false }: FooterProps) {
 
   return (
     <footer className={footerClassName}>
-      <div className="border-t border-gray-800 mt-6 text-center py-4">
-        <p className="text-gray-600 font-mono text-xs tracking-wider">
+      <div className="mt-8 border-t border-border-subtle py-5 text-center">
+        <p className="text-xs text-text-dim">
           {BRAND_FOOTER}
         </p>
       </div>

@@ -20,9 +20,9 @@ interface SpinnerProps {
 }
 
 const colorMap = {
-  white: "border-white border-t-transparent",
-  black: "border-black border-t-transparent",
-  gray: "border-gray-400 border-t-transparent",
+  white: "border-action-primary border-t-transparent",
+  black: "border-canvas border-t-transparent",
+  gray: "border-text-muted border-t-transparent",
 };
 
 export default function Spinner({
@@ -32,14 +32,14 @@ export default function Spinner({
 }: SpinnerProps) {
   if (mode === "fullscreen") {
     return (
-      <div className="min-h-screen bg-black flex items-center justify-center" role="status" aria-live="polite">
+      <div className="flex min-h-[100dvh] items-center justify-center bg-canvas" role="status" aria-live="polite">
         <div className="text-center">
           <div
-            className={`w-8 h-8 border ${colorMap[color]} rounded-full animate-spin mx-auto mb-4`}
+            className={`mx-auto mb-4 h-8 w-8 rounded-full border-2 ${colorMap[color]} animate-spin`}
             aria-hidden="true"
           ></div>
           {text && (
-            <p className="text-white font-mono text-sm tracking-wider uppercase">
+            <p className="text-sm text-text-muted">
               {text}
             </p>
           )}
@@ -51,13 +51,13 @@ export default function Spinner({
 
   if (mode === "inline") {
     return (
-      <div className="flex-1 min-h-[200px] flex items-center justify-center p-8" role="status" aria-live="polite">
+      <div className="flex min-h-[200px] flex-1 items-center justify-center p-8" role="status" aria-live="polite">
         <div
-          className={`w-6 h-6 border ${colorMap[color]} rounded-full animate-spin`}
+          className={`h-6 w-6 rounded-full border-2 ${colorMap[color]} animate-spin`}
           aria-hidden="true"
         ></div>
         {text && (
-          <span className="ml-2 text-white font-mono text-sm">{text}</span>
+          <span className="ml-2 text-sm text-text-muted">{text}</span>
         )}
         {!text && <span className="sr-only">로딩 중</span>}
       </div>
@@ -67,7 +67,7 @@ export default function Spinner({
   // button
   return (
     <div
-      className={`w-4 h-4 border ${colorMap[color]} rounded-full animate-spin`}
+      className={`h-4 w-4 rounded-full border-2 ${colorMap[color]} animate-spin`}
       aria-hidden="true"
     ></div>
   );

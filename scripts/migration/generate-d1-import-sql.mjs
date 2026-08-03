@@ -136,6 +136,9 @@ for (const link of tables.external_dj_links || []) {
     active: boolInt(link.active, true),
     expires_at: link.expires_at || null,
     created_by: link.created_by || link.created_by_user_id || null,
+    created_at:
+      link.created_at ||
+      (link.date ? `${link.date}T00:00:00.000Z` : snapshot.exportedAt || now),
   }));
 }
 

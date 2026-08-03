@@ -1,14 +1,15 @@
 "use client";
 
 import React, { useId } from "react";
+import Icon from "./Icon";
 
 /**
- * GuestSearchInput — 게스트 목록 검색용 공용 입력 컴포넌트.
+ * GuestSearchInput: 게스트 목록 검색용 공용 입력 컴포넌트.
  * 검색 아이콘, 텍스트 입력, 초기화(X) 버튼으로 구성.
  *
  * @param value - 현재 검색 키워드
  * @param onChange - 검색 키워드 변경 핸들러
- * @param placeholder - 입력 필드 placeholder (기본: "SEARCH GUEST...")
+ * @param placeholder - 입력 필드 placeholder
  * @param className - 외부 래퍼 추가 클래스
  */
 
@@ -22,34 +23,37 @@ interface GuestSearchInputProps {
 const GuestSearchInput: React.FC<GuestSearchInputProps> = ({
   value,
   onChange,
-  placeholder = "SEARCH GUEST...",
+  placeholder = "Search guests…",
   className = "",
 }) => {
   const inputId = useId();
 
   return (
-    <div className={`px-4 py-3 border-b border-gray-700 ${className}`}>
+    <div className={`border-b border-border-subtle bg-surface px-4 py-3 sm:px-5 ${className}`}>
       <label htmlFor={inputId} className="sr-only">
-        게스트 이름 검색
+        Search guest names
       </label>
       <div className="relative flex items-center">
-        <i className="ri-search-line absolute left-3 text-gray-500 text-sm pointer-events-none" aria-hidden="true"></i>
+        <Icon name="search" size={16} className="pointer-events-none absolute left-3 text-text-dim" />
         <input
           id={inputId}
+          name="guest-search"
           type="search"
           value={value}
+          autoComplete="off"
+          spellCheck={false}
           onChange={(e) => onChange(e.target.value)}
           placeholder={placeholder}
-          className="w-full bg-gray-800/50 border border-gray-700 pl-9 pr-9 py-2 text-white font-mono text-xs tracking-wider uppercase placeholder-gray-500 focus:outline-none focus:border-gray-500 transition-colors"
+          className="guest-search-input app-field min-h-12 py-2.5 pl-9 pr-12 text-base sm:text-sm"
         />
         {value && (
           <button
             type="button"
             onClick={() => onChange("")}
-            className="absolute right-2 w-6 h-6 flex items-center justify-center text-gray-400 hover:text-white transition-colors"
+            className="pressable absolute inset-y-0 right-0 flex min-h-11 w-11 touch-manipulation items-center justify-center rounded-control text-text-muted hover:bg-surface-hover hover:text-text-heading"
             aria-label="Clear search"
           >
-            <i className="ri-close-line text-sm" aria-hidden="true"></i>
+            <Icon name="close" size={16} />
           </button>
         )}
       </div>

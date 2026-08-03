@@ -49,4 +49,5 @@ export interface ExternalDJLink {
   active: boolean;
   expiresAt?: string | null;
   createdBy?: string | null;
+  createdAt?: string | null;
 }

@@ -2,6 +2,7 @@
 
 import { useId, useState } from "react";
 import type { InputHTMLAttributes, KeyboardEvent } from "react";
+import Icon from "./Icon";
 
 interface PasswordInputProps
   extends Omit<InputHTMLAttributes<HTMLInputElement>, "type"> {
@@ -10,7 +11,7 @@ interface PasswordInputProps
 }
 
 const defaultInputClassName =
-  "w-full bg-black border border-gray-600 px-4 py-3 pr-12 text-white font-mono text-sm tracking-wider focus:outline-none focus:border-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed";
+  "app-field pr-12";
 
 export default function PasswordInput({
   inputClassName,
@@ -55,11 +56,11 @@ export default function PasswordInput({
         <button
           type="button"
           onClick={() => setIsVisible((visible) => !visible)}
-          className="absolute inset-y-0 right-0 px-3 text-gray-500 hover:text-white transition-colors"
+          className="pressable absolute inset-y-0 right-0 flex w-11 items-center justify-center rounded-control text-text-muted hover:bg-surface-hover hover:text-text-heading"
           aria-label={isVisible ? "Hide password" : "Show password"}
           aria-pressed={isVisible}
         >
-          <i className={isVisible ? "ri-eye-off-line" : "ri-eye-line"} aria-hidden="true"></i>
+          <Icon name={isVisible ? "view-off" : "view"} size={18} />
         </button>
       </div>
       {isWarningVisible && (
@@ -67,9 +68,9 @@ export default function PasswordInput({
           id={capsLockWarningId}
           role="status"
           aria-live="polite"
-          className="mt-2 flex items-center gap-1.5 text-[10px] font-mono tracking-[0.08em] text-yellow-300"
+          className="mt-2 flex items-center gap-1.5 text-xs text-text-muted"
         >
-          <i className="ri-alert-line" aria-hidden="true"></i>
+          <Icon name="warning" size={14} />
           Caps Lock is on
         </p>
       )}
