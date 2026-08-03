@@ -24,17 +24,22 @@ import {
   DEMO_ACCOUNTS,
   authenticateDemoAccount,
   getDemoAccess,
-  isDemoSession,
   type DemoAccess,
   type DemoAccount,
   type DemoSession,
 } from "@/lib/demo/auth";
 import {
+  clearDemoSession,
+  readDemoSession,
+  readDemoState,
+  writeDemoState,
+  writeDemoSession,
+} from "@/lib/demo/browser-storage";
+import {
   addDemoGuest,
   createDemoLink,
   createDemoState,
   decideDemoRequest,
-  isDemoState,
   setDemoGuestCheckIn,
   type DemoActivity,
   type DemoExternalLink,
@@ -42,9 +47,6 @@ import {
   type DemoGuestLimitRequest,
   type DemoState,
 } from "@/lib/demo/state";
-
-const DEMO_STORAGE_KEY = "authon:portfolio-demo:v1";
-const DEMO_SESSION_KEY = "authon:portfolio-demo-session:v1";
 
 type DemoView = DemoAccess;
 
@@ -81,30 +83,14 @@ export default function DemoPage() {
   );
 
   useEffect(() => {
-    const stored = window.localStorage.getItem(DEMO_STORAGE_KEY);
-    if (stored) {
-      try {
-        const parsed: unknown = JSON.parse(stored);
-        if (isDemoState(parsed)) setState(parsed);
-      } catch {
-        window.localStorage.removeItem(DEMO_STORAGE_KEY);
-      }
-    }
-    const storedSession = window.sessionStorage.getItem(DEMO_SESSION_KEY);
-    if (storedSession) {
-      try {
-        const parsedSession: unknown = JSON.parse(storedSession);
-        if (isDemoSession(parsedSession)) setSession(parsedSession);
-      } catch {
-        window.sessionStorage.removeItem(DEMO_SESSION_KEY);
-      }
-    }
+    setState(readDemoState(window.localStorage));
+    setSession(readDemoSession(window.sessionStorage));
     setIsHydrated(true);
   }, []);
 
   useEffect(() => {
     if (!isHydrated) return;
-    window.localStorage.setItem(DEMO_STORAGE_KEY, JSON.stringify(state));
+    writeDemoState(window.localStorage, state);
   }, [isHydrated, state]);
 
   const waitingPartyCount = state.guests
@@ -125,7 +111,7 @@ export default function DemoPage() {
     return (
       <DemoLogin
         onAuthenticated={(nextSession) => {
-          window.sessionStorage.setItem(DEMO_SESSION_KEY, JSON.stringify(nextSession));
+          writeDemoSession(window.sessionStorage, nextSession);
           setSession(nextSession);
           setActiveView(getDemoAccess(nextSession.role)[0]);
           setNotice("");
@@ -135,7 +121,7 @@ export default function DemoPage() {
   }
 
   const signOut = () => {
-    window.sessionStorage.removeItem(DEMO_SESSION_KEY);
+    clearDemoSession(window.sessionStorage);
     setSession(null);
     setNotice("");
   };
@@ -229,6 +215,13 @@ export default function DemoPage() {
             <p className="mt-1 text-xs leading-relaxed text-text-muted">
               {t("safeDescription")}
             </p>
+            <Link
+              href="/demo/workspace"
+              className="pressable mt-3 inline-flex min-h-9 items-center gap-2 border border-border-default bg-surface px-3 text-xs font-medium text-text-heading hover:border-border-strong hover:bg-surface-hover"
+            >
+              {t("openWorkspace")}
+              <Icon name="arrow-right" size={15} />
+            </Link>
           </div>
         </section>
 
