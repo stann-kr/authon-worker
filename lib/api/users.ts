@@ -29,7 +29,14 @@ export async function fetchUsersByVenue(venueId?: string | null): Promise<ApiRes
     }
 
     const result = await query.orderBy(asc(users.name));
-    return { data: result.map((u) => ({ ...u, role: u.role as User["role"] })), error: null };
+    return {
+      data: result.map((user) => ({
+        ...user,
+        role: user.role as User["role"],
+        migrationStatus: user.migrationStatus as User["migrationStatus"],
+      })),
+      error: null,
+    };
   } catch (error: unknown) {
     console.error("Failed to fetch users:", error);
     return { data: null, error: "Unable to load users right now." };
@@ -82,7 +89,16 @@ export async function updateUserProfile(
 
     await db.update(users).set(dbUpdates).where(eq(users.id, userId));
     const result = await db.select().from(users).where(eq(users.id, userId));
-    return { data: result[0] ? { ...result[0], role: result[0].role as User["role"] } : null, error: null };
+    return {
+      data: result[0]
+        ? {
+            ...result[0],
+            role: result[0].role as User["role"],
+            migrationStatus: result[0].migrationStatus as User["migrationStatus"],
+          }
+        : null,
+      error: null,
+    };
   } catch (error: unknown) {
     console.error("Failed to update user:", error);
     return { data: null, error: "Unable to update user right now." };

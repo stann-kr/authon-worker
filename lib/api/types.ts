@@ -25,6 +25,7 @@ export interface User {
   role: "super_admin" | "venue_admin" | "door_staff" | "staff" | "dj";
   guestLimit: number | null;
   active: boolean;
+  migrationStatus: "native" | "pending_reset" | "active";
 }
 
 export interface Guest {

@@ -211,30 +211,55 @@ export default function UserManagement() {
           </div>
 
           {activeTab === "users" && (
-            <StatGrid
-              items={[
-                {
-                  label: "DJ",
-                  value: users.filter((u) => u.role === "dj").length,
-                  color: "default",
-                },
-                {
-                  label: "STAFF",
-                  value: users.filter((u) => u.role === "staff").length,
-                  color: "default",
-                },
-                {
-                  label: "DOOR",
-                  value: users.filter((u) => u.role === "door_staff").length,
-                  color: "default",
-                },
-                {
-                  label: "ADMIN",
-                  value: users.filter((u) => u.role === "venue_admin").length,
-                  color: "danger",
-                },
-              ]}
-            />
+            <div className="space-y-3">
+              <StatGrid
+                items={[
+                  {
+                    label: "DJ",
+                    value: users.filter((u) => u.role === "dj").length,
+                    color: "default",
+                  },
+                  {
+                    label: "STAFF",
+                    value: users.filter((u) => u.role === "staff").length,
+                    color: "default",
+                  },
+                  {
+                    label: "DOOR",
+                    value: users.filter((u) => u.role === "door_staff").length,
+                    color: "default",
+                  },
+                  {
+                    label: "ADMIN",
+                    value: users.filter((u) => u.role === "venue_admin").length,
+                    color: "danger",
+                  },
+                ]}
+              />
+              <StatGrid
+                items={[
+                  {
+                    label: "READY",
+                    value: users.filter(
+                      (u) => u.active && u.migrationStatus !== "pending_reset",
+                    ).length,
+                    color: "default",
+                  },
+                  {
+                    label: "SETUP PENDING",
+                    value: users.filter(
+                      (u) => u.active && u.migrationStatus === "pending_reset",
+                    ).length,
+                    color: "waiting",
+                  },
+                  {
+                    label: "INACTIVE",
+                    value: users.filter((u) => !u.active).length,
+                    color: "danger",
+                  },
+                ]}
+              />
+            </div>
           )}
         </div>
         </>
@@ -306,6 +331,8 @@ function UserCard({
   onDelete: (id: string) => void;
 }) {
   const [isEditing, setIsEditing] = useState(false);
+  const isSetupPending =
+    user.active && user.migrationStatus === "pending_reset";
   const [editData, setEditData] = useState({
     role: user.role,
     guestLimit: user.guestLimit,
@@ -338,7 +365,15 @@ function UserCard({
             {user.email}
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          {isSetupPending && (
+            <span
+              className="border border-status-waiting/70 bg-status-waiting/10 px-2 py-1 font-mono text-xs uppercase tracking-wider text-status-waiting"
+              aria-label="First login setup pending"
+            >
+              SETUP PENDING
+            </span>
+          )}
           <span className="text-xs font-medium">
             <RoleLabel role={user.role} colored />
           </span>
@@ -367,6 +402,16 @@ function UserCard({
               </p>
             </div>
           </div>
+          {isSetupPending && (
+            <div className="mb-3 border border-status-waiting/60 bg-status-waiting/10 p-3">
+              <p className="font-mono text-xs font-medium uppercase tracking-wider text-status-waiting">
+                First login not completed
+              </p>
+              <p className="mt-1 text-xs leading-relaxed text-text-muted">
+                This account must set a password through the first-login flow before normal sign-in.
+              </p>
+            </div>
+          )}
           <div className={`grid gap-2 ${canEditRole ? "grid-cols-2" : "grid-cols-1"}`}>
             <button
               onClick={() => setIsEditing(true)}
