@@ -11,7 +11,7 @@
     "cf:preview": "opennextjs-cloudflare preview",
     "lint": "eslint .",
     "test:date": "node --experimental-strip-types --test lib/date.test.mjs",
-    "test:demo": "node --experimental-strip-types --test lib/demo/state.test.mjs",
+    "test:demo": "node --experimental-strip-types --test lib/demo/*.test.mjs",
     "test:user-policy": "node --experimental-strip-types --test lib/users/policy.test.mjs",
     "db:generate": "drizzle-kit generate",
     "db:migrate:local": "wrangler d1 migrations apply authon-db --local",

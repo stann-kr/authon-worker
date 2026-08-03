@@ -15,14 +15,25 @@ import EmptyState from "@/components/EmptyState";
 import Icon, { type IconName } from "@/components/Icon";
 import LanguageSwitcher from "@/components/LanguageSwitcher";
 import PanelHeader from "@/components/PanelHeader";
+import PasswordInput from "@/components/PasswordInput";
+import RoleLabel from "@/components/RoleLabel";
+import Spinner from "@/components/Spinner";
 import StatGrid from "@/components/StatGrid";
 import StatusLabel from "@/components/StatusLabel";
+import {
+  DEMO_ACCOUNTS,
+  authenticateDemoAccount,
+  getDemoAccess,
+  isDemoSession,
+  type DemoAccess,
+  type DemoAccount,
+  type DemoSession,
+} from "@/lib/demo/auth";
 import {
   addDemoGuest,
   createDemoLink,
   createDemoState,
   decideDemoRequest,
-  getDemoProgress,
   isDemoState,
   setDemoGuestCheckIn,
   type DemoActivity,
@@ -33,8 +44,9 @@ import {
 } from "@/lib/demo/state";
 
 const DEMO_STORAGE_KEY = "authon:portfolio-demo:v1";
+const DEMO_SESSION_KEY = "authon:portfolio-demo-session:v1";
 
-type DemoView = "guests" | "door" | "requests" | "links";
+type DemoView = DemoAccess;
 
 interface DemoTab {
   id: DemoView;
@@ -45,11 +57,12 @@ interface DemoTab {
 export default function DemoPage() {
   const t = useTranslations("Demo");
   const [state, setState] = useState<DemoState>(() => createDemoState());
+  const [session, setSession] = useState<DemoSession | null>(null);
   const [activeView, setActiveView] = useState<DemoView>("guests");
   const [notice, setNotice] = useState("");
   const [isHydrated, setIsHydrated] = useState(false);
 
-  const tabs = useMemo<DemoTab[]>(
+  const allTabs = useMemo<DemoTab[]>(
     () => [
       { id: "guests", icon: "user-add", label: t("tabGuests") },
       { id: "door", icon: "login", label: t("tabDoor") },
@@ -57,6 +70,14 @@ export default function DemoPage() {
       { id: "links", icon: "link", label: t("tabLinks") },
     ],
     [t],
+  );
+  const allowedViews = useMemo(
+    () => (session ? getDemoAccess(session.role) : []),
+    [session],
+  );
+  const tabs = useMemo(
+    () => allTabs.filter((tab) => allowedViews.includes(tab.id)),
+    [allTabs, allowedViews],
   );
 
   useEffect(() => {
@@ -67,6 +88,15 @@ export default function DemoPage() {
         if (isDemoState(parsed)) setState(parsed);
       } catch {
         window.localStorage.removeItem(DEMO_STORAGE_KEY);
+      }
+    }
+    const storedSession = window.sessionStorage.getItem(DEMO_SESSION_KEY);
+    if (storedSession) {
+      try {
+        const parsedSession: unknown = JSON.parse(storedSession);
+        if (isDemoSession(parsedSession)) setSession(parsedSession);
+      } catch {
+        window.sessionStorage.removeItem(DEMO_SESSION_KEY);
       }
     }
     setIsHydrated(true);
@@ -86,6 +116,29 @@ export default function DemoPage() {
   const pendingRequestCount = state.requests.filter(
     (request) => request.status === "pending",
   ).length;
+
+  if (!isHydrated) {
+    return <Spinner mode="fullscreen" text={t("loadingDemo")} />;
+  }
+
+  if (!session) {
+    return (
+      <DemoLogin
+        onAuthenticated={(nextSession) => {
+          window.sessionStorage.setItem(DEMO_SESSION_KEY, JSON.stringify(nextSession));
+          setSession(nextSession);
+          setActiveView(getDemoAccess(nextSession.role)[0]);
+          setNotice("");
+        }}
+      />
+    );
+  }
+
+  const signOut = () => {
+    window.sessionStorage.removeItem(DEMO_SESSION_KEY);
+    setSession(null);
+    setNotice("");
+  };
 
   const resetDemo = () => {
     if (!window.confirm(t("resetConfirm"))) return;
@@ -133,6 +186,20 @@ export default function DemoPage() {
           </div>
           <div className="flex items-center gap-2">
             <LanguageSwitcher compact />
+            <div className="hidden border-l border-border-subtle pl-3 text-right sm:block">
+              <p className="text-xs font-medium text-text-heading">{session.name}</p>
+              <p className="mt-0.5 text-[11px] text-text-muted">
+                <RoleLabel role={session.role} />
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={signOut}
+              className="pressable inline-flex min-h-9 items-center gap-2 border border-border-default px-3 text-xs font-medium text-text-muted hover:border-border-strong hover:bg-surface-hover hover:text-text-heading"
+            >
+              <Icon name="logout" size={16} />
+              <span className="hidden lg:inline">{t("switchAccount")}</span>
+            </button>
             <Link
               href="/auth/login"
               className="pressable inline-flex min-h-9 items-center gap-2 border border-border-default px-3 text-xs font-medium text-text-muted hover:border-border-strong hover:bg-surface-hover hover:text-text-heading"
@@ -168,6 +235,7 @@ export default function DemoPage() {
         <ScenarioRail
           state={state}
           activeView={activeView}
+          allowedViews={allowedViews}
           onSelect={setActiveView}
         />
 
@@ -176,8 +244,12 @@ export default function DemoPage() {
             items={[
               { label: t("statWaiting"), value: waitingPartyCount, color: "waiting" },
               { label: t("statCheckedIn"), value: checkedInPartyCount, color: "checked" },
-              { label: t("statRequests"), value: pendingRequestCount },
-              { label: t("statLinks"), value: state.links.length },
+              ...(session.role === "venue_admin"
+                ? [
+                    { label: t("statRequests"), value: pendingRequestCount },
+                    { label: t("statLinks"), value: state.links.length },
+                  ]
+                : []),
             ]}
           />
         </div>
@@ -194,7 +266,15 @@ export default function DemoPage() {
           <div
             role="tablist"
             aria-label={t("workspaceSections")}
-            className="grid grid-cols-2 divide-x divide-y divide-border-subtle border border-border-subtle bg-surface sm:grid-cols-4 sm:divide-y-0"
+            className={`grid divide-x divide-border-subtle border border-border-subtle bg-surface ${
+              tabs.length === 1
+                ? "grid-cols-1"
+                : tabs.length === 2
+                  ? "grid-cols-2"
+                  : tabs.length === 3
+                    ? "grid-cols-3"
+                    : "grid-cols-4"
+            }`}
           >
             {tabs.map((tab, index) => {
               const isActive = activeView === tab.id;
@@ -299,18 +379,204 @@ export default function DemoPage() {
   );
 }
 
+function DemoLogin({
+  onAuthenticated,
+}: {
+  onAuthenticated: (session: DemoSession) => void;
+}) {
+  const t = useTranslations("Demo");
+  const initialAccount = DEMO_ACCOUNTS[0];
+  const [selectedAccountId, setSelectedAccountId] = useState(initialAccount.id);
+  const [email, setEmail] = useState(initialAccount.email);
+  const [password, setPassword] = useState(initialAccount.password);
+  const [error, setError] = useState("");
+
+  const accountDescription = (role: DemoAccount["role"]) => {
+    switch (role) {
+      case "venue_admin":
+        return t("venueAdminAccountDescription");
+      case "door_staff":
+        return t("doorStaffAccountDescription");
+      case "dj":
+        return t("djAccountDescription");
+    }
+  };
+
+  const accountIcon = (role: DemoAccount["role"]): IconName => {
+    if (role === "venue_admin") return "user-admin";
+    if (role === "door_staff") return "login";
+    return "user";
+  };
+
+  const selectAccount = (account: DemoAccount) => {
+    setSelectedAccountId(account.id);
+    setEmail(account.email);
+    setPassword(account.password);
+    setError("");
+    document.getElementById("demo-email")?.focus();
+  };
+
+  const submit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const nextSession = authenticateDemoAccount(email, password);
+    if (!nextSession) {
+      setError(t("invalidDemoCredentials"));
+      return;
+    }
+    onAuthenticated(nextSession);
+  };
+
+  return (
+    <div className="page-shell">
+      <header className="border-b border-border-subtle bg-canvas">
+        <div className="mx-auto flex min-h-16 w-full max-w-[1200px] items-center justify-between gap-4 px-4 sm:px-6 lg:px-10">
+          <div className="flex items-center gap-3">
+            <div className="grid h-9 w-9 place-items-center border border-border-strong bg-surface font-mono text-xs font-semibold text-text-heading">
+              A
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-text-heading">AUTHON</p>
+              <p className="font-mono text-[11px] uppercase tracking-[0.12em] text-status-checked">
+                {t("sandboxStatus")}
+              </p>
+            </div>
+          </div>
+          <LanguageSwitcher compact />
+        </div>
+      </header>
+
+      <main className="mx-auto grid w-full max-w-[1200px] flex-1 items-start gap-8 px-4 py-8 sm:px-6 sm:py-12 lg:grid-cols-[minmax(0,1fr)_26rem] lg:gap-12 lg:px-10 lg:py-16">
+        <section aria-labelledby="demo-login-title">
+          <p className="mb-3 font-mono text-xs uppercase tracking-[0.16em] text-text-muted">
+            {t("loginEyebrow")}
+          </p>
+          <h1 id="demo-login-title" className="max-w-2xl text-3xl font-semibold tracking-[-0.04em] text-text-heading sm:text-4xl lg:text-5xl">
+            {t("loginTitle")}
+          </h1>
+          <p className="mt-4 max-w-2xl text-sm leading-relaxed text-text-muted sm:text-base">
+            {t("loginDescription")}
+          </p>
+
+          <div className="mt-8">
+            <h2 className="type-panel-title">{t("chooseAccount")}</h2>
+            <p className="mt-2 text-sm text-text-muted">{t("chooseAccountDescription")}</p>
+            <div className="mt-4 grid gap-3 sm:grid-cols-3 lg:grid-cols-1 xl:grid-cols-3">
+              {DEMO_ACCOUNTS.map((account) => {
+                const isSelected = selectedAccountId === account.id;
+                return (
+                  <button
+                    key={account.id}
+                    type="button"
+                    aria-pressed={isSelected}
+                    onClick={() => selectAccount(account)}
+                    className={`pressable min-h-40 border p-4 text-left ${
+                      isSelected
+                        ? "border-action-primary bg-surface-raised"
+                        : "border-border-subtle bg-surface hover:border-border-strong hover:bg-surface-raised"
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <Icon name={accountIcon(account.role)} size={20} className={isSelected ? "text-text-heading" : "text-text-muted"} />
+                      <span className={`font-mono text-[10px] uppercase tracking-[0.12em] ${isSelected ? "text-status-checked" : "text-text-dim"}`}>
+                        {isSelected ? t("selectedAccount") : t("selectAccount")}
+                      </span>
+                    </div>
+                    <p className="mt-5 text-sm font-semibold text-text-heading">{account.name}</p>
+                    <p className="mt-1 text-xs text-text-muted"><RoleLabel role={account.role} /></p>
+                    <p className="mt-3 text-xs leading-relaxed text-text-dim">{accountDescription(account.role)}</p>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </section>
+
+        <section className="app-panel p-5 sm:p-6 lg:sticky lg:top-8" aria-labelledby="demo-sign-in-title">
+          <div className="border-b border-border-subtle pb-5">
+            <p className="font-mono text-xs uppercase tracking-[0.12em] text-status-checked">{t("fictionalAccount")}</p>
+            <h2 id="demo-sign-in-title" className="mt-2 text-2xl font-semibold tracking-[-0.03em] text-text-heading">
+              {t("signInTitle")}
+            </h2>
+            <p className="mt-2 text-sm leading-relaxed text-text-muted">{t("signInDescription")}</p>
+          </div>
+
+          <form onSubmit={submit} className="mt-5 space-y-5">
+            <div>
+              <label htmlFor="demo-email" className="app-label">{t("email")}</label>
+              <input
+                id="demo-email"
+                type="email"
+                value={email}
+                onChange={(event) => {
+                  setEmail(event.target.value);
+                  setError("");
+                }}
+                className="app-field"
+                autoComplete="username"
+                required
+                aria-describedby={error ? "demo-login-error" : "demo-credential-help"}
+                aria-invalid={error ? "true" : "false"}
+              />
+            </div>
+            <div>
+              <label htmlFor="demo-password" className="app-label">{t("password")}</label>
+              <PasswordInput
+                id="demo-password"
+                value={password}
+                onChange={(event) => {
+                  setPassword(event.target.value);
+                  setError("");
+                }}
+                inputClassName="app-field pr-12"
+                autoComplete="current-password"
+                required
+                aria-describedby={error ? "demo-login-error" : "demo-credential-help"}
+                aria-invalid={error ? "true" : "false"}
+              />
+              <p id="demo-credential-help" className="app-helper">{t("credentialHelp")}</p>
+            </div>
+
+            {error && (
+              <div id="demo-login-error">
+                <Alert type="error" message={error} />
+              </div>
+            )}
+
+            <Button type="submit" fullWidth size="lg" leftIcon={<Icon name="login" size={17} />}>
+              {t("signInToDemo")}
+            </Button>
+          </form>
+
+          <div className="mt-5 border-l-2 border-status-checked bg-status-checked/10 px-4 py-3">
+            <p className="text-xs leading-relaxed text-text-muted">{t("fictionalAccountNotice")}</p>
+          </div>
+
+          <Link
+            href="/auth/login"
+            className="pressable mt-5 flex min-h-11 w-full items-center justify-center gap-2 border border-border-default px-4 text-sm font-medium text-text-muted hover:border-border-strong hover:bg-surface-hover hover:text-text-heading"
+          >
+            {t("productionSignIn")}
+            <Icon name="arrow-right" size={16} />
+          </Link>
+        </section>
+      </main>
+    </div>
+  );
+}
+
 function ScenarioRail({
   state,
   activeView,
+  allowedViews,
   onSelect,
 }: {
   state: DemoState;
   activeView: DemoView;
+  allowedViews: readonly DemoAccess[];
   onSelect: (view: DemoView) => void;
 }) {
   const t = useTranslations("Demo");
-  const progress = getDemoProgress(state);
-  const missions: Array<{
+  const allMissions: Array<{
     view: DemoView;
     label: string;
     complete: boolean;
@@ -320,6 +586,8 @@ function ScenarioRail({
     { view: "requests", label: t("missionReview"), complete: state.completedSteps.requestReviewed },
     { view: "links", label: t("missionCreateLink"), complete: state.completedSteps.linkCreated },
   ];
+  const missions = allMissions.filter((mission) => allowedViews.includes(mission.view));
+  const progress = missions.filter((mission) => mission.complete).length;
 
   return (
     <section aria-labelledby="demo-scenario-title" className="border border-border-subtle bg-surface">
@@ -328,13 +596,25 @@ function ScenarioRail({
           <h2 id="demo-scenario-title" className="type-panel-title">
             {t("scenarioTitle")}
           </h2>
-          <p className="mt-1 text-xs text-text-muted">{t("scenarioDescription")}</p>
+          <p className="mt-1 text-xs text-text-muted">
+            {t("scenarioDescription", { count: missions.length })}
+          </p>
         </div>
         <span className="font-mono text-xs text-text-heading">
           {t("scenarioProgress", { complete: progress, total: missions.length })}
         </span>
       </div>
-      <ol className="grid md:grid-cols-4">
+      <ol
+        className={`grid ${
+          missions.length === 1
+            ? "md:grid-cols-1"
+            : missions.length === 2
+              ? "md:grid-cols-2"
+              : missions.length === 3
+                ? "md:grid-cols-3"
+                : "md:grid-cols-4"
+        }`}
+      >
         {missions.map((mission, index) => (
           <li key={mission.view} className="border-b border-border-subtle last:border-b-0 md:border-b-0 md:border-r md:last:border-r-0">
             <button
