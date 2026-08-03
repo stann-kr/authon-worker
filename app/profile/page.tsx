@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Footer from "@/components/Footer";
-import Spinner from "@/components/Spinner";
+import RouteLoadingFallback from "@/components/RouteLoadingFallback";
 import Alert from "@/components/Alert";
 import RoleLabel from "@/components/RoleLabel";
 import PasswordInput from "@/components/PasswordInput";
@@ -37,7 +37,7 @@ export default function ProfilePage() {
   useEffect(() => {
     const currentUser = getUser();
     if (!currentUser) {
-      router.push("/auth/login");
+      router.replace("/auth/login");
       return;
     }
     setUser(currentUser);
@@ -95,7 +95,7 @@ export default function ProfilePage() {
   };
 
   if (isLoading) {
-    return <Spinner mode="fullscreen" text={commonT("loading")} />;
+    return <RouteLoadingFallback />;
   }
 
   if (!user) return null;

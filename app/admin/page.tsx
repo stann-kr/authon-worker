@@ -16,6 +16,7 @@ import { getUser } from "../../lib/auth";
 import Icon, { type IconName } from "../../components/Icon";
 import { useTranslations } from "next-intl";
 import { useVenueSelector } from "../../components/VenueSelector";
+import { useRouteTransition } from "../../components/RouteTransitionProvider";
 
 type AdminTab = "guests" | "links" | "users" | "venues";
 type GuestAdminTab = "list" | "requests";
@@ -38,6 +39,7 @@ export default function AdminPage() {
 function AdminPageContent() {
   const t = useTranslations("AdminNav");
   const router = useRouter();
+  const { startRouteTransition } = useRouteTransition();
   const { currentVenue } = useVenueSelector();
   const businessDate = getBusinessDate(currentVenue ?? {});
   const [activeTab, setActiveTab] = useLocalStorage<AdminTab>(
@@ -117,7 +119,7 @@ function AdminPageContent() {
       }
 
       if (e.key === "Escape") {
-        router.push("/");
+        if (startRouteTransition("/")) router.push("/");
       } else {
         const shortcutIndex = Number.parseInt(e.key, 10) - 1;
         if (!Number.isNaN(shortcutIndex) && tabs[shortcutIndex]) {
@@ -128,7 +130,7 @@ function AdminPageContent() {
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [tabs, setActiveTab, router]);
+  }, [tabs, setActiveTab, router, startRouteTransition]);
 
   const handleTabKeyDown = (
     event: ReactKeyboardEvent<HTMLButtonElement>,

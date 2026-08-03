@@ -3,6 +3,7 @@ import {
   createLatestRequestGuard,
   type LatestRequestGuard,
 } from "./latest-request";
+import { subscribeToRouteTransitionStart } from "./route-transition-events";
 
 /**
  * useState와 동일하지만 localStorage에 값을 영속화합니다.
@@ -64,7 +65,14 @@ export function useLatestRequestGuard(): LatestRequestGuard {
   const [guard] = useState(createLatestRequestGuard);
 
   useEffect(() => {
-    return guard.invalidateRequests;
+    const unsubscribe = subscribeToRouteTransitionStart(
+      guard.invalidateRequests,
+    );
+
+    return () => {
+      unsubscribe();
+      guard.invalidateRequests();
+    };
   }, [guard]);
 
   return guard;

@@ -36,7 +36,6 @@
     "undoCheckIn": "Undo check-in for {name}",
     "removeGuest": "Remove guest",
     "removed": "Removed",
-    "verifyingAccess": "Verifying access",
     "operationalDate": "Operational date",
     "changeOperationalDate": "Change operational date",
     "previousDate": "Previous operational date",
@@ -169,7 +168,6 @@
   },
   "ExternalGuest": {
     "guestAccess": "Guest access",
-    "validating": "Validating guest access",
     "invalidTitle": "Invalid link",
     "guestOwner": "Guest owner",
     "event": "Event",
@@ -191,7 +189,6 @@
   },
   "Home": {
     "availableWorkspaces": "Available workspaces",
-    "loading": "Loading workspace",
     "guestTitle": "Guest registration",
     "guestDescription": "Add names, review limits and manage your guest list.",
     "doorTitle": "Door check-in",
@@ -222,7 +219,6 @@
     "todaysGuests": "Today's guests",
     "noSearchResults": "No guests match this search",
     "noGuestsForDate": "No guests registered for this date",
-    "loadingWorkspace": "Loading guest workspace",
     "registeredBy": "Current operator",
     "registeredByPlaceholder": "Enter your name",
     "registeredByHelp": "Required for shared accounts and saved with each guest.",

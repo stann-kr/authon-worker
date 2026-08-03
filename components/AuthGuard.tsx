@@ -4,10 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { getUser, hasAccess, User } from "../lib/auth";
 import type { AccessScope } from "@/lib/users/policy";
-import Spinner from "./Spinner";
-import { useTranslations } from "next-intl";
-import { useRouteTransition } from "./RouteTransitionProvider";
-import RouteLoadingShell from "./RouteLoadingShell";
+import RouteLoadingFallback from "./RouteLoadingFallback";
 
 interface AuthGuardProps {
   children: React.ReactNode;
@@ -18,11 +15,9 @@ export default function AuthGuard({
   children,
   requiredAccess,
 }: AuthGuardProps) {
-  const t = useTranslations("Common");
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const router = useRouter();
-  const { isRouteTransitionActive } = useRouteTransition();
 
   useEffect(() => {
     const checkAuth = () => {
@@ -33,13 +28,13 @@ export default function AuthGuard({
       const currentUser = getUser();
 
       if (!currentUser) {
-        router.push("/auth/login");
+        router.replace("/auth/login");
         return;
       }
 
       // 2. Check Role Access
       if (!hasAccess(currentUser, requiredAccess)) {
-        router.push("/");
+        router.replace("/");
         return;
       }
 
@@ -51,11 +46,7 @@ export default function AuthGuard({
   }, [router, requiredAccess]);
 
   if (isLoading) {
-    if (isRouteTransitionActive) {
-      return <RouteLoadingShell />;
-    }
-
-    return <Spinner mode="fullscreen" text={t("verifyingAccess")} />;
+    return <RouteLoadingFallback />;
   }
 
   if (!user) {

@@ -1,17 +1,5 @@
-"use client";
-
-import RouteLoadingShell from "@/components/RouteLoadingShell";
-import { useRouteTransition } from "@/components/RouteTransitionProvider";
-import Spinner from "@/components/Spinner";
-import { useTranslations } from "next-intl";
+import RouteLoadingFallback from "@/components/RouteLoadingFallback";
 
 export default function Loading() {
-  const t = useTranslations("Common");
-  const { isRouteTransitionActive } = useRouteTransition();
-
-  if (!isRouteTransitionActive) {
-    return <Spinner mode="fullscreen" text={t("loading")} />;
-  }
-
-  return <RouteLoadingShell />;
+  return <RouteLoadingFallback />;
 }
