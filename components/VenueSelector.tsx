@@ -6,6 +6,7 @@ import { fetchVenues } from "@/lib/api/venues";
 import type { Venue } from "@/lib/api/types";
 import { getUser } from "@/lib/auth";
 import Icon from "./Icon";
+import { useTranslations } from "next-intl";
 
 /**
  * useVenueSelector — super_admin 베뉴 선택 로직 훅.
@@ -64,15 +65,16 @@ export default function VenueSelector({
   venues,
   selectedVenueId,
   onVenueChange,
-  placeholder = "-- Select Venue --",
+  placeholder,
   className = "",
 }: VenueSelectorProps) {
+  const t = useTranslations("Common");
   const selectId = useId();
 
   return (
     <div className={`min-w-0 ${className}`}>
       <label htmlFor={selectId} className="type-context-title">
-        Venue
+        {t("venue")}
       </label>
       <div className="relative">
         <select
@@ -81,7 +83,7 @@ export default function VenueSelector({
           onChange={(e) => onVenueChange(e.target.value)}
           className="app-field appearance-none pr-10"
         >
-          <option value="">{placeholder}</option>
+          <option value="">{placeholder ?? t("selectVenue")}</option>
           {venues.map((v) => (
             <option key={v.id} value={v.id}>
               {v.name}

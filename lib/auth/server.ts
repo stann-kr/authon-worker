@@ -5,6 +5,7 @@ import { eq } from "drizzle-orm";
 import { users } from "../db/schema";
 import { getDb } from "../db/client";
 import { getRequestTenantContext } from "../tenant/server";
+import { isLocale, type Locale } from "@/i18n/config";
 
 export type Role = "super_admin" | "venue_admin" | "door_staff" | "staff" | "dj";
 
@@ -15,6 +16,7 @@ export interface SessionUser {
   email: string;
   role: Role;
   venueId: string | null;
+  preferredLocale: Locale | null;
 }
 
 interface StoredSession {
@@ -73,6 +75,7 @@ export async function requireAuth(): Promise<SessionUser> {
       venueId: users.venueId,
       active: users.active,
       sessionVersion: users.sessionVersion,
+      preferredLocale: users.preferredLocale,
     })
     .from(users)
     .where(eq(users.id, payload.sub))
@@ -93,6 +96,7 @@ export async function requireAuth(): Promise<SessionUser> {
     email: user.email,
     role: user.role,
     venueId: user.venueId ?? null,
+    preferredLocale: isLocale(user.preferredLocale) ? user.preferredLocale : null,
   };
 
   const tenant = await getRequestTenantContext();

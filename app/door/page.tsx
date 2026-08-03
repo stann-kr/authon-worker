@@ -27,6 +27,7 @@ import {
 import { fetchUsersByVenue } from "../../lib/api/users";
 import { fetchExternalLinksByDate } from "../../lib/api/external-links";
 import type { Guest, User, ExternalDJLink } from "../../lib/api/types";
+import { useLocale, useTranslations } from "next-intl";
 
 export default function DoorPage() {
   return (
@@ -37,6 +38,8 @@ export default function DoorPage() {
 }
 
 function DoorPageContent() {
+  const t = useTranslations("Door");
+  const locale = useLocale() as "en" | "ko";
   const [selectedDate, setSelectedDate] = useLocalStorage(
     "door:selectedDate",
     getBusinessDate(),
@@ -94,18 +97,18 @@ function DoorPageContent() {
         fetchExternalLinksByDate(venueId, selectedDate),
       ]);
       if (guestRes.error || userRes.error || linkRes.error) {
-        setFeedback("일부 운영 데이터를 불러오지 못했습니다. 새로고침 후 다시 시도해주세요.");
+        setFeedback(t("partialLoadFailed"));
       }
       if (guestRes.data) setGuests(guestRes.data);
       if (userRes.data) setUsers(userRes.data);
       if (linkRes.data) setExternalLinks(linkRes.data);
     } catch (error) {
       console.error("Failed to load data:", error);
-      setFeedback("운영 데이터를 불러오지 못했습니다. 네트워크 상태를 확인해주세요.");
+      setFeedback(t("loadFailed"));
     } finally {
       setIsFetching(false);
     }
-  }, [selectedDate, venueId]);
+  }, [selectedDate, t, venueId]);
 
   useEffect(() => {
     loadData();
@@ -135,7 +138,7 @@ function DoorPageContent() {
       setFeedback(null);
     } else {
       console.error("Failed to update guest status:", error);
-      setFeedback("게스트 상태를 변경하지 못했습니다. 다시 시도해주세요.");
+      setFeedback(t("updateFailed"));
     }
 
     setLoadingStates((prev) => ({ ...prev, [`${id}_${action}`]: false }));
@@ -177,7 +180,7 @@ function DoorPageContent() {
     sortMode === "alpha"
       ? [...filteredGuests].sort((a, b) =>
           a.status === b.status
-            ? (a.name || "").localeCompare(b.name || "", "ko-KR", {
+            ? (a.name || "").localeCompare(b.name || "", locale === "ko" ? "ko-KR" : "en-US", {
                 sensitivity: "base",
               })
             : a.status === "pending"
@@ -218,7 +221,7 @@ function DoorPageContent() {
       <div className="flex flex-1 flex-col overflow-x-hidden pt-20 sm:pt-24">
         <div className="page-container">
           <OperationsLayout
-            title="Door check-in"
+            title={t("title")}
             dashboard={
               <>
                 <div className="context-bar">
@@ -236,7 +239,7 @@ function DoorPageContent() {
                     )}
                     <div className="min-w-0">
                       <label htmlFor="door-user-filter" className="type-context-title">
-                        Guest owner
+                        {t("guestOwner")}
                       </label>
                       <div className="relative">
                         <select
@@ -247,7 +250,7 @@ function DoorPageContent() {
                           autoComplete="off"
                           className="app-field appearance-none pr-10"
                         >
-                          <option value="all">All guest owners</option>
+                          <option value="all">{t("allOwners")}</option>
                           {filteredUsers.map((user) => (
                             <option key={user.id} value={user.id}>
                               {user.name}
@@ -255,7 +258,7 @@ function DoorPageContent() {
                           ))}
                           {filteredExtLinks.map((link) => (
                             <option key={`ext:${link.id}`} value={`ext:${link.id}`}>
-                              {link.djName} (External)
+                              {link.djName} ({t("external")})
                             </option>
                           ))}
                         </select>
@@ -273,7 +276,7 @@ function DoorPageContent() {
 
                 <section className="app-panel" aria-labelledby="door-dashboard-title">
                   <PanelHeader
-                    title="Door check-in"
+                    title={t("title")}
                     headingLevel={2}
                     headingId="door-dashboard-title"
                     count={displayGuests.length}
@@ -293,17 +296,17 @@ function DoorPageContent() {
                   <StatGrid
                     items={[
                       {
-                        label: "WAITING",
+                        label: t("waiting"),
                         value: pendingGuests.length,
                         color: "waiting",
                       },
                       {
-                        label: "CHECKED IN",
+                        label: t("checkedIn"),
                         value: checkedGuests.length,
                         color: "checked",
                       },
                       {
-                        label: "TOTAL",
+                        label: t("total"),
                         value: pendingGuests.length + checkedGuests.length,
                         color: "default",
                       },
@@ -319,7 +322,7 @@ function DoorPageContent() {
               aria-busy={isFetching}
             >
               <PanelHeader
-                title="Guest list"
+                title={t("guestList")}
                 headingLevel={2}
                 headingId="door-guest-list-title"
                 count={displayGuests.length}
@@ -332,8 +335,8 @@ function DoorPageContent() {
                   icon="user"
                   message={
                     searchQuery
-                      ? "No guests match this search"
-                      : "No guests for this date"
+                      ? t("noSearchResults")
+                      : t("noGuestsForDate")
                   }
                 />
               ) : (

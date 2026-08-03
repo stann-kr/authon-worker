@@ -8,6 +8,7 @@ import Spinner from "@/components/Spinner";
 import Icon, { type IconName } from "@/components/Icon";
 import TransitionLink from "@/components/TransitionLink";
 import AdminHeader from "@/app/admin/components/AdminHeader";
+import { useTranslations } from "next-intl";
 
 interface MenuItem {
   id: string;
@@ -18,33 +19,6 @@ interface MenuItem {
   requiredAccess: string[];
 }
 
-const menuItems: MenuItem[] = [
-  {
-    id: "guest",
-    title: "Guest registration",
-    description: "Add names, review limits and manage your guest list.",
-    icon: "user-add",
-    href: "/guest",
-    requiredAccess: ["guest"],
-  },
-  {
-    id: "door",
-    title: "Door check-in",
-    description: "Find arriving guests and confirm entry without delay.",
-    icon: "login",
-    href: "/door",
-    requiredAccess: ["door"],
-  },
-  {
-    id: "admin",
-    title: "Administration",
-    description: "Manage guests, links, users and venue operations.",
-    icon: "settings",
-    href: "/admin",
-    requiredAccess: ["admin"],
-  },
-];
-
 const roleMenuOrder: Record<User["role"], string[]> = {
   dj: ["guest"],
   staff: ["guest"],
@@ -54,9 +28,36 @@ const roleMenuOrder: Record<User["role"], string[]> = {
 };
 
 export default function Home() {
+  const t = useTranslations("Home");
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const router = useRouter();
+  const menuItems: MenuItem[] = useMemo(() => [
+    {
+      id: "guest",
+      title: t("guestTitle"),
+      description: t("guestDescription"),
+      icon: "user-add",
+      href: "/guest",
+      requiredAccess: ["guest"],
+    },
+    {
+      id: "door",
+      title: t("doorTitle"),
+      description: t("doorDescription"),
+      icon: "login",
+      href: "/door",
+      requiredAccess: ["door"],
+    },
+    {
+      id: "admin",
+      title: t("adminTitle"),
+      description: t("adminDescription"),
+      icon: "settings",
+      href: "/admin",
+      requiredAccess: ["admin"],
+    },
+  ], [t]);
 
   useEffect(() => {
     const currentUser = getUser();
@@ -80,7 +81,7 @@ export default function Home() {
                 roleMenuOrder[user.role].indexOf(b.id),
             )
         : [],
-    [user],
+    [menuItems, user],
   );
 
   useEffect(() => {
@@ -109,7 +110,7 @@ export default function Home() {
   }, [accessibleMenus, router, user]);
 
   if (isLoading) {
-    return <Spinner mode="fullscreen" text="Loading workspace" />;
+    return <Spinner mode="fullscreen" text={t("loading")} />;
   }
 
   if (!user) return null;
@@ -121,7 +122,7 @@ export default function Home() {
       <main className="mx-auto flex w-full max-w-[1040px] flex-1 flex-col justify-center px-4 pb-8 pt-20 sm:px-6 sm:pt-24 lg:px-10">
         {accessibleMenus.length > 0 && (
           <nav
-            aria-label="Available workspaces"
+            aria-label={t("availableWorkspaces")}
             className="mx-auto w-full border-y border-border-default"
           >
             {accessibleMenus.map((item, index) => (

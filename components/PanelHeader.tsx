@@ -1,6 +1,7 @@
 "use client";
 
 import Icon from "./Icon";
+import { useTranslations } from "next-intl";
 
 /**
  * PanelHeader — 리스트 패널(main-content-panel 등)의 공통 헤더.
@@ -43,6 +44,7 @@ export default function PanelHeader({
   isLoading,
   actions,
 }: PanelHeaderProps) {
+  const t = useTranslations("Common");
   const hasButtons =
     (sortMode !== undefined && onSortToggle) || onRefresh || actions;
   const Heading = headingLevel === 1 ? "h1" : headingLevel === 2 ? "h2" : "h3";
@@ -64,10 +66,10 @@ export default function PanelHeader({
               type="button"
               onClick={onSortToggle}
               aria-pressed={sortMode === "alpha"}
-              aria-label={sortMode === "alpha" ? "Sort by creation time" : "Sort alphabetically"}
+              aria-label={sortMode === "alpha" ? t("sortByCreationTime") : t("sortAlphabetically")}
               className="pressable min-h-11 touch-manipulation whitespace-nowrap rounded-control border border-border-default bg-surface-raised px-3 py-2 text-center text-xs font-medium text-text-muted hover:border-border-strong hover:text-text-heading"
             >
-              {sortMode === "alpha" ? "A-Z" : "Created"}
+              {sortMode === "alpha" ? "A-Z" : t("created")}
             </button>
           )}
           {onRefresh && (
@@ -78,7 +80,7 @@ export default function PanelHeader({
               className="pressable flex min-h-11 touch-manipulation items-center justify-center gap-1.5 rounded-control border border-border-default bg-surface-raised px-3 py-2 text-xs font-medium text-text-muted hover:border-border-strong hover:text-text-heading disabled:opacity-50"
             >
               <Icon name="refresh" size={16} className={isLoading ? "animate-spin" : ""} />
-              Refresh
+              {t("refresh")}
             </button>
           )}
           {actions}

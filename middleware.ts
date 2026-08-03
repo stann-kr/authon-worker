@@ -6,6 +6,12 @@ import { drizzle } from "drizzle-orm/d1";
 import { and, eq } from "drizzle-orm";
 import { users, venueDomains, venues } from "@/lib/db/schema";
 import { isPlatformHostname, normalizeHostname } from "@/lib/tenant/host";
+import {
+  isLocale,
+  LOCALE_COOKIE_MAX_AGE,
+  LOCALE_COOKIE_NAME,
+  REQUEST_LOCALE_HEADER,
+} from "@/i18n/config";
 
 function parseStoredSession(raw: string): { userId?: string; sessionVersion?: number } | null {
   try {
@@ -18,12 +24,32 @@ function parseStoredSession(raw: string): { userId?: string; sessionVersion?: nu
 
 export async function middleware(request: NextRequest) {
   const { pathname, searchParams } = request.nextUrl;
+  const explicitLocale = searchParams.get("lang");
+  const requestHeaders = new Headers(request.headers);
+  if (isLocale(explicitLocale)) {
+    requestHeaders.set(REQUEST_LOCALE_HEADER, explicitLocale);
+  }
+
+  const continueRequest = () => {
+    const response = NextResponse.next({ request: { headers: requestHeaders } });
+    if (isLocale(explicitLocale)) {
+      response.cookies.set({
+        name: LOCALE_COOKIE_NAME,
+        value: explicitLocale,
+        sameSite: "lax",
+        secure: request.nextUrl.protocol === "https:",
+        maxAge: LOCALE_COOKIE_MAX_AGE,
+        path: "/",
+      });
+    }
+    return response;
+  };
 
   if (
     pathname.startsWith("/_next/") ||
     pathname.startsWith("/favicon.ico")
   ) {
-    return NextResponse.next();
+    return continueRequest();
   }
 
   const { env } = getCloudflareContext();
@@ -60,16 +86,17 @@ export async function middleware(request: NextRequest) {
   if (
     pathname.startsWith("/api/auth/") ||
     pathname.startsWith("/api/internal/") ||
+    pathname === "/api/locale" ||
     pathname === "/auth/login" ||
     pathname === "/auth/reset-password" ||
     pathname === "/auth/register"
   ) {
-    return NextResponse.next();
+    return continueRequest();
   }
 
   // ─── 외부 DJ 토큰 링크: /guest?token=xxx ────────────────────
   if (pathname === "/guest" && searchParams.has("token")) {
-    return NextResponse.next();
+    return continueRequest();
   }
 
   // ─── JWT + 세션 검증 ──────────────────────────────────────
@@ -144,7 +171,7 @@ export async function middleware(request: NextRequest) {
       }
     }
 
-    return NextResponse.next();
+    return continueRequest();
   } catch (error) {
     console.error("JWT Verify Error:", error);
     return NextResponse.redirect(new URL("/auth/login", request.url));

@@ -23,6 +23,14 @@ Client
 - 요청 도메인은 표시 컨텍스트이며 권한 근거로 단독 사용하지 않고 계정·링크의 venue scope와 교차 검증한다.
 - 공개 링크 기반 게스트 등록은 계정 로그인 흐름과 분리한다.
 
+## 언어 결정
+
+- 지원 언어는 영어(`en`)와 한국어(`ko`)이며 전역 fallback은 영어다.
+- 명시적 `lang`, 계정 설정, locale cookie, 브라우저 언어를 allowlist 검증해 적용한다.
+- 브라우저가 지원하지 않는 언어만 제공하면 영어를 사용한다. 언어 헤더가 없거나 해석할 수 없을 때만 도메인 기본 언어를 사용한다.
+- 로그인 사용자는 계정에 저장한 언어가 우선하며, External Link는 방문자 자동 감지 또는 링크별 고정 언어를 사용한다.
+- 언어는 인증, 권한, 베뉴 scope, 시간대와 분리한다.
+
 ## 기술 스택
 
 | 영역 | 기술 |
@@ -31,6 +39,7 @@ Client
 | Runtime | Cloudflare Workers / OpenNext |
 | Language | TypeScript |
 | Styling | Carbon theme/icons + Tailwind CSS semantic tokens |
+| Localization | next-intl (`en`, `ko`) |
 | Database | Cloudflare D1 / SQLite |
 | ORM | Drizzle ORM |
 | Session | Cloudflare KV |
@@ -90,9 +99,9 @@ Client
 | 테이블 | 설명 |
 |---|---|
 | `venues` | 베뉴 정보와 활성 상태 |
-| `venue_domains` | host, platform/venue scope, 베뉴별 대표 도메인 |
-| `users` | 계정, role, venue scope, session/migration 상태 |
-| `external_dj_links` | 외부 DJ 등록 링크, 정원/사용량, 생성 시각 |
+| `venue_domains` | host, platform/venue scope, 베뉴별 대표 도메인과 기본 언어 |
+| `users` | 계정, role, venue scope, session/migration 상태와 선호 언어 |
+| `external_dj_links` | 외부 DJ 등록 링크, 정원/사용량, 생성 시각과 언어 모드 |
 | `guests` | 게스트 등록 정보와 체크인 전 상태 |
 | `check_ins` | 체크인 기록 |
 | `password_reset_tokens` | 비밀번호 재설정 token hash와 만료/사용 상태 |
@@ -108,5 +117,6 @@ Client
 | D1 schema | Drizzle schema, migration files, affected queries |
 | 배포 runtime | OpenNext compatibility, Worker build result |
 | 이메일 | reset-password route, SES sender configuration, public error message |
+| 국제화 | locale resolver, 메시지 키 대응, 계정·도메인·External Link 우선순위 |
 
 외부 링크의 최근 목록은 `created_at` 내림차순으로 조회한다. Supabase snapshot을 D1으로 이전할 때도 원본 `created_at`을 보존하므로 컷오버 전에 생성된 링크가 최근 목록에서 누락되지 않는다.

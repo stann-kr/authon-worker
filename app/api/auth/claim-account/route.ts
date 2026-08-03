@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { hashPassword } from "@/lib/auth/password";
-import { getPasswordPolicyError } from "@/lib/auth/password-policy";
+import { getPasswordPolicyErrorCode } from "@/lib/auth/password-policy";
 import {
   clearRateLimit,
   consumeRateLimit,
@@ -25,16 +25,22 @@ export async function POST(request: Request) {
       typeof newPassword !== "string"
     ) {
       return NextResponse.json(
-        { error: "Email and a new password are required." },
+        { code: "MISSING_SETUP_FIELDS", error: "Email and a new password are required." },
         { status: 400 },
       );
     }
 
     const normalizedEmail = email.trim().toLowerCase();
-    const passwordPolicyError = getPasswordPolicyError(newPassword);
-    if (passwordPolicyError) {
+    const passwordPolicyErrorCode = getPasswordPolicyErrorCode(newPassword);
+    if (passwordPolicyErrorCode) {
       return NextResponse.json(
-        { error: passwordPolicyError },
+        {
+          code: passwordPolicyErrorCode,
+          error:
+            passwordPolicyErrorCode === "PASSWORD_TOO_SHORT"
+              ? "Password must be at least 8 characters."
+              : "Password must include both letters and numbers.",
+        },
         { status: 400 },
       );
     }
@@ -50,7 +56,7 @@ export async function POST(request: Request) {
 
     if (!rateLimit.allowed) {
       return NextResponse.json(
-        { error: "Too many setup attempts. Please try again later." },
+        { code: "RATE_LIMITED", error: "Too many setup attempts. Please try again later." },
         {
           status: 429,
           headers: { "Retry-After": String(rateLimit.retryAfterSeconds) },
@@ -64,7 +70,7 @@ export async function POST(request: Request) {
     const expectedVenueId = tenant.scope === "venue" ? tenant.venueId : null;
 
     if (!tenant.resolved) {
-      return NextResponse.json({ error: "Unknown venue." }, { status: 404 });
+      return NextResponse.json({ code: "UNKNOWN_VENUE", error: "Unknown venue." }, { status: 404 });
     }
 
     const [userResult] = await env.DB.batch<{ id: string } | { user_id: string }>([
@@ -98,6 +104,7 @@ export async function POST(request: Request) {
     if (!claimedUserId) {
       return NextResponse.json(
         {
+          code: "ACCOUNT_NOT_ELIGIBLE",
           error:
             "This account is not eligible for first-time setup. Sign in normally or contact an administrator.",
         },
@@ -117,7 +124,7 @@ export async function POST(request: Request) {
   } catch (error) {
     console.error("Account claim error:", error);
     return NextResponse.json(
-      { error: "Unable to complete first-time setup right now." },
+      { code: "SERVER_ERROR", error: "Unable to complete first-time setup right now." },
       { status: 500 },
     );
   }

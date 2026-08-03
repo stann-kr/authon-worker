@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { getUser, hasAccess, User } from "../lib/auth";
 import Spinner from "./Spinner";
+import { useTranslations } from "next-intl";
 
 interface AuthGuardProps {
   children: React.ReactNode;
@@ -14,6 +15,7 @@ export default function AuthGuard({
   children,
   requiredAccess,
 }: AuthGuardProps) {
+  const t = useTranslations("Common");
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const router = useRouter();
@@ -45,7 +47,7 @@ export default function AuthGuard({
   }, [router, requiredAccess]);
 
   if (isLoading) {
-    return <Spinner mode="fullscreen" text="Loading workspace" />;
+    return <Spinner mode="fullscreen" text={t("verifyingAccess")} />;
   }
 
   if (!user) {

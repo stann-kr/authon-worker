@@ -11,6 +11,8 @@ import { escapeHtml, isEmailConfigured, sendEmail } from "./email";
 import { generateResetToken, hashResetToken } from "../auth/token";
 import { getPasswordPolicyError } from "../auth/password-policy";
 import { getVenueDeliveryContext } from "../tenant/server";
+import { isLocale, type Locale } from "@/i18n/config";
+import { getTranslations } from "next-intl/server";
 
 export async function fetchUsersByVenue(venueId?: string | null): Promise<ApiResponse<User[]>> {
   try {
@@ -34,6 +36,7 @@ export async function fetchUsersByVenue(venueId?: string | null): Promise<ApiRes
         ...user,
         role: user.role as User["role"],
         migrationStatus: user.migrationStatus as User["migrationStatus"],
+        preferredLocale: isLocale(user.preferredLocale) ? user.preferredLocale : null,
       })),
       error: null,
     };
@@ -95,6 +98,7 @@ export async function updateUserProfile(
             ...result[0],
             role: result[0].role as User["role"],
             migrationStatus: result[0].migrationStatus as User["migrationStatus"],
+            preferredLocale: isLocale(result[0].preferredLocale) ? result[0].preferredLocale : null,
           }
         : null,
       error: null,
@@ -112,6 +116,7 @@ export async function createUserViaEdge(params: {
   venueId?: string | null;
   guestLimit?: number;
   password?: string;
+  preferredLocale?: Locale | null;
 }): Promise<ApiResponse<{ id: string }>> {
   try {
     const actor = await requireRole(["super_admin", "venue_admin"]);
@@ -147,6 +152,7 @@ export async function createUserViaEdge(params: {
       guestLimit: params.guestLimit || null,
       passwordHash,
       active: true,
+      preferredLocale: isLocale(params.preferredLocale) ? params.preferredLocale : null,
       createdAt: new Date().toISOString(),
     });
 
@@ -206,24 +212,27 @@ export async function resendInvitationViaEdge(userId: string): Promise<{ error: 
     });
 
     const delivery = await getVenueDeliveryContext(user.venueId, env.NEXT_PUBLIC_APP_URL);
-    const resetLink = `${delivery.baseUrl}/auth/reset-password?token=${token}`;
-    const safeName = escapeHtml(user.name);
+    const emailLocale = isLocale(user.preferredLocale)
+      ? user.preferredLocale
+      : delivery.defaultLocale;
+    const t = await getTranslations({ locale: emailLocale, namespace: "Email" });
+    const resetLink = `${delivery.baseUrl}/auth/reset-password?token=${token}&lang=${emailLocale}`;
     const safeResetLink = escapeHtml(resetLink);
 
     try {
       await sendEmail({
         to: user.email,
-        subject: `[${delivery.brand.name}] 계정 초기 비밀번호 설정 안내`,
+        subject: t("inviteSubject", { brand: delivery.brand.name }),
         body: `
         <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
-          <h2>계정 초기 비밀번호 설정 안내</h2>
-          <p>안녕하세요, ${safeName}님.</p>
-          <p>관리자에 의해 귀하의 계정이 생성되었습니다. 아래 링크를 클릭하여 비밀번호를 설정하고 로그인을 완료해주세요.</p>
+          <h2>${escapeHtml(t("inviteHeading"))}</h2>
+          <p>${escapeHtml(t("greeting", { name: user.name }))}</p>
+          <p>${escapeHtml(t("inviteInstructions"))}</p>
           <div style="margin: 30px 0;">
-            <a href="${safeResetLink}" style="background-color: #000; color: #fff; padding: 12px 24px; text-decoration: none; border-radius: 4px;">비밀번호 설정하기</a>
+            <a href="${safeResetLink}" style="background-color: #000; color: #fff; padding: 12px 24px; text-decoration: none; border-radius: 4px;">${escapeHtml(t("setPasswordButton"))}</a>
           </div>
-          <p>이 링크는 7일 동안 유효합니다.</p>
-          <p style="color: #666; font-size: 12px; margin-top: 40px;">본 메일은 발송 전용입니다.</p>
+          <p>${escapeHtml(t("inviteExpiry"))}</p>
+          <p style="color: #666; font-size: 12px; margin-top: 40px;">${escapeHtml(t("noReply"))}</p>
         </div>
         `,
       });

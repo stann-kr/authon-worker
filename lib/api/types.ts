@@ -14,6 +14,7 @@ export interface Venue {
   brandDescription?: string | null;
   brandFooter?: string | null;
   primaryDomain?: string | null;
+  defaultLocale?: "en" | "ko" | null;
   active: boolean;
 }
 
@@ -26,6 +27,7 @@ export interface User {
   guestLimit: number | null;
   active: boolean;
   migrationStatus: "native" | "pending_reset" | "active";
+  preferredLocale: "en" | "ko" | null;
 }
 
 export interface Guest {
@@ -57,4 +59,5 @@ export interface ExternalDJLink {
   createdBy?: string | null;
   createdAt?: string | null;
   guestUrl?: string | null;
+  localeMode: "auto" | "en" | "ko";
 }

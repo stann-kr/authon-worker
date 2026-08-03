@@ -54,11 +54,21 @@ export function isExpiringSoon(expiresAt?: string | null, now = Date.now()): boo
   return delta > 0 && delta <= DAY_MS;
 }
 
-export function formatRelativeExpiry(expiresAt?: string | null, now = Date.now()): string {
-  if (!expiresAt) return "NO EXPIRY";
+export function formatRelativeExpiry(
+  expiresAt?: string | null,
+  now = Date.now(),
+  labels: {
+    noExpiry?: string;
+    invalidExpiry?: string;
+    expiredAgo?: (duration: string) => string;
+    expiresIn?: (duration: string) => string;
+    formatDuration?: (parts: { days: number; hours: number; minutes: number }) => string;
+  } = {},
+): string {
+  if (!expiresAt) return labels.noExpiry ?? "NO EXPIRY";
 
   const expiryTime = getExpiryTime(expiresAt);
-  if (expiryTime === null) return "INVALID EXPIRY";
+  if (expiryTime === null) return labels.invalidExpiry ?? "INVALID EXPIRY";
 
   const delta = expiryTime - now;
   const absDelta = Math.abs(delta);
@@ -68,14 +78,17 @@ export function formatRelativeExpiry(expiresAt?: string | null, now = Date.now()
   const hours = Math.floor((totalMinutes % (24 * 60)) / 60);
   const minutes = totalMinutes % 60;
 
-  const compact =
+  const compact = labels.formatDuration?.({ days, hours, minutes }) ?? (
     days > 0
       ? `${days}D ${hours}H`
       : hours > 0
         ? `${hours}H ${minutes}M`
-        : `${minutes}M`;
+        : `${minutes}M`
+  );
 
-  return delta <= 0 ? `EXPIRED ${compact} AGO` : `EXPIRES IN ${compact}`;
+  return delta <= 0
+    ? labels.expiredAgo?.(compact) ?? `EXPIRED ${compact} AGO`
+    : labels.expiresIn?.(compact) ?? `EXPIRES IN ${compact}`;
 }
 
 export function formatExpiryTimestamp(expiresAt?: string | null): string {
@@ -86,13 +99,14 @@ export function formatTimestamp(
   value?: string | null,
   emptyLabel = "Unknown",
   invalidLabel = "Invalid timestamp",
+  locale = "en-US",
 ): string {
   if (!value) return emptyLabel;
 
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return invalidLabel;
 
-  return new Intl.DateTimeFormat("en-US", {
+  return new Intl.DateTimeFormat(locale, {
     year: "numeric",
     month: "short",
     day: "2-digit",
@@ -173,6 +187,7 @@ export function filterLinksByManageFilter<T extends LinkStatusInput>(
 export function sortLinks<T extends LinkStatusInput>(
   links: T[],
   sortBy: ManageSort,
+  locale?: string,
 ): T[] {
   return [...links].sort((a, b) => {
     const expiryA = getExpiryTime(a.expiresAt) ?? Number.POSITIVE_INFINITY;
@@ -184,7 +199,7 @@ export function sortLinks<T extends LinkStatusInput>(
       case "newest":
         return getCreatedTime(b.createdAt) - getCreatedTime(a.createdAt);
       case "djName":
-        return (a.djName ?? "").localeCompare(b.djName ?? "", undefined, {
+        return (a.djName ?? "").localeCompare(b.djName ?? "", locale, {
           sensitivity: "base",
         });
       default:

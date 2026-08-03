@@ -7,6 +7,7 @@ import { type ExternalDJLink, type Guest, type Venue, type ApiResponse } from ".
 import { requireRole, type SessionUser } from "../auth/server";
 import { getDb } from "../db/client";
 import { getRequestTenantContext, getVenueDeliveryContext } from "../tenant/server";
+import { isExternalLinkLocaleMode } from "@/i18n/config";
 
 type Db = ReturnType<typeof getDb>;
 
@@ -45,11 +46,14 @@ function isExpired(expiresAt?: string | null): boolean {
 async function addGuestUrls<T extends typeof externalDjLinks.$inferSelect>(
   venueId: string,
   links: T[],
-): Promise<Array<T & { guestUrl: string }>> {
+): Promise<Array<T & { guestUrl: string; localeMode: ExternalDJLink["localeMode"] }>> {
   const { baseUrl } = await getVenueDeliveryContext(venueId);
   return links.map((link) => ({
     ...link,
-    guestUrl: `${baseUrl}/guest?token=${encodeURIComponent(link.token)}`,
+    localeMode: isExternalLinkLocaleMode(link.localeMode) ? link.localeMode : "auto",
+    guestUrl: `${baseUrl}/guest?token=${encodeURIComponent(link.token)}${
+      link.localeMode === "en" || link.localeMode === "ko" ? `&lang=${link.localeMode}` : ""
+    }`,
   }));
 }
 
@@ -111,6 +115,7 @@ export async function createExternalLink(link: {
   event: string;
   date: string;
   maxGuests: number;
+  localeMode?: ExternalDJLink["localeMode"];
   createdBy?: string;
 }): Promise<ApiResponse<ExternalDJLink>> {
   try {
@@ -129,6 +134,7 @@ export async function createExternalLink(link: {
       event: link.event,
       date: link.date,
       maxGuests: link.maxGuests,
+      localeMode: isExternalLinkLocaleMode(link.localeMode) ? link.localeMode : "auto",
       usedGuests: 0,
       active: true,
       expiresAt,
@@ -214,7 +220,10 @@ export async function validateExternalToken(token: string): Promise<ApiResponse<
 
     return {
       data: {
-        link,
+        link: {
+          ...link,
+          localeMode: isExternalLinkLocaleMode(link.localeMode) ? link.localeMode : "auto",
+        },
         venue,
         guests: guestsResult.map((g) => ({ ...g, status: g.status as Guest["status"] })),
       },

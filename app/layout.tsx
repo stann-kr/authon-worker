@@ -5,6 +5,8 @@ import DesignSystemProvider from "@/components/DesignSystemProvider";
 import VenueBrandProvider from "@/components/VenueBrandProvider";
 import { RouteTransitionProvider } from "@/components/RouteTransitionProvider";
 import { getRequestTenantContext } from "@/lib/tenant/server";
+import { NextIntlClientProvider } from "next-intl";
+import { getLocale, getMessages, getTranslations } from "next-intl/server";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -18,7 +20,11 @@ const geistMono = Geist_Mono({
 
 export async function generateMetadata(): Promise<Metadata> {
   const { brand } = await getRequestTenantContext();
-  return { title: brand.name, description: brand.description };
+  return {
+    title: brand.name,
+    description: brand.description,
+    robots: { index: false, follow: false },
+  };
 }
 
 export const viewport: Viewport = {
@@ -33,26 +39,33 @@ export default async function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  const tenant = await getRequestTenantContext();
+  const [tenant, locale, messages, t] = await Promise.all([
+    getRequestTenantContext(),
+    getLocale(),
+    getMessages(),
+    getTranslations("Common"),
+  ]);
 
   return (
-    <html lang="ko" suppressHydrationWarning={true}>
+    <html lang={locale} suppressHydrationWarning={true}>
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased bg-canvas text-text-body`}
         style={{ minHeight: "100dvh" }}
       >
-        <VenueBrandProvider tenant={tenant}>
-          <DesignSystemProvider>
-            <RouteTransitionProvider>
-              <a href="#main-content" className="skip-link">
-                본문으로 건너뛰기
-              </a>
-              <div id="main-content" tabIndex={-1}>
-                {children}
-              </div>
-            </RouteTransitionProvider>
-          </DesignSystemProvider>
-        </VenueBrandProvider>
+        <NextIntlClientProvider messages={messages}>
+          <VenueBrandProvider tenant={tenant}>
+            <DesignSystemProvider>
+              <RouteTransitionProvider>
+                <a href="#main-content" className="skip-link">
+                  {t("skipToContent")}
+                </a>
+                <div id="main-content" tabIndex={-1}>
+                  {children}
+                </div>
+              </RouteTransitionProvider>
+            </DesignSystemProvider>
+          </VenueBrandProvider>
+        </NextIntlClientProvider>
       </body>
     </html>
   );

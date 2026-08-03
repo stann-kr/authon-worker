@@ -1,3 +1,7 @@
+"use client";
+
+import { useTranslations } from "next-intl";
+
 /**
  * Spinner — 로딩 스피너 컴포넌트.
  *
@@ -30,6 +34,7 @@ export default function Spinner({
   text,
   color = "white",
 }: SpinnerProps) {
+  const t = useTranslations("Common");
   if (mode === "fullscreen") {
     return (
       <div className="flex min-h-[100dvh] items-center justify-center bg-canvas" role="status" aria-live="polite">
@@ -43,7 +48,7 @@ export default function Spinner({
               {text}
             </p>
           )}
-          {!text && <span className="sr-only">로딩 중</span>}
+          {!text && <span className="sr-only">{t("loading")}</span>}
         </div>
       </div>
     );
@@ -59,7 +64,7 @@ export default function Spinner({
         {text && (
           <span className="ml-2 text-sm text-text-muted">{text}</span>
         )}
-        {!text && <span className="sr-only">로딩 중</span>}
+        {!text && <span className="sr-only">{t("loading")}</span>}
       </div>
     );
   }

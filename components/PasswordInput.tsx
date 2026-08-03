@@ -3,6 +3,7 @@
 import { useId, useState } from "react";
 import type { InputHTMLAttributes, KeyboardEvent } from "react";
 import Icon from "./Icon";
+import { useTranslations } from "next-intl";
 
 interface PasswordInputProps
   extends Omit<InputHTMLAttributes<HTMLInputElement>, "type"> {
@@ -22,6 +23,7 @@ export default function PasswordInput({
   "aria-describedby": ariaDescribedBy,
   ...props
 }: PasswordInputProps) {
+  const t = useTranslations("Common");
   const [isVisible, setIsVisible] = useState(false);
   const [isCapsLockOn, setIsCapsLockOn] = useState(false);
   const capsLockWarningId = useId();
@@ -57,7 +59,7 @@ export default function PasswordInput({
           type="button"
           onClick={() => setIsVisible((visible) => !visible)}
           className="pressable absolute inset-y-0 right-0 flex w-11 items-center justify-center rounded-control text-text-muted hover:bg-surface-hover hover:text-text-heading"
-          aria-label={isVisible ? "Hide password" : "Show password"}
+          aria-label={isVisible ? t("hidePassword") : t("showPassword")}
           aria-pressed={isVisible}
         >
           <Icon name={isVisible ? "view-off" : "view"} size={18} />
@@ -71,7 +73,7 @@ export default function PasswordInput({
           className="mt-2 flex items-center gap-1.5 text-xs text-text-muted"
         >
           <Icon name="warning" size={14} />
-          Caps Lock is on
+          {t("capsLockOn")}
         </p>
       )}
     </div>

@@ -14,6 +14,7 @@ import {
   normalizeHostname,
 } from "@/lib/tenant/host";
 import type { TenantContext, TenantScope } from "@/lib/tenant/types";
+import { DEFAULT_LOCALE, isLocale } from "@/i18n/config";
 
 function getConfiguredBaseUrl(): string | null {
   return getCloudflareContext().env.NEXT_PUBLIC_APP_URL || null;
@@ -27,6 +28,7 @@ function platformContext(hostname: string, fallbackBaseUrl?: string | null): Ten
     venueId: null,
     baseUrl: configuredBaseUrl || baseUrlForHostname(hostname),
     brand: PLATFORM_BRAND,
+    defaultLocale: DEFAULT_LOCALE,
     resolved: isPlatformHostname(hostname),
   };
 }
@@ -51,6 +53,7 @@ export async function resolveTenantByHostname(
       brandTagline: venues.brandTagline,
       brandDescription: venues.brandDescription,
       brandFooter: venues.brandFooter,
+      defaultLocale: venueDomains.defaultLocale,
     })
     .from(venueDomains)
     .leftJoin(venues, eq(venueDomains.venueId, venues.id))
@@ -70,6 +73,7 @@ export async function resolveTenantByHostname(
     return {
       ...platformContext(hostname, fallbackBaseUrl),
       baseUrl: baseUrlForHostname(hostname),
+      defaultLocale: isLocale(row.defaultLocale) ? row.defaultLocale : DEFAULT_LOCALE,
       resolved: true,
     };
   }
@@ -90,6 +94,7 @@ export async function resolveTenantByHostname(
       brandDescription: row.brandDescription,
       brandFooter: row.brandFooter,
     }),
+    defaultLocale: isLocale(row.defaultLocale) ? row.defaultLocale : DEFAULT_LOCALE,
     resolved: true,
   };
 }
@@ -112,11 +117,16 @@ export async function getTenantContextForRequest(request: Request): Promise<Tena
 export async function getVenueDeliveryContext(
   venueId: string | null | undefined,
   fallbackBaseUrl?: string | null,
-): Promise<Pick<TenantContext, "baseUrl" | "brand" | "venueId">> {
+): Promise<Pick<TenantContext, "baseUrl" | "brand" | "venueId" | "defaultLocale">> {
   const effectiveFallbackBaseUrl = fallbackBaseUrl ?? getConfiguredBaseUrl();
   if (!venueId) {
     const fallback = platformContext("localhost", effectiveFallbackBaseUrl);
-    return { baseUrl: fallback.baseUrl, brand: fallback.brand, venueId: null };
+    return {
+      baseUrl: fallback.baseUrl,
+      brand: fallback.brand,
+      venueId: null,
+      defaultLocale: fallback.defaultLocale,
+    };
   }
 
   const db = getDb();
@@ -128,6 +138,7 @@ export async function getVenueDeliveryContext(
       brandTagline: venues.brandTagline,
       brandDescription: venues.brandDescription,
       brandFooter: venues.brandFooter,
+      defaultLocale: venueDomains.defaultLocale,
     })
     .from(venues)
     .leftJoin(
@@ -144,11 +155,17 @@ export async function getVenueDeliveryContext(
   const row = rows[0];
   if (!row) {
     const fallback = platformContext("localhost", effectiveFallbackBaseUrl);
-    return { baseUrl: fallback.baseUrl, brand: fallback.brand, venueId };
+    return {
+      baseUrl: fallback.baseUrl,
+      brand: fallback.brand,
+      venueId,
+      defaultLocale: fallback.defaultLocale,
+    };
   }
 
   return {
     venueId,
+    defaultLocale: isLocale(row.defaultLocale) ? row.defaultLocale : DEFAULT_LOCALE,
     baseUrl:
       (row.hostname ? baseUrlForHostname(row.hostname) : null) ||
       normalizeBaseUrl(effectiveFallbackBaseUrl) ||

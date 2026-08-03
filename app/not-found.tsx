@@ -2,9 +2,13 @@ import Link from "next/link";
 import Button from "@/components/Button";
 import Icon from "@/components/Icon";
 import { getRequestTenantContext } from "@/lib/tenant/server";
+import { getTranslations } from "next-intl/server";
 
 export default async function NotFound() {
-  const { brand } = await getRequestTenantContext();
+  const [{ brand }, t] = await Promise.all([
+    getRequestTenantContext(),
+    getTranslations("Common"),
+  ]);
   return (
     <div className="flex min-h-[100dvh] items-center justify-center bg-canvas px-4 text-center">
       <div className="app-panel w-full max-w-md p-8 sm:p-10">
@@ -13,14 +17,14 @@ export default async function NotFound() {
         </div>
         <p className="font-mono text-sm text-text-muted">404</p>
         <h1 className="mt-2 text-2xl font-semibold text-text-heading">
-          Page not found
+          {t("notFoundTitle")}
         </h1>
         <p className="mt-3 text-sm leading-relaxed text-text-muted">
-          The requested {brand.name} workspace does not exist or is no longer available.
+          {t("notFoundDescription", { brand: brand.name })}
         </p>
         <div className="mx-auto mt-8 w-full max-w-xs">
           <Link href="/">
-            <Button fullWidth size="lg">Go home</Button>
+            <Button fullWidth size="lg">{t("goHome")}</Button>
           </Link>
         </div>
       </div>

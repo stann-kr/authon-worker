@@ -2,6 +2,7 @@ import React from "react";
 import Button from "./Button";
 import Icon from "./Icon";
 import StatusLabel from "./StatusLabel";
+import { useTranslations } from "next-intl";
 
 export interface Guest {
   id: string;
@@ -44,6 +45,7 @@ const GuestListCard: React.FC<GuestListCardProps> = ({
   isUndoLoading = false,
   isDeleteLoading = false,
 }) => {
+  const t = useTranslations("Common");
   const rowTone = index % 2 === 0 ? "bg-surface" : "bg-surface-raised";
   const indicatorTone =
     guest.status === "checked"
@@ -52,7 +54,7 @@ const GuestListCard: React.FC<GuestListCardProps> = ({
         ? "before:bg-border-strong"
         : "before:bg-status-waiting";
   const handleDelete = () => {
-    if (!onDelete || !window.confirm("Remove this guest from the list?")) return;
+    if (!onDelete || !window.confirm(t("removeGuestConfirm"))) return;
     onDelete();
   };
 
@@ -73,7 +75,7 @@ const GuestListCard: React.FC<GuestListCardProps> = ({
             </p>
             {djName && (
               <p className="mt-0.5 text-xs text-text-muted">
-                By {djName}
+                {t("byName", { name: djName })}
               </p>
             )}
 
@@ -81,7 +83,7 @@ const GuestListCard: React.FC<GuestListCardProps> = ({
               <div className="mt-1.5 flex flex-wrap items-center gap-x-5 gap-y-1">
                 {showRegisteredAt && guest.createdAt && (
                   <span className="flex items-baseline gap-2 text-xs text-text-dim">
-                    <span>REGISTERED</span>
+                    <span>{t("registered")}</span>
                     <time
                       dateTime={guest.createdAt}
                       className="font-mono tabular-nums text-text-muted"
@@ -92,7 +94,7 @@ const GuestListCard: React.FC<GuestListCardProps> = ({
                 )}
                 {guest.checkInTime && (
                   <span className="flex items-baseline gap-2 text-xs text-status-checked">
-                    <span>CHECKED IN</span>
+                    <span>{t("checkedIn")}</span>
                     <time
                       dateTime={guest.checkInTime}
                       className="font-mono tabular-nums"
@@ -109,7 +111,7 @@ const GuestListCard: React.FC<GuestListCardProps> = ({
         <div className="flex flex-shrink-0 flex-wrap items-center justify-end gap-2">
           {guest.status === "pending" && (
             <>
-              <span className="sr-only">Status: waiting.</span>
+              <span className="sr-only">{t("waitingStatus")}</span>
               {onCheck && (
                 <Button
                   onClick={onCheck}
@@ -118,7 +120,7 @@ const GuestListCard: React.FC<GuestListCardProps> = ({
                   size="md"
                   className="w-32 px-2 sm:w-36 sm:px-4"
                 >
-                  CHECK IN
+                  {t("checkIn")}
                 </Button>
               )}
 
@@ -129,7 +131,7 @@ const GuestListCard: React.FC<GuestListCardProps> = ({
                   variant="danger"
                   className="px-3 sm:px-4"
                 >
-                  DELETE
+                  {t("delete")}
                 </Button>
               )}
 
@@ -139,7 +141,7 @@ const GuestListCard: React.FC<GuestListCardProps> = ({
                   isLoading={isDeleteLoading}
                   variant="ghost"
                   className="px-3 sm:px-4 border border-border-default text-text-muted"
-                  aria-label="Delete Guest"
+                  aria-label={t("deleteGuest")}
                 >
                   <Icon name="close" size={16} />
                 </Button>
@@ -149,7 +151,7 @@ const GuestListCard: React.FC<GuestListCardProps> = ({
 
           {guest.status === "checked" && (
             <>
-              <span className="sr-only">Status: checked in.</span>
+              <span className="sr-only">{t("checkedInStatus")}</span>
               {onUndo && (
                 <Button
                   onClick={onUndo}
@@ -158,9 +160,9 @@ const GuestListCard: React.FC<GuestListCardProps> = ({
                   size="md"
                   leftIcon={<Icon name="undo" size={16} />}
                   className="w-32 px-2 sm:w-36 sm:px-4"
-                  aria-label={`Undo check-in for ${guest.name}`}
+                  aria-label={t("undoCheckIn", { name: guest.name })}
                 >
-                  UNDO
+                  {t("undo")}
                 </Button>
               )}
               {!onUndo && (
@@ -169,7 +171,7 @@ const GuestListCard: React.FC<GuestListCardProps> = ({
                   appearance="inline"
                   className="whitespace-nowrap"
                 >
-                  CHECKED IN
+                  {t("checkedIn")}
                 </StatusLabel>
               )}
               {mode === "operations" && onDelete && (
@@ -178,7 +180,7 @@ const GuestListCard: React.FC<GuestListCardProps> = ({
                   isLoading={isDeleteLoading}
                   variant="ghost"
                   className="w-8 h-8 sm:w-10 sm:h-10 p-0 border border-border-default text-text-muted"
-                  aria-label="Remove Guest"
+                  aria-label={t("removeGuest")}
                 >
                   <Icon name="close" size={16} />
                 </Button>
@@ -188,7 +190,7 @@ const GuestListCard: React.FC<GuestListCardProps> = ({
 
           {guest.status === "deleted" && (
             <StatusLabel tone="neutral">
-              REMOVED
+              {t("removed")}
             </StatusLabel>
           )}
         </div>

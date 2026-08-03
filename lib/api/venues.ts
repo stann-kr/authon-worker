@@ -6,6 +6,7 @@ import { type Venue, type ApiResponse } from "./types";
 import { requireRole } from "../auth/server";
 import { getDb } from "../db/client";
 import { isPlatformHostname, normalizeHostname } from "../tenant/host";
+import { DEFAULT_LOCALE, isLocale, type Locale } from "@/i18n/config";
 
 type Db = ReturnType<typeof getDb>;
 type VenueRow = typeof venues.$inferSelect;
@@ -26,15 +27,19 @@ function isHostnameError(error: unknown): boolean {
   return error instanceof Error && error.message.toLowerCase().includes("hostname");
 }
 
-function toVenue(row: VenueRow, primaryDomain: string | null = null): Venue {
-  return { ...row, type: row.type as Venue["type"], primaryDomain };
+function toVenue(
+  row: VenueRow,
+  primaryDomain: string | null = null,
+  defaultLocale: Locale | null = null,
+): Venue {
+  return { ...row, type: row.type as Venue["type"], primaryDomain, defaultLocale };
 }
 
 async function loadVenue(db: Db, id: string): Promise<Venue | null> {
   const [row] = await db.select().from(venues).where(eq(venues.id, id)).limit(1);
   if (!row) return null;
   const [domain] = await db
-    .select({ hostname: venueDomains.hostname })
+    .select({ hostname: venueDomains.hostname, defaultLocale: venueDomains.defaultLocale })
     .from(venueDomains)
     .where(
       and(
@@ -44,10 +49,19 @@ async function loadVenue(db: Db, id: string): Promise<Venue | null> {
       ),
     )
     .limit(1);
-  return toVenue(row, domain?.hostname || null);
+  return toVenue(
+    row,
+    domain?.hostname || null,
+    isLocale(domain?.defaultLocale) ? domain.defaultLocale : null,
+  );
 }
 
-async function setPrimaryDomain(db: Db, venueId: string, value: string | null | undefined) {
+async function setPrimaryDomain(
+  db: Db,
+  venueId: string,
+  value: string | null | undefined,
+  defaultLocale: Locale = DEFAULT_LOCALE,
+) {
   const hostname = parsePrimaryDomain(value);
   const existingForHost = hostname
     ? await db
@@ -71,7 +85,7 @@ async function setPrimaryDomain(db: Db, venueId: string, value: string | null | 
   if (existingForHost[0]) {
     await db
       .update(venueDomains)
-      .set({ venueId, scope: "venue", isPrimary: true, active: true })
+      .set({ venueId, scope: "venue", isPrimary: true, active: true, defaultLocale })
       .where(eq(venueDomains.id, existingForHost[0].id));
     return;
   }
@@ -83,6 +97,7 @@ async function setPrimaryDomain(db: Db, venueId: string, value: string | null | 
     scope: "venue",
     isPrimary: true,
     active: true,
+    defaultLocale,
     createdAt: new Date().toISOString(),
   });
 }
@@ -107,7 +122,11 @@ export async function fetchVenues(includeInactive = false): Promise<ApiResponse<
     const venueIds = rows.map((row) => row.id);
     const domains = venueIds.length
       ? await db
-          .select({ venueId: venueDomains.venueId, hostname: venueDomains.hostname })
+          .select({
+            venueId: venueDomains.venueId,
+            hostname: venueDomains.hostname,
+            defaultLocale: venueDomains.defaultLocale,
+          })
           .from(venueDomains)
           .where(
             and(
@@ -117,10 +136,17 @@ export async function fetchVenues(includeInactive = false): Promise<ApiResponse<
             ),
           )
       : [];
-    const domainByVenue = new Map(domains.map((domain) => [domain.venueId, domain.hostname]));
+    const domainByVenue = new Map(domains.map((domain) => [domain.venueId, domain]));
 
     return {
-      data: rows.map((row) => toVenue(row, domainByVenue.get(row.id) || null)),
+      data: rows.map((row) => {
+        const domain = domainByVenue.get(row.id);
+        return toVenue(
+          row,
+          domain?.hostname || null,
+          isLocale(domain?.defaultLocale) ? domain.defaultLocale : null,
+        );
+      }),
       error: null,
     };
   } catch (error: unknown) {
@@ -139,6 +165,7 @@ export async function createVenue(venue: {
   brandDescription?: string;
   brandFooter?: string;
   primaryDomain?: string;
+  defaultLocale?: Locale;
 }): Promise<ApiResponse<Venue>> {
   try {
     await requireRole(["super_admin"]);
@@ -165,7 +192,14 @@ export async function createVenue(venue: {
       brandFooter: venue.brandFooter?.trim() || null,
       active: true,
     });
-    if (primaryDomain) await setPrimaryDomain(db, id, primaryDomain);
+    if (primaryDomain) {
+      await setPrimaryDomain(
+        db,
+        id,
+        primaryDomain,
+        isLocale(venue.defaultLocale) ? venue.defaultLocale : DEFAULT_LOCALE,
+      );
+    }
     return { data: await loadVenue(db, id), error: null };
   } catch (error: unknown) {
     console.error("Failed to create venue:", error);
@@ -188,6 +222,7 @@ export async function updateVenue(
     | "brandDescription"
     | "brandFooter"
     | "primaryDomain"
+    | "defaultLocale"
     | "active"
   >>,
 ): Promise<ApiResponse<Venue>> {
@@ -221,8 +256,24 @@ export async function updateVenue(
     if (Object.keys(dbUpdates).length > 0) {
       await db.update(venues).set(dbUpdates).where(eq(venues.id, id));
     }
-    if (primaryDomain !== undefined) {
-      await setPrimaryDomain(db, id, primaryDomain);
+    if (primaryDomain !== undefined || updates.defaultLocale !== undefined) {
+      const [currentDomain] = await db
+        .select({ hostname: venueDomains.hostname })
+        .from(venueDomains)
+        .where(
+          and(
+            eq(venueDomains.venueId, id),
+            eq(venueDomains.isPrimary, true),
+            eq(venueDomains.active, true),
+          ),
+        )
+        .limit(1);
+      await setPrimaryDomain(
+        db,
+        id,
+        primaryDomain !== undefined ? primaryDomain : currentDomain?.hostname,
+        isLocale(updates.defaultLocale) ? updates.defaultLocale : DEFAULT_LOCALE,
+      );
     }
     return { data: await loadVenue(db, id), error: null };
   } catch (error: unknown) {

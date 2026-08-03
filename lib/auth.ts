@@ -12,6 +12,7 @@ export interface User {
   name: string;
   role: "super_admin" | "venue_admin" | "door_staff" | "staff" | "dj";
   guest_limit: number;
+  preferred_locale?: "en" | "ko" | null;
 }
 
 /**
@@ -22,7 +23,7 @@ export interface User {
 export const login = async (
   email: string,
   password: string,
-): Promise<{ success: boolean; message?: string; requiresSetup?: boolean }> => {
+): Promise<{ success: boolean; message?: string; code?: string; requiresSetup?: boolean }> => {
   try {
     const res = await fetch("/api/auth/login", {
       method: "POST",
@@ -35,6 +36,7 @@ export const login = async (
       return {
         success: false,
         message: errorData.error || "Login failed.",
+        code: errorData.code,
         requiresSetup: errorData.code === "PASSWORD_SETUP_REQUIRED",
       };
     }
@@ -48,6 +50,7 @@ export const login = async (
       name: user.name,
       role: user.role,
       guest_limit: user.guestLimit || 0,
+      preferred_locale: user.preferredLocale || null,
     };
 
     localStorage.setItem("user", JSON.stringify(userInfo));
@@ -62,7 +65,7 @@ export const login = async (
 export const claimMigratedAccount = async (
   email: string,
   newPassword: string,
-): Promise<{ success: boolean; message?: string }> => {
+): Promise<{ success: boolean; message?: string; code?: string }> => {
   try {
     const res = await fetch("/api/auth/claim-account", {
       method: "POST",
@@ -75,6 +78,7 @@ export const claimMigratedAccount = async (
       return {
         success: false,
         message: data.error || "First-time setup failed.",
+        code: data.code,
       };
     }
 
