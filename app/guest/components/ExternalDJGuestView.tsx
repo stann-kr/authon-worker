@@ -14,6 +14,7 @@ import GuestListCard from "@/components/GuestListCard";
 import GuestSearchInput from "@/components/GuestSearchInput";
 import Icon from "@/components/Icon";
 import LanguageSwitcher from "@/components/LanguageSwitcher";
+import { useRouteLoadingTask } from "@/components/RouteTransitionProvider";
 import { useLocale, useTranslations } from "next-intl";
 import { formatDateDisplay } from "@/lib/date";
 import {
@@ -47,6 +48,7 @@ export default function ExternalDJGuestView({ token }: ExternalDJGuestViewProps)
     "default",
   );
   const validationGuard = useLatestRequestGuard();
+  useRouteLoadingTask(isValidating);
 
   useEffect(() => {
     const validate = async () => {

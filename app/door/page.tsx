@@ -22,6 +22,7 @@ import Alert from "../../components/Alert";
 import Icon from "../../components/Icon";
 import Skeleton from "../../components/Skeleton";
 import OperationsLayout from "../../components/OperationsLayout";
+import { useRouteLoadingTask } from "../../components/RouteTransitionProvider";
 import { getBusinessDate } from "../../lib/date";
 import {
   fetchGuestsByDate,
@@ -103,6 +104,7 @@ function DoorPageContent() {
 
   const hasCurrentScopeData = loadedScopeKey === requestScopeKey;
   const isCurrentScopeFetching = isFetching || !hasCurrentScopeData;
+  useRouteLoadingTask(isCurrentScopeFetching);
   const displayData = !hasCurrentScopeData
     ? EMPTY_DISPLAY_DATA
     : isFetching && displayCacheRef.current.scopeKey === requestScopeKey
@@ -147,6 +149,10 @@ function DoorPageContent() {
     } catch (error) {
       if (!isLatestRequest()) return;
       console.error("Failed to load data:", error);
+      setGuests([]);
+      setUsers([]);
+      setExternalLinks([]);
+      setLoadedScopeKey(requestScopeKey);
       setFeedback(t("loadFailed"));
     } finally {
       if (isLatestRequest()) setIsFetching(false);
