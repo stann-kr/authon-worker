@@ -189,9 +189,6 @@
   },
   "Home": {
     "availableWorkspaces": "Available workspaces",
-    "workspaceLabel": "Workspaces",
-    "workspaceTitle": "What would you like to work on?",
-    "keyboardHint": "Use number keys to jump in",
     "guestCategory": "List management",
     "guestTitle": "Guest registration",
     "guestDescription": "Add names, review limits and manage your guest list.",

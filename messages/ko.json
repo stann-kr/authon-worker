@@ -189,9 +189,6 @@
   },
   "Home": {
     "availableWorkspaces": "사용 가능한 작업 공간",
-    "workspaceLabel": "작업 메뉴",
-    "workspaceTitle": "어떤 업무를 시작할까요?",
-    "keyboardHint": "숫자 키로 바로 이동",
     "guestCategory": "명단 관리",
     "guestTitle": "게스트 등록",
     "guestDescription": "이름을 추가하고 한도를 확인하며 게스트 목록을 관리합니다.",

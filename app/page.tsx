@@ -157,7 +157,7 @@ export default function Home() {
     <div className="flex min-h-[100dvh] flex-col bg-canvas">
       <AdminHeader />
 
-      <main className="mx-auto flex w-full max-w-[1040px] flex-1 flex-col justify-center px-4 pb-8 pt-20 sm:px-6 sm:pt-24 lg:px-10">
+      <main className="mx-auto flex w-full max-w-[1040px] flex-1 flex-col px-4 pb-8 pt-20 sm:px-6 sm:pt-24 lg:px-10">
         {user.role === "venue_admin" && pendingGuestRequestCount > 0 && (
           <TransitionLink
             href="/admin?tab=guests&view=requests"
@@ -186,20 +186,6 @@ export default function Home() {
             aria-label={t("availableWorkspaces")}
             className={`mx-auto w-full ${workspaceWidthClass}`}
           >
-            <div className="mb-4 flex items-end justify-between gap-4 border-b border-border-default pb-3">
-              <div>
-                <p className="text-xs font-medium text-text-muted">
-                  {t("workspaceLabel")}
-                </p>
-                <h1 className="mt-1 text-xl font-semibold tracking-[-0.02em] text-text-heading sm:text-2xl">
-                  {t("workspaceTitle")}
-                </h1>
-              </div>
-              <p className="hidden font-mono text-xs text-text-dim sm:block">
-                {t("keyboardHint")}
-              </p>
-            </div>
-
             <div
               className={`grid border-l border-t border-border-default ${workspaceGridClass}`}
             >
@@ -226,7 +212,7 @@ function WorkspaceLink({
   return (
     <TransitionLink
       href={item.href}
-      className="pressable group relative flex min-h-[224px] flex-col border-b border-r border-border-default bg-surface hover:bg-surface-raised focus-visible:bg-surface-raised focus-visible:outline-none before:absolute before:inset-x-0 before:top-0 before:h-0.5 before:bg-action-primary before:opacity-0 before:transition-opacity hover:before:opacity-100 focus-visible:before:opacity-100 sm:min-h-[244px]"
+      className="pressable group relative flex min-h-[248px] flex-col border-b border-r border-border-default bg-surface hover:bg-surface-raised focus-visible:bg-surface-raised focus-visible:outline-none before:absolute before:inset-x-0 before:top-0 before:h-0.5 before:bg-action-primary before:opacity-0 before:transition-opacity hover:before:opacity-100 focus-visible:before:opacity-100 sm:min-h-[272px]"
     >
       <div className="flex w-full items-center justify-between border-b border-border-subtle px-4 py-3 sm:px-5">
         <span className="text-xs font-medium text-text-muted">
