@@ -203,7 +203,7 @@ export default function InviteUser() {
                   onChange={(e) =>
                     setFormData({ ...formData, venue_id: e.target.value })
                   }
-                  className="w-full appearance-none bg-canvas border border-border-default px-4 py-3 pr-10 text-text-heading text-sm focus:outline-none focus:border-border-focus"
+                  className="w-full appearance-none bg-canvas border border-border-strong px-4 py-3 pr-10 text-text-heading text-sm focus:outline-none focus:border-border-focus"
                   required
                 >
                   <option value="">{t("selectVenue")}</option>
@@ -229,7 +229,7 @@ export default function InviteUser() {
               onChange={(e) =>
                 setFormData({ ...formData, email: e.target.value })
               }
-              className="w-full bg-canvas border border-border-default px-4 py-3 text-text-heading text-sm focus:outline-none focus:border-border-focus"
+              className="w-full bg-canvas border border-border-strong px-4 py-3 text-text-heading text-sm focus:outline-none focus:border-border-focus"
               placeholder="user@example.com"
               required
             />
@@ -246,7 +246,7 @@ export default function InviteUser() {
               onChange={(e) =>
                 setFormData({ ...formData, name: e.target.value })
               }
-              className="w-full bg-canvas border border-border-default px-4 py-3 text-text-heading text-sm focus:outline-none focus:border-border-focus"
+              className="w-full bg-canvas border border-border-strong px-4 py-3 text-text-heading text-sm focus:outline-none focus:border-border-focus"
               placeholder={t("namePlaceholder")}
               required
             />
@@ -353,7 +353,7 @@ export default function InviteUser() {
                   const val = e.target.value.replace(/[^0-9]/g, "");
                   setFormData({ ...formData, guest_limit: val });
                 }}
-                className="w-full bg-canvas border border-border-default px-4 py-3 text-text-heading text-sm focus:outline-none focus:border-border-focus"
+                className="w-full bg-canvas border border-border-strong px-4 py-3 text-text-heading text-sm focus:outline-none focus:border-border-focus"
                 placeholder={t("guestLimitPlaceholder")}
               />
             </div>

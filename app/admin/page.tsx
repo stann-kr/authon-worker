@@ -23,6 +23,7 @@ import {
 
 type AdminTab = "guests" | "links" | "users" | "venues";
 type GuestAdminTab = "list" | "requests";
+const GUEST_ADMIN_TABS: GuestAdminTab[] = ["list", "requests"];
 
 interface AdminTabDefinition {
   id: AdminTab;
@@ -164,6 +165,31 @@ function AdminPageContent() {
     document.getElementById(`tab-${nextTab.id}`)?.focus();
   };
 
+  const handleGuestTabKeyDown = (
+    event: ReactKeyboardEvent<HTMLButtonElement>,
+    tabIndex: number,
+  ) => {
+    if (isRouteTransitionActive) return;
+
+    let nextIndex: number | null = null;
+    if (event.key === "ArrowRight" || event.key === "ArrowDown") {
+      nextIndex = (tabIndex + 1) % GUEST_ADMIN_TABS.length;
+    } else if (event.key === "ArrowLeft" || event.key === "ArrowUp") {
+      nextIndex =
+        (tabIndex - 1 + GUEST_ADMIN_TABS.length) % GUEST_ADMIN_TABS.length;
+    } else if (event.key === "Home") {
+      nextIndex = 0;
+    } else if (event.key === "End") {
+      nextIndex = GUEST_ADMIN_TABS.length - 1;
+    }
+
+    if (nextIndex === null) return;
+    event.preventDefault();
+    const nextTab = GUEST_ADMIN_TABS[nextIndex];
+    setActiveGuestTab(nextTab);
+    document.getElementById(`guest-tab-${nextTab}`)?.focus();
+  };
+
   return (
     <div className="min-h-[100dvh] bg-canvas flex flex-col">
       <AdminHeader />
@@ -225,20 +251,26 @@ function AdminPageContent() {
                   aria-label={t("guestSections")}
                   className="mb-4 grid grid-cols-2 divide-x divide-border-subtle border border-border-subtle bg-surface"
                 >
-                  {(["list", "requests"] as const).map((guestTab) => {
+                  {GUEST_ADMIN_TABS.map((guestTab, guestTabIndex) => {
                     const isActive = activeGuestTab === guestTab;
                     return (
                       <button
                         key={guestTab}
-                      type="button"
-                      role="tab"
-                      aria-selected={isActive}
-                      disabled={isRouteTransitionActive}
-                      onClick={() => {
-                        if (!isRouteTransitionActive) {
-                          setActiveGuestTab(guestTab);
+                        id={`guest-tab-${guestTab}`}
+                        type="button"
+                        role="tab"
+                        aria-selected={isActive}
+                        aria-controls={`guest-panel-${guestTab}`}
+                        disabled={isRouteTransitionActive}
+                        tabIndex={isActive ? 0 : -1}
+                        onClick={() => {
+                          if (!isRouteTransitionActive) {
+                            setActiveGuestTab(guestTab);
+                          }
+                        }}
+                        onKeyDown={(event) =>
+                          handleGuestTabKeyDown(event, guestTabIndex)
                         }
-                      }}
                         className={`min-h-11 px-4 py-2 text-sm font-medium focus-visible:outline-none ${
                           isActive
                             ? "bg-surface-raised text-text-heading"
@@ -250,15 +282,21 @@ function AdminPageContent() {
                     );
                   })}
                 </div>
-                {activeGuestTab === "list" ? (
-                  <GuestList
-                    selectedDate={selectedDate}
-                    onDateChange={setSelectedDate}
-                    businessDate={businessDate}
-                  />
-                ) : (
-                  <GuestLimitRequestManagement />
-                )}
+                <div
+                  role="tabpanel"
+                  id={`guest-panel-${activeGuestTab}`}
+                  aria-labelledby={`guest-tab-${activeGuestTab}`}
+                >
+                  {activeGuestTab === "list" ? (
+                    <GuestList
+                      selectedDate={selectedDate}
+                      onDateChange={setSelectedDate}
+                      businessDate={businessDate}
+                    />
+                  ) : (
+                    <GuestLimitRequestManagement />
+                  )}
+                </div>
               </>
             )}
             {activeTab === "links" && (

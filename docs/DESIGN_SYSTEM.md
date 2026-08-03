@@ -46,6 +46,7 @@ Authon UI는 베뉴 현장에서 반복적으로 사용하는 운영 도구다. 
 - desktop content 폭은 최대 `1440px`다. 홈은 선택 밀도를 낮추기 위해 `1040px`를 유지한다.
 - multi-column 화면은 `768px` 미만에서 단일 column으로 축소한다.
 - interactive control은 최소 `44px × 44px` touch target을 제공한다.
+- form field와 선택 control은 `border-strong`을 사용해 인접 surface와 3:1 이상의 비텍스트 대비를 확보하고, panel 구획선은 `border-default` 또는 `border-subtle`을 사용한다.
 - Guest와 Door는 모바일에서 dashboard와 list를 한 열로 쌓고, `768px` 이상에서는 좌측 운영 dashboard와 우측 guest list의 master-detail 구조를 사용한다.
 - 날짜 입력은 viewport가 아니라 component container 폭을 기준으로 배치한다. 좁은 container에서는 날짜와 quick control을 두 줄로 표시한다.
 - 고정 또는 sticky 영역은 목록의 첫 행을 가리지 않아야 하며, 페이지 안에 불필요한 중첩 scroll container를 만들지 않는다.
@@ -99,6 +100,8 @@ Authon UI는 베뉴 현장에서 반복적으로 사용하는 운영 도구다. 
 ## 주요 component
 
 - `Button`: primary, secondary, outline, danger, ghost variant와 loading state를 제공한다.
+- `ConfirmDialog`: 확인이 필요한 작업의 제목·설명·action, focus trap, Escape 닫기와 trigger focus 복귀를 통일한다. native confirm dialog는 사용하지 않는다.
+- `OperationalSectionNav`: Admin 하위 작업의 좌측 section selector와 선택 상태를 통일한다.
 - `PanelHeader`: count, sort, refresh, 추가 action의 위치를 통일한다.
 - `StatGrid`: 통계 수치와 label을 카드 중앙에 정렬하고 현재 조회 범위의 loading 상태를 함께 표현한다.
 - `GuestListCard`: waiting, checked, removed 상태와 registration/operations 작업 모드별 action을 표현한다. 공용 계정 게스트는 계정명과 실제 입력자를 함께 표시하고, checked 상태의 되돌리기는 해당 행 안에서 제공한다.
@@ -130,4 +133,5 @@ Authon UI는 베뉴 현장에서 반복적으로 사용하는 운영 도구다. 
 - focus ring은 밝은 무채색 `focus` token으로 통일하고 배경과 3:1 이상 대비를 유지한다.
 - icon-only button은 `aria-label`과 충분한 hit area를 제공한다.
 - tab은 arrow, Home, End key 이동과 올바른 ARIA 연결을 유지한다.
+- dialog는 열릴 때 내부 control로 focus를 이동하고, 닫힐 때 trigger로 focus를 복귀하며, 열린 동안 focus가 dialog 밖으로 이동하지 않게 한다.
 - loading, success, error 상태는 적절한 live region을 사용한다.

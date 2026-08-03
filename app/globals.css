@@ -66,6 +66,8 @@ textarea {
 
 button {
   touch-action: manipulation;
+  min-block-size: 2.75rem;
+  min-inline-size: 2.75rem;
 }
 
 button:not(:disabled) {
@@ -181,7 +183,7 @@ input[type="date"] {
   }
 
   .app-field {
-    @apply w-full rounded-control border border-border-default bg-surface-raised px-4 py-3 text-sm text-text-heading outline-none placeholder:text-text-dim disabled:cursor-not-allowed disabled:opacity-50;
+    @apply w-full rounded-control border border-border-strong bg-surface-raised px-4 py-3 text-sm text-text-heading outline-none placeholder:text-text-dim disabled:cursor-not-allowed disabled:opacity-50;
     transition: border-color var(--app-duration-fast) ease,
       background-color var(--app-duration-fast) ease;
   }

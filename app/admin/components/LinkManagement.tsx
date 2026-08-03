@@ -12,6 +12,8 @@ import Icon from "../../../components/Icon";
 import Skeleton from "../../../components/Skeleton";
 import DatePicker from "../../../components/DatePicker";
 import OperationsLayout from "../../../components/OperationsLayout";
+import OperationalSectionNav from "../../../components/OperationalSectionNav";
+import ConfirmDialog from "../../../components/ConfirmDialog";
 import { useSectionLoadingTask } from "../../../components/RouteTransitionProvider";
 import { useLatestRequestGuard } from "../../../lib/hooks";
 import { formatDateDisplay } from "../../../lib/date";
@@ -82,9 +84,8 @@ export default function LinkManagement({
   const [success, setSuccess] = useState<string | null>(null);
   const [copyToast, setCopyToast] = useState<string | null>(null);
   const [pendingDeleteLink, setPendingDeleteLink] = useState<ExternalDJLink | null>(null);
-  const deleteDialogRef = useRef<HTMLDivElement>(null);
-  const deleteCancelRef = useRef<HTMLButtonElement>(null);
-  const deleteTriggerRef = useRef<HTMLElement | null>(null);
+  const [pendingDeactivateLink, setPendingDeactivateLink] =
+    useState<ExternalDJLink | null>(null);
 
   // 로딩 중 이전 데이터를 유지하여 화면 깜빡임 방지
   const displayCacheRef = useRef<{ scopeKey: string; links: ExternalDJLink[] }>({
@@ -170,41 +171,6 @@ export default function LinkManagement({
     return () => window.clearInterval(intervalId);
   }, []);
 
-  useEffect(() => {
-    if (!pendingDeleteLink) return;
-
-    deleteCancelRef.current?.focus();
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        setPendingDeleteLink(null);
-        return;
-      }
-
-      if (event.key === "Tab" && deleteDialogRef.current) {
-        const focusable = Array.from(
-          deleteDialogRef.current.querySelectorAll<HTMLElement>(
-            'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
-          ),
-        );
-        const first = focusable[0];
-        const last = focusable[focusable.length - 1];
-
-        if (event.shiftKey && document.activeElement === first) {
-          event.preventDefault();
-          last?.focus();
-        } else if (!event.shiftKey && document.activeElement === last) {
-          event.preventDefault();
-          first?.focus();
-        }
-      }
-    };
-    document.addEventListener("keydown", handleKeyDown);
-    return () => {
-      document.removeEventListener("keydown", handleKeyDown);
-      deleteTriggerRef.current?.focus();
-    };
-  }, [pendingDeleteLink]);
-
   const getGuestPageUrl = (token: string, guestUrl?: string | null) => {
     if (guestUrl) return guestUrl;
     if (typeof window === "undefined") return "";
@@ -284,13 +250,12 @@ export default function LinkManagement({
     } else {
       setLinks((prev) => prev.filter((link) => link.id !== id));
       setSuccess(t("deleted"));
-      setPendingDeleteLink(null);
     }
     setLoadingStates((prev) => ({ ...prev, [`delete_${id}`]: false }));
+    setPendingDeleteLink(null);
   };
 
   const requestDeleteLink = (link: ExternalDJLink) => {
-    deleteTriggerRef.current = document.activeElement as HTMLElement | null;
     setError(null);
     setSuccess(null);
     setPendingDeleteLink(link);
@@ -299,7 +264,6 @@ export default function LinkManagement({
   const handleDeactivateLink = async (id: string) => {
     setError(null);
     setSuccess(null);
-    if (!confirm(t("deactivateConfirm"))) return;
 
     setLoadingStates((prev) => ({ ...prev, [`deactivate_${id}`]: true }));
     const { error } = await deactivateExternalLink(id);
@@ -315,6 +279,7 @@ export default function LinkManagement({
       setSuccess(t("deactivated"));
     }
     setLoadingStates((prev) => ({ ...prev, [`deactivate_${id}`]: false }));
+    setPendingDeactivateLink(null);
   };
 
   const handleActivateLink = async (id: string) => {
@@ -394,37 +359,18 @@ export default function LinkManagement({
             className="app-panel p-4 sm:p-5"
           />
         )}
-        <div className="app-panel p-4 sm:p-5">
-          <div className="mb-4">
-            <h3 className="type-context-title mb-3">
-              {t("section")}
-            </h3>
-            <div className="space-y-2">
-              <button
-                onClick={() => setActiveTab("create")}
-                className={`flex w-full items-center gap-2 p-3 text-left text-sm font-medium transition-colors ${
-                  activeTab === "create"
-                    ? "border border-border-default border-l-2 border-l-action-primary bg-surface-raised text-text-heading"
-                    : "bg-surface-raised text-text-muted hover:text-text-heading border border-border-default"
-                }`}
-              >
-                <Icon name="add" size={17} />
-                {t("create")}
-              </button>
-              <button
-                onClick={() => setActiveTab("manage")}
-                className={`flex w-full items-center gap-2 p-3 text-left text-sm font-medium transition-colors ${
-                  activeTab === "manage"
-                    ? "border border-border-default border-l-2 border-l-action-primary bg-surface-raised text-text-heading"
-                    : "bg-surface-raised text-text-muted hover:text-text-heading border border-border-default"
-                }`}
-              >
-                <Icon name="link" size={17} />
-                {t("manage")}
-              </button>
-            </div>
+        <div>
+          <OperationalSectionNav
+            label={t("section")}
+            items={[
+              { id: "create", label: t("create"), icon: "add" },
+              { id: "manage", label: t("manage"), icon: "link" },
+            ]}
+            activeId={activeTab}
+            onChange={setActiveTab}
+          />
             {activeTab === "manage" && (
-              <div className="mt-4 border-t border-border-subtle pt-4">
+              <div className="app-panel mt-4 p-4 sm:p-5">
                 <p className="app-label">{t("view")}</p>
                 <div className="grid grid-cols-2 gap-2">
                   {(["date", "recent"] as const).map((scope) => (
@@ -470,7 +416,6 @@ export default function LinkManagement({
                 )}
               </div>
             )}
-          </div>
         </div>
 
         <div className="app-panel p-4 sm:p-5">
@@ -964,7 +909,7 @@ export default function LinkManagement({
                             </span>
                           ) : link.active ? (
                             <button
-                              onClick={() => handleDeactivateLink(link.id)}
+                              onClick={() => setPendingDeactivateLink(link)}
                               disabled={loadingStates[`deactivate_${link.id}`]}
                               className="min-h-11 border border-border-default bg-surface px-3 py-2 text-xs font-medium text-text-muted hover:bg-surface-raised disabled:opacity-50"
                             >
@@ -1016,71 +961,39 @@ export default function LinkManagement({
         </div>
       )}
 
+      {pendingDeactivateLink && (
+        <ConfirmDialog
+          open
+          title={t("deactivateTitle")}
+          description={t("deactivateConfirm")}
+          confirmLabel={t("deactivate")}
+          cancelLabel={commonT("cancel")}
+          onConfirm={() => handleDeactivateLink(pendingDeactivateLink.id)}
+          onCancel={() => setPendingDeactivateLink(null)}
+          isLoading={loadingStates[`deactivate_${pendingDeactivateLink.id}`]}
+        />
+      )}
+
       {pendingDeleteLink && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-canvas/80 px-4">
-          <div
-            ref={deleteDialogRef}
-            className="w-full max-w-md border border-status-danger/70 bg-canvas p-5 sm:p-6"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="delete-link-title"
-            aria-describedby="delete-link-description"
-          >
-            <div className="flex items-start justify-between gap-4 mb-4">
-              <div>
-                <p className="mb-2 font-mono text-xs uppercase tracking-[0.24em] text-status-danger">
-                  {t("destructiveAction")}
-                </p>
-                <h3 id="delete-link-title" className="type-panel-title font-mono uppercase tracking-[0.18em]">
-                  {t("deleteTitle")}
-                </h3>
-              </div>
-              <button
-                type="button"
-                onClick={() => setPendingDeleteLink(null)}
-                className="text-text-dim hover:text-text-heading transition-colors"
-                aria-label={t("closeDelete")}
-              >
-                <Icon name="close" size={18} />
-              </button>
-            </div>
-
-            <div className="space-y-3 mb-6">
-              <p id="delete-link-description" className="text-xs font-medium uppercase tracking-[0.05em] text-text-muted leading-relaxed">
-                {t("deleteDescription")}
-              </p>
-              <div className="border border-border-default bg-canvas p-3">
-                <p className="text-xs font-medium uppercase tracking-[0.05em] text-text-heading break-words">
-                  {pendingDeleteLink.djName} / {pendingDeleteLink.event}
-                </p>
-                <p className="mt-2 text-xs font-medium uppercase tracking-[0.05em] text-text-dim">
-                  {t("usage")} {pendingDeleteLink.usedGuests}/{pendingDeleteLink.maxGuests}
-                </p>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-              <button
-                ref={deleteCancelRef}
-                type="button"
-                onClick={() => setPendingDeleteLink(null)}
-                className="bg-canvas border border-border-default text-text-body py-3 px-4 text-xs font-medium uppercase tracking-[0.05em] hover:text-text-heading hover:border-border-strong transition-colors"
-              >
-                {commonT("cancel")}
-              </button>
-              <button
-                type="button"
-                onClick={() => handleDeleteLink(pendingDeleteLink.id)}
-                disabled={loadingStates[`delete_${pendingDeleteLink.id}`]}
-                className="border border-status-danger/70 bg-status-danger/10 px-4 py-3 font-mono text-xs uppercase tracking-[0.22em] text-status-danger transition-colors hover:bg-status-danger/20 disabled:opacity-50"
-              >
-                {loadingStates[`delete_${pendingDeleteLink.id}`]
-                  ? t("deleting")
-                  : t("deleteLink")}
-              </button>
-            </div>
+        <ConfirmDialog
+          open
+          title={t("deleteTitle")}
+          description={t("deleteDescription")}
+          confirmLabel={t("deleteLink")}
+          cancelLabel={commonT("cancel")}
+          onConfirm={() => handleDeleteLink(pendingDeleteLink.id)}
+          onCancel={() => setPendingDeleteLink(null)}
+          isLoading={loadingStates[`delete_${pendingDeleteLink.id}`]}
+        >
+          <div className="border border-border-strong bg-surface p-3">
+            <p className="break-words text-sm font-medium text-text-heading">
+              {pendingDeleteLink.djName} / {pendingDeleteLink.event}
+            </p>
+            <p className="mt-2 text-xs text-text-muted">
+              {t("usage")} {pendingDeleteLink.usedGuests}/{pendingDeleteLink.maxGuests}
+            </p>
           </div>
-        </div>
+        </ConfirmDialog>
       )}
     </>
   );

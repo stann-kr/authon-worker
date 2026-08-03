@@ -321,7 +321,7 @@ export default function GuestList({
                   id="admin-guest-user-filter"
                   value={selectedDJ === "all" ? "" : selectedDJ}
                   onChange={(e) => setSelectedDJ(e.target.value || "all")}
-                  className="w-full appearance-none bg-surface-raised border border-border-default px-4 py-4 pr-10 text-text-heading text-sm font-medium focus:outline-none focus:border-border-focus min-h-[52px]"
+                  className="w-full appearance-none bg-surface-raised border border-border-strong px-4 py-4 pr-10 text-text-heading text-sm font-medium focus:outline-none focus:border-border-focus min-h-[52px]"
                 >
                   <option value="">{t("selectUser")}</option>
                   {filteredUsers.map((u) => (

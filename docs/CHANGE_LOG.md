@@ -4,6 +4,15 @@
 
 ## 2026-08-04
 
+### 운영 UI 접근성과 확인 흐름 개선
+
+#### Changed
+
+- form control 경계 대비와 모든 button의 최소 터치 영역을 높여 저조도·모바일 환경의 조작성을 개선했다.
+- Admin 게스트 하위 탭에 방향키·Home·End 이동과 올바른 tab·tabpanel 연결을 추가했다.
+- 사용자·링크·베뉴 관리의 반복 section 선택 UI와 파괴적 작업 확인 dialog를 공통 component로 통일했다.
+- 로그인 오류가 실제 관련 입력에만 invalid 상태로 연결되도록 form 오류 범위를 분리했다.
+
 ### 메인 작업 메뉴 카드 개선
 
 #### Changed

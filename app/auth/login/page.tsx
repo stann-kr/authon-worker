@@ -13,6 +13,17 @@ import { getPasswordPolicyErrorCode } from "@/lib/auth/password-policy";
 import { useVenueBrand } from "@/components/VenueBrandProvider";
 
 type LoginMode = "login" | "setup";
+type AuthErrorTarget =
+  | "form"
+  | "email"
+  | "password"
+  | "setupPassword"
+  | "confirmPassword";
+
+interface AuthErrorState {
+  message: string;
+  target: AuthErrorTarget;
+}
 
 export default function LoginPage() {
   const { brand } = useVenueBrand();
@@ -26,8 +37,11 @@ export default function LoginPage() {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [mode, setMode] = useState<LoginMode>("login");
   const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState("");
+  const [authError, setAuthError] = useState<AuthErrorState | null>(null);
   const router = useRouter();
+  const showError = (message: string, target: AuthErrorTarget = "form") => {
+    setAuthError({ message, target });
+  };
 
   const getLoginError = (code?: string, fallback?: string) => {
     switch (code) {
@@ -70,7 +84,7 @@ export default function LoginPage() {
     setFormData((current) => ({ ...current, password: "" }));
     setSetupPassword("");
     setConfirmPassword("");
-    setError("");
+    setAuthError(null);
   };
 
   const returnToLogin = () => {
@@ -78,13 +92,13 @@ export default function LoginPage() {
     setSetupPassword("");
     setSetupCode("");
     setConfirmPassword("");
-    setError("");
+    setAuthError(null);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
-    setError("");
+    setAuthError(null);
 
     try {
       const result = await login(formData.email, formData.password);
@@ -94,10 +108,10 @@ export default function LoginPage() {
       } else if (result.requiresSetup) {
         enterSetupMode();
       } else {
-        setError(getLoginError(result.code, result.message));
+        showError(getLoginError(result.code, result.message));
       }
     } catch {
-      setError(t("genericLoginError"));
+      showError(t("genericLoginError"));
     } finally {
       setIsLoading(false);
     }
@@ -108,20 +122,21 @@ export default function LoginPage() {
 
     const passwordPolicyError = getPasswordPolicyErrorCode(setupPassword);
     if (passwordPolicyError) {
-      setError(
+      showError(
         passwordPolicyError === "PASSWORD_TOO_SHORT"
           ? t("passwordTooShort")
           : t("passwordRequiresLettersAndNumbers"),
+        "setupPassword",
       );
       return;
     }
     if (setupPassword !== confirmPassword) {
-      setError(t("passwordsDoNotMatch"));
+      showError(t("passwordsDoNotMatch"), "confirmPassword");
       return;
     }
 
     setIsLoading(true);
-    setError("");
+    setAuthError(null);
 
     try {
       const claimResult = await claimMigratedAccount(
@@ -130,7 +145,13 @@ export default function LoginPage() {
         setupPassword,
       );
       if (!claimResult.success) {
-        setError(getSetupError(claimResult.code));
+        showError(
+          getSetupError(claimResult.code),
+          claimResult.code === "PASSWORD_TOO_SHORT" ||
+            claimResult.code === "PASSWORD_REQUIRES_LETTERS_AND_NUMBERS"
+            ? "setupPassword"
+            : "form",
+        );
         return;
       }
 
@@ -139,7 +160,7 @@ export default function LoginPage() {
         setMode("login");
         setSetupPassword("");
         setConfirmPassword("");
-        setError(
+        showError(
           t("automaticSignInFailed"),
         );
         return;
@@ -147,7 +168,7 @@ export default function LoginPage() {
 
       router.push("/");
     } catch {
-      setError(t("firstSetupFailed"));
+      showError(t("firstSetupFailed"));
     } finally {
       setIsLoading(false);
     }
@@ -203,8 +224,8 @@ export default function LoginPage() {
                 disabled={isLoading}
                 readOnly={mode === "setup"}
                 aria-readonly={mode === "setup"}
-                aria-describedby={`email-helper${error ? " auth-error" : ""}`}
-                aria-invalid={error ? "true" : "false"}
+                aria-describedby={`email-helper${authError?.target === "email" ? " auth-error" : ""}`}
+                aria-invalid={authError?.target === "email"}
               />
               <p id="email-helper" className="app-helper">
                 {mode === "login"
@@ -230,8 +251,8 @@ export default function LoginPage() {
                   autoComplete="current-password"
                   required
                   disabled={isLoading}
-                  aria-describedby={`password-helper password-support${error ? " auth-error" : ""}`}
-                  aria-invalid={error ? "true" : "false"}
+                  aria-describedby={`password-helper password-support${authError?.target === "password" ? " auth-error" : ""}`}
+                  aria-invalid={authError?.target === "password"}
                 />
                 <p id="password-helper" className="app-helper">
                   {t("passwordHelp")}
@@ -251,8 +272,8 @@ export default function LoginPage() {
                     autoComplete="new-password"
                     required
                     disabled={isLoading}
-                    aria-describedby={`setup-password-policy${error ? " auth-error" : ""}`}
-                    aria-invalid={error ? "true" : "false"}
+                    aria-describedby={`setup-password-policy${authError?.target === "setupPassword" ? " auth-error" : ""}`}
+                    aria-invalid={authError?.target === "setupPassword"}
                   />
                   <p id="setup-password-policy" className="app-helper">
                     {t("passwordPolicyHint")}
@@ -271,16 +292,16 @@ export default function LoginPage() {
                     autoComplete="new-password"
                     required
                     disabled={isLoading}
-                    aria-describedby={error ? "auth-error" : undefined}
-                    aria-invalid={error ? "true" : "false"}
+                    aria-describedby={authError?.target === "confirmPassword" ? "auth-error" : undefined}
+                    aria-invalid={authError?.target === "confirmPassword"}
                   />
                 </div>
               </div>
             )}
 
-            {error && (
+            {authError && (
               <div id="auth-error">
-                <Alert type="error" message={error} />
+                <Alert type="error" message={authError.message} />
               </div>
             )}
 

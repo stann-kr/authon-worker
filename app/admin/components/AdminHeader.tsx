@@ -46,7 +46,7 @@ export default function AdminHeader() {
           {pathname !== "/profile" && (
             <TransitionLink
               href="/profile"
-              className="pressable flex h-10 w-10 items-center justify-center rounded-control border border-border-default bg-surface text-text-muted hover:border-border-strong hover:bg-surface-hover hover:text-text-heading"
+              className="pressable flex h-11 w-11 items-center justify-center rounded-control border border-border-default bg-surface text-text-muted hover:border-border-strong hover:bg-surface-hover hover:text-text-heading"
               aria-label={t("profileSettings")}
               title={t("profileSettings")}
             >
@@ -55,7 +55,7 @@ export default function AdminHeader() {
           )}
           <button
             onClick={logout}
-            className="pressable flex h-10 w-10 items-center justify-center rounded-control border border-border-default bg-surface text-text-muted hover:border-border-strong hover:bg-surface-hover hover:text-text-heading"
+            className="pressable flex h-11 w-11 items-center justify-center rounded-control border border-border-default bg-surface text-text-muted hover:border-border-strong hover:bg-surface-hover hover:text-text-heading"
             aria-label={t("logout")}
             title={t("logout")}
           >

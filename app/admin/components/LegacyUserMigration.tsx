@@ -4,6 +4,7 @@ import { useState } from "react";
 import Spinner from "@/components/Spinner";
 import Alert from "@/components/Alert";
 import Icon from "@/components/Icon";
+import ConfirmDialog from "@/components/ConfirmDialog";
 import { useTranslations } from "next-intl";
 
 interface MigrationResult {
@@ -14,15 +15,13 @@ interface MigrationResult {
 
 export default function LegacyUserMigration() {
   const t = useTranslations("MigrationAdmin");
+  const commonT = useTranslations("Common");
   const [loading, setLoading] = useState(false);
+  const [isConfirmOpen, setIsConfirmOpen] = useState(false);
   const [results, setResults] = useState<MigrationResult[] | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const runMigration = async () => {
-    if (!confirm(t("confirm"))) {
-      return;
-    }
-
     setLoading(true);
     setError(null);
     setResults(null);
@@ -49,10 +48,12 @@ export default function LegacyUserMigration() {
       setError(err instanceof Error ? err.message : t("failed"));
     } finally {
       setLoading(false);
+      setIsConfirmOpen(false);
     }
   };
 
   return (
+    <>
     <div className="app-panel p-6 sm:p-8">
       <div className="flex items-center gap-3 mb-6">
         <div className="flex h-10 w-10 items-center justify-center border border-border-strong">
@@ -79,7 +80,7 @@ export default function LegacyUserMigration() {
       <div className="flex justify-center">
         {!results && (
           <button
-            onClick={runMigration}
+            onClick={() => setIsConfirmOpen(true)}
             disabled={loading}
             className="flex items-center gap-2 bg-action-primary px-8 py-4 text-sm font-semibold text-action-text transition-colors hover:bg-action-hover disabled:opacity-50"
           >
@@ -119,5 +120,17 @@ export default function LegacyUserMigration() {
         </div>
       )}
     </div>
+      <ConfirmDialog
+        open={isConfirmOpen}
+        title={t("confirmTitle")}
+        description={t("confirm")}
+        confirmLabel={t("start")}
+        cancelLabel={commonT("cancel")}
+        onConfirm={runMigration}
+        onCancel={() => setIsConfirmOpen(false)}
+        isLoading={loading}
+        tone="primary"
+      />
+    </>
   );
 }

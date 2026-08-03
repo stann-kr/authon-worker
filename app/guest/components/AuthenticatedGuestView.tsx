@@ -460,7 +460,7 @@ export default function AuthenticatedGuestView({ user }: AuthenticatedGuestViewP
                       </div>
                     ) : displayQuota?.canRequestExtra ? (
                       <details className="mt-3 border border-border-default bg-canvas p-3">
-                        <summary className="cursor-pointer text-sm font-medium text-text-heading">
+                        <summary className="flex min-h-11 cursor-pointer items-center text-sm font-medium text-text-heading">
                           {t("requestExtra")}
                         </summary>
                         <div className="mt-3 space-y-3">
