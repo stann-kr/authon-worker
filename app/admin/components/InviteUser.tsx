@@ -172,25 +172,27 @@ export default function InviteUser() {
             disabled
             aria-disabled="true"
             title={t("inviteUnavailableTitle")}
-            className={`p-3 text-xs font-medium transition-colors ${
+            className={`flex min-h-12 items-center justify-center gap-2 p-3 text-xs font-medium transition-colors ${
               createMode === "invite"
                 ? "border border-border-default border-l-2 border-l-action-primary bg-surface-raised text-text-heading"
                 : "bg-canvas text-text-dim cursor-not-allowed"
             }`}
           >
-            <Icon name="email" size={16} /> {t("emailLater")}
+            <Icon name="email" size={16} />
+            <span>{t("emailLater")}</span>
           </button>
           <button
             type="button"
             onClick={() => setCreateMode("password")}
             aria-pressed={createMode === "password"}
-            className={`p-3 text-xs font-medium transition-colors ${
+            className={`flex min-h-12 items-center justify-center gap-2 p-3 text-xs font-medium transition-colors ${
               createMode === "password"
                 ? "border border-border-default border-l-2 border-l-action-primary bg-surface-raised text-text-heading"
                 : "bg-canvas text-text-muted hover:text-text-heading"
             }`}
           >
-            <Icon name="key" size={16} /> {t("temporaryPassword")}
+            <Icon name="key" size={16} />
+            <span>{t("temporaryPassword")}</span>
           </button>
         </div>
 
@@ -299,7 +301,7 @@ export default function InviteUser() {
             <legend className="app-label">
               {t("role")}
             </legend>
-            <div className="grid grid-cols-4 gap-2">
+            <div className={`grid gap-2 ${isSuperAdmin ? "grid-cols-4" : "grid-cols-3"}`}>
               {roleOptions.map((opt) => (
                 <button
                   key={opt.value}
