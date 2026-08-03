@@ -6,34 +6,15 @@ import AuthGuard from "@/components/AuthGuard";
 import { getUser } from "@/lib/auth";
 import ExternalDJGuestView from "./components/ExternalDJGuestView";
 import AuthenticatedGuestView from "./components/AuthenticatedGuestView";
-
-import AdminHeader from "@/app/admin/components/AdminHeader";
-import Footer from "@/components/Footer";
-import Spinner from "@/components/Spinner";
-import { useTranslations } from "next-intl";
+import RouteLoadingFallback from "@/components/RouteLoadingFallback";
 
 /**
  * GuestPage Entry Point
  * Handles routing between External DJ flow and Authenticated flow.
  */
 export default function GuestPage() {
-  const t = useTranslations("GuestOperations");
   return (
-    <Suspense
-      fallback={
-        <div className="min-h-[100dvh] bg-canvas flex flex-col">
-          <AdminHeader />
-          <div className="flex-1 overflow-x-hidden pt-20 sm:pt-24 flex flex-col">
-            <div className="mx-auto flex w-full max-w-[1440px] flex-col px-4 sm:px-6 lg:min-h-0 lg:flex-1 lg:px-10">
-              <div className="main-content-panel lg:min-h-0">
-                <Spinner mode="inline" text={t("loadingWorkspace")} />
-              </div>
-            </div>
-            <Footer />
-          </div>
-        </div>
-      }
-    >
+    <Suspense fallback={<RouteLoadingFallback />}>
       <GuestPageRouter />
     </Suspense>
   );

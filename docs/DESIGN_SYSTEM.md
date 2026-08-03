@@ -75,7 +75,8 @@ Authon UI는 베뉴 현장에서 반복적으로 사용하는 운영 도구다. 
 
 ## 상태 표현
 
-- 로그인 후 작업 화면 사이의 route loading은 현재 header와 footer를 유지하고 목적지의 접근 권한 확인까지 콘텐츠 영역에 공통 spinner 하나를 표시한다. 최초 진입의 인증 확인은 fullscreen spinner를 사용한다.
+- 화면 단위 loading은 최초 진입·작업 공간 준비·접근 권한 확인 모두 현재 언어의 공통 문구를 사용한다. 로그인 후 route 전환은 현재 header와 footer를 유지하고 목적지가 준비될 때까지 콘텐츠 영역에 spinner 하나만 표시한다.
+- route 전환이 진행 중일 때는 새 메뉴 이동을 겹쳐 시작하지 않으며, 이전 화면의 진행 중인 목록 응답은 화면 상태를 갱신하지 않는다.
 - 초기 data loading은 최종 행 구조와 같은 skeleton을 사용하고, 현재 조회 범위의 집계가 준비되기 전 통계 수치는 `—`로 표시한다.
 - button loading은 label 위치를 유지하는 작은 progress indicator를 사용한다.
 - empty state는 원인과 다음 행동을 함께 제시할 수 있어야 한다.

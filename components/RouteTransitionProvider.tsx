@@ -11,13 +11,15 @@ import {
 } from "react";
 import { usePathname } from "next/navigation";
 import { useTranslations } from "next-intl";
+import { announceRouteTransitionStart } from "@/lib/route-transition-events";
 import Spinner from "./Spinner";
 
 type TransitionPhase = "idle" | "visible" | "leaving";
 
 interface RouteTransitionContextValue {
   isRouteTransitionActive: boolean;
-  startRouteTransition: (href?: string) => void;
+  isRouteTransitionPending: boolean;
+  startRouteTransition: (href?: string) => boolean;
 }
 
 const MINIMUM_VISIBLE_MS = 160;
@@ -67,23 +69,29 @@ export function RouteTransitionProvider({ children }: { children: ReactNode }) {
 
   const startRouteTransition = useCallback(
     (href?: string) => {
+      if (phaseRef.current === "visible") {
+        return false;
+      }
+
       if (href) {
         const target = new URL(href, window.location.href);
         if (
           target.origin !== window.location.origin ||
           target.pathname === window.location.pathname
         ) {
-          return;
+          return true;
         }
       }
 
       clearTimers();
+      announceRouteTransitionStart();
       visibleAtRef.current = performance.now();
       updatePhase("visible");
       safetyTimerRef.current = window.setTimeout(
         finishTransition,
         TRANSITION_TIMEOUT_MS,
       );
+      return true;
     },
     [clearTimers, finishTransition, updatePhase],
   );
@@ -110,6 +118,7 @@ export function RouteTransitionProvider({ children }: { children: ReactNode }) {
     <RouteTransitionContext.Provider
       value={{
         isRouteTransitionActive: phase !== "idle",
+        isRouteTransitionPending: phase === "visible",
         startRouteTransition,
       }}
     >

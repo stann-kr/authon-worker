@@ -36,7 +36,6 @@
     "undoCheckIn": "{name}의 입장 확인 취소",
     "removeGuest": "게스트 제거",
     "removed": "제거됨",
-    "verifyingAccess": "접근 권한 확인 중",
     "operationalDate": "운영일",
     "changeOperationalDate": "운영일 변경",
     "previousDate": "이전 운영일",
@@ -169,7 +168,6 @@
   },
   "ExternalGuest": {
     "guestAccess": "게스트 등록",
-    "validating": "게스트 접근 권한 확인 중",
     "invalidTitle": "유효하지 않은 링크",
     "guestOwner": "게스트 담당자",
     "event": "이벤트",
@@ -191,7 +189,6 @@
   },
   "Home": {
     "availableWorkspaces": "사용 가능한 작업 공간",
-    "loading": "작업 공간 불러오는 중",
     "guestTitle": "게스트 등록",
     "guestDescription": "이름을 추가하고 한도를 확인하며 게스트 목록을 관리합니다.",
     "doorTitle": "도어 체크인",
@@ -222,7 +219,6 @@
     "todaysGuests": "오늘의 게스트",
     "noSearchResults": "검색 결과가 없습니다",
     "noGuestsForDate": "이 운영일에 등록된 게스트가 없습니다",
-    "loadingWorkspace": "게스트 작업 공간 불러오는 중",
     "registeredBy": "현재 입력자",
     "registeredByPlaceholder": "본인 이름 입력",
     "registeredByHelp": "공용 계정은 필수이며 각 게스트에 입력자 이름이 기록됩니다.",

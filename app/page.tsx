@@ -4,9 +4,10 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { getUser, logout, hasAccess, type User } from "../lib/auth";
 import Footer from "@/components/Footer";
-import Spinner from "@/components/Spinner";
+import RouteLoadingFallback from "@/components/RouteLoadingFallback";
 import Icon, { type IconName } from "@/components/Icon";
 import TransitionLink from "@/components/TransitionLink";
+import { useRouteTransition } from "@/components/RouteTransitionProvider";
 import AdminHeader from "@/app/admin/components/AdminHeader";
 import { fetchMyVenuePendingGuestLimitRequestCount } from "@/lib/api/guest-limits";
 import { useTranslations } from "next-intl";
@@ -26,6 +27,7 @@ export default function Home() {
   const [pendingGuestRequestCount, setPendingGuestRequestCount] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const router = useRouter();
+  const { startRouteTransition } = useRouteTransition();
   const menuItems: MenuItem[] = useMemo(() => [
     {
       id: "guest",
@@ -100,16 +102,17 @@ export default function Home() {
 
       const keyIndex = Number.parseInt(event.key, 10) - 1;
       if (!Number.isNaN(keyIndex) && accessibleMenus[keyIndex]) {
-        router.push(accessibleMenus[keyIndex].href);
+        const href = accessibleMenus[keyIndex].href;
+        if (startRouteTransition(href)) router.push(href);
       }
     };
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [accessibleMenus, router, user]);
+  }, [accessibleMenus, router, startRouteTransition, user]);
 
   if (isLoading) {
-    return <Spinner mode="fullscreen" text={t("loading")} />;
+    return <RouteLoadingFallback />;
   }
 
   if (!user) return null;

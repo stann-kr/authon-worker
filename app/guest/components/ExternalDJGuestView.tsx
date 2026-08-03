@@ -29,6 +29,7 @@ interface ExternalDJGuestViewProps {
 
 export default function ExternalDJGuestView({ token }: ExternalDJGuestViewProps) {
   const t = useTranslations("ExternalGuest");
+  const commonT = useTranslations("Common");
   const locale = useLocale() as "en" | "ko";
   const { brand } = useVenueBrand();
   const [linkInfo, setLinkInfo] = useState<ExternalDJLink | null>(null);
@@ -164,7 +165,7 @@ export default function ExternalDJGuestView({ token }: ExternalDJGuestViewProps)
         <div className="flex-1 overflow-x-hidden pt-16 sm:pt-20 flex flex-col">
           <div className="page-container">
             <div className="main-content-panel">
-              <Spinner mode="inline" text={t("validating")} />
+              <Spinner mode="inline" text={commonT("loading")} />
             </div>
           </div>
           <Footer />
