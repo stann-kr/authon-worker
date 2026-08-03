@@ -16,7 +16,10 @@ import { getUser } from "../../lib/auth";
 import Icon, { type IconName } from "../../components/Icon";
 import { useTranslations } from "next-intl";
 import { useVenueSelector } from "../../components/VenueSelector";
-import { useRouteTransition } from "../../components/RouteTransitionProvider";
+import {
+  useRouteLoadingTask,
+  useRouteTransition,
+} from "../../components/RouteTransitionProvider";
 
 type AdminTab = "guests" | "links" | "users" | "venues";
 type GuestAdminTab = "list" | "requests";
@@ -39,7 +42,8 @@ export default function AdminPage() {
 function AdminPageContent() {
   const t = useTranslations("AdminNav");
   const router = useRouter();
-  const { startRouteTransition } = useRouteTransition();
+  const { isRouteTransitionActive, startRouteTransition } =
+    useRouteTransition();
   const { currentVenue } = useVenueSelector();
   const businessDate = getBusinessDate(currentVenue ?? {});
   const [activeTab, setActiveTab] = useLocalStorage<AdminTab>(
@@ -56,6 +60,7 @@ function AdminPageContent() {
   );
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
   const [isRoleReady, setIsRoleReady] = useState(false);
+  useRouteLoadingTask(!isRoleReady);
 
   useEffect(() => {
     if (currentVenue) setSelectedDate(businessDate);
@@ -107,6 +112,8 @@ function AdminPageContent() {
   // Keyboard shortcut listener for tab switching & home return
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      if (isRouteTransitionActive) return;
+
       const target = e.target as HTMLElement | null;
       if (
         target &&
@@ -130,12 +137,14 @@ function AdminPageContent() {
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [tabs, setActiveTab, router, startRouteTransition]);
+  }, [isRouteTransitionActive, tabs, setActiveTab, router, startRouteTransition]);
 
   const handleTabKeyDown = (
     event: ReactKeyboardEvent<HTMLButtonElement>,
     tabIndex: number,
   ) => {
+    if (isRouteTransitionActive) return;
+
     let nextIndex: number | null = null;
 
     if (event.key === "ArrowRight" || event.key === "ArrowDown") {
@@ -177,8 +186,11 @@ function AdminPageContent() {
                     id={`tab-${tab.id}`}
                     aria-selected={isActive}
                     aria-controls={`panel-${tab.id}`}
+                    disabled={isRouteTransitionActive}
                     tabIndex={isActive ? 0 : -1}
-                    onClick={() => setActiveTab(tab.id)}
+                    onClick={() => {
+                      if (!isRouteTransitionActive) setActiveTab(tab.id);
+                    }}
                     onKeyDown={(event) => handleTabKeyDown(event, tabIndex)}
                     className={`relative z-10 min-h-14 p-3 text-sm font-medium after:absolute after:inset-x-0 after:-bottom-px after:h-px after:content-[''] focus-visible:outline-none sm:p-4 ${
                       isActive
@@ -218,10 +230,15 @@ function AdminPageContent() {
                     return (
                       <button
                         key={guestTab}
-                        type="button"
-                        role="tab"
-                        aria-selected={isActive}
-                        onClick={() => setActiveGuestTab(guestTab)}
+                      type="button"
+                      role="tab"
+                      aria-selected={isActive}
+                      disabled={isRouteTransitionActive}
+                      onClick={() => {
+                        if (!isRouteTransitionActive) {
+                          setActiveGuestTab(guestTab);
+                        }
+                      }}
                         className={`min-h-11 px-4 py-2 text-sm font-medium focus-visible:outline-none ${
                           isActive
                             ? "bg-surface-raised text-text-heading"

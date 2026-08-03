@@ -19,6 +19,7 @@ import GuestListCard from "@/components/GuestListCard";
 import GuestSearchInput from "@/components/GuestSearchInput";
 import Skeleton from "@/components/Skeleton";
 import OperationsLayout from "@/components/OperationsLayout";
+import { useRouteLoadingTask } from "@/components/RouteTransitionProvider";
 import { getBusinessDate } from "@/lib/date";
 import {
   fetchGuestsByDate,
@@ -95,6 +96,7 @@ export default function AuthenticatedGuestView({ user }: AuthenticatedGuestViewP
 
   const hasCurrentScopeData = loadedScopeKey === requestScopeKey;
   const isCurrentScopeFetching = isFetching || !hasCurrentScopeData;
+  useRouteLoadingTask(isCurrentScopeFetching);
   const displayDataGuests = !hasCurrentScopeData
     ? []
     : isFetching && displayCacheRef.current.scopeKey === requestScopeKey

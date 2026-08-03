@@ -14,6 +14,7 @@ import {
 import type { GuestLimitRequestView } from "@/lib/api/types";
 import { useLatestRequestGuard } from "@/lib/hooks";
 import { useTranslations } from "next-intl";
+import { useRouteLoadingTask } from "@/components/RouteTransitionProvider";
 
 const EMPTY_REQUESTS: GuestLimitRequestView[] = [];
 
@@ -44,6 +45,7 @@ export default function GuestLimitRequestManagement() {
 
   const scopedRequests = loadedVenueId === venueId ? requests : EMPTY_REQUESTS;
   const isCurrentVenueLoading = isLoading || loadedVenueId !== venueId;
+  useRouteLoadingTask(isCurrentVenueLoading);
 
   const loadRequests = useCallback(async () => {
     const requestedVenueId = venueId;
@@ -56,21 +58,31 @@ export default function GuestLimitRequestManagement() {
       return;
     }
     setIsLoading(true);
-    const { data, error } = await fetchGuestLimitRequests(venueId);
-    if (!isLatestRequest() || currentVenueIdRef.current !== requestedVenueId) return;
-    if (error) {
+    try {
+      const { data, error } = await fetchGuestLimitRequests(venueId);
+      if (!isLatestRequest() || currentVenueIdRef.current !== requestedVenueId) return;
+      if (error) {
+        setFeedback({ type: "error", message: t("loadFailed") });
+        setRequests([]);
+        setApprovedAmounts({});
+      } else {
+        const nextRequests = data ?? [];
+        setRequests(nextRequests);
+        setApprovedAmounts(
+          Object.fromEntries(nextRequests.map((request) => [request.id, request.requestedExtra])),
+        );
+      }
+    } catch {
+      if (!isLatestRequest() || currentVenueIdRef.current !== requestedVenueId) return;
       setFeedback({ type: "error", message: t("loadFailed") });
       setRequests([]);
       setApprovedAmounts({});
-    } else {
-      const nextRequests = data ?? [];
-      setRequests(nextRequests);
-      setApprovedAmounts(
-        Object.fromEntries(nextRequests.map((request) => [request.id, request.requestedExtra])),
-      );
+    } finally {
+      if (isLatestRequest() && currentVenueIdRef.current === requestedVenueId) {
+        setLoadedVenueId(requestedVenueId);
+        setIsLoading(false);
+      }
     }
-    setLoadedVenueId(requestedVenueId);
-    setIsLoading(false);
   }, [requestGuard, t, venueId]);
 
   useEffect(() => {

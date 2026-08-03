@@ -14,6 +14,7 @@ import Alert from "../../../components/Alert";
 import Icon from "../../../components/Icon";
 import Skeleton from "../../../components/Skeleton";
 import OperationsLayout from "../../../components/OperationsLayout";
+import { useRouteLoadingTask } from "../../../components/RouteTransitionProvider";
 import {
   fetchManagedUsersByVenue,
   fetchUserAuditEvents,
@@ -77,6 +78,7 @@ export default function UserManagement() {
   const scopedAuditEvents =
     loadedScopeKey === requestScopeKey ? auditEvents : EMPTY_AUDIT_EVENTS;
   const isCurrentScopeLoading = isLoading || loadedScopeKey !== requestScopeKey;
+  useRouteLoadingTask(activeTab === "users" && isCurrentScopeLoading);
 
   useEffect(() => {
     const isKnownTab = ["create", "users", "migrate"].includes(activeTab as string);
@@ -130,6 +132,9 @@ export default function UserManagement() {
     } catch (error) {
       if (!isLatestRequest() || currentScopeKeyRef.current !== requestScopeKey) return;
       console.error("Failed to load users:", error);
+      setUsers([]);
+      setAuditEvents([]);
+      setLoadedScopeKey(requestScopeKey);
       setLoadError(t("connectionLoadFailed"));
     } finally {
       if (isLatestRequest() && currentScopeKeyRef.current === requestScopeKey) {

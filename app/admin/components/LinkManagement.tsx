@@ -12,6 +12,7 @@ import Icon from "../../../components/Icon";
 import Skeleton from "../../../components/Skeleton";
 import DatePicker from "../../../components/DatePicker";
 import OperationsLayout from "../../../components/OperationsLayout";
+import { useRouteLoadingTask } from "../../../components/RouteTransitionProvider";
 import { useLatestRequestGuard } from "../../../lib/hooks";
 import { formatDateDisplay } from "../../../lib/date";
 import {
@@ -113,6 +114,7 @@ export default function LinkManagement({
 
   const hasCurrentScopeData = loadedScopeKey === requestScopeKey;
   const isCurrentScopeFetching = isFetching || !hasCurrentScopeData;
+  useRouteLoadingTask(activeTab === "manage" && isCurrentScopeFetching);
   const displayLinks = !hasCurrentScopeData
     ? EMPTY_LINKS
     : isFetching && displayCacheRef.current.scopeKey === requestScopeKey
@@ -149,6 +151,8 @@ export default function LinkManagement({
     } catch (err) {
       if (!isLatestRequest()) return;
       console.error("Failed to load links:", err);
+      setLinks([]);
+      setLoadedScopeKey(requestScopeKey);
       setError(t("loadFailed"));
     } finally {
       if (isLatestRequest()) setIsFetching(false);

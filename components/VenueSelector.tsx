@@ -1,12 +1,13 @@
 "use client";
 
 import { useState, useEffect, useId } from "react";
-import { useLocalStorage } from "@/lib/hooks";
+import { useLatestRequestGuard, useLocalStorage } from "@/lib/hooks";
 import { fetchVenues } from "@/lib/api/venues";
 import type { Venue } from "@/lib/api/types";
 import { getUser } from "@/lib/auth";
 import Icon from "./Icon";
 import { useTranslations } from "next-intl";
+import { useRouteLoadingTask } from "./RouteTransitionProvider";
 
 /**
  * useVenueSelector — super_admin 베뉴 선택 로직 훅.
@@ -19,21 +20,39 @@ export function useVenueSelector() {
   const user = getUser();
   const isSuperAdmin = user?.role === "super_admin";
   const [venues, setVenues] = useState<Venue[]>([]);
+  const [isLoadingVenues, setIsLoadingVenues] = useState(true);
   const [selectedVenueId, setSelectedVenueId] = useLocalStorage<string>(
     "admin:selectedVenueId",
     "",
   );
+  const requestGuard = useLatestRequestGuard();
+  useRouteLoadingTask(isLoadingVenues);
 
   useEffect(() => {
-    fetchVenues().then(({ data }) => {
-      if (data) {
-        setVenues(data);
-        if (isSuperAdmin && data.length > 0) {
-          setSelectedVenueId((prev) => prev || data[0].id);
+    const isLatestRequest = requestGuard.beginRequest();
+    setIsLoadingVenues(true);
+
+    const loadVenues = async () => {
+      try {
+        const { data } = await fetchVenues();
+        if (!isLatestRequest()) return;
+        if (data) {
+          setVenues(data);
+          if (isSuperAdmin && data.length > 0) {
+            setSelectedVenueId((prev) => prev || data[0].id);
+          }
         }
+      } catch (error: unknown) {
+        if (isLatestRequest()) {
+          console.error("Failed to load venues:", error);
+        }
+      } finally {
+        if (isLatestRequest()) setIsLoadingVenues(false);
       }
-    });
-  }, [isSuperAdmin, setSelectedVenueId]);
+    };
+
+    loadVenues();
+  }, [isSuperAdmin, requestGuard, setSelectedVenueId]);
 
   const venueId = isSuperAdmin ? selectedVenueId : (user?.venue_id ?? "");
   const currentVenue = venues.find((venue) => venue.id === venueId) ?? null;

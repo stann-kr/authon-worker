@@ -11,7 +11,7 @@ export default function TransitionLink({
   onClick,
   ...props
 }: TransitionLinkProps) {
-  const { isRouteTransitionPending, startRouteTransition } =
+  const { isRouteTransitionActive, startRouteTransition } =
     useRouteTransition();
 
   const handleClick = (event: MouseEvent<HTMLAnchorElement>) => {
@@ -41,7 +41,7 @@ export default function TransitionLink({
       href={href}
       onClick={handleClick}
       {...props}
-      aria-disabled={isRouteTransitionPending || props["aria-disabled"]}
+      aria-disabled={isRouteTransitionActive || props["aria-disabled"]}
     />
   );
 }

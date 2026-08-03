@@ -3,7 +3,10 @@
 import { useTranslations } from "next-intl";
 import RouteLoadingShell from "./RouteLoadingShell";
 import Spinner from "./Spinner";
-import { useRouteTransition } from "./RouteTransitionProvider";
+import {
+  useRouteLoadingTask,
+  useRouteTransition,
+} from "./RouteTransitionProvider";
 
 /**
  * 앱 화면의 초기 진입과 client route 전환에서 같은 로딩 문구를 사용합니다.
@@ -12,6 +15,7 @@ import { useRouteTransition } from "./RouteTransitionProvider";
 export default function RouteLoadingFallback() {
   const t = useTranslations("Common");
   const { isRouteTransitionActive } = useRouteTransition();
+  useRouteLoadingTask(true);
 
   if (isRouteTransitionActive) {
     return <RouteLoadingShell />;

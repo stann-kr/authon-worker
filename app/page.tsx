@@ -10,6 +10,7 @@ import TransitionLink from "@/components/TransitionLink";
 import { useRouteTransition } from "@/components/RouteTransitionProvider";
 import AdminHeader from "@/app/admin/components/AdminHeader";
 import { fetchMyVenuePendingGuestLimitRequestCount } from "@/lib/api/guest-limits";
+import { useLatestRequestGuard } from "@/lib/hooks";
 import { useTranslations } from "next-intl";
 
 interface MenuItem {
@@ -28,6 +29,7 @@ export default function Home() {
   const [isLoading, setIsLoading] = useState(true);
   const router = useRouter();
   const { startRouteTransition } = useRouteTransition();
+  const requestGuard = useLatestRequestGuard();
   const menuItems: MenuItem[] = useMemo(() => [
     {
       id: "guest",
@@ -56,25 +58,38 @@ export default function Home() {
   ], [t]);
 
   useEffect(() => {
-    const currentUser = getUser();
-    if (!currentUser) {
-      logout();
-      return;
-    }
+    const initializeHome = async () => {
+      const isLatestRequest = requestGuard.beginRequest();
+      const currentUser = getUser();
+      if (!currentUser) {
+        logout();
+        return;
+      }
 
-    setUser(currentUser);
-    setIsLoading(false);
+      setUser(currentUser);
 
-    if (currentUser.role === "venue_admin") {
-      fetchMyVenuePendingGuestLimitRequestCount().then(({ data, error }) => {
-        if (error) {
-          console.error("Failed to load pending guest request count:", error);
-          return;
+      try {
+        if (currentUser.role === "venue_admin") {
+          const { data, error } =
+            await fetchMyVenuePendingGuestLimitRequestCount();
+          if (!isLatestRequest()) return;
+          if (error) {
+            console.error("Failed to load pending guest request count:", error);
+          } else {
+            setPendingGuestRequestCount(data ?? 0);
+          }
         }
-        setPendingGuestRequestCount(data ?? 0);
-      });
-    }
-  }, []);
+      } catch (error: unknown) {
+        if (isLatestRequest()) {
+          console.error("Failed to load pending guest request count:", error);
+        }
+      } finally {
+        if (isLatestRequest()) setIsLoading(false);
+      }
+    };
+
+    initializeHome();
+  }, [requestGuard]);
 
   const accessibleMenus = useMemo(
     () =>

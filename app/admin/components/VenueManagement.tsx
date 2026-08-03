@@ -14,6 +14,8 @@ import EmptyState from "../../../components/EmptyState";
 import Icon from "../../../components/Icon";
 import Skeleton from "../../../components/Skeleton";
 import OperationsLayout from "../../../components/OperationsLayout";
+import { useRouteLoadingTask } from "../../../components/RouteTransitionProvider";
+import { useLatestRequestGuard } from "../../../lib/hooks";
 import { getVenueTypeColor } from "../../../lib/colors";
 import { useTranslations } from "next-intl";
 import {
@@ -74,18 +76,29 @@ export default function VenueManagement() {
   const [formSuccess, setFormSuccess] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [listError, setListError] = useState("");
+  const requestGuard = useLatestRequestGuard();
+  useRouteLoadingTask(isLoading);
 
   const loadVenues = useCallback(async () => {
+    const isLatestRequest = requestGuard.beginRequest();
     setIsLoading(true);
     setListError("");
-    const { data, error } = await fetchVenues(true); // include inactive
-    if (data) setVenues(data);
-    if (error) {
+    try {
+      const { data, error } = await fetchVenues(true); // include inactive
+      if (!isLatestRequest()) return;
+      if (data) setVenues(data);
+      if (error) {
+        console.error("Failed to load venues:", error);
+        setListError(t("loadFailed"));
+      }
+    } catch (error: unknown) {
+      if (!isLatestRequest()) return;
       console.error("Failed to load venues:", error);
       setListError(t("loadFailed"));
+    } finally {
+      if (isLatestRequest()) setIsLoading(false);
     }
-    setIsLoading(false);
-  }, [t]);
+  }, [requestGuard, t]);
 
   useEffect(() => {
     loadVenues();
