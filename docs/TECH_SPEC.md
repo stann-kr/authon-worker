@@ -139,5 +139,8 @@ Client
 - 역할을 전환해도 같은 브라우저의 샘플 상태가 이어져 DJ 등록과 Door 체크인 같은 역할 간 handoff를 확인할 수 있다.
 - 초기화는 현재 브라우저의 데모 상태만 기본 fixture로 되돌리고 운영 계정이나 데이터에는 영향을 주지 않는다.
 - 데모 인증과 상태 전이는 순수 함수로 분리해 계정 검증, 역할별 접근, 등록값 정규화, 체크인 되돌리기, 요청 단일 결정, 링크 정원 제한을 테스트한다.
+- demo branch의 `wrangler.demo.toml`은 별도 `authon-demo` Worker와 `demo.authon.stann.kr` Custom Domain을 정의하며 정적 Assets 외에 D1·KV·secret binding을 갖지 않는다.
+- demo Worker에서는 `/`을 `/demo`로 이동하고 `/demo/**`와 locale cookie 변경만 허용한다. 로그인·게스트·도어·관리·프로필 화면과 production API는 middleware에서 `404`로 종료한다.
+- demo runtime의 tenant와 locale 해석은 platform brand와 브라우저 설정만 사용하며 사용자 session과 D1 venue lookup을 실행하지 않는다.
 
 외부 링크의 최근 목록은 `created_at` 내림차순으로 조회한다. Supabase snapshot을 D1으로 이전할 때도 원본 `created_at`을 보존하므로 컷오버 전에 생성된 링크가 최근 목록에서 누락되지 않는다.

@@ -27,6 +27,8 @@ docker compose run --rm web npm run db:migrate:local
 
 포트폴리오 데모: http://localhost:3000/demo
 
+Demo branch의 Worker 명령은 운영 Worker가 아니라 별도 `authon-demo` 설정을 사용하며, 배포 대상 Custom Domain은 `demo.authon.stann.kr`이다.
+
 ---
 
 ## 주요 문서

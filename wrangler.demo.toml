@@ -1,0 +1,26 @@
+name = "authon-demo"
+main = ".open-next/worker.js"
+compatibility_date = "2026-07-27"
+compatibility_flags = ["nodejs_compat"]
+workers_dev = true
+
+routes = [
+  { pattern = "demo.authon.stann.kr", custom_domain = true }
+]
+
+[observability]
+enabled = true
+head_sampling_rate = 1
+
+[observability.logs]
+enabled = true
+head_sampling_rate = 1
+invocation_logs = true
+
+[assets]
+directory = ".open-next/assets"
+binding = "ASSETS"
+
+[vars]
+AUTHON_DEPLOYMENT_MODE = "demo"
+NEXT_PUBLIC_APP_URL = "https://demo.authon.stann.kr"

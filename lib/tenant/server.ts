@@ -15,6 +15,7 @@ import {
 } from "@/lib/tenant/host";
 import type { TenantContext, TenantScope } from "@/lib/tenant/types";
 import { DEFAULT_LOCALE, isLocale } from "@/i18n/config";
+import { isDemoDeployment } from "@/lib/demo/deployment";
 
 function getConfiguredBaseUrl(): string | null {
   return getCloudflareContext().env.NEXT_PUBLIC_APP_URL || null;
@@ -101,9 +102,17 @@ export async function resolveTenantByHostname(
 
 export const getRequestTenantContext = cache(async (): Promise<TenantContext> => {
   const requestHeaders = await headers();
+  const hostname = normalizeHostname(requestHeaders.get("host")) || "localhost";
+  const env = getCloudflareContext().env;
+  if (isDemoDeployment(env.AUTHON_DEPLOYMENT_MODE)) {
+    return {
+      ...platformContext(hostname, env.NEXT_PUBLIC_APP_URL),
+      resolved: true,
+    };
+  }
   return resolveTenantByHostname(
-    requestHeaders.get("host"),
-    getConfiguredBaseUrl(),
+    hostname,
+    env.NEXT_PUBLIC_APP_URL,
   );
 });
 

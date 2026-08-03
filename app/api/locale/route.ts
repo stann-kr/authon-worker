@@ -3,6 +3,8 @@ import { eq } from "drizzle-orm";
 import { getCurrentUser } from "@/lib/auth/server";
 import { getDb } from "@/lib/db/client";
 import { users } from "@/lib/db/schema";
+import { getCloudflareContext } from "@opennextjs/cloudflare";
+import { isDemoDeployment } from "@/lib/demo/deployment";
 import {
   isLocale,
   LOCALE_COOKIE_MAX_AGE,
@@ -15,7 +17,10 @@ export async function POST(request: Request) {
     return NextResponse.json({ code: "INVALID_LOCALE" }, { status: 400 });
   }
 
-  const user = await getCurrentUser();
+  const { env } = getCloudflareContext();
+  const user = isDemoDeployment(env.AUTHON_DEPLOYMENT_MODE)
+    ? null
+    : await getCurrentUser();
   if (user) {
     const db = getDb();
     await db

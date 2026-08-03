@@ -8,13 +8,18 @@ import {
 import { resolveLocale } from "@/i18n/resolve";
 import { getCurrentUser } from "@/lib/auth/server";
 import { isLocale } from "@/i18n/config";
+import { getCloudflareContext } from "@opennextjs/cloudflare";
+import { isDemoDeployment } from "@/lib/demo/deployment";
 
 export default getRequestConfig(async () => {
+  const { env } = getCloudflareContext();
   const [requestHeaders, cookieStore, tenant, user] = await Promise.all([
     headers(),
     cookies(),
     getRequestTenantContext(),
-    getCurrentUser(),
+    isDemoDeployment(env.AUTHON_DEPLOYMENT_MODE)
+      ? Promise.resolve(null)
+      : getCurrentUser(),
   ]);
 
   const explicitLocale = requestHeaders.get(REQUEST_LOCALE_HEADER);

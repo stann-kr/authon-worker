@@ -4,6 +4,19 @@
 
 ## 2026-08-03
 
+### 포트폴리오 데모 전용 Worker 격리
+
+#### Added
+
+- `demo.authon.stann.kr`을 대상으로 하는 별도 `authon-demo` Worker 설정과 demo 전용 build·preview·deploy 명령을 추가했다.
+- Custom Domain 접속 시 루트는 `/demo`로 이동하고 샌드박스 화면과 언어 변경만 제공한다.
+
+#### Security
+
+- demo Worker에서 D1, KV와 운영 secret binding을 제거했다.
+- 운영 로그인·게스트·도어·관리·프로필 화면과 인증·관리·내부 API를 demo runtime middleware에서 `404`로 차단했다.
+- demo locale과 tenant 해석이 운영 사용자 session이나 venue database를 조회하지 않도록 분리했다.
+
 ### 가상 계정 로그인과 역할별 데모 접근
 
 #### Added

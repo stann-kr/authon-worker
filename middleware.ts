@@ -13,6 +13,10 @@ import {
   REQUEST_LOCALE_HEADER,
 } from "@/i18n/config";
 import { hasAccess, isAccountKind, isRole } from "@/lib/users/policy";
+import {
+  getDemoRouteDisposition,
+  isDemoDeployment,
+} from "@/lib/demo/deployment";
 
 function parseStoredSession(raw: string): { userId?: string; sessionVersion?: number } | null {
   try {
@@ -54,8 +58,23 @@ export async function middleware(request: NextRequest) {
   }
 
   const { env } = getCloudflareContext();
-  const db = drizzle(env.DB);
   const hostname = normalizeHostname(request.headers.get("host"));
+
+  if (isDemoDeployment(env.AUTHON_DEPLOYMENT_MODE)) {
+    const disposition = getDemoRouteDisposition(pathname, hostname);
+    if (disposition === "redirect_to_demo") {
+      return NextResponse.redirect(new URL("/demo", request.url));
+    }
+    if (disposition === "not_found") {
+      return new NextResponse("Not Found", {
+        status: 404,
+        headers: { "Cache-Control": "no-store" },
+      });
+    }
+    return continueRequest();
+  }
+
+  const db = drizzle(env.DB);
   let requestVenueId: string | null = null;
 
   if (!hostname || !isPlatformHostname(hostname)) {
@@ -194,6 +213,6 @@ export async function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
-    "/((?!api/auth|api/internal|_next/static|_next/image|favicon.ico).*)",
+    "/((?!_next/static|_next/image|favicon.ico).*)",
   ],
 };
