@@ -24,6 +24,7 @@ import {
 import { fetchUsersByVenue } from "../../../lib/api/users";
 import { fetchExternalLinksByDate } from "../../../lib/api/external-links";
 import type { Guest, User, ExternalDJLink } from "../../../lib/api/types";
+import { useLocale, useTranslations } from "next-intl";
 
 interface GuestListProps {
   selectedDate: string;
@@ -34,6 +35,9 @@ export default function GuestList({
   selectedDate,
   onDateChange,
 }: GuestListProps) {
+  const t = useTranslations("AdminGuest");
+  const doorT = useTranslations("Door");
+  const locale = useLocale() as "en" | "ko";
   const [selectedDJ, setSelectedDJ] = useState<string>("all");
   const [loadingStates, setLoadingStates] = useState<{
     [key: string]: boolean;
@@ -87,18 +91,18 @@ export default function GuestList({
         fetchExternalLinksByDate(venueId, selectedDate),
       ]);
       if (guestRes.error || userRes.error || linkRes.error) {
-        setFeedback("일부 운영 데이터를 불러오지 못했습니다. 새로고침 후 다시 시도해주세요.");
+        setFeedback(doorT("partialLoadFailed"));
       }
       if (guestRes.data) setGuests(guestRes.data);
       if (userRes.data) setUsers(userRes.data);
       if (linkRes.data) setExternalLinks(linkRes.data);
     } catch (err) {
       console.error("Failed to load data:", err);
-      setFeedback("운영 데이터를 불러오지 못했습니다. 네트워크 상태를 확인해주세요.");
+      setFeedback(doorT("loadFailed"));
     } finally {
       setIsFetching(false);
     }
-  }, [selectedDate, venueId]);
+  }, [doorT, selectedDate, venueId]);
 
   useEffect(() => {
     loadData();
@@ -130,7 +134,7 @@ export default function GuestList({
       setFeedback(null);
     } else {
       console.error("Failed to update guest status:", error);
-      setFeedback("게스트 상태를 변경하지 못했습니다. 다시 시도해주세요.");
+      setFeedback(doorT("updateFailed"));
     }
 
     setLoadingStates((prev) => ({ ...prev, [`${id}_${action}`]: false }));
@@ -171,7 +175,7 @@ export default function GuestList({
   const sortedGuests =
     sortMode === "alpha"
       ? [...filteredGuests].sort((a, b) =>
-          (a.name || "").localeCompare(b.name || "", "ko-KR", {
+          (a.name || "").localeCompare(b.name || "", locale === "ko" ? "ko-KR" : "en-US", {
             sensitivity: "base",
           }),
         )
@@ -188,13 +192,13 @@ export default function GuestList({
 
   const getSelectedDJInfo = () => {
     if (selectedDJ === "all")
-      return { name: "All users", event: "Total overview" };
+      return { name: t("allUsers"), event: t("totalOverview") };
     if (selectedDJ.startsWith("ext:")) {
       const link = displayData.externalLinks.find(
         (l) => l.id === selectedDJ.replace("ext:", ""),
       );
       return link
-        ? { name: link.djName, event: "EXTERNAL DJ" }
+        ? { name: link.djName, event: t("externalDj") }
         : { name: "", event: "" };
     }
     const u = displayData.users.find((u) => u.id === selectedDJ);
@@ -221,7 +225,7 @@ export default function GuestList({
 
   return (
     <OperationsLayout
-      title="Admin guest management"
+      title={t("title")}
       dashboard={
         <>
         <div className="context-bar">
@@ -239,7 +243,7 @@ export default function GuestList({
         <div className="app-panel p-4 sm:p-5">
           <div className="mb-4">
             <label htmlFor="admin-guest-user-filter" className="type-context-title mb-3">
-              User filter
+              {t("userFilter")}
             </label>
             <div className="space-y-2">
               <button
@@ -250,7 +254,7 @@ export default function GuestList({
                     : "bg-surface-raised text-text-muted hover:text-text-heading border border-border-default"
                 }`}
               >
-                All users
+                {t("allUsers")}
               </button>
               <div className="relative">
                 <select
@@ -259,7 +263,7 @@ export default function GuestList({
                   onChange={(e) => setSelectedDJ(e.target.value || "all")}
                   className="w-full appearance-none bg-surface-raised border border-border-default px-4 py-4 pr-10 text-text-heading text-sm font-medium focus:outline-none focus:border-border-focus min-h-[52px]"
                 >
-                  <option value="">SELECT USER</option>
+                  <option value="">{t("selectUser")}</option>
                   {filteredUsers.map((u) => (
                     <option key={u.id} value={u.id} className="bg-surface">
                       {u.name}
@@ -290,7 +294,7 @@ export default function GuestList({
               {selectedDJInfo.event}
             </p>
             <p className="text-sm text-text-muted">
-              {formatDateDisplay(selectedDate)}
+              {formatDateDisplay(selectedDate, locale)}
             </p>
           </div>
           <div className="text-center mb-4">
@@ -298,18 +302,18 @@ export default function GuestList({
               {pendingGuests.length + checkedGuests.length}
             </div>
             <div className="text-xs font-medium text-text-muted">
-              TOTAL GUESTS
+              {t("totalGuests")}
             </div>
           </div>
 
           <StatGrid
             items={[
               {
-                label: "WAITING",
+                label: t("waiting"),
                 value: pendingGuests.length,
                 color: "waiting",
               },
-              { label: "CHECKED", value: checkedGuests.length, color: "checked" },
+              { label: t("checked"), value: checkedGuests.length, color: "checked" },
             ]}
           />
         </div>
@@ -320,7 +324,7 @@ export default function GuestList({
       <div className="flex min-w-0 flex-col lg:min-h-0">
         <div className="main-content-panel lg:min-h-0 lg:max-h-full">
           <PanelHeader
-            title="Guest list"
+            title={t("guestList")}
             count={displayGuests.length}
             sortMode={sortMode}
             onSortToggle={() =>
@@ -338,7 +342,10 @@ export default function GuestList({
           {isFetching && displayData.guests.length === 0 ? (
             <Skeleton rows={6} />
           ) : displayGuests.length === 0 ? (
-            <EmptyState icon="user" message={searchQuery ? "NO GUESTS MATCH THIS SEARCH" : "NO GUESTS FOR THIS DATE"} />
+            <EmptyState
+              icon="user"
+              message={searchQuery ? t("noSearchResults") : t("noGuestsForDate")}
+            />
           ) : (
             <div
               className={`divide-y divide-border-default lg:overflow-y-auto transition-opacity duration-200 ${isFetching ? "opacity-50 pointer-events-none" : ""}`}

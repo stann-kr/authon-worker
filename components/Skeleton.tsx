@@ -1,11 +1,16 @@
+"use client";
+
+import { useTranslations } from "next-intl";
+
 interface SkeletonProps {
   rows?: number;
   compact?: boolean;
 }
 
 export default function Skeleton({ rows = 5, compact = false }: SkeletonProps) {
+  const t = useTranslations("Common");
   return (
-    <div className="animate-pulse" role="status" aria-label="Loading content…">
+    <div className="animate-pulse" role="status" aria-label={t("loadingContent")}>
       {Array.from({ length: rows }, (_, index) => (
         <div
           key={index}
@@ -19,7 +24,7 @@ export default function Skeleton({ rows = 5, compact = false }: SkeletonProps) {
           <div className="h-9 w-20 rounded-control bg-surface-active" />
         </div>
       ))}
-      <span className="sr-only">Loading…</span>
+      <span className="sr-only">{t("loading")}</span>
     </div>
   );
 }

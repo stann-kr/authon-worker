@@ -10,6 +10,7 @@ const fallbackTenant: TenantContext = {
   venueId: null,
   baseUrl: "http://localhost:3000",
   brand: PLATFORM_BRAND,
+  defaultLocale: "en",
   resolved: false,
 };
 

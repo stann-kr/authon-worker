@@ -7,6 +7,11 @@ import { users } from "@/lib/db/schema";
 import { verifyPassword, hashPassword, needsRehash } from "@/lib/auth/password";
 import { clearRateLimit, consumeRateLimit, getRequestIp } from "@/lib/auth/rate-limit";
 import { getTenantContextForRequest } from "@/lib/tenant/server";
+import {
+  isLocale,
+  LOCALE_COOKIE_MAX_AGE,
+  LOCALE_COOKIE_NAME,
+} from "@/i18n/config";
 
 export async function POST(request: Request) {
   try {
@@ -20,7 +25,7 @@ export async function POST(request: Request) {
       !password
     ) {
       return NextResponse.json(
-        { error: "이메일과 비밀번호를 입력해주세요." },
+        { code: "MISSING_CREDENTIALS", error: "Email and password are required." },
         { status: 400 }
       );
     }
@@ -36,7 +41,7 @@ export async function POST(request: Request) {
 
     if (!rateLimit.allowed) {
       return NextResponse.json(
-        { error: "로그인 시도가 너무 많습니다. 잠시 후 다시 시도해주세요." },
+        { code: "RATE_LIMITED", error: "Too many login attempts. Please try again later." },
         {
           status: 429,
           headers: { "Retry-After": String(rateLimit.retryAfterSeconds) },
@@ -50,7 +55,7 @@ export async function POST(request: Request) {
     const tenant = await getTenantContextForRequest(request);
 
     const invalidCredentialsResponse = () => NextResponse.json(
-      { error: "이메일 또는 비밀번호가 올바르지 않습니다." },
+      { code: "INVALID_CREDENTIALS", error: "Invalid email or password." },
       { status: 401 }
     );
 
@@ -89,7 +94,7 @@ export async function POST(request: Request) {
 
     if (!env.JWT_SECRET) {
       console.error("JWT_SECRET is not configured");
-      return NextResponse.json({ error: "로그인 처리 중 오류가 발생했습니다." }, { status: 500 });
+      return NextResponse.json({ code: "SERVER_ERROR", error: "Unable to sign in right now." }, { status: 500 });
     }
     const secret = new TextEncoder().encode(env.JWT_SECRET);
     const token = await new SignJWT({
@@ -123,6 +128,7 @@ export async function POST(request: Request) {
         name: user.name,
         venueId: user.venueId ?? null,
         guestLimit: user.guestLimit ?? 0,
+        preferredLocale: isLocale(user.preferredLocale) ? user.preferredLocale : null,
       },
     });
 
@@ -146,11 +152,22 @@ export async function POST(request: Request) {
       path: "/",
     });
 
+    if (isLocale(user.preferredLocale)) {
+      response.cookies.set({
+        name: LOCALE_COOKIE_NAME,
+        value: user.preferredLocale,
+        sameSite: "lax",
+        secure: new URL(request.url).protocol === "https:",
+        maxAge: LOCALE_COOKIE_MAX_AGE,
+        path: "/",
+      });
+    }
+
     return response;
   } catch (error) {
     console.error("Login error:", error);
     return NextResponse.json(
-      { error: "로그인 처리 중 오류가 발생했습니다." },
+      { code: "SERVER_ERROR", error: "Unable to sign in right now." },
       { status: 500 }
     );
   }

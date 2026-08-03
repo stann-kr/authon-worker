@@ -2,6 +2,7 @@
 
 import React, { useId } from "react";
 import Icon from "./Icon";
+import { useTranslations } from "next-intl";
 
 /**
  * GuestSearchInput: 게스트 목록 검색용 공용 입력 컴포넌트.
@@ -23,15 +24,16 @@ interface GuestSearchInputProps {
 const GuestSearchInput: React.FC<GuestSearchInputProps> = ({
   value,
   onChange,
-  placeholder = "Search guests…",
+  placeholder,
   className = "",
 }) => {
+  const t = useTranslations("Common");
   const inputId = useId();
 
   return (
     <div className={`border-b border-border-subtle bg-surface px-4 py-3 sm:px-5 ${className}`}>
       <label htmlFor={inputId} className="sr-only">
-        Search guest names
+        {t("searchGuestNames")}
       </label>
       <div className="relative flex items-center">
         <Icon name="search" size={16} className="pointer-events-none absolute left-3 text-text-dim" />
@@ -43,7 +45,7 @@ const GuestSearchInput: React.FC<GuestSearchInputProps> = ({
           autoComplete="off"
           spellCheck={false}
           onChange={(e) => onChange(e.target.value)}
-          placeholder={placeholder}
+          placeholder={placeholder ?? t("searchGuests")}
           className="guest-search-input app-field min-h-12 py-2.5 pl-9 pr-12 text-base sm:text-sm"
         />
         {value && (
@@ -51,7 +53,7 @@ const GuestSearchInput: React.FC<GuestSearchInputProps> = ({
             type="button"
             onClick={() => onChange("")}
             className="pressable absolute inset-y-0 right-0 flex min-h-11 w-11 touch-manipulation items-center justify-center rounded-control text-text-muted hover:bg-surface-hover hover:text-text-heading"
-            aria-label="Clear search"
+            aria-label={t("clearSearch")}
           >
             <Icon name="close" size={16} />
           </button>

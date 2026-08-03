@@ -1,5 +1,6 @@
 import type { NextConfig } from "next";
 import { initOpenNextCloudflareForDev } from "@opennextjs/cloudflare";
+import createNextIntlPlugin from "next-intl/plugin";
 
 initOpenNextCloudflareForDev();
 
@@ -8,7 +9,7 @@ const securityHeaders = [
     key: "Content-Security-Policy",
     value: "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; img-src 'self' data: blob:; connect-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; font-src 'self' data: https://cdnjs.cloudflare.com",
   },
-  { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+  { key: "Referrer-Policy", value: "same-origin" },
   { key: "X-Content-Type-Options", value: "nosniff" },
   { key: "X-Frame-Options", value: "DENY" },
   { key: "Strict-Transport-Security", value: "max-age=31536000; includeSubDomains" },
@@ -32,4 +33,6 @@ const nextConfig: NextConfig = {
   },
 };
 
-export default nextConfig;
+const withNextIntl = createNextIntlPlugin("./i18n/request.ts");
+
+export default withNextIntl(nextConfig);

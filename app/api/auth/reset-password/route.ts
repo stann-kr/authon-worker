@@ -9,6 +9,15 @@ import { consumeRateLimit, getRequestIp } from "@/lib/auth/rate-limit";
 import { getPasswordPolicyError } from "@/lib/auth/password-policy";
 import { generateResetToken, hashResetToken } from "@/lib/auth/token";
 import { getTenantContextForRequest, getVenueDeliveryContext } from "@/lib/tenant/server";
+import { getTranslations } from "next-intl/server";
+import { isLocale, LOCALE_COOKIE_NAME } from "@/i18n/config";
+import { resolveLocale } from "@/i18n/resolve";
+
+function getCookieValue(request: Request, name: string): string | null {
+  const cookieHeader = request.headers.get("cookie") || "";
+  const escapedName = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return cookieHeader.match(new RegExp(`(?:^|;\\s*)${escapedName}=([^;]+)`))?.[1] ?? null;
+}
 
 /**
  * 비밀번호 재설정 요청 (POST) 및 재설정 실행 (PUT)
@@ -85,24 +94,31 @@ export async function POST(request: Request) {
     });
 
     const delivery = await getVenueDeliveryContext(user.venueId, env.NEXT_PUBLIC_APP_URL);
-    const resetLink = `${delivery.baseUrl}/auth/reset-password?token=${token}`;
-    const safeName = escapeHtml(user.name);
+    const emailLocale = isLocale(user.preferredLocale)
+      ? user.preferredLocale
+      : resolveLocale({
+          cookieLocale: getCookieValue(request, LOCALE_COOKIE_NAME),
+          acceptLanguage: request.headers.get("accept-language"),
+          domainDefaultLocale: tenant.defaultLocale,
+        });
+    const t = await getTranslations({ locale: emailLocale, namespace: "Email" });
+    const resetLink = `${delivery.baseUrl}/auth/reset-password?token=${token}&lang=${emailLocale}`;
     const safeResetLink = escapeHtml(resetLink);
 
     try {
       await sendEmail({
         to: normalizedEmail,
-        subject: `[${delivery.brand.name}] 비밀번호 재설정 안내`,
+        subject: t("resetSubject", { brand: delivery.brand.name }),
         body: `
         <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
-          <h2>비밀번호 재설정 안내</h2>
-          <p>안녕하세요, ${safeName}님.</p>
-          <p>비밀번호 재설정을 위해 아래 링크를 클릭해주세요. 이 링크는 1시간 동안 유효합니다.</p>
+          <h2>${escapeHtml(t("resetHeading"))}</h2>
+          <p>${escapeHtml(t("greeting", { name: user.name }))}</p>
+          <p>${escapeHtml(t("resetInstructions"))}</p>
           <div style="margin: 30px 0;">
-            <a href="${safeResetLink}" style="background-color: #000; color: #fff; padding: 12px 24px; text-decoration: none; border-radius: 4px;">비밀번호 재설정하기</a>
+            <a href="${safeResetLink}" style="background-color: #000; color: #fff; padding: 12px 24px; text-decoration: none; border-radius: 4px;">${escapeHtml(t("resetButton"))}</a>
           </div>
-          <p>만약 본인이 요청하지 않았다면 이 메일을 무시하셔도 됩니다.</p>
-          <p style="color: #666; font-size: 12px; margin-top: 40px;">본 메일은 발신 전용입니다.</p>
+          <p>${escapeHtml(t("ignoreNotice"))}</p>
+          <p style="color: #666; font-size: 12px; margin-top: 40px;">${escapeHtml(t("noReply"))}</p>
         </div>
         `,
       });

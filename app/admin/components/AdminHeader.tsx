@@ -5,16 +5,17 @@ import { usePathname } from "next/navigation";
 import { logout } from "@/lib/auth";
 import Icon from "@/components/Icon";
 import { useVenueBrand } from "@/components/VenueBrandProvider";
-
-const contextLabels: Record<string, string> = {
-  "/admin": "Admin",
-  "/door": "Door",
-  "/guest": "Guest",
-  "/profile": "Profile",
-};
+import { useTranslations } from "next-intl";
 
 export default function AdminHeader() {
+  const t = useTranslations("Common");
   const pathname = usePathname();
+  const contextLabels: Record<string, string> = {
+    "/admin": t("admin"),
+    "/door": t("door"),
+    "/guest": t("guest"),
+    "/profile": t("profile"),
+  };
   const contextLabel = contextLabels[pathname];
   const { brand } = useVenueBrand();
 
@@ -24,7 +25,7 @@ export default function AdminHeader() {
         <Link
           href="/"
           className="pressable flex min-w-0 items-center gap-3 rounded-control focus-visible:outline-none"
-          aria-label={`${brand.name} Home`}
+          aria-label={t("brandHome", { brand: brand.name })}
         >
           <span className="grid h-8 w-8 shrink-0 place-items-center border border-border-strong bg-surface font-mono text-sm font-semibold text-text-heading">
             {brand.name.charAt(0).toUpperCase()}
@@ -46,8 +47,8 @@ export default function AdminHeader() {
             <Link
               href="/profile"
               className="pressable flex h-10 w-10 items-center justify-center rounded-control border border-border-default bg-surface text-text-muted hover:border-border-strong hover:bg-surface-hover hover:text-text-heading"
-              aria-label="Profile settings"
-              title="Profile settings"
+              aria-label={t("profileSettings")}
+              title={t("profileSettings")}
             >
               <Icon name="user-admin" size={18} />
             </Link>
@@ -55,8 +56,8 @@ export default function AdminHeader() {
           <button
             onClick={logout}
             className="pressable flex h-10 w-10 items-center justify-center rounded-control border border-border-default bg-surface text-text-muted hover:border-border-strong hover:bg-surface-hover hover:text-text-heading"
-            aria-label="Logout"
-            title="Logout"
+            aria-label={t("logout")}
+            title={t("logout")}
           >
             <Icon name="logout" size={18} />
           </button>

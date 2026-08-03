@@ -37,13 +37,14 @@ export function getBusinessDate(): string {
 /**
  * 날짜를 표시용 포맷으로 변환 (YYYY.MM.DD (DDD))
  */
-export function formatDateDisplay(dateString: string): string {
+export function formatDateDisplay(dateString: string, locale: "en" | "ko" = "en"): string {
+  const intlLocale = locale === "ko" ? "ko-KR" : "en-US";
   const ymdMatch = dateString.match(/^(\d{4})-(\d{2})-(\d{2})$/);
   if (ymdMatch) {
     const [, year, month, day] = ymdMatch;
     const date = new Date(`${year}-${month}-${day}T00:00:00`);
     if (!Number.isNaN(date.getTime())) {
-      const dayName = new Intl.DateTimeFormat("en-US", {
+      const dayName = new Intl.DateTimeFormat(intlLocale, {
         weekday: "short",
       })
         .format(date)
@@ -58,7 +59,7 @@ export function formatDateDisplay(dateString: string): string {
     return dateString;
   }
 
-  const dayName = new Intl.DateTimeFormat("en-US", { weekday: "short" })
+  const dayName = new Intl.DateTimeFormat(intlLocale, { weekday: "short" })
     .format(date)
     .toUpperCase();
   return `${date.getFullYear()}.${String(date.getMonth() + 1).padStart(2, "0")}.${String(date.getDate()).padStart(2, "0")} (${dayName})`;

@@ -10,11 +10,15 @@ import PasswordInput from "@/components/PasswordInput";
 import Icon from "@/components/Icon";
 import Button from "@/components/Button";
 import AdminHeader from "@/app/admin/components/AdminHeader";
+import LanguageSwitcher from "@/components/LanguageSwitcher";
+import { useTranslations } from "next-intl";
 import { getUser, User } from "@/lib/auth";
 import { updateUserProfile } from "@/lib/api/users";
-import { getPasswordPolicyError, PASSWORD_POLICY_HINT } from "@/lib/auth/password-policy";
+import { getPasswordPolicyErrorCode } from "@/lib/auth/password-policy";
 
 export default function ProfilePage() {
+  const t = useTranslations("Profile");
+  const commonT = useTranslations("Common");
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
@@ -48,7 +52,7 @@ export default function ProfilePage() {
 
     try {
       if (!user) {
-        setError("User session is unavailable.");
+        setError(t("sessionUnavailable"));
         return;
       }
 
@@ -60,7 +64,8 @@ export default function ProfilePage() {
         });
 
         if (nameError) {
-          setError("Failed to update name: " + nameError);
+          console.error("Failed to update name:", nameError);
+          setError(t("nameUpdateFailed"));
           setIsSaving(false);
           return;
         }
@@ -83,14 +88,14 @@ export default function ProfilePage() {
       setShowSuccess(true);
       setTimeout(() => setShowSuccess(false), 3000);
     } catch {
-      setError("An error occurred while saving.");
+      setError(t("saveFailed"));
     } finally {
       setIsSaving(false);
     }
   };
 
   if (isLoading) {
-    return <Spinner mode="fullscreen" text="LOADING..." />;
+    return <Spinner mode="fullscreen" text={commonT("loading")} />;
   }
 
   if (!user) return null;
@@ -118,7 +123,7 @@ export default function ProfilePage() {
                       <RoleLabel role={user.role} />
                     </span>
                     <span className="px-2 py-1 bg-canvas border border-border-strong text-xs font-mono text-text-body">
-                      LIMIT: {user.guest_limit}
+                      {t("guestLimit")}: {user.guest_limit}
                     </span>
                   </div>
                 </div>
@@ -126,12 +131,12 @@ export default function ProfilePage() {
 
               <div className="app-panel p-4 sm:p-5">
                 <h3 className="text-xs font-medium text-text-muted sm:text-sm mb-3">
-                  ACCOUNT INFO
+                  {t("accountInfo")}
                 </h3>
                 <div className="space-y-3">
                   <div className="flex justify-between items-center gap-3">
                     <span className="text-xs text-text-dim">
-                      Role
+                      {t("role")}
                     </span>
                     <span className="text-xs text-text-heading text-right">
                       <RoleLabel role={user.role} />
@@ -139,7 +144,7 @@ export default function ProfilePage() {
                   </div>
                   <div className="flex justify-between items-center gap-3">
                     <span className="text-xs text-text-dim">
-                      Guest Limit
+                      {t("guestLimit")}
                     </span>
                     <span className="text-text-heading font-mono text-xs">
                       {user.guest_limit}
@@ -147,10 +152,10 @@ export default function ProfilePage() {
                   </div>
                   <div className="flex justify-between items-center gap-3">
                     <span className="text-xs text-text-dim">
-                      Status
+                      {t("status")}
                     </span>
                     <span className="text-xs text-text-heading">
-                      ACTIVE
+                      {t("active")}
                     </span>
                   </div>
                 </div>
@@ -161,7 +166,7 @@ export default function ProfilePage() {
               {showSuccess && (
                 <Alert
                   type="success"
-                  message="Profile saved successfully."
+                  message={t("profileUpdated")}
                   className="mb-6"
                 />
               )}
@@ -172,10 +177,10 @@ export default function ProfilePage() {
                 <div className="border-b border-border-default p-4 space-y-4">
                   <div>
                     <h3 className="text-sm font-semibold text-text-heading">
-                      Account settings
+                      {t("accountSettings")}
                     </h3>
                     <p className="mt-2 text-sm leading-relaxed text-text-muted">
-                      Keep profile details and security actions separated so each task is easier to review on desktop and mobile.
+                      {t("accountSettingsHelp")}
                     </p>
                   </div>
 
@@ -190,7 +195,7 @@ export default function ProfilePage() {
                           : "bg-canvas text-text-muted border-border-default hover:text-text-heading hover:border-border-strong"
                       }`}
                     >
-                      Basic info
+                      {t("basicInfo")}
                     </button>
                     <button
                       type="button"
@@ -202,7 +207,7 @@ export default function ProfilePage() {
                           : "bg-canvas text-text-muted border-border-default hover:text-text-heading hover:border-border-strong"
                       }`}
                     >
-                      Security
+                      {t("security")}
                     </button>
                   </div>
                 </div>
@@ -211,14 +216,14 @@ export default function ProfilePage() {
                   <div>
                     <div className="border-b border-border-default p-4">
                       <h3 className="text-xs font-semibold text-text-heading sm:text-sm">
-                        EDIT PROFILE
+                        {t("editProfile")}
                       </h3>
                     </div>
 
                     <form onSubmit={handleSubmit} className="p-4 sm:p-6 space-y-6" aria-busy={isSaving}>
                       <div>
                         <label htmlFor="profile-name" className="app-label">
-                          Name
+                          {t("name")}
                         </label>
                         <input
                           id="profile-name"
@@ -234,12 +239,18 @@ export default function ProfilePage() {
                           aria-invalid={error ? "true" : "false"}
                         />
                         <p id="profile-name-helper" className="app-helper">
-                          Your display name or identifier within this context.
+                          {t("nameHelp")}
                         </p>
                       </div>
 
+                      <div>
+                        <p className="app-label">{t("preferredLanguage")}</p>
+                        <LanguageSwitcher />
+                        <p className="app-helper">{t("preferredLanguageHelp")}</p>
+                      </div>
+
                       <Button type="submit" isLoading={isSaving} fullWidth size="lg" leftIcon={<Icon name="save" size={17} />}>
-                        Save changes
+                        {commonT("saveChanges")}
                       </Button>
                     </form>
                   </div>
@@ -247,7 +258,7 @@ export default function ProfilePage() {
                   <div>
                     <div className="border-b border-border-default p-4">
                       <h3 className="text-xs font-semibold text-text-heading sm:text-sm">
-                        CHANGE PASSWORD
+                        {t("changePassword")}
                       </h3>
                     </div>
                     <PasswordChangeForm />
@@ -264,6 +275,8 @@ export default function ProfilePage() {
 }
 
 function PasswordChangeForm() {
+  const t = useTranslations("Profile");
+  const authT = useTranslations("Auth");
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -278,14 +291,20 @@ function PasswordChangeForm() {
     setPasswordError("");
     setPasswordSuccess("");
 
-    const policyError = getPasswordPolicyError(newPassword);
-    if (policyError) {
-      setPasswordError(policyError);
+    const policyErrorCode = getPasswordPolicyErrorCode(newPassword);
+    if (policyErrorCode) {
+      setPasswordError(
+        authT(
+          policyErrorCode === "PASSWORD_TOO_SHORT"
+            ? "passwordTooShort"
+            : "passwordRequiresLettersAndNumbers",
+        ),
+      );
       return;
     }
 
     if (newPassword !== confirmPassword) {
-      setPasswordError("New passwords do not match.");
+      setPasswordError(t("passwordsDoNotMatch"));
       return;
     }
 
@@ -299,10 +318,11 @@ function PasswordChangeForm() {
 
       const data = await res.json();
       if (!res.ok) {
-        throw new Error(data.error || "Failed to update password");
+        console.error("Failed to update password:", data.error);
+        throw new Error(t("passwordUpdateFailed"));
       }
 
-      setPasswordSuccess(data.message || "Password updated successfully.");
+      setPasswordSuccess(t("passwordUpdated"));
       setCurrentPassword("");
       setNewPassword("");
       setConfirmPassword("");
@@ -315,7 +335,7 @@ function PasswordChangeForm() {
         }, 3000);
       }
     } catch (err: unknown) {
-      setPasswordError(err instanceof Error ? err.message : "An error occurred.");
+      setPasswordError(err instanceof Error ? err.message : t("passwordUpdateFailed"));
     } finally {
       setIsUpdating(false);
     }
@@ -329,16 +349,16 @@ function PasswordChangeForm() {
       <div className="border border-border-strong bg-surface-raised p-4 space-y-2">
         <div className="flex items-center gap-2 text-text-muted font-mono text-xs tracking-[0.24em] uppercase">
           <Icon name="warning" size={16} />
-          Security warning
+          {t("securityWarning")}
         </div>
         <p id="password-warning-msg" className="text-text-muted font-mono text-xs sm:text-xs tracking-[0.08em] leading-relaxed">
-          Changing your password will immediately sign you out. You will need to log in again on this device.
+          {t("securityWarningText")}
         </p>
       </div>
 
       <div>
         <label htmlFor="current-password" className="app-label">
-          Current password
+          {t("currentPassword")}
         </label>
         <PasswordInput
           id="current-password"
@@ -354,7 +374,7 @@ function PasswordChangeForm() {
 
       <div>
         <label htmlFor="new-password" className="app-label">
-          New password
+          {t("newPassword")}
         </label>
         <PasswordInput
           id="new-password"
@@ -363,18 +383,18 @@ function PasswordChangeForm() {
           autoComplete="new-password"
           disabled={isUpdating || isRedirecting}
           required
-          placeholder="Create a new password"
+          placeholder={t("newPassword")}
           aria-describedby="new-password-policy"
           aria-invalid={passwordError ? "true" : "false"}
         />
         <p id="new-password-policy" className="app-helper">
-          {PASSWORD_POLICY_HINT}
+          {authT("passwordPolicyHint")}
         </p>
       </div>
 
       <div>
         <label htmlFor="confirm-password" className="app-label">
-          Confirm new password
+          {t("confirmNewPassword")}
         </label>
         <PasswordInput
           id="confirm-password"
@@ -383,12 +403,12 @@ function PasswordChangeForm() {
           autoComplete="new-password"
           disabled={isUpdating || isRedirecting}
           required
-          placeholder="Re-enter your new password"
+          placeholder={t("confirmNewPassword")}
           aria-describedby="confirm-password-helper"
           aria-invalid={passwordError ? "true" : "false"}
         />
         <p id="confirm-password-helper" className="app-helper">
-          Re-enter your new password to confirm accuracy before saving.
+          {t("confirmPasswordHelp")}
         </p>
       </div>
 
@@ -400,7 +420,7 @@ function PasswordChangeForm() {
         size="lg"
         leftIcon={<Icon name="key" size={17} />}
       >
-        {isRedirecting ? "Redirecting to login" : "Update password"}
+        {isRedirecting ? t("redirectingToLogin") : t("changePassword")}
       </Button>
     </form>
   );

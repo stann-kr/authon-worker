@@ -1,14 +1,10 @@
 import { getRoleColor } from "@/lib/colors";
+import { useTranslations } from "next-intl";
 
 interface RoleLabelProps {
   role?: string | null;
   className?: string;
   colored?: boolean;
-}
-
-function formatRole(role?: string | null) {
-  if (!role) return "-";
-  return role.replace(/_/g, " ").toUpperCase();
 }
 
 export { getRoleColor };
@@ -18,10 +14,18 @@ export default function RoleLabel({
   className,
   colored,
 }: RoleLabelProps) {
+  const t = useTranslations("Common");
   const colorClass = colored ? getRoleColor(role) : "";
+  const roleLabels: Record<string, string> = {
+    super_admin: t("roleSuperAdmin"),
+    venue_admin: t("roleVenueAdmin"),
+    door_staff: t("roleDoorStaff"),
+    staff: t("roleStaff"),
+    dj: t("roleDj"),
+  };
   return (
     <span className={[colorClass, className].filter(Boolean).join(" ")}>
-      {formatRole(role)}
+      {role ? roleLabels[role] ?? role.replace(/_/g, " ").toUpperCase() : "-"}
     </span>
   );
 }

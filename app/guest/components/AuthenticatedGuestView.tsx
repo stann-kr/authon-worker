@@ -23,12 +23,15 @@ import {
 } from "@/lib/api/guests";
 import type { Guest } from "@/lib/api/types";
 import { type User as AuthUser } from "@/lib/auth";
+import { useLocale, useTranslations } from "next-intl";
 
 interface AuthenticatedGuestViewProps {
   user: AuthUser | null;
 }
 
 export default function AuthenticatedGuestView({ user }: AuthenticatedGuestViewProps) {
+  const t = useTranslations("GuestOperations");
+  const locale = useLocale() as "en" | "ko";
   const [selectedDate, setSelectedDate] = useState<string>(getBusinessDate());
   const [guestName, setGuestName] = useState<string>("");
   const [isLoading, setIsLoading] = useState<boolean>(false);
@@ -76,13 +79,13 @@ export default function AuthenticatedGuestView({ user }: AuthenticatedGuestViewP
 
     if (fetchError) {
       console.error("Failed to fetch guests:", fetchError);
-      setError("Failed to load guest data.");
+      setError(t("loadFailed"));
     } else if (data) {
       setGuests(data);
     }
 
     setIsFetching(false);
-  }, [selectedDate, effectiveVenueId]);
+  }, [selectedDate, effectiveVenueId, t]);
 
   useEffect(() => {
     loadGuests();
@@ -100,7 +103,7 @@ export default function AuthenticatedGuestView({ user }: AuthenticatedGuestViewP
 
     if (!effectiveVenueId) {
       console.error("No venue ID available");
-      setError("Please select a venue.");
+      setError(t("selectVenue"));
       return;
     }
 
@@ -111,7 +114,7 @@ export default function AuthenticatedGuestView({ user }: AuthenticatedGuestViewP
     const activeGuestsCount = filteredGuests.filter((g) => g.status !== "deleted").length;
     
     if (guestLimit > 0 && activeGuestsCount >= guestLimit) {
-      setError(`Guest limit reached. (${guestLimit}/day)`);
+      setError(t("limitReachedDaily", { limit: guestLimit }));
       setIsLoading(false);
       return;
     }
@@ -126,7 +129,7 @@ export default function AuthenticatedGuestView({ user }: AuthenticatedGuestViewP
 
     if (createError) {
       console.error("Failed to create guest:", createError);
-      setError("Failed to register guest.");
+      setError(t("registerFailed"));
       setIsLoading(false);
       return;
     }
@@ -147,7 +150,7 @@ export default function AuthenticatedGuestView({ user }: AuthenticatedGuestViewP
 
     if (deleteError) {
       console.error("Failed to delete guest:", deleteError);
-      setError("Failed to delete guest.");
+      setError(t("deleteFailed"));
       setIsLoading(false);
       return;
     }
@@ -175,7 +178,7 @@ export default function AuthenticatedGuestView({ user }: AuthenticatedGuestViewP
 
   const sortGuestsByName = (list: Guest[]) => {
     return [...list].sort((a, b) =>
-      (a.name || "").localeCompare(b.name || "", "ko-KR", {
+      (a.name || "").localeCompare(b.name || "", locale === "ko" ? "ko-KR" : "en-US", {
         sensitivity: "base",
       }),
     );
@@ -206,7 +209,7 @@ export default function AuthenticatedGuestView({ user }: AuthenticatedGuestViewP
       <div className="flex flex-1 flex-col overflow-x-hidden pt-20 sm:pt-24">
         <div className="page-container">
           <OperationsLayout
-            title="Guest registration"
+            title={t("title")}
             dashboard={
               <>
                 <div className="context-bar">
@@ -232,17 +235,17 @@ export default function AuthenticatedGuestView({ user }: AuthenticatedGuestViewP
                     <div className="mb-3 flex items-end justify-between gap-4">
                       <div>
                         <h2 id="add-guest-title" className="type-panel-title">
-                          Add guest
+                          {t("addGuest")}
                         </h2>
                         <p className="mt-1 text-sm text-text-muted">
-                          Add one full name at a time.
+                          {t("addOneAtATime")}
                         </p>
                       </div>
                       <div className="text-right">
                         <div className="font-mono text-lg tabular-nums text-text-heading">
                           {guestLimit > 0 ? guestLimit - activeGuestsCount : "∞"}
                         </div>
-                        <div className="text-xs text-text-muted">Remaining</div>
+                        <div className="text-xs text-text-muted">{t("remaining")}</div>
                       </div>
                     </div>
 
@@ -256,7 +259,7 @@ export default function AuthenticatedGuestView({ user }: AuthenticatedGuestViewP
                       >
                         <div className="min-w-0 flex-1">
                           <label htmlFor="authenticated-guest-name" className="app-label">
-                            Guest name
+                            {t("guestName")}
                           </label>
                           <input
                             id="authenticated-guest-name"
@@ -264,7 +267,7 @@ export default function AuthenticatedGuestView({ user }: AuthenticatedGuestViewP
                             type="text"
                             value={guestName}
                             onChange={(event) => setGuestName(event.target.value)}
-                            placeholder="Enter full name…"
+                            placeholder={t("enterFullName")}
                             autoComplete="off"
                             className="app-field min-h-11"
                           />
@@ -276,12 +279,12 @@ export default function AuthenticatedGuestView({ user }: AuthenticatedGuestViewP
                           size="lg"
                           fullWidth
                         >
-                          Add Guest
+                          {t("addGuest")}
                         </Button>
                       </form>
                     ) : (
                       <div className="border-l-2 border-status-danger bg-status-danger/10 px-3 py-2 text-sm text-status-danger">
-                        Guest limit reached ({guestLimit}/{guestLimit})
+                        {t("limitReached", { used: guestLimit, max: guestLimit })}
                       </div>
                     )}
                   </div>
@@ -289,7 +292,7 @@ export default function AuthenticatedGuestView({ user }: AuthenticatedGuestViewP
 
                 <section className="app-panel" aria-labelledby="guest-tools-title">
                   <PanelHeader
-                    title="Guest list tools"
+                    title={t("tools")}
                     headingLevel={2}
                     headingId="guest-tools-title"
                     sortMode={sortMode}
@@ -308,17 +311,17 @@ export default function AuthenticatedGuestView({ user }: AuthenticatedGuestViewP
                   <StatGrid
                     items={[
                       {
-                        label: "WAITING",
+                        label: t("waiting"),
                         value: pendingGuests.length,
                         color: "waiting",
                       },
                       {
-                        label: "CHECKED IN",
+                        label: t("checkedIn"),
                         value: checkedGuests.length,
                         color: "checked",
                       },
                       {
-                        label: "TOTAL",
+                        label: t("total"),
                         value: activeGuestsCount,
                         color: "default",
                       },
@@ -334,7 +337,7 @@ export default function AuthenticatedGuestView({ user }: AuthenticatedGuestViewP
               aria-busy={isFetching}
             >
               <PanelHeader
-                title="Today's guests"
+                title={t("todaysGuests")}
                 headingLevel={2}
                 headingId="guest-list-title"
                 count={displayGuests.length}
@@ -347,8 +350,8 @@ export default function AuthenticatedGuestView({ user }: AuthenticatedGuestViewP
                   icon="user-add"
                   message={
                     searchQuery
-                      ? "No guests match this search"
-                      : "No guests registered for this date"
+                      ? t("noSearchResults")
+                      : t("noGuestsForDate")
                   }
                 />
               ) : (

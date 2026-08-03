@@ -13,6 +13,7 @@ import Footer from "../../components/Footer";
 import { getBusinessDate } from "../../lib/date";
 import { getUser } from "../../lib/auth";
 import Icon, { type IconName } from "../../components/Icon";
+import { useTranslations } from "next-intl";
 
 export default function AdminPage() {
   return (
@@ -23,6 +24,7 @@ export default function AdminPage() {
 }
 
 function AdminPageContent() {
+  const t = useTranslations("AdminNav");
   const router = useRouter();
   const [activeTab, setActiveTab] = useLocalStorage(
     "admin:activeTab",
@@ -43,14 +45,14 @@ function AdminPageContent() {
 
   const tabs = useMemo(
     () => [
-      { id: "guests", label: "Guest", icon: "users" as IconName, shortcut: "1" },
-      { id: "links", label: "Links", icon: "link" as IconName, shortcut: "2" },
-      { id: "users", label: "Users", icon: "user-admin" as IconName, shortcut: "3" },
+      { id: "guests", label: t("guests"), icon: "users" as IconName, shortcut: "1" },
+      { id: "links", label: t("links"), icon: "link" as IconName, shortcut: "2" },
+      { id: "users", label: t("users"), icon: "user-admin" as IconName, shortcut: "3" },
       ...(isSuperAdmin
-        ? [{ id: "venues", label: "Venues", icon: "store" as IconName, shortcut: "4" }]
+        ? [{ id: "venues", label: t("venues"), icon: "store" as IconName, shortcut: "4" }]
         : []),
     ],
-    [isSuperAdmin],
+    [isSuperAdmin, t],
   );
 
   useEffect(() => {
@@ -122,7 +124,7 @@ function AdminPageContent() {
           <div className="mb-4 lg:mb-6 flex-shrink-0">
             <div
               role="tablist"
-              aria-label="Admin Sections"
+              aria-label={t("sections")}
               aria-orientation="horizontal"
               className={`grid ${tabs.length === 4 ? "grid-cols-4" : "grid-cols-3"} divide-x divide-border-subtle border border-border-subtle bg-surface`}
             >

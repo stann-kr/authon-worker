@@ -20,8 +20,10 @@ import {
   deleteUserViaEdge,
 } from "../../../lib/api/users";
 import type { User } from "../../../lib/api/types";
+import { useTranslations } from "next-intl";
 
 export default function UserManagement() {
+  const t = useTranslations("UserAdmin");
   const [activeTab, setActiveTab] = useLocalStorage<"create" | "users" | "migrate">(
     "usermgmt:activeTab",
     "create",
@@ -58,17 +60,17 @@ export default function UserManagement() {
       );
       if (error) {
         console.error("Failed to load users:", error);
-        setLoadError("Unable to load users. Please try again.");
+        setLoadError(t("loadFailed"));
       } else if (data) {
         setUsers(data);
       }
     } catch (error) {
       console.error("Failed to load users:", error);
-      setLoadError("Unable to load users. Please check your connection.");
+      setLoadError(t("connectionLoadFailed"));
     } finally {
       setIsLoading(false);
     }
-  }, [effectiveVenueId, isSuperAdmin]);
+  }, [effectiveVenueId, isSuperAdmin, t]);
 
   useEffect(() => {
     if (activeTab === "users" && (effectiveVenueId || isSuperAdmin)) {
@@ -89,7 +91,7 @@ export default function UserManagement() {
       const { error } = await updateUserProfile(userId, updates);
       if (error) {
         console.error("Failed to update user:", error);
-        alert("Failed to update user.");
+        alert(t("updateFailed"));
       } else {
         await loadUsers();
       }
@@ -99,18 +101,18 @@ export default function UserManagement() {
   };
 
   const handleUserDelete = async (userId: string) => {
-    if (!confirm("Delete this user? This action cannot be undone.")) return;
+    if (!confirm(t("deleteConfirm"))) return;
     try {
       const { error } = await deleteUserViaEdge(userId);
       if (error) {
         console.error("Failed to delete user:", error);
-        alert(error || "Failed to delete user.");
+        alert(t("deleteFailed"));
       } else {
         await loadUsers();
       }
     } catch (error: unknown) {
       console.error("Failed to delete user:", error);
-      alert(error instanceof Error ? error.message : "Failed to delete user.");
+      alert(t("deleteFailed"));
     }
   };
 
@@ -118,13 +120,13 @@ export default function UserManagement() {
     switch (activeTab) {
       case "create":
         return {
-          title: "Create user",
-          description: "Create new staff accounts",
+          title: t("createUser"),
+          description: t("createDescription"),
         };
       case "users":
-        return { title: "Users", description: "Manage existing users" };
+        return { title: t("users"), description: t("usersDescription") };
       case "migrate":
-        return { title: "Migration", description: "Legacy user data import" };
+        return { title: t("migration"), description: t("migrationDescription") };
       default:
         return { title: "", description: "" };
     }
@@ -134,7 +136,7 @@ export default function UserManagement() {
 
   return (
     <OperationsLayout
-      title="Admin user management"
+      title={t("title")}
       dashboard={
         <>
         {/* Venue selector for super_admin */}
@@ -143,14 +145,14 @@ export default function UserManagement() {
             venues={venues}
             selectedVenueId={selectedVenueId}
             onVenueChange={setSelectedVenueId}
-            placeholder="ALL VENUES"
+            placeholder={t("allVenues")}
             className="app-panel p-4 sm:p-5"
           />
         )}
         <div className="app-panel p-4 sm:p-5">
           <div className="mb-4">
             <h3 className="type-context-title mb-3">
-              Section
+              {t("section")}
             </h3>
             <div className="space-y-2">
               <button
@@ -162,7 +164,7 @@ export default function UserManagement() {
                 }`}
               >
                 <Icon name="user-add" size={17} />
-                Create
+                {t("create")}
               </button>
               <button
                 onClick={() => setActiveTab("users")}
@@ -173,7 +175,7 @@ export default function UserManagement() {
                 }`}
               >
                 <Icon name="user" size={17} />
-                Users
+                {t("users")}
               </button>
               {isSuperAdmin && (
                 <button
@@ -185,7 +187,7 @@ export default function UserManagement() {
                   }`}
                 >
                   <Icon name="database" size={17} />
-                  Migrate
+                  {t("migrate")}
                 </button>
               )}
             </div>
@@ -206,7 +208,7 @@ export default function UserManagement() {
               {activeTab === "users" ? users.length : "-"}
             </div>
             <div className="text-xs font-medium text-text-muted">
-              {activeTab === "users" ? "TOTAL USERS" : ""}
+              {activeTab === "users" ? t("totalUsers") : ""}
             </div>
           </div>
 
@@ -220,17 +222,17 @@ export default function UserManagement() {
                     color: "default",
                   },
                   {
-                    label: "STAFF",
+                    label: t("staff"),
                     value: users.filter((u) => u.role === "staff").length,
                     color: "default",
                   },
                   {
-                    label: "DOOR",
+                    label: t("door"),
                     value: users.filter((u) => u.role === "door_staff").length,
                     color: "default",
                   },
                   {
-                    label: "ADMIN",
+                    label: t("admin"),
                     value: users.filter((u) => u.role === "venue_admin").length,
                     color: "danger",
                   },
@@ -239,21 +241,21 @@ export default function UserManagement() {
               <StatGrid
                 items={[
                   {
-                    label: "READY",
+                    label: t("ready"),
                     value: users.filter(
                       (u) => u.active && u.migrationStatus !== "pending_reset",
                     ).length,
                     color: "default",
                   },
                   {
-                    label: "SETUP PENDING",
+                    label: t("setupPending"),
                     value: users.filter(
                       (u) => u.active && u.migrationStatus === "pending_reset",
                     ).length,
                     color: "waiting",
                   },
                   {
-                    label: "INACTIVE",
+                    label: t("inactive"),
                     value: users.filter((u) => !u.active).length,
                     color: "danger",
                   },
@@ -273,7 +275,7 @@ export default function UserManagement() {
         {activeTab === "users" && (
           <div className="app-panel">
             <PanelHeader
-              title="User list"
+              title={t("userList")}
               count={users.length}
               onRefresh={loadUsers}
               isLoading={isLoading}
@@ -285,7 +287,7 @@ export default function UserManagement() {
               ) : users.length === 0 ? (
                 <div className="text-center py-8">
                   <p className="text-text-muted font-mono text-sm">
-                    No users found.
+                    {t("noUsers")}
                   </p>
                 </div>
               ) : (
@@ -330,6 +332,8 @@ function UserCard({
   ) => void;
   onDelete: (id: string) => void;
 }) {
+  const t = useTranslations("UserAdmin");
+  const commonT = useTranslations("Common");
   const [isEditing, setIsEditing] = useState(false);
   const isSetupPending =
     user.active && user.migrationStatus === "pending_reset";
@@ -369,9 +373,9 @@ function UserCard({
           {isSetupPending && (
             <span
               className="border border-status-waiting/70 bg-status-waiting/10 px-2 py-1 font-mono text-xs uppercase tracking-wider text-status-waiting"
-              aria-label="First login setup pending"
+              aria-label={t("firstLoginPending")}
             >
-              SETUP PENDING
+              {t("setupPending")}
             </span>
           )}
           <span className="text-xs font-medium">
@@ -385,7 +389,7 @@ function UserCard({
           <div className="grid grid-cols-2 gap-4 mb-3">
             <div>
               <p className="text-xs text-text-dim mb-1">
-                GUEST LIMIT
+                {t("guestLimit")}
               </p>
               <p className="text-text-heading font-mono text-xs sm:text-sm">
                 {user.guestLimit}
@@ -393,22 +397,22 @@ function UserCard({
             </div>
             <div>
               <p className="text-xs text-text-dim mb-1">
-                Status
+                {t("status")}
               </p>
               <p
                 className={`font-mono text-xs sm:text-sm ${user.active ? "text-text-heading" : "text-status-danger"}`}
               >
-                {user.active ? "ACTIVE" : "INACTIVE"}
+                {user.active ? t("active") : t("inactive")}
               </p>
             </div>
           </div>
           {isSetupPending && (
             <div className="mb-3 border border-status-waiting/60 bg-status-waiting/10 p-3">
               <p className="font-mono text-xs font-medium uppercase tracking-wider text-status-waiting">
-                First login not completed
+                {t("firstLoginIncomplete")}
               </p>
               <p className="mt-1 text-xs leading-relaxed text-text-muted">
-                This account must set a password through the first-login flow before normal sign-in.
+                {t("firstLoginHelp")}
               </p>
             </div>
           )}
@@ -417,14 +421,14 @@ function UserCard({
               onClick={() => setIsEditing(true)}
               className="bg-surface-active hover:bg-border-strong text-text-heading text-xs font-medium py-2 sm:py-3 transition-colors"
             >
-              EDIT
+              {t("edit")}
             </button>
             {canEditRole && (
               <button
                 onClick={() => onDelete(user.id)}
                 className="border border-status-danger/70 bg-status-danger/10 py-2 font-mono text-xs uppercase tracking-wider text-status-danger transition-colors hover:bg-status-danger/20 sm:py-3"
               >
-                DELETE
+                {t("delete")}
               </button>
             )}
           </div>
@@ -432,10 +436,10 @@ function UserCard({
             <div className="mt-2">
               <button
                 disabled
-                title="Available after the email service is connected"
+                title={t("inviteUnavailableTitle")}
                 className="w-full bg-surface text-text-dim border border-border-default text-xs font-medium py-2 sm:py-3 cursor-not-allowed"
               >
-                EMAIL INVITE UNAVAILABLE
+                {t("inviteUnavailable")}
               </button>
             </div>
           )}
@@ -445,7 +449,7 @@ function UserCard({
           {canEditRole && (
             <fieldset>
               <legend className="app-label">
-                Role
+                {t("role")}
               </legend>
               <div className="grid grid-cols-4 gap-1">
                 {editableRoles.map((role) => (
@@ -471,7 +475,7 @@ function UserCard({
 
           <div>
             <label htmlFor={`user-guest-limit-${user.id}`} className="app-label">
-              GUEST LIMIT
+              {t("guestLimit")}
             </label>
             <input
               id={`user-guest-limit-${user.id}`}
@@ -502,7 +506,7 @@ function UserCard({
                   : "border-status-danger bg-status-danger/10 text-status-danger"
               }`}
             >
-              {editData.active ? "ACTIVE" : "INACTIVE"}
+              {editData.active ? t("active") : t("inactive")}
             </button>
           </div>
 
@@ -511,7 +515,7 @@ function UserCard({
               onClick={handleSave}
               className="bg-text-heading hover:bg-text-body text-canvas text-xs font-medium py-2 sm:py-3 transition-colors"
             >
-              SAVE
+              {t("save")}
             </button>
             <button
               onClick={() => {
@@ -524,7 +528,7 @@ function UserCard({
               }}
               className="bg-surface-active hover:bg-border-strong text-text-heading text-xs font-medium py-2 sm:py-3 transition-colors"
             >
-              CANCEL
+              {commonT("cancel")}
             </button>
           </div>
         </div>

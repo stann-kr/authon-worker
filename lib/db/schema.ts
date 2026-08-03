@@ -21,6 +21,7 @@ export const venueDomains = sqliteTable('venue_domains', {
   scope: text('scope').notNull().default('venue'),
   isPrimary: integer('is_primary', { mode: 'boolean' }).notNull().default(false),
   active: integer('active', { mode: 'boolean' }).notNull().default(true),
+  defaultLocale: text('default_locale'),
   createdAt: text('created_at').notNull(),
 }, (t) => [
   index('idx_venue_domains_venue').on(t.venueId, t.active),
@@ -43,6 +44,7 @@ export const users = sqliteTable('users', {
   migrationStatus: text('migration_status').notNull().default('native'),
   migratedAt: text('migrated_at'),
   passwordSetAt: text('password_set_at'),
+  preferredLocale: text('preferred_locale'),
   createdAt: text('created_at').notNull(),
 }, (t) => [index('idx_users_venue').on(t.venueId)]);
 
@@ -58,6 +60,7 @@ export const externalDjLinks = sqliteTable('external_dj_links', {
   active: integer('active', { mode: 'boolean' }).notNull().default(true),
   expiresAt: text('expires_at'),
   createdBy: text('created_by').references(() => users.id),
+  localeMode: text('locale_mode').notNull().default('auto'),
   createdAt: text('created_at'),
 }, (t) => [
   index('idx_external_dj_links_venue').on(t.venueId),

@@ -9,15 +9,23 @@ import Alert from "@/components/Alert";
 import PasswordInput from "@/components/PasswordInput";
 import Button from "@/components/Button";
 import Icon from "@/components/Icon";
-import { getPasswordPolicyError, PASSWORD_POLICY_HINT } from "@/lib/auth/password-policy";
+import LanguageSwitcher from "@/components/LanguageSwitcher";
+import { getPasswordPolicyErrorCode } from "@/lib/auth/password-policy";
+import { useTranslations } from "next-intl";
 
-const STEP_ITEMS = ["REQUEST", "EMAIL", "RESET", "DONE"] as const;
-
-function StepIndicator({ currentStep }: { currentStep: 0 | 1 | 2 | 3 }) {
+function StepIndicator({
+  currentStep,
+  labels,
+  progressLabel,
+}: {
+  currentStep: 0 | 1 | 2 | 3;
+  labels: readonly string[];
+  progressLabel: string;
+}) {
   return (
-    <div className="mb-8" aria-label={`Password reset progress: ${STEP_ITEMS[currentStep]}`}>
+    <div className="mb-8" aria-label={progressLabel}>
       <div className="grid grid-cols-4 gap-2">
-        {STEP_ITEMS.map((label, index) => {
+        {labels.map((label, index) => {
           const active = index === currentStep;
           const complete = index < currentStep;
           return (
@@ -43,6 +51,8 @@ function StepIndicator({ currentStep }: { currentStep: 0 | 1 | 2 | 3 }) {
 }
 
 function ResetPasswordContent() {
+  const t = useTranslations("ResetPassword");
+  const authT = useTranslations("Auth");
   const { brand } = useVenueBrand();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -82,19 +92,18 @@ function ResetPasswordContent() {
         body: JSON.stringify({ email }),
       });
 
-      const data = await res.json();
       if (!res.ok) {
         throw new Error(
-          data.error || "An error occurred while sending the reset request.",
+          t("requestFailed"),
         );
       }
 
-      setMessage({ type: "success", text: "A reset link has been sent to your email." });
+      setMessage({ type: "success", text: t("requestSuccess") });
       setStep("requestSent");
     } catch (err: unknown) {
       setMessage({
         type: "error",
-        text: err instanceof Error ? err.message : "An unexpected error occurred.",
+        text: err instanceof Error ? err.message : t("unexpectedError"),
       });
     } finally {
       setLoading(false);
@@ -104,14 +113,21 @@ function ResetPasswordContent() {
   const handleReset = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    const policyError = getPasswordPolicyError(newPassword);
-    if (policyError) {
-      setMessage({ type: "error", text: policyError });
+    const policyErrorCode = getPasswordPolicyErrorCode(newPassword);
+    if (policyErrorCode) {
+      setMessage({
+        type: "error",
+        text: authT(
+          policyErrorCode === "PASSWORD_TOO_SHORT"
+            ? "passwordTooShort"
+            : "passwordRequiresLettersAndNumbers",
+        ),
+      });
       return;
     }
 
     if (newPassword !== confirmPassword) {
-      setMessage({ type: "error", text: "Passwords do not match." });
+      setMessage({ type: "error", text: authT("passwordsDoNotMatch") });
       return;
     }
 
@@ -125,23 +141,22 @@ function ResetPasswordContent() {
         body: JSON.stringify({ token, newPassword }),
       });
 
-      const data = await res.json();
       if (!res.ok) {
         throw new Error(
-          data.error || "An error occurred while updating your password.",
+          t("updateFailed"),
         );
       }
 
       setMessage({
         type: "success",
-        text: "Your password has been updated successfully.",
+        text: t("resetSuccess"),
       });
       setStep("resetComplete");
       setTimeout(() => router.push("/auth/login"), 4500);
     } catch (err: unknown) {
       setMessage({
         type: "error",
-        text: err instanceof Error ? err.message : "An unexpected error occurred.",
+        text: err instanceof Error ? err.message : t("unexpectedError"),
       });
     } finally {
       setLoading(false);
@@ -152,6 +167,9 @@ function ResetPasswordContent() {
     <div className="flex min-h-[100dvh] items-center justify-center bg-canvas px-4 py-10 sm:px-6 lg:px-8">
       <div className="w-full max-w-sm sm:max-w-md">
         <div className="app-panel p-6 sm:p-8 lg:p-10">
+          <div className="mb-5 flex justify-end">
+            <LanguageSwitcher compact />
+          </div>
           <div className="mb-8 text-center">
             <div className="mx-auto mb-5 grid h-11 w-11 place-items-center border border-border-strong bg-surface font-mono text-sm font-semibold text-text-heading">
               {brand.name.charAt(0).toUpperCase()}
@@ -160,18 +178,34 @@ function ResetPasswordContent() {
               {brand.name}
             </h1>
             <p className="text-sm text-text-muted">
-              Reset your password securely
+              {t("tagline")}
             </p>
           </div>
 
-          <StepIndicator currentStep={stepIndex} />
+          <StepIndicator
+            currentStep={stepIndex}
+            labels={[
+              t("requestStep"),
+              t("emailStep"),
+              t("resetStep"),
+              t("doneStep"),
+            ]}
+            progressLabel={t("progress", {
+              step: [
+                t("requestStep"),
+                t("emailStep"),
+                t("resetStep"),
+                t("doneStep"),
+              ][stepIndex],
+            })}
+          />
 
           <div className="mb-6 rounded-control border border-border-default bg-canvas p-4">
             <p className="mb-2 text-sm font-semibold text-text-heading">
-              Secure recovery flow
+              {t("secureFlow")}
             </p>
             <p className="text-xs leading-relaxed text-text-muted">
-              Reset links are single-use, time-limited, and only work for registered accounts.
+              {t("secureFlowDescription")}
             </p>
           </div>
 
@@ -185,7 +219,7 @@ function ResetPasswordContent() {
             <form onSubmit={handleRequest} className="space-y-6" aria-busy={loading}>
               <div>
                 <label htmlFor="email" className="app-label">
-                  EMAIL ADDRESS
+                  {t("email")}
                 </label>
                 <input
                   id="email"
@@ -200,16 +234,16 @@ function ResetPasswordContent() {
                   aria-invalid={message?.type === "error" ? "true" : "false"}
                 />
                 <p id="email-helper" className="app-helper">
-                  Use the email address registered to your account.
+                  {t("emailHelp")}
                 </p>
               </div>
 
               <p id="request-helper" className="text-xs leading-relaxed text-text-dim">
-                For security, we do not confirm whether an email is registered during the request step.
+                {t("privacyHelp")}
               </p>
 
               <Button type="submit" isLoading={loading} fullWidth size="lg">
-                Send reset link
+                {t("sendLink")}
               </Button>
             </form>
           )}
@@ -218,7 +252,7 @@ function ResetPasswordContent() {
             <form onSubmit={handleReset} className="space-y-6" aria-busy={loading}>
               <div>
                 <label htmlFor="new-password" className="app-label">
-                  NEW PASSWORD
+                  {t("newPassword")}
                 </label>
                 <PasswordInput
                   id="new-password"
@@ -228,18 +262,18 @@ function ResetPasswordContent() {
                   onChange={(e) => setNewPassword(e.target.value)}
                   disabled={loading}
                   inputClassName="app-field pr-12"
-                  placeholder="Create a new password"
+                  placeholder={t("newPasswordPlaceholder")}
                   aria-describedby="password-policy"
                   aria-invalid={message?.type === "error" ? "true" : "false"}
                 />
                 <p id="password-policy" className="app-helper">
-                  {PASSWORD_POLICY_HINT}
+                  {authT("passwordPolicyHint")}
                 </p>
               </div>
 
               <div>
                 <label htmlFor="confirm-password" className="app-label">
-                  CONFIRM PASSWORD
+                  {t("confirmPassword")}
                 </label>
                 <PasswordInput
                   id="confirm-password"
@@ -249,17 +283,17 @@ function ResetPasswordContent() {
                   onChange={(e) => setConfirmPassword(e.target.value)}
                   disabled={loading}
                   inputClassName="app-field pr-12"
-                  placeholder="Re-enter your new password"
+                  placeholder={t("confirmPasswordPlaceholder")}
                   aria-describedby="confirm-helper"
                   aria-invalid={message?.type === "error" ? "true" : "false"}
                 />
                 <p id="confirm-helper" className="app-helper">
-                  Re-enter the same password to confirm it before submission.
+                  {t("confirmHelp")}
                 </p>
               </div>
 
               <Button type="submit" isLoading={loading} fullWidth size="lg">
-                Update password
+                {t("updatePassword")}
               </Button>
             </form>
           )}
@@ -272,15 +306,15 @@ function ResetPasswordContent() {
 
               <div className="space-y-3">
                 <p className="text-sm leading-relaxed text-text-body">
-                  A secure reset link has been sent to your email.
+                  {t("requestSent")}
                 </p>
                 <p className="text-xs leading-relaxed text-text-dim">
-                  The link is valid for 1 hour. If it does not arrive, check your spam folder or contact your administrator/support team.
+                  {t("requestSentHelp")}
                 </p>
               </div>
 
               <Button onClick={() => router.push("/auth/login")} fullWidth size="lg">
-                Return to login
+                {t("returnToLogin")}
               </Button>
             </div>
           )}
@@ -293,15 +327,15 @@ function ResetPasswordContent() {
 
               <div className="space-y-3">
                 <p className="text-sm leading-relaxed text-text-body">
-                  Your password has been updated successfully.
+                  {t("resetSuccess")}
                 </p>
                 <p className="text-xs leading-relaxed text-text-dim">
-                  Redirecting you back to login so you can sign in with the new password.
+                  {t("resetSuccessHelp")}
                 </p>
               </div>
 
               <Button onClick={() => router.push("/auth/login")} fullWidth size="lg">
-                Return to login
+                {t("returnToLogin")}
               </Button>
             </div>
           )}
@@ -311,7 +345,7 @@ function ResetPasswordContent() {
               onClick={() => router.push("/auth/login")}
               className="pressable rounded-control px-3 py-2 text-sm font-medium text-text-muted hover:bg-surface-hover hover:text-text-heading"
             >
-              Back to login
+              {t("backToLogin")}
             </button>
           </div>
 
@@ -323,11 +357,12 @@ function ResetPasswordContent() {
 }
 
 export default function ResetPasswordPage() {
+  const t = useTranslations("Common");
   return (
     <Suspense
       fallback={
         <div className="flex min-h-[100dvh] items-center justify-center bg-canvas">
-          <Spinner mode="inline" text="LOADING..." />
+          <Spinner mode="inline" text={t("loading")} />
         </div>
       }
     >

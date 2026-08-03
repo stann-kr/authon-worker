@@ -33,7 +33,7 @@ button,
 input,
 select,
 textarea {
-  font-family: var(--font-geist-sans), sans-serif;
+  font-family: var(--font-geist-sans), "Apple SD Gothic Neo", "Noto Sans KR", "Malgun Gothic", sans-serif;
 }
 
 button,

@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { getUser, hasAccess, User } from "../lib/auth";
+import { useTranslations } from "next-intl";
 
 interface AuthGuardProps {
   children: React.ReactNode;
@@ -13,6 +14,7 @@ export default function AuthGuard({
   children,
   requiredAccess,
 }: AuthGuardProps) {
+  const t = useTranslations("Common");
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const router = useRouter();
@@ -49,7 +51,7 @@ export default function AuthGuard({
         <div className="text-center" role="status" aria-live="polite">
           <div className="mx-auto mb-4 h-8 w-8 animate-spin rounded-full border-2 border-action-primary border-t-transparent" aria-hidden="true"></div>
           <p className="text-sm text-text-muted">
-            Verifying access
+            {t("verifyingAccess")}
           </p>
         </div>
       </div>

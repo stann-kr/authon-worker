@@ -13,6 +13,8 @@ import { useVenueBrand } from "@/components/VenueBrandProvider";
 import GuestListCard from "@/components/GuestListCard";
 import GuestSearchInput from "@/components/GuestSearchInput";
 import Icon from "@/components/Icon";
+import LanguageSwitcher from "@/components/LanguageSwitcher";
+import { useLocale, useTranslations } from "next-intl";
 import { formatDateDisplay } from "@/lib/date";
 import {
   validateExternalToken,
@@ -26,6 +28,8 @@ interface ExternalDJGuestViewProps {
 }
 
 export default function ExternalDJGuestView({ token }: ExternalDJGuestViewProps) {
+  const t = useTranslations("ExternalGuest");
+  const locale = useLocale() as "en" | "ko";
   const { brand } = useVenueBrand();
   const [linkInfo, setLinkInfo] = useState<ExternalDJLink | null>(null);
   const [venueInfo, setVenueInfo] = useState<Venue | null>(null);
@@ -47,7 +51,8 @@ export default function ExternalDJGuestView({ token }: ExternalDJGuestViewProps)
       setIsValidating(true);
       const { data, error } = await validateExternalToken(token);
       if (error) {
-        setValidationError(error || "Invalid link.");
+        console.error("Invalid external guest link:", error);
+        setValidationError(t("invalidTitle"));
       } else if (data) {
         setLinkInfo(data.link);
         setVenueInfo(data.venue);
@@ -58,7 +63,7 @@ export default function ExternalDJGuestView({ token }: ExternalDJGuestViewProps)
       setIsValidating(false);
     };
     validate();
-  }, [token]);
+  }, [t, token]);
 
   const handleSave = async () => {
     if (!guestName.trim() || !linkInfo) return;
@@ -72,7 +77,8 @@ export default function ExternalDJGuestView({ token }: ExternalDJGuestViewProps)
     });
 
     if (createError) {
-      setError(createError || "Failed to register guest.");
+      console.error("Failed to register guest:", createError);
+      setError(t("registerFailed"));
     } else if (data) {
       setGuests((prev) => [...prev, data]);
       setGuestName("");
@@ -93,7 +99,8 @@ export default function ExternalDJGuestView({ token }: ExternalDJGuestViewProps)
     });
 
     if (deleteError) {
-      setError(deleteError || "Failed to delete guest.");
+      console.error("Failed to delete guest:", deleteError);
+      setError(t("deleteFailed"));
     } else {
       setGuests((prev) => prev.filter((g) => g.id !== guestId));
       setLinkInfo((prev) =>
@@ -105,7 +112,7 @@ export default function ExternalDJGuestView({ token }: ExternalDJGuestViewProps)
 
   const sortGuestsByName = (list: Guest[]) => {
     return [...list].sort((a, b) =>
-      (a.name || "").localeCompare(b.name || "", "ko-KR", {
+      (a.name || "").localeCompare(b.name || "", locale === "ko" ? "ko-KR" : "en-US", {
         sensitivity: "base",
       }),
     );
@@ -128,9 +135,12 @@ export default function ExternalDJGuestView({ token }: ExternalDJGuestViewProps)
             {brand.name}
           </span>
         </div>
-        <span className="operational-label">
-          Guest access
-        </span>
+        <div className="flex items-center gap-3">
+          <span className="operational-label">
+            {t("guestAccess")}
+          </span>
+          <LanguageSwitcher compact />
+        </div>
       </div>
     </div>
   );
@@ -142,7 +152,7 @@ export default function ExternalDJGuestView({ token }: ExternalDJGuestViewProps)
         <div className="flex-1 overflow-x-hidden pt-16 sm:pt-20 flex flex-col">
           <div className="page-container">
             <div className="main-content-panel">
-              <Spinner mode="inline" text="Validating guest access" />
+              <Spinner mode="inline" text={t("validating")} />
             </div>
           </div>
           <Footer />
@@ -159,7 +169,7 @@ export default function ExternalDJGuestView({ token }: ExternalDJGuestViewProps)
             <Icon name="warning" size={24} className="text-status-danger" />
           </div>
           <h1 className="mb-2 text-xl font-semibold text-text-heading">
-            Invalid link
+            {t("invalidTitle")}
           </h1>
           <p className="mb-6 text-sm leading-relaxed text-text-muted">
             {validationError}
@@ -189,25 +199,25 @@ export default function ExternalDJGuestView({ token }: ExternalDJGuestViewProps)
         <div className="page-container">
           <div className="context-bar mb-4 sm:grid-cols-2 lg:grid-cols-4">
             <div>
-              <div className="type-context-title">Guest owner</div>
+              <div className="type-context-title">{t("guestOwner")}</div>
               <div className="text-sm font-medium text-text-heading">
                 {linkInfo?.djName}
               </div>
             </div>
             <div>
-              <div className="type-context-title">Event</div>
+              <div className="type-context-title">{t("event")}</div>
               <div className="text-sm text-text-body">{linkInfo?.event}</div>
             </div>
             <div>
-              <div className="type-context-title">Venue</div>
+              <div className="type-context-title">{t("venue")}</div>
               <div className="text-sm text-text-body">
                 {venueInfo?.name ?? "-"}
               </div>
             </div>
             <div>
-              <div className="type-context-title">Operational date</div>
+              <div className="type-context-title">{t("operationalDate")}</div>
               <div className="font-mono text-sm text-text-body">
-                {linkInfo ? formatDateDisplay(linkInfo.date || "") : "-"}
+                {linkInfo ? formatDateDisplay(linkInfo.date || "", locale) : "-"}
               </div>
             </div>
           </div>
@@ -219,17 +229,17 @@ export default function ExternalDJGuestView({ token }: ExternalDJGuestViewProps)
               <div className="mb-3 flex items-end justify-between gap-4">
                 <div>
                   <h1 className="type-panel-title">
-                    Add guest
+                    {t("addGuest")}
                   </h1>
                   <p className="mt-1 text-sm text-text-muted">
-                    Add one full name at a time.
+                    {t("addOneAtATime")}
                   </p>
                 </div>
                 <div className="text-right">
                   <div className="font-mono text-lg tabular-nums text-text-heading">
                     {remaining}
                   </div>
-                  <div className="text-xs text-text-muted">Remaining</div>
+                  <div className="text-xs text-text-muted">{t("remaining")}</div>
                 </div>
               </div>
 
@@ -237,14 +247,14 @@ export default function ExternalDJGuestView({ token }: ExternalDJGuestViewProps)
                 <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
                   <div className="min-w-0 flex-1">
                     <label htmlFor="external-guest-name" className="app-label">
-                      Guest name
+                      {t("guestName")}
                     </label>
                     <input
                       id="external-guest-name"
                       type="text"
                       value={guestName}
                       onChange={(event) => setGuestName(event.target.value)}
-                      placeholder="Enter full name"
+                      placeholder={t("enterFullName")}
                       className="app-field min-h-11"
                       onKeyDown={(event) => {
                         if (event.key === "Enter") handleSave();
@@ -258,22 +268,25 @@ export default function ExternalDJGuestView({ token }: ExternalDJGuestViewProps)
                     size="lg"
                     className="sm:min-w-32"
                   >
-                    ADD GUEST
+                    {t("addGuest")}
                   </Button>
                 </div>
               ) : (
                 <div className="border-l-2 border-status-danger bg-status-danger/10 px-3 py-2 text-sm text-status-danger">
-                  Guest limit reached ({linkInfo?.maxGuests}/{linkInfo?.maxGuests})
+                  {t("guestLimitReached", {
+                    used: linkInfo?.maxGuests ?? 0,
+                    max: linkInfo?.maxGuests ?? 0,
+                  })}
                 </div>
               )}
             </div>
 
             <StatGrid
               items={[
-                { label: "REGISTERED", value: guests.length, color: "default" },
-                { label: "REMAINING", value: remaining, color: "default" },
+                { label: t("registered"), value: guests.length, color: "default" },
+                { label: t("remaining"), value: remaining, color: "default" },
                 {
-                  label: "MAX",
+                  label: t("max"),
                   value: linkInfo?.maxGuests ?? 0,
                   color: "default",
                 },
@@ -281,7 +294,7 @@ export default function ExternalDJGuestView({ token }: ExternalDJGuestViewProps)
             />
 
             <PanelHeader
-              title="Guest list"
+              title={t("guestList")}
               count={displayGuests.length}
               sortMode={sortMode}
               onSortToggle={() =>
@@ -301,8 +314,8 @@ export default function ExternalDJGuestView({ token }: ExternalDJGuestViewProps)
                 icon="user-add"
                 message={
                   searchQuery
-                    ? "No guests match this search"
-                    : "No guests registered yet"
+                    ? t("noSearchResults")
+                    : t("noGuests")
                 }
               />
             ) : (

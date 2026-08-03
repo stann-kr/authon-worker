@@ -22,6 +22,7 @@ import {
   activateExternalLink,
 } from "../../../lib/api/external-links";
 import type { ExternalDJLink } from "../../../lib/api/types";
+import { useLocale, useTranslations } from "next-intl";
 import {
   deriveLinkStatus,
   filterLinksByManageFilter,
@@ -42,6 +43,9 @@ export default function LinkManagement({
   selectedDate,
   onDateChange,
 }: LinkManagementProps) {
+  const t = useTranslations("LinkAdmin");
+  const commonT = useTranslations("Common");
+  const locale = useLocale() as "en" | "ko";
   const [activeTab, setActiveTab] = useState<"create" | "manage">("create");
   const [manageScope, setManageScope] = useState<"date" | "recent">("date");
   const [recentLimit, setRecentLimit] = useState<5 | 10>(5);
@@ -53,6 +57,7 @@ export default function LinkManagement({
     dj: "",
     event: "",
     maxGuests: 5,
+    localeMode: "auto" as ExternalDJLink["localeMode"],
   });
   const [generatedLink, setGeneratedLink] = useState<ExternalDJLink | null>(
     null,
@@ -116,11 +121,11 @@ export default function LinkManagement({
       }
     } catch (err) {
       console.error("Failed to load links:", err);
-      setError("Unable to load links right now.");
+      setError(t("loadFailed"));
     } finally {
       setIsFetching(false);
     }
-  }, [manageScope, recentLimit, selectedDate, venueId]);
+  }, [manageScope, recentLimit, selectedDate, t, venueId]);
 
   useEffect(() => {
     if (activeTab === "manage") {
@@ -187,15 +192,22 @@ export default function LinkManagement({
       event: formData.event,
       date: formData.date,
       maxGuests: formData.maxGuests,
+      localeMode: formData.localeMode,
       createdBy: user?.id,
     });
 
     if (error) {
       console.error("Failed to create link:", error);
-      setError("Failed to create link.");
+      setError(t("createFailed"));
     } else if (data) {
       setGeneratedLink(data);
-      setFormData({ date: selectedDate, dj: "", event: "", maxGuests: 5 });
+      setFormData({
+        date: selectedDate,
+        dj: "",
+        event: "",
+        maxGuests: 5,
+        localeMode: "auto",
+      });
     }
 
     setIsGenerating(false);
@@ -214,11 +226,11 @@ export default function LinkManagement({
         setCopiedId(id);
         setTimeout(() => setCopiedId(null), 2000);
       }
-      setCopyToast(id ? "Guest link copied." : "Generated link copied.");
+      setCopyToast(id ? t("guestLinkCopied") : t("generatedLinkCopied"));
       setTimeout(() => setCopyToast(null), 2200);
     } catch (err) {
       console.error("Copy failed:", err);
-      setError("Failed to copy link.");
+      setError(t("copyFailed"));
     }
 
     setTimeout(() => {
@@ -236,10 +248,10 @@ export default function LinkManagement({
     const { error } = await deleteExternalLink(id);
     if (error) {
       console.error("Failed to delete link:", error);
-      setError("Failed to delete link.");
+      setError(t("deleteFailed"));
     } else {
       setLinks((prev) => prev.filter((link) => link.id !== id));
-      setSuccess("Link deleted.");
+      setSuccess(t("deleted"));
       setPendingDeleteLink(null);
     }
     setLoadingStates((prev) => ({ ...prev, [`delete_${id}`]: false }));
@@ -255,20 +267,20 @@ export default function LinkManagement({
   const handleDeactivateLink = async (id: string) => {
     setError(null);
     setSuccess(null);
-    if (!confirm("Deactivate this link?")) return;
+    if (!confirm(t("deactivateConfirm"))) return;
 
     setLoadingStates((prev) => ({ ...prev, [`deactivate_${id}`]: true }));
     const { error } = await deactivateExternalLink(id);
     if (error) {
       console.error("Failed to deactivate link:", error);
-      setError("Failed to deactivate link.");
+      setError(t("deactivateFailed"));
     } else {
       setLinks((prev) =>
         prev.map((link) =>
           link.id === id ? { ...link, active: false } : link,
         ),
       );
-      setSuccess("Link deactivated.");
+      setSuccess(t("deactivated"));
     }
     setLoadingStates((prev) => ({ ...prev, [`deactivate_${id}`]: false }));
   };
@@ -281,12 +293,12 @@ export default function LinkManagement({
     const { error } = await activateExternalLink(id);
     if (error) {
       console.error("Failed to activate link:", error);
-      setError("Failed to activate link.");
+      setError(t("reactivateFailed"));
     } else {
       setLinks((prev) =>
         prev.map((link) => (link.id === id ? { ...link, active: true } : link)),
       );
-      setSuccess("Link reactivated.");
+      setSuccess(t("reactivated"));
     }
     setLoadingStates((prev) => ({ ...prev, [`activate_${id}`]: false }));
   };
@@ -302,19 +314,23 @@ export default function LinkManagement({
   );
 
   const sortedLinks = useMemo(
-    () => sortLinks(filteredLinks, manageScope === "recent" ? "newest" : manageSort),
-    [filteredLinks, manageScope, manageSort],
+    () => sortLinks(
+      filteredLinks,
+      manageScope === "recent" ? "newest" : manageSort,
+      locale === "ko" ? "ko-KR" : "en-US",
+    ),
+    [filteredLinks, locale, manageScope, manageSort],
   );
 
   const getTabInfo = () => {
     switch (activeTab) {
       case "create":
         return {
-          title: "Create link",
-          description: "Generate new access code",
+          title: t("createLink"),
+          description: t("createDescription"),
         };
       case "manage":
-        return { title: "Manage links", description: "View and manage codes" };
+        return { title: t("manageLinks"), description: t("manageDescription") };
       default:
         return { title: "", description: "" };
     }
@@ -325,7 +341,7 @@ export default function LinkManagement({
   return (
     <>
       <OperationsLayout
-        title="Admin link management"
+        title={t("title")}
         dashboard={
           <>
         {(activeTab === "create" || manageScope === "date") && (
@@ -345,7 +361,7 @@ export default function LinkManagement({
         <div className="app-panel p-4 sm:p-5">
           <div className="mb-4">
             <h3 className="type-context-title mb-3">
-              Section
+              {t("section")}
             </h3>
             <div className="space-y-2">
               <button
@@ -357,7 +373,7 @@ export default function LinkManagement({
                 }`}
               >
                 <Icon name="add" size={17} />
-                Create
+                {t("create")}
               </button>
               <button
                 onClick={() => setActiveTab("manage")}
@@ -368,12 +384,12 @@ export default function LinkManagement({
                 }`}
               >
                 <Icon name="link" size={17} />
-                Manage
+                {t("manage")}
               </button>
             </div>
             {activeTab === "manage" && (
               <div className="mt-4 border-t border-border-subtle pt-4">
-                <p className="app-label">View</p>
+                <p className="app-label">{t("view")}</p>
                 <div className="grid grid-cols-2 gap-2">
                   {(["date", "recent"] as const).map((scope) => (
                     <button
@@ -390,13 +406,13 @@ export default function LinkManagement({
                           : "border-border-default bg-surface-raised text-text-muted"
                       }`}
                     >
-                      {scope === "date" ? "By date" : "Recent"}
+                      {scope === "date" ? t("byDate") : t("recent")}
                     </button>
                   ))}
                 </div>
                 {manageScope === "recent" && (
                   <div className="mt-3">
-                    <p className="app-label">Items</p>
+                    <p className="app-label">{t("items")}</p>
                     <div className="grid grid-cols-2 gap-2">
                       {([5, 10] as const).map((limit) => (
                         <button
@@ -431,16 +447,16 @@ export default function LinkManagement({
             </p>
             <p className="text-sm text-text-muted mt-1">
               {activeTab === "manage" && manageScope === "recent"
-                ? `Latest ${recentLimit} created links`
-                : formatDateDisplay(selectedDate)}
+                ? t("latestCreated", { count: recentLimit })
+                : formatDateDisplay(selectedDate, locale)}
             </p>
           </div>
           {activeTab === "manage" && (
             <StatGrid
               items={[
-                { label: "TOTAL", value: dashboardStats.total, color: "default" },
-                { label: "ACTIVE", value: dashboardStats.active, color: "checked" },
-                { label: "ATTENTION", value: dashboardStats.attention, color: "danger" },
+                { label: t("total"), value: dashboardStats.total, color: "default" },
+                { label: t("active"), value: dashboardStats.active, color: "checked" },
+                { label: t("attention"), value: dashboardStats.attention, color: "danger" },
               ]}
             />
           )}
@@ -455,10 +471,10 @@ export default function LinkManagement({
             <div className="app-panel p-4 sm:p-6">
               <div className="mb-6">
                 <h2 className="type-panel-title font-mono uppercase tracking-wider mb-1">
-                  CREATE ACCESS LINK
+                  {t("createAccessLink")}
                 </h2>
                 <p className="text-text-muted text-xs font-medium">
-                  GENERATE NEW GUEST CODE FOR EXTERNAL DJ
+                  {t("createAccessDescription")}
                 </p>
               </div>
 
@@ -468,13 +484,13 @@ export default function LinkManagement({
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
                   <div>
                     <label htmlFor="link-date" className="app-label">
-                      DATE
+                      {t("date")}
                     </label>
                     <div className="relative h-[46px] group">
                       {/* Mirroring UI Layer */}
                       <div className="absolute inset-0 bg-canvas border border-border-strong px-4 py-3 flex items-center justify-between pointer-events-none group-focus-within:border-border-focus transition-colors">
                         <span className="text-text-heading text-sm">
-                          {formatDateDisplay(formData.date)}
+                          {formatDateDisplay(formData.date, locale)}
                         </span>
                         <Icon name="calendar" size={18} className="text-text-muted" />
                       </div>
@@ -496,7 +512,7 @@ export default function LinkManagement({
 
                   <div>
                     <label htmlFor="link-dj-name" className="app-label">
-                      DJ NAME
+                      {t("djName")}
                     </label>
                     <input
                       id="link-dj-name"
@@ -509,7 +525,7 @@ export default function LinkManagement({
                         })
                       }
                       className="w-full bg-canvas border border-border-strong px-4 py-3 text-text-heading text-sm focus:outline-none focus:border-border-focus uppercase"
-                      placeholder="DJ NAME"
+                      placeholder={t("djName")}
                       required
                     />
                   </div>
@@ -517,7 +533,7 @@ export default function LinkManagement({
 
                 <div>
                   <label htmlFor="link-event-name" className="app-label">
-                    EVENT NAME
+                    {t("eventName")}
                   </label>
                   <input
                     id="link-event-name"
@@ -530,14 +546,14 @@ export default function LinkManagement({
                       })
                     }
                     className="w-full bg-canvas border border-border-strong px-4 py-3 text-text-heading text-sm focus:outline-none focus:border-border-focus uppercase"
-                    placeholder="EVENT NAME"
+                    placeholder={t("eventName")}
                     required
                   />
                 </div>
 
                 <div>
                   <label htmlFor="link-max-guests" className="app-label">
-                    MAX GUESTS
+                    {t("maxGuests")}
                   </label>
                   <input
                     id="link-max-guests"
@@ -555,6 +571,36 @@ export default function LinkManagement({
                   />
                 </div>
 
+                <fieldset>
+                  <legend className="app-label">{t("guestPageLanguage")}</legend>
+                  <div className="grid grid-cols-3 gap-2">
+                    {([
+                      { value: "auto", label: t("auto") },
+                      { value: "en", label: commonT("english") },
+                      { value: "ko", label: commonT("korean") },
+                    ] as const).map((option) => (
+                      <button
+                        key={option.value}
+                        type="button"
+                        aria-pressed={formData.localeMode === option.value}
+                        onClick={() =>
+                          setFormData({ ...formData, localeMode: option.value })
+                        }
+                        className={`min-h-11 border px-3 py-2 text-xs font-medium ${
+                          formData.localeMode === option.value
+                            ? "border-action-primary bg-action-primary text-action-text"
+                            : "border-border-default bg-canvas text-text-muted hover:border-border-strong hover:text-text-heading"
+                        }`}
+                      >
+                        {option.label}
+                      </button>
+                    ))}
+                  </div>
+                  <p className="app-helper">
+                    {t("autoHelp")}
+                  </p>
+                </fieldset>
+
                 <button
                   type="submit"
                   disabled={isGenerating}
@@ -563,10 +609,10 @@ export default function LinkManagement({
                   {isGenerating ? (
                     <div className="flex items-center justify-center gap-2">
                       <div className="w-4 h-4 border-2 border-canvas border-t-transparent rounded-full animate-spin"></div>
-                      GENERATING...
+                      {t("generating")}
                     </div>
                   ) : (
-                    "GENERATE LINK"
+                    t("generateLink")
                   )}
                 </button>
               </form>
@@ -576,17 +622,20 @@ export default function LinkManagement({
               <div className="app-panel p-4 sm:p-6">
                 <div className="mb-4">
                   <h3 className="type-panel-title mb-2">
-                    GENERATED ACCESS LINK
+                    {t("generatedAccessLink")}
                   </h3>
                   <p className="text-text-muted font-mono text-xs">
-                    {generatedLink.djName} / {generatedLink.event} | MAX:{" "}
+                    {generatedLink.djName} / {generatedLink.event} | {t("max")}:{" "}
                     {generatedLink.maxGuests}
+                  </p>
+                  <p className="mt-1 font-mono text-xs text-text-dim">
+                    {t("language")}: {generatedLink.localeMode === "auto" ? t("auto") : generatedLink.localeMode.toUpperCase()}
                   </p>
                 </div>
 
                 <div className="bg-canvas border border-border-default p-4 mb-4">
                   <div className="font-mono text-xs tracking-wider text-text-muted mb-1">
-                    GUEST URL
+                    {t("guestUrl")}
                   </div>
                   <div className="font-mono text-sm tracking-wider text-text-heading break-all">
                     {getGuestPageUrl(generatedLink.token, generatedLink.guestUrl)}
@@ -603,10 +652,10 @@ export default function LinkManagement({
                   {isCopying ? (
                     <div className="flex items-center justify-center gap-2">
                       <div className="w-3 h-3 border-2 border-canvas border-t-transparent rounded-full animate-spin"></div>
-                      COPYING...
+                      {t("copying")}
                     </div>
                   ) : (
-                    "COPY LINK"
+                    t("copyLink")
                   )}
                 </button>
               </div>
@@ -621,7 +670,7 @@ export default function LinkManagement({
 
             <div className="app-panel">
               <PanelHeader
-                title="Link list"
+                title={t("linkList")}
                 count={sortedLinks.length}
                 onRefresh={loadLinks}
                 isLoading={isFetching}
@@ -631,9 +680,9 @@ export default function LinkManagement({
                 <div className="flex flex-wrap items-end justify-between gap-3">
                   <div className="flex flex-wrap gap-2">
                     {[
-                      { key: "all", label: "All", count: dashboardStats.total },
-                      { key: "active", label: "Active", count: dashboardStats.active },
-                      { key: "attention", label: "Attention", count: dashboardStats.attention },
+                      { key: "all", label: t("all"), count: dashboardStats.total },
+                      { key: "active", label: t("active"), count: dashboardStats.active },
+                      { key: "attention", label: t("attention"), count: dashboardStats.attention },
                     ].map((filter) => (
                       <button
                         key={filter.key}
@@ -654,7 +703,7 @@ export default function LinkManagement({
                   {manageScope === "date" && (
                     <div className="min-w-[190px]">
                       <label htmlFor="link-sort" className="app-label">
-                        Sort
+                        {t("sort")}
                       </label>
                       <div className="relative">
                         <select
@@ -665,9 +714,9 @@ export default function LinkManagement({
                           }
                           className="app-field min-h-11 appearance-none py-2.5 pl-4 pr-12 text-xs uppercase"
                         >
-                          <option value="newest">Newest created</option>
-                          <option value="expiresSoonest">Expires soonest</option>
-                          <option value="djName">DJ name</option>
+                          <option value="newest">{t("newestCreated")}</option>
+                          <option value="expiresSoonest">{t("expiresSoonest")}</option>
+                          <option value="djName">{t("djName")}</option>
                         </select>
                         <Icon
                           name="chevron-down"
@@ -681,9 +730,8 @@ export default function LinkManagement({
 
                 <p className="mt-3 text-xs text-text-dim">
                   {manageScope === "recent"
-                    ? `Latest ${recentLimit} created links`
-                    : formatDateDisplay(selectedDate)}
-                  {manageFilter !== "all" ? ` · ${manageFilter}` : ""}
+                    ? t("latestCreated", { count: recentLimit })
+                    : formatDateDisplay(selectedDate, locale)}
                 </p>
               </div>
 
@@ -696,7 +744,7 @@ export default function LinkManagement({
                   {sortedLinks.length === 0 ? (
                     <EmptyState
                       icon="link"
-                      message="NO LINKS MATCH THIS FILTER"
+                      message={t("noLinks")}
                     />
                   ) : (
                     sortedLinks.map((link, index) => {
@@ -710,14 +758,14 @@ export default function LinkManagement({
                           : "bg-text-heading";
 
                       const primaryStatus = status.expired
-                        ? { label: "EXPIRED", tone: "border-status-danger text-status-danger", indicator: "before:bg-status-danger" }
+                        ? { label: t("expired"), tone: "border-status-danger text-status-danger", indicator: "before:bg-status-danger" }
                         : status.inactive
-                          ? { label: "INACTIVE", tone: "border-border-strong text-text-muted", indicator: "before:bg-border-strong" }
+                          ? { label: t("inactive"), tone: "border-border-strong text-text-muted", indicator: "before:bg-border-strong" }
                           : status.full
-                            ? { label: "FULL", tone: "border-status-danger text-status-danger", indicator: "before:bg-status-danger" }
+                            ? { label: t("full"), tone: "border-status-danger text-status-danger", indicator: "before:bg-status-danger" }
                             : status.expiringSoon
-                              ? { label: "EXPIRING", tone: "border-status-waiting text-status-waiting", indicator: "before:bg-status-waiting" }
-                              : { label: "ACTIVE", tone: "border-status-checked text-status-checked", indicator: "before:bg-status-checked" };
+                              ? { label: t("expiring"), tone: "border-status-waiting text-status-waiting", indicator: "before:bg-status-waiting" }
+                              : { label: t("active"), tone: "border-status-checked text-status-checked", indicator: "before:bg-status-checked" };
 
                       return (
                       <article
@@ -734,7 +782,7 @@ export default function LinkManagement({
                                 {link.djName}
                               </h3>
                               <p className="mt-0.5 break-words text-xs text-text-muted">
-                                {link.event || "Untitled event"}
+                                {link.event || t("untitledEvent")}
                               </p>
                             </div>
                           </div>
@@ -745,29 +793,51 @@ export default function LinkManagement({
 
                         <dl className="mt-3 flex flex-wrap gap-x-6 gap-y-2 pl-10 sm:pl-11">
                           <div>
-                            <dt className="text-xs text-text-dim">EVENT DATE</dt>
+                            <dt className="text-xs text-text-dim">{t("eventDate")}</dt>
                             <dd className="mt-0.5 font-mono text-xs text-text-muted">
-                              {link.date ? formatDateDisplay(link.date) : "No date"}
+                              {link.date ? formatDateDisplay(link.date, locale) : t("noDate")}
                             </dd>
                           </div>
                           {manageScope === "recent" && (
                             <div>
-                              <dt className="text-xs text-text-dim">CREATED</dt>
+                              <dt className="text-xs text-text-dim">{t("created")}</dt>
                               <dd className="mt-0.5 font-mono text-xs text-text-muted">
-                                {formatTimestamp(link.createdAt)}
+                                {formatTimestamp(
+                                  link.createdAt,
+                                  t("unknownTime"),
+                                  t("invalidTime"),
+                                  locale === "ko" ? "ko-KR" : "en-US",
+                                )}
                               </dd>
                             </div>
                           )}
                           <div>
-                            <dt className="text-xs text-text-dim">USAGE</dt>
+                            <dt className="text-xs text-text-dim">{t("usage")}</dt>
                             <dd className="mt-0.5 font-mono text-xs text-text-heading">
                               {link.usedGuests}/{link.maxGuests}
                             </dd>
                           </div>
                           <div>
-                            <dt className="text-xs text-text-dim">EXPIRY</dt>
+                            <dt className="text-xs text-text-dim">{t("expiry")}</dt>
                             <dd className={`mt-0.5 font-mono text-xs ${status.expired ? "text-status-danger" : "text-text-muted"}`}>
-                              {formatRelativeExpiry(link.expiresAt, now)}
+                              {formatRelativeExpiry(link.expiresAt, now, {
+                                noExpiry: t("noExpiry"),
+                                invalidExpiry: t("invalidExpiry"),
+                                expiredAgo: (duration) => t("expiredAgo", { duration }),
+                                expiresIn: (duration) => t("expiresIn", { duration }),
+                                formatDuration: ({ days, hours, minutes }) =>
+                                  days > 0
+                                    ? t("durationDaysHours", { days, hours })
+                                    : hours > 0
+                                      ? t("durationHoursMinutes", { hours, minutes })
+                                      : t("durationMinutes", { minutes }),
+                              })}
+                            </dd>
+                          </div>
+                          <div>
+                            <dt className="text-xs text-text-dim">{t("language")}</dt>
+                            <dd className="mt-0.5 font-mono text-xs uppercase text-text-muted">
+                              {link.localeMode === "auto" ? t("auto") : link.localeMode}
                             </dd>
                           </div>
                         </dl>
@@ -790,7 +860,7 @@ export default function LinkManagement({
                               htmlFor={`link-url-${link.id}`}
                               className="app-label"
                             >
-                              Guest URL
+                              {t("guestUrl")}
                             </label>
                             <div className="flex flex-col gap-2 sm:flex-row">
                               <input
@@ -808,11 +878,11 @@ export default function LinkManagement({
                                 rel="noreferrer"
                                 className="pressable inline-flex min-h-11 items-center justify-center border border-border-default bg-surface-raised px-4 text-xs font-semibold text-text-heading hover:border-border-strong hover:bg-surface-hover"
                               >
-                                OPEN
+                                {t("open")}
                               </a>
                             </div>
                             <p className="app-helper">
-                              Select the URL manually or open it in a new tab.
+                              {t("urlHelp")}
                             </p>
                           </div>
                         )}
@@ -833,7 +903,7 @@ export default function LinkManagement({
                               name={isLinkVisible ? "view-off" : "view"}
                               size={16}
                             />
-                            {isLinkVisible ? "HIDE" : "VIEW"}
+                            {isLinkVisible ? t("hide") : t("view")}
                           </button>
                           <button
                             onClick={() =>
@@ -847,14 +917,14 @@ export default function LinkManagement({
                                 <div className="w-3 h-3 border-2 border-canvas border-t-transparent rounded-full animate-spin"></div>
                               </div>
                             ) : copiedId === link.id ? (
-                              "COPIED"
+                              t("copied")
                             ) : (
-                              "COPY LINK"
+                              t("copyLink")
                             )}
                           </button>
                           {status.expired ? (
                             <span className="inline-flex min-h-11 items-center border border-status-danger/70 px-3 text-xs text-status-danger">
-                              EXPIRED
+                              {t("expired")}
                             </span>
                           ) : link.active ? (
                             <button
@@ -864,7 +934,7 @@ export default function LinkManagement({
                             >
                               {loadingStates[`deactivate_${link.id}`]
                                 ? "..."
-                                : "DEACTIVATE"}
+                                : t("deactivate")}
                             </button>
                           ) : (
                             <button
@@ -874,7 +944,7 @@ export default function LinkManagement({
                             >
                               {loadingStates[`activate_${link.id}`]
                                 ? "..."
-                                : "ACTIVATE"}
+                                : t("activate")}
                             </button>
                           )}
                           <button
@@ -887,7 +957,7 @@ export default function LinkManagement({
                                 <div className="h-3 w-3 animate-spin rounded-full border-2 border-status-danger border-t-transparent"></div>
                               </div>
                             ) : (
-                              "DELETE"
+                              t("delete")
                             )}
                           </button>
                         </div>
@@ -923,17 +993,17 @@ export default function LinkManagement({
             <div className="flex items-start justify-between gap-4 mb-4">
               <div>
                 <p className="mb-2 font-mono text-xs uppercase tracking-[0.24em] text-status-danger">
-                  Destructive action
+                  {t("destructiveAction")}
                 </p>
                 <h3 id="delete-link-title" className="type-panel-title font-mono uppercase tracking-[0.18em]">
-                  Delete guest link?
+                  {t("deleteTitle")}
                 </h3>
               </div>
               <button
                 type="button"
                 onClick={() => setPendingDeleteLink(null)}
                 className="text-text-dim hover:text-text-heading transition-colors"
-                aria-label="Close delete confirmation"
+                aria-label={t("closeDelete")}
               >
                 <Icon name="close" size={18} />
               </button>
@@ -941,14 +1011,14 @@ export default function LinkManagement({
 
             <div className="space-y-3 mb-6">
               <p id="delete-link-description" className="text-xs font-medium uppercase tracking-[0.05em] text-text-muted leading-relaxed">
-                This action is permanent and will immediately invalidate the active guest link.
+                {t("deleteDescription")}
               </p>
               <div className="border border-border-default bg-canvas p-3">
                 <p className="text-xs font-medium uppercase tracking-[0.05em] text-text-heading break-words">
                   {pendingDeleteLink.djName} / {pendingDeleteLink.event}
                 </p>
                 <p className="mt-2 text-xs font-medium uppercase tracking-[0.05em] text-text-dim">
-                  Usage {pendingDeleteLink.usedGuests}/{pendingDeleteLink.maxGuests}
+                  {t("usage")} {pendingDeleteLink.usedGuests}/{pendingDeleteLink.maxGuests}
                 </p>
               </div>
             </div>
@@ -960,7 +1030,7 @@ export default function LinkManagement({
                 onClick={() => setPendingDeleteLink(null)}
                 className="bg-canvas border border-border-default text-text-body py-3 px-4 text-xs font-medium uppercase tracking-[0.05em] hover:text-text-heading hover:border-border-strong transition-colors"
               >
-                Cancel
+                {commonT("cancel")}
               </button>
               <button
                 type="button"
@@ -969,8 +1039,8 @@ export default function LinkManagement({
                 className="border border-status-danger/70 bg-status-danger/10 px-4 py-3 font-mono text-xs uppercase tracking-[0.22em] text-status-danger transition-colors hover:bg-status-danger/20 disabled:opacity-50"
               >
                 {loadingStates[`delete_${pendingDeleteLink.id}`]
-                  ? "Deleting..."
-                  : "Delete link"}
+                  ? t("deleting")
+                  : t("deleteLink")}
               </button>
             </div>
           </div>

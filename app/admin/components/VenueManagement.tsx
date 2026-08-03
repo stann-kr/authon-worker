@@ -15,6 +15,7 @@ import Icon from "../../../components/Icon";
 import Skeleton from "../../../components/Skeleton";
 import OperationsLayout from "../../../components/OperationsLayout";
 import { getVenueTypeColor } from "../../../lib/colors";
+import { useTranslations } from "next-intl";
 
 const VENUE_TYPES = [
   { value: "club", label: "CLUB" },
@@ -25,6 +26,15 @@ const VENUE_TYPES = [
 ] as const;
 
 export default function VenueManagement() {
+  const t = useTranslations("VenueAdmin");
+  const commonT = useTranslations("Common");
+  const venueTypeLabels: Record<Venue["type"], string> = {
+    club: t("typeClub"),
+    bar: t("typeBar"),
+    lounge: t("typeLounge"),
+    festival: t("typeFestival"),
+    private: t("typePrivate"),
+  };
   const [venues, setVenues] = useState<Venue[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<"list" | "create">("list");
@@ -36,6 +46,7 @@ export default function VenueManagement() {
     brandName: "",
     brandTagline: "",
     primaryDomain: "",
+    defaultLocale: "en" as NonNullable<Venue["defaultLocale"]>,
   });
   const [formError, setFormError] = useState("");
   const [formSuccess, setFormSuccess] = useState("");
@@ -49,10 +60,10 @@ export default function VenueManagement() {
     if (data) setVenues(data);
     if (error) {
       console.error("Failed to load venues:", error);
-      setListError("Unable to load venues. Please try again.");
+      setListError(t("loadFailed"));
     }
     setIsLoading(false);
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     loadVenues();
@@ -65,7 +76,7 @@ export default function VenueManagement() {
     setFormSuccess("");
 
     if (!formData.name.trim()) {
-      setFormError("Please enter a venue name.");
+      setFormError(t("nameRequired"));
       setIsSubmitting(false);
       return;
     }
@@ -78,12 +89,14 @@ export default function VenueManagement() {
       brandName: formData.brandName.trim() || undefined,
       brandTagline: formData.brandTagline.trim() || undefined,
       primaryDomain: formData.primaryDomain.trim() || undefined,
+      defaultLocale: formData.defaultLocale,
     });
 
     if (error) {
-      setFormError(error || "Failed to create venue.");
+      console.error("Failed to create venue:", error);
+      setFormError(t("createFailed"));
     } else if (data) {
-      setFormSuccess(`Venue "${data.name}" has been created.`);
+      setFormSuccess(t("created", { name: data.name }));
       setFormData({
         name: "",
         type: "club",
@@ -92,6 +105,7 @@ export default function VenueManagement() {
         brandName: "",
         brandTagline: "",
         primaryDomain: "",
+        defaultLocale: "en",
       });
       loadVenues();
     }
@@ -102,7 +116,7 @@ export default function VenueManagement() {
     const { error } = await updateVenue(venue.id, { active: !venue.active });
     if (error) {
       console.error("Failed to update venue:", error);
-      setListError("Unable to update the venue. Please try again.");
+      setListError(t("updateFailed"));
     } else {
       loadVenues();
     }
@@ -111,9 +125,9 @@ export default function VenueManagement() {
   const getTabInfo = () => {
     switch (activeTab) {
       case "create":
-        return { title: "Create venue", description: "Register a new venue" };
+        return { title: t("createVenue"), description: t("createDescription") };
       case "list":
-        return { title: "Venues", description: "Manage all venues" };
+        return { title: t("venues"), description: t("venuesDescription") };
       default:
         return { title: "", description: "" };
     }
@@ -123,13 +137,13 @@ export default function VenueManagement() {
 
   return (
     <OperationsLayout
-      title="Admin venue management"
+      title={t("title")}
       dashboard={
         <>
         <div className="app-panel p-4 sm:p-5">
           <div className="mb-4">
             <h3 className="type-context-title mb-3">
-              Section
+              {t("section")}
             </h3>
             <div className="space-y-2">
               <button
@@ -141,7 +155,7 @@ export default function VenueManagement() {
                 }`}
               >
                 <Icon name="add" size={17} />
-                Create
+                {t("create")}
               </button>
               <button
                 onClick={() => setActiveTab("list")}
@@ -152,7 +166,7 @@ export default function VenueManagement() {
                 }`}
               >
                 <Icon name="store" size={17} />
-                Venues
+                {t("venues")}
               </button>
             </div>
           </div>
@@ -172,7 +186,7 @@ export default function VenueManagement() {
               {activeTab === "list" ? venues.length : "-"}
             </div>
             <div className="text-xs font-medium text-text-muted">
-              {activeTab === "list" ? "TOTAL VENUES" : ""}
+              {activeTab === "list" ? t("totalVenues") : ""}
             </div>
           </div>
 
@@ -180,12 +194,12 @@ export default function VenueManagement() {
             <StatGrid
               items={[
                 {
-                  label: "ACTIVE",
+                  label: t("active"),
                   value: venues.filter((v) => v.active).length,
                   color: "default",
                 },
                 {
-                  label: "INACTIVE",
+                  label: t("inactive"),
                   value: venues.filter((v) => !v.active).length,
                   color: "danger",
                 },
@@ -203,13 +217,13 @@ export default function VenueManagement() {
           <div className="space-y-6">
             <div className="app-panel p-4 sm:p-5">
               <h2 className="type-section-title mb-4">
-                CREATE NEW VENUE
+                {t("createNew")}
               </h2>
 
               <form onSubmit={handleCreate} className="space-y-4">
                 <div>
                   <label htmlFor="venue-create-name" className="app-label">
-                    VENUE NAME
+                    {t("venueName")}
                   </label>
                   <input
                     id="venue-create-name"
@@ -219,14 +233,14 @@ export default function VenueManagement() {
                       setFormData({ ...formData, name: e.target.value })
                     }
                     className="w-full bg-canvas border border-border-default px-4 py-3 text-text-heading text-sm focus:outline-none focus:border-border-focus"
-                    placeholder="Club Name"
+                    placeholder={t("namePlaceholder")}
                     required
                   />
                 </div>
 
                 <fieldset>
                   <legend className="app-label">
-                    TYPE
+                    {t("type")}
                   </legend>
                   <div className="grid grid-cols-5 gap-2">
                     {VENUE_TYPES.map((opt) => (
@@ -246,7 +260,7 @@ export default function VenueManagement() {
                             : "bg-canvas text-text-muted border-border-default hover:text-text-heading hover:border-border-strong"
                         }`}
                       >
-                        {opt.label}
+                        {venueTypeLabels[opt.value]}
                       </button>
                     ))}
                   </div>
@@ -254,7 +268,7 @@ export default function VenueManagement() {
 
                 <div>
                   <label htmlFor="venue-create-address" className="app-label">
-                    ADDRESS <span className="text-text-dim">(OPTIONAL)</span>
+                    {t("address")} <span className="text-text-dim">({t("optional")})</span>
                   </label>
                   <input
                     id="venue-create-address"
@@ -264,14 +278,14 @@ export default function VenueManagement() {
                       setFormData({ ...formData, address: e.target.value })
                     }
                     className="w-full bg-canvas border border-border-default px-4 py-3 text-text-heading text-sm focus:outline-none focus:border-border-focus"
-                    placeholder="Gangnam-gu, Seoul..."
+                    placeholder={t("addressPlaceholder")}
                   />
                 </div>
 
                 <div>
                   <label htmlFor="venue-create-description" className="app-label">
-                    DESCRIPTION{" "}
-                    <span className="text-text-dim">(OPTIONAL)</span>
+                    {t("description")}{" "}
+                    <span className="text-text-dim">({t("optional")})</span>
                   </label>
                   <textarea
                     id="venue-create-description"
@@ -281,14 +295,14 @@ export default function VenueManagement() {
                     }
                     className="w-full bg-canvas border border-border-default px-4 py-3 text-text-heading text-sm focus:outline-none focus:border-border-focus resize-none"
                     rows={3}
-                    placeholder="Venue description..."
+                    placeholder={t("descriptionPlaceholder")}
                   />
                 </div>
 
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div>
                     <label htmlFor="venue-create-brand-name" className="app-label">
-                      DISPLAY NAME <span className="text-text-dim">(OPTIONAL)</span>
+                      {t("displayName")} <span className="text-text-dim">({t("optional")})</span>
                     </label>
                     <input
                       id="venue-create-brand-name"
@@ -296,12 +310,12 @@ export default function VenueManagement() {
                       value={formData.brandName}
                       onChange={(e) => setFormData({ ...formData, brandName: e.target.value })}
                       className="app-field"
-                      placeholder="Defaults to venue name"
+                      placeholder={t("displayNamePlaceholder")}
                     />
                   </div>
                   <div>
                     <label htmlFor="venue-create-brand-tagline" className="app-label">
-                      TAGLINE <span className="text-text-dim">(OPTIONAL)</span>
+                      {t("tagline")} <span className="text-text-dim">({t("optional")})</span>
                     </label>
                     <input
                       id="venue-create-brand-tagline"
@@ -309,14 +323,14 @@ export default function VenueManagement() {
                       value={formData.brandTagline}
                       onChange={(e) => setFormData({ ...formData, brandTagline: e.target.value })}
                       className="app-field"
-                      placeholder="Guest Management System"
+                      placeholder={t("taglinePlaceholder")}
                     />
                   </div>
                 </div>
 
                 <div>
                   <label htmlFor="venue-create-domain" className="app-label">
-                    PRIMARY DOMAIN <span className="text-text-dim">(OPTIONAL)</span>
+                    {t("primaryDomain")} <span className="text-text-dim">({t("optional")})</span>
                   </label>
                   <input
                     id="venue-create-domain"
@@ -327,7 +341,30 @@ export default function VenueManagement() {
                     className="app-field"
                     placeholder="guest.example.com"
                   />
-                  <p className="app-helper">Enter the hostname only, without https:// or a path.</p>
+                  <p className="app-helper">{t("domainHelp")}</p>
+                </div>
+
+                <div>
+                  <label htmlFor="venue-create-default-locale" className="app-label">
+                    {t("domainDefaultLanguage")}
+                  </label>
+                  <select
+                    id="venue-create-default-locale"
+                    value={formData.defaultLocale}
+                    onChange={(event) =>
+                      setFormData({
+                        ...formData,
+                        defaultLocale: event.target.value as "en" | "ko",
+                      })
+                    }
+                    className="app-field"
+                  >
+                    <option value="en">{commonT("english")}</option>
+                    <option value="ko">{commonT("korean")}</option>
+                  </select>
+                  <p className="app-helper">
+                    {t("domainLanguageHelp")}
+                  </p>
                 </div>
 
                 {formError && <Alert type="error" message={formError} />}
@@ -342,10 +379,10 @@ export default function VenueManagement() {
                   {isSubmitting ? (
                     <div className="flex items-center justify-center gap-2">
                       <div className="w-4 h-4 border border-canvas border-t-transparent rounded-full animate-spin"></div>
-                      <span>CREATING...</span>
+                      <span>{t("creating")}</span>
                     </div>
                   ) : (
-                    "CREATE VENUE"
+                    t("createVenue")
                   )}
                 </button>
               </form>
@@ -356,7 +393,7 @@ export default function VenueManagement() {
         {activeTab === "list" && (
           <div className="app-panel">
             <PanelHeader
-              title="Venue list"
+              title={t("venueList")}
               count={venues.length}
               onRefresh={loadVenues}
               isLoading={isLoading}
@@ -366,7 +403,7 @@ export default function VenueManagement() {
               {isLoading && venues.length === 0 ? (
                 <Skeleton rows={4} />
               ) : venues.length === 0 ? (
-                <EmptyState icon="store" message="NO VENUES FOUND" />
+                <EmptyState icon="store" message={t("noVenues")} />
               ) : (
                 <div
                   className={`grid grid-cols-1 md:grid-cols-2 gap-4 transition-opacity duration-200 ${isLoading ? "opacity-50 pointer-events-none" : ""}`}
@@ -414,9 +451,19 @@ function VenueCard({
       | "brandName"
       | "brandTagline"
       | "primaryDomain"
+      | "defaultLocale"
     >>,
   ) => Promise<string | null>;
 }) {
+  const t = useTranslations("VenueAdmin");
+  const commonT = useTranslations("Common");
+  const venueTypeLabels: Record<Venue["type"], string> = {
+    club: t("typeClub"),
+    bar: t("typeBar"),
+    lounge: t("typeLounge"),
+    festival: t("typeFestival"),
+    private: t("typePrivate"),
+  };
   const [isEditing, setIsEditing] = useState(false);
   const [editData, setEditData] = useState({
     name: venue.name,
@@ -426,6 +473,7 @@ function VenueCard({
     brandName: venue.brandName || "",
     brandTagline: venue.brandTagline || "",
     primaryDomain: venue.primaryDomain || "",
+    defaultLocale: venue.defaultLocale || "en",
   });
 
   const handleSave = async () => {
@@ -437,6 +485,7 @@ function VenueCard({
       brandName: editData.brandName,
       brandTagline: editData.brandTagline,
       primaryDomain: editData.primaryDomain,
+      defaultLocale: editData.defaultLocale,
     });
     if (!error) setIsEditing(false);
   };
@@ -460,11 +509,11 @@ function VenueCard({
           <span
             className={`text-xs font-medium ${getVenueTypeColor(venue.type)}`}
           >
-            {venue.type.toUpperCase()}
+            {venueTypeLabels[venue.type]}
           </span>
           {!venue.active && (
             <span className="border border-status-danger/70 bg-status-danger/10 px-2 py-1 font-mono text-xs uppercase tracking-wider text-status-danger">
-              INACTIVE
+              {t("inactive")}
             </span>
           )}
         </div>
@@ -478,33 +527,36 @@ function VenueCard({
             </p>
           )}
           <div className="mb-3 border border-border-subtle bg-canvas p-3">
-            <p className="app-label">BRAND / DOMAIN</p>
+            <p className="app-label">{t("brandDomain")}</p>
             <p className="font-mono text-sm text-text-heading">
               {venue.brandName || venue.name}
             </p>
             <p className="mt-1 break-all font-mono text-xs text-text-muted">
-              {venue.primaryDomain || "No primary domain assigned"}
+              {venue.primaryDomain || t("noDomain")}
+            </p>
+            <p className="mt-1 font-mono text-xs uppercase text-text-dim">
+              {t("defaultLanguage")}: {venue.defaultLocale || "en"}
             </p>
           </div>
           <div className="grid grid-cols-2 gap-2 mb-3">
             <div>
               <p className="text-xs text-text-dim mb-1">
-                STATUS
+                {t("status")}
               </p>
               <p
                 className={`font-mono text-xs sm:text-sm ${venue.active ? "text-text-heading" : "text-status-danger"}`}
               >
-                {venue.active ? "ACTIVE" : "INACTIVE"}
+                {venue.active ? t("active") : t("inactive")}
               </p>
             </div>
             <div>
               <p className="text-xs text-text-dim mb-1">
-                Type
+                {t("type")}
               </p>
               <p
                 className={`font-mono text-xs sm:text-sm ${getVenueTypeColor(venue.type)}`}
               >
-                {venue.type.toUpperCase()}
+                {venueTypeLabels[venue.type]}
               </p>
             </div>
           </div>
@@ -513,7 +565,7 @@ function VenueCard({
               onClick={() => setIsEditing(true)}
               className="bg-surface-active hover:bg-border-strong text-text-heading text-xs font-medium py-2 sm:py-3 transition-colors"
             >
-              EDIT
+              {t("edit")}
             </button>
             <button
               onClick={() => onToggleActive(venue)}
@@ -523,7 +575,7 @@ function VenueCard({
                   : "bg-surface-raised hover:bg-surface-raised text-text-heading border-border-strong"
               }`}
             >
-              {venue.active ? "DEACTIVATE" : "ACTIVATE"}
+              {venue.active ? t("deactivate") : t("activate")}
             </button>
           </div>
         </div>
@@ -531,7 +583,7 @@ function VenueCard({
         <div className="space-y-3">
           <div>
             <label htmlFor={`venue-name-${venue.id}`} className="app-label">
-              Name
+              {t("venueName")}
             </label>
             <input
               id={`venue-name-${venue.id}`}
@@ -546,7 +598,7 @@ function VenueCard({
 
           <fieldset>
             <legend className="app-label">
-              Type
+              {t("type")}
             </legend>
             <div className="grid grid-cols-5 gap-1">
               {VENUE_TYPES.map((opt) => (
@@ -566,7 +618,7 @@ function VenueCard({
                       : "bg-surface-raised text-text-muted border-border-strong hover:text-text-heading hover:border-border-strong"
                   }`}
                 >
-                  {opt.label}
+                  {venueTypeLabels[opt.value]}
                 </button>
               ))}
             </div>
@@ -574,7 +626,7 @@ function VenueCard({
 
           <div>
             <label htmlFor={`venue-address-${venue.id}`} className="app-label">
-              Address
+              {t("address")}
             </label>
             <input
               id={`venue-address-${venue.id}`}
@@ -589,7 +641,7 @@ function VenueCard({
 
           <div>
             <label htmlFor={`venue-description-${venue.id}`} className="app-label">
-              Description
+              {t("description")}
             </label>
             <textarea
               id={`venue-description-${venue.id}`}
@@ -605,7 +657,7 @@ function VenueCard({
           <div className="grid gap-3 sm:grid-cols-2">
             <div>
               <label htmlFor={`venue-brand-name-${venue.id}`} className="app-label">
-                Display name
+                {t("displayName")}
               </label>
               <input
                 id={`venue-brand-name-${venue.id}`}
@@ -618,7 +670,7 @@ function VenueCard({
             </div>
             <div>
               <label htmlFor={`venue-brand-tagline-${venue.id}`} className="app-label">
-                Tagline
+                {t("tagline")}
               </label>
               <input
                 id={`venue-brand-tagline-${venue.id}`}
@@ -626,14 +678,14 @@ function VenueCard({
                 value={editData.brandTagline}
                 onChange={(e) => setEditData({ ...editData, brandTagline: e.target.value })}
                 className="app-field"
-                placeholder="Guest Management System"
+                placeholder={t("taglinePlaceholder")}
               />
             </div>
           </div>
 
           <div>
             <label htmlFor={`venue-domain-${venue.id}`} className="app-label">
-              Primary domain
+              {t("primaryDomain")}
             </label>
             <input
               id={`venue-domain-${venue.id}`}
@@ -644,7 +696,27 @@ function VenueCard({
               className="app-field"
               placeholder="guest.example.com"
             />
-            <p className="app-helper">Saving an empty value removes the primary domain.</p>
+            <p className="app-helper">{t("emptyDomainHelp")}</p>
+          </div>
+
+          <div>
+            <label htmlFor={`venue-default-locale-${venue.id}`} className="app-label">
+              {t("domainDefaultLanguage")}
+            </label>
+            <select
+              id={`venue-default-locale-${venue.id}`}
+              value={editData.defaultLocale}
+              onChange={(event) =>
+                setEditData({
+                  ...editData,
+                  defaultLocale: event.target.value as "en" | "ko",
+                })
+              }
+              className="app-field"
+            >
+              <option value="en">{commonT("english")}</option>
+              <option value="ko">{commonT("korean")}</option>
+            </select>
           </div>
 
           <div className="grid grid-cols-2 gap-2">
@@ -652,7 +724,7 @@ function VenueCard({
               onClick={handleSave}
               className="bg-text-heading hover:bg-text-body text-canvas text-xs font-medium py-2 sm:py-3 transition-colors"
             >
-              SAVE
+              {t("save")}
             </button>
             <button
               onClick={() => {
@@ -665,11 +737,12 @@ function VenueCard({
                   brandName: venue.brandName || "",
                   brandTagline: venue.brandTagline || "",
                   primaryDomain: venue.primaryDomain || "",
+                  defaultLocale: venue.defaultLocale || "en",
                 });
               }}
               className="bg-surface-active hover:bg-border-strong text-text-heading text-xs font-medium py-2 sm:py-3 transition-colors"
             >
-              CANCEL
+              {commonT("cancel")}
             </button>
           </div>
         </div>

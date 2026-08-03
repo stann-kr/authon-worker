@@ -8,9 +8,13 @@ import type { Venue } from "../../../lib/api/types";
 import PasswordInput from "../../../components/PasswordInput";
 import Alert from "../../../components/Alert";
 import Icon from "../../../components/Icon";
-import { getPasswordPolicyError, PASSWORD_POLICY_HINT } from "../../../lib/auth/password-policy";
+import { getPasswordPolicyErrorCode } from "../../../lib/auth/password-policy";
+import RoleLabel from "../../../components/RoleLabel";
+import { useTranslations } from "next-intl";
 
 export default function InviteUser() {
+  const t = useTranslations("UserAdmin");
+  const authT = useTranslations("Auth");
   const [createMode, setCreateMode] = useState<"invite" | "password">("password");
   const [formData, setFormData] = useState({
     email: "",
@@ -19,6 +23,7 @@ export default function InviteUser() {
     guest_limit: "",
     venue_id: "",
     password: "",
+    preferred_locale: "auto" as "auto" | "en" | "ko",
   });
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
@@ -68,15 +73,21 @@ export default function InviteUser() {
     setSuccess("");
 
     if (!formData.venue_id) {
-      setError("Please select a venue.");
+      setError(t("venueRequired"));
       setIsLoading(false);
       return;
     }
 
     if (createMode === "password") {
-      const passwordPolicyError = getPasswordPolicyError(formData.password);
-      if (passwordPolicyError) {
-        setError(passwordPolicyError);
+      const passwordPolicyErrorCode = getPasswordPolicyErrorCode(formData.password);
+      if (passwordPolicyErrorCode) {
+        setError(
+          authT(
+            passwordPolicyErrorCode === "PASSWORD_TOO_SHORT"
+              ? "passwordTooShort"
+              : "passwordRequiresLettersAndNumbers",
+          ),
+        );
         setIsLoading(false);
         return;
       }
@@ -86,7 +97,7 @@ export default function InviteUser() {
     if (formData.role !== "venue_admin") {
       const limitVal = parseInt(String(formData.guest_limit));
       if (isNaN(limitVal) || limitVal < 1) {
-        setError("Guest limit must be a number of 1 or more.");
+        setError(t("guestLimitInvalid"));
         setIsLoading(false);
         return;
       }
@@ -105,10 +116,15 @@ export default function InviteUser() {
         ...(createMode === "password" && formData.password
           ? { password: formData.password }
           : {}),
+        preferredLocale:
+          formData.preferred_locale === "auto"
+            ? null
+            : formData.preferred_locale,
       });
 
       if (createError) {
-        setError(createError || "Failed to create user.");
+        console.error("Failed to create user:", createError);
+        setError(t("createFailed"));
       } else {
         if (createMode === "password" && formData.password) {
           setTempPassword(formData.password);
@@ -116,8 +132,8 @@ export default function InviteUser() {
         }
         const msg =
           createMode === "password"
-            ? `Account created for ${formData.name} (${formData.email}).`
-            : `Invitation email sent to ${formData.name} (${formData.email}).`;
+            ? t("created", { name: formData.name, email: formData.email })
+            : t("invited", { name: formData.name, email: formData.email });
         setSuccess(msg);
         setFormData((prev) => ({
           ...prev,
@@ -129,7 +145,8 @@ export default function InviteUser() {
         }));
       }
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "An error occurred while creating the user.");
+      console.error("Failed to create user:", err);
+      setError(t("createFailed"));
     } finally {
       setIsLoading(false);
     }
@@ -139,7 +156,7 @@ export default function InviteUser() {
     <div className="space-y-6">
       <div className="app-panel p-4 sm:p-5">
         <h2 className="type-section-title mb-4">
-          CREATE USER
+          {t("createUser")}
         </h2>
 
         <div className="grid grid-cols-2 gap-px bg-surface-active mb-4">
@@ -147,14 +164,14 @@ export default function InviteUser() {
             type="button"
             disabled
             aria-disabled="true"
-            title="Available after the email service is connected"
+            title={t("inviteUnavailableTitle")}
             className={`p-3 text-xs font-medium transition-colors ${
               createMode === "invite"
                 ? "border border-border-default border-l-2 border-l-action-primary bg-surface-raised text-text-heading"
                 : "bg-canvas text-text-dim cursor-not-allowed"
             }`}
           >
-            <Icon name="email" size={16} /> EMAIL LATER
+            <Icon name="email" size={16} /> {t("emailLater")}
           </button>
           <button
             type="button"
@@ -166,19 +183,19 @@ export default function InviteUser() {
                 : "bg-canvas text-text-muted hover:text-text-heading"
             }`}
           >
-            <Icon name="key" size={16} /> TEMP PASSWORD
+            <Icon name="key" size={16} /> {t("temporaryPassword")}
           </button>
         </div>
 
         <p className="mb-4 border border-border-strong bg-surface-raised p-3 font-mono text-xs leading-relaxed tracking-[0.12em] text-text-muted" role="note">
-          EMAIL INVITES ARE TEMPORARILY UNAVAILABLE. CREATE THE ACCOUNT WITH A TEMPORARY PASSWORD AND SHARE IT SECURELY.
+          {t("inviteUnavailableHelp")}
         </p>
 
         <form onSubmit={handleSubmit} className="space-y-4" aria-busy={isLoading}>
           {isSuperAdmin && venues.length > 0 && (
             <div>
               <label htmlFor="invite-venue" className="app-label">
-                VENUE
+                {t("venue")}
               </label>
               <div className="relative">
                 <select
@@ -190,7 +207,7 @@ export default function InviteUser() {
                   className="w-full appearance-none bg-canvas border border-border-default px-4 py-3 pr-10 text-text-heading text-sm focus:outline-none focus:border-border-focus"
                   required
                 >
-                  <option value="">SELECT VENUE</option>
+                  <option value="">{t("selectVenue")}</option>
                   {venues.map((venue) => (
                     <option key={venue.id} value={venue.id}>
                       {venue.name} ({venue.type})
@@ -204,7 +221,7 @@ export default function InviteUser() {
 
           <div>
             <label htmlFor="invite-email" className="app-label">
-              EMAIL ADDRESS
+              {t("emailAddress")}
             </label>
             <input
               id="invite-email"
@@ -221,7 +238,7 @@ export default function InviteUser() {
 
           <div>
             <label htmlFor="invite-name" className="app-label">
-              NAME
+              {t("name")}
             </label>
             <input
               id="invite-name"
@@ -231,14 +248,14 @@ export default function InviteUser() {
                 setFormData({ ...formData, name: e.target.value })
               }
               className="w-full bg-canvas border border-border-default px-4 py-3 text-text-heading text-sm focus:outline-none focus:border-border-focus"
-              placeholder="Enter full name"
+              placeholder={t("namePlaceholder")}
               required
             />
           </div>
 
           <fieldset>
             <legend className="app-label">
-              ROLE
+              {t("role")}
             </legend>
             <div className="grid grid-cols-4 gap-2">
               {roleOptions.map((opt) => (
@@ -255,7 +272,7 @@ export default function InviteUser() {
                       : "bg-canvas text-text-muted border-border-default hover:text-text-heading hover:border-border-strong"
                   }`}
                 >
-                  {opt.label}
+                  <RoleLabel role={opt.value} />
                 </button>
               ))}
             </div>
@@ -264,7 +281,7 @@ export default function InviteUser() {
           {formData.role !== "venue_admin" && (
             <div>
               <label htmlFor="invite-guest-limit" className="app-label">
-                GUEST LIMIT
+                {t("guestLimit")}
               </label>
               <input
                 id="invite-guest-limit"
@@ -277,15 +294,37 @@ export default function InviteUser() {
                   setFormData({ ...formData, guest_limit: val });
                 }}
                 className="w-full bg-canvas border border-border-default px-4 py-3 text-text-heading text-sm focus:outline-none focus:border-border-focus"
-                placeholder="Enter guest limit"
+                placeholder={t("guestLimitPlaceholder")}
               />
             </div>
           )}
 
+          <div>
+            <label htmlFor="invite-preferred-locale" className="app-label">
+              {t("preferredLanguage")}
+            </label>
+            <select
+              id="invite-preferred-locale"
+              value={formData.preferred_locale}
+              onChange={(event) =>
+                setFormData({
+                  ...formData,
+                  preferred_locale: event.target.value as "auto" | "en" | "ko",
+                })
+              }
+              className="app-field"
+            >
+              <option value="auto">{t("automaticLanguage")}</option>
+              <option value="en">English</option>
+              <option value="ko">한국어</option>
+            </select>
+            <p className="app-helper">{t("preferredLanguageHelp")}</p>
+          </div>
+
           {createMode === "password" && (
             <div>
               <label htmlFor="invite-password" className="app-label">
-                TEMPORARY PASSWORD
+                {t("temporaryPassword")}
               </label>
               <PasswordInput
                 id="invite-password"
@@ -294,13 +333,13 @@ export default function InviteUser() {
                   setFormData({ ...formData, password: e.target.value })
                 }
                 inputClassName="w-full bg-canvas border border-border-default px-4 py-3 pr-12 text-text-heading text-sm focus:outline-none focus:border-border-focus"
-                placeholder="Create a temporary password"
+                placeholder={t("passwordPlaceholder")}
                 autoComplete="new-password"
                 aria-describedby="invite-password-help"
                 required
               />
               <p id="invite-password-help" className="text-text-dim font-mono text-xs mt-1 tracking-wider">
-                {PASSWORD_POLICY_HINT} Share it securely and ask the user to change it after first login.
+                {authT("passwordPolicyHint")} {t("passwordShareHelp")}
               </p>
             </div>
           )}
@@ -310,7 +349,7 @@ export default function InviteUser() {
           {success && (
             <div className="bg-surface-raised border border-border-strong p-4 space-y-2" role="status" aria-live="polite">
               <p className="text-text-heading text-xs font-medium">
-                {tempPassword ? "ACCOUNT CREATED" : "INVITATION SENT"}
+                {tempPassword ? t("accountCreated") : t("invitationSent")}
               </p>
               <p className="text-text-heading font-mono text-xs tracking-wider">
                 {success}
@@ -318,7 +357,7 @@ export default function InviteUser() {
               {tempPassword && (
                 <div className="mt-2 border border-border-strong p-2 flex items-center justify-between gap-2">
                   <span className="font-mono text-xs text-text-heading tracking-wider">
-                    TEMP PASSWORD:{" "}
+                    {t("tempPassword")}:{" "}
                     <span className="select-all">
                       {showTempPassword ? tempPassword : "•".repeat(tempPassword.length)}
                     </span>
@@ -329,14 +368,14 @@ export default function InviteUser() {
                       onClick={() => setShowTempPassword((v) => !v)}
                       className="text-text-heading hover:text-xs text-text-heading"
                     >
-                      {showTempPassword ? "HIDE" : "SHOW"}
+                      {showTempPassword ? t("hide") : t("show")}
                     </button>
                     <button
                       type="button"
                       onClick={() => navigator.clipboard.writeText(tempPassword)}
                       className="text-text-heading hover:text-xs text-text-heading"
                     >
-                      COPY
+                      {t("copy")}
                     </button>
                   </div>
                 </div>
@@ -353,13 +392,13 @@ export default function InviteUser() {
               <div className="flex items-center justify-center gap-2">
                 <div className="w-4 h-4 border border-canvas border-t-transparent rounded-full animate-spin"></div>
                 <span>
-                  {createMode === "password" ? "CREATING..." : "SENDING..."}
+                  {createMode === "password" ? t("creating") : t("sending")}
                 </span>
               </div>
             ) : createMode === "password" ? (
-              "CREATE ACCOUNT"
+              t("createAccount")
             ) : (
-              "SEND INVITATION"
+              t("sendInvitation")
             )}
           </button>
         </form>
