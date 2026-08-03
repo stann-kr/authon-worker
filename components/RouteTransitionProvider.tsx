@@ -16,6 +16,7 @@ import Spinner from "./Spinner";
 type TransitionPhase = "idle" | "visible" | "leaving";
 
 interface RouteTransitionContextValue {
+  isRouteTransitionActive: boolean;
   startRouteTransition: (href?: string) => void;
 }
 
@@ -106,7 +107,12 @@ export function RouteTransitionProvider({ children }: { children: ReactNode }) {
   useEffect(() => clearTimers, [clearTimers]);
 
   return (
-    <RouteTransitionContext.Provider value={{ startRouteTransition }}>
+    <RouteTransitionContext.Provider
+      value={{
+        isRouteTransitionActive: phase !== "idle",
+        startRouteTransition,
+      }}
+    >
       {children}
       {phase !== "idle" && (
         <div
