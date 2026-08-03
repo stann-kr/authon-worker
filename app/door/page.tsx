@@ -22,7 +22,6 @@ import Alert from "../../components/Alert";
 import Icon from "../../components/Icon";
 import Skeleton from "../../components/Skeleton";
 import OperationsLayout from "../../components/OperationsLayout";
-import { getRoleLabelText } from "../../components/RoleLabel";
 import { useSectionLoadingTask } from "../../components/RouteTransitionProvider";
 import { getBusinessDate } from "../../lib/date";
 import {
@@ -50,7 +49,6 @@ export default function DoorPage() {
 
 function DoorPageContent() {
   const t = useTranslations("Door");
-  const commonT = useTranslations("Common");
   const locale = useLocale() as "en" | "ko";
   const { venueId, venues, selectedVenueId, setSelectedVenueId, isSuperAdmin, currentVenue } =
     useVenueSelector();
@@ -206,26 +204,17 @@ function DoorPageContent() {
 
   const getContributor = (guest: Guest): {
     name?: string;
-    role?: string;
     accountKind: "personal" | "shared";
   } => {
     if (guest.createdByUserId) {
       const u = displayData.users.find((u) => u.id === guest.createdByUserId);
-      return {
-        name: u?.name,
-        role: u?.role,
-        accountKind: u?.accountKind ?? "personal",
-      };
+      return { name: u?.name, accountKind: u?.accountKind ?? "personal" };
     }
     if (guest.externalLinkId) {
       const link = displayData.externalLinks.find(
         (l) => l.id === guest.externalLinkId,
       );
-      return {
-        name: link ? `${link.djName} (${t("external")})` : undefined,
-        role: "dj",
-        accountKind: "personal",
-      };
+      return { name: link ? `${link.djName} (EXT)` : undefined, accountKind: "personal" };
     }
     return { accountKind: "personal" };
   };
@@ -325,15 +314,12 @@ function DoorPageContent() {
                           <option value="all">{t("allOwners")}</option>
                           {filteredUsers.map((user) => (
                             <option key={user.id} value={user.id}>
-                              {user.name} · {getRoleLabelText(
-                                user.accountKind === "shared" ? "shared" : user.role,
-                                (key) => commonT(key),
-                              )}
+                              {user.name}
                             </option>
                           ))}
                           {filteredExtLinks.map((link) => (
                             <option key={`ext:${link.id}`} value={`ext:${link.id}`}>
-                              {link.djName} · {commonT("roleDj")} · {t("external")}
+                              {link.djName} ({t("external")})
                             </option>
                           ))}
                         </select>
@@ -434,8 +420,7 @@ function DoorPageContent() {
                       }}
                       index={index}
                       mode="operations"
-                      contributorName={contributor.name}
-                      contributorRole={contributor.role}
+                      djName={contributor.name}
                       accountKind={contributor.accountKind}
                       registeredByName={guest.registeredByName}
                       onCheck={() =>

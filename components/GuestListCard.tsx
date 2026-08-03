@@ -3,7 +3,6 @@ import Button from "./Button";
 import Icon from "./Icon";
 import StatusLabel from "./StatusLabel";
 import ConfirmDialog from "./ConfirmDialog";
-import RoleLabel from "./RoleLabel";
 import { useTranslations } from "next-intl";
 
 export interface Guest {
@@ -24,8 +23,7 @@ interface GuestListCardProps {
   guest: Guest;
   index: number;
   mode?: "registration" | "operations";
-  contributorName?: string;
-  contributorRole?: string | null;
+  djName?: string;
   accountKind?: "personal" | "shared";
   registeredByName?: string | null;
   showRegisteredAt?: boolean;
@@ -41,8 +39,7 @@ const GuestListCard: React.FC<GuestListCardProps> = ({
   guest,
   index,
   mode = "registration",
-  contributorName,
-  contributorRole,
+  djName,
   accountKind = "personal",
   registeredByName,
   showRegisteredAt = false,
@@ -84,17 +81,15 @@ const GuestListCard: React.FC<GuestListCardProps> = ({
             <p className="type-row-title break-words">
               {guest.name}
             </p>
-            {(contributorName || registeredByName) && (
+            {(djName || registeredByName) && (
               <div className="mt-0.5 flex flex-wrap items-center gap-2 text-xs text-text-muted">
-                {(contributorRole || accountKind === "shared") && (
+                {accountKind === "shared" && (
                   <span className="border border-border-strong bg-canvas px-1.5 py-0.5 font-mono uppercase tracking-wider text-text-heading">
-                    <RoleLabel
-                      role={accountKind === "shared" ? "shared" : contributorRole}
-                    />
+                    {t("sharedAccount")}
                   </span>
                 )}
-                {contributorName ? (
-                  <span>{t("byName", { name: contributorName })}</span>
+                {djName ? (
+                  <span>{t("byName", { name: djName })}</span>
                 ) : null}
                 {registeredByName && (
                   <span>{t("registeredByName", { name: registeredByName })}</span>

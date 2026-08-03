@@ -16,7 +16,6 @@ import Icon from "../../../components/Icon";
 import Skeleton from "../../../components/Skeleton";
 import DatePicker from "../../../components/DatePicker";
 import OperationsLayout from "../../../components/OperationsLayout";
-import { getRoleLabelText } from "../../../components/RoleLabel";
 import { useSectionLoadingTask } from "../../../components/RouteTransitionProvider";
 import VenueSelector, {
   useVenueSelector,
@@ -50,7 +49,6 @@ export default function GuestList({
 }: GuestListProps) {
   const t = useTranslations("AdminGuest");
   const doorT = useTranslations("Door");
-  const commonT = useTranslations("Common");
   const locale = useLocale() as "en" | "ko";
   const [selectedDJ, setSelectedDJ] = useState<string>("all");
   const [loadingStates, setLoadingStates] = useState<{
@@ -198,26 +196,17 @@ export default function GuestList({
 
   const getContributor = (guest: Guest): {
     name?: string;
-    role?: string;
     accountKind: "personal" | "shared";
   } => {
     if (guest.createdByUserId) {
       const u = displayData.users.find((u) => u.id === guest.createdByUserId);
-      return {
-        name: u?.name,
-        role: u?.role,
-        accountKind: u?.accountKind ?? "personal",
-      };
+      return { name: u?.name, accountKind: u?.accountKind ?? "personal" };
     }
     if (guest.externalLinkId) {
       const link = displayData.externalLinks.find(
         (l) => l.id === guest.externalLinkId,
       );
-      return {
-        name: link ? `${link.djName} (${doorT("external")})` : undefined,
-        role: "dj",
-        accountKind: "personal",
-      };
+      return { name: link ? `${link.djName} (EXT)` : undefined, accountKind: "personal" };
     }
     return { accountKind: "personal" };
   };
@@ -270,13 +259,7 @@ export default function GuestList({
     }
     const u = displayData.users.find((u) => u.id === selectedDJ);
     return u
-      ? {
-          name: u.name,
-          event: getRoleLabelText(
-            u.accountKind === "shared" ? "shared" : u.role,
-            (key) => commonT(key),
-          ),
-        }
+      ? { name: u.name, event: u.role.toUpperCase() }
       : { name: "", event: "" };
   };
 
@@ -343,10 +326,7 @@ export default function GuestList({
                   <option value="">{t("selectUser")}</option>
                   {filteredUsers.map((u) => (
                     <option key={u.id} value={u.id} className="bg-surface">
-                      {u.name} · {getRoleLabelText(
-                        u.accountKind === "shared" ? "shared" : u.role,
-                        (key) => commonT(key),
-                      )}
+                      {u.name}
                     </option>
                   ))}
                   {filteredExtLinks.map((link) => (
@@ -355,7 +335,7 @@ export default function GuestList({
                       value={`ext:${link.id}`}
                       className="bg-surface"
                     >
-                      {link.djName} · {commonT("roleDj")} · {doorT("external")}
+                      {link.djName} (EXT)
                     </option>
                   ))}
                 </select>
@@ -447,8 +427,7 @@ export default function GuestList({
                     }}
                     index={index}
                     mode="operations"
-                    contributorName={contributor.name}
-                    contributorRole={contributor.role}
+                    djName={contributor.name}
                     accountKind={contributor.accountKind}
                     registeredByName={guest.registeredByName}
                     showRegisteredAt
