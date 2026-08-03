@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { getUser, hasAccess, User } from "../lib/auth";
+import Spinner from "./Spinner";
 
 interface AuthGuardProps {
   children: React.ReactNode;
@@ -44,16 +45,7 @@ export default function AuthGuard({
   }, [router, requiredAccess]);
 
   if (isLoading) {
-    return (
-      <div className="flex min-h-[100dvh] items-center justify-center bg-canvas">
-        <div className="text-center" role="status" aria-live="polite">
-          <div className="mx-auto mb-4 h-8 w-8 animate-spin rounded-full border-2 border-action-primary border-t-transparent" aria-hidden="true"></div>
-          <p className="text-sm text-text-muted">
-            Verifying access
-          </p>
-        </div>
-      </div>
-    );
+    return <Spinner mode="fullscreen" text="Loading workspace" />;
   }
 
   if (!user) {

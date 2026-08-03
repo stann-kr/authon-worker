@@ -36,6 +36,24 @@ textarea {
   font-family: var(--font-geist-sans), sans-serif;
 }
 
+.route-transition-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  background: var(--app-canvas);
+  opacity: 1;
+  transition: opacity var(--app-duration-fast) var(--app-ease-out);
+}
+
+.route-transition-overlay[data-state="leaving"] {
+  pointer-events: none;
+  opacity: 0;
+}
+
+.route-transition-overlay .animate-spin {
+  animation-duration: 650ms;
+}
+
 button,
 input,
 select,

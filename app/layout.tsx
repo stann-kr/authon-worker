@@ -3,6 +3,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import DesignSystemProvider from "@/components/DesignSystemProvider";
 import VenueBrandProvider from "@/components/VenueBrandProvider";
+import { RouteTransitionProvider } from "@/components/RouteTransitionProvider";
 import { getRequestTenantContext } from "@/lib/tenant/server";
 
 const geistSans = Geist({
@@ -42,12 +43,14 @@ export default async function RootLayout({
       >
         <VenueBrandProvider tenant={tenant}>
           <DesignSystemProvider>
-            <a href="#main-content" className="skip-link">
-              본문으로 건너뛰기
-            </a>
-            <div id="main-content" tabIndex={-1}>
-              {children}
-            </div>
+            <RouteTransitionProvider>
+              <a href="#main-content" className="skip-link">
+                본문으로 건너뛰기
+              </a>
+              <div id="main-content" tabIndex={-1}>
+                {children}
+              </div>
+            </RouteTransitionProvider>
           </DesignSystemProvider>
         </VenueBrandProvider>
       </body>

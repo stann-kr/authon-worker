@@ -2,11 +2,11 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
 import { getUser, logout, hasAccess, type User } from "../lib/auth";
 import Footer from "@/components/Footer";
 import Spinner from "@/components/Spinner";
 import Icon, { type IconName } from "@/components/Icon";
+import TransitionLink from "@/components/TransitionLink";
 import AdminHeader from "@/app/admin/components/AdminHeader";
 
 interface MenuItem {
@@ -144,7 +144,7 @@ function WorkspaceLink({
   index: number;
 }) {
   return (
-    <Link
+    <TransitionLink
       href={item.href}
       className="pressable group relative grid min-h-[88px] grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-4 border-b border-border-subtle px-4 py-4 last:border-b-0 hover:bg-surface-raised focus-visible:bg-surface-raised focus-visible:outline-none sm:min-h-[104px] sm:gap-5 sm:px-5 before:absolute before:inset-y-0 before:left-0 before:w-0.5 before:bg-action-primary before:opacity-0 before:transition-opacity hover:before:opacity-100 focus-visible:before:opacity-100"
     >
@@ -165,6 +165,6 @@ function WorkspaceLink({
         </kbd>
         <Icon name="arrow-right" size={18} />
       </span>
-    </Link>
+    </TransitionLink>
   );
 }
