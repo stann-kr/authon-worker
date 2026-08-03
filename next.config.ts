@@ -2,7 +2,8 @@ import type { NextConfig } from "next";
 import { initOpenNextCloudflareForDev } from "@opennextjs/cloudflare";
 import createNextIntlPlugin from "next-intl/plugin";
 
-initOpenNextCloudflareForDev();
+// `next dev`는 문서화된 local D1/KV fixture만 사용하고 remote 운영 데이터에 연결하지 않는다.
+initOpenNextCloudflareForDev({ remoteBindings: false });
 
 const securityHeaders = [
   {

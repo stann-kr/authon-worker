@@ -12,18 +12,21 @@ interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   fullWidth?: boolean;
 }
 
-export default function Button({
-  children,
-  variant = "primary",
-  size = "md",
-  isLoading = false,
-  leftIcon,
-  rightIcon,
-  fullWidth = false,
-  className = "",
-  disabled,
-  ...props
-}: ButtonProps) {
+const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(function Button(
+  {
+    children,
+    variant = "primary",
+    size = "md",
+    isLoading = false,
+    leftIcon,
+    rightIcon,
+    fullWidth = false,
+    className = "",
+    disabled,
+    ...props
+  },
+  ref,
+) {
   const baseClasses = "pressable inline-flex min-w-11 touch-manipulation items-center justify-center gap-2 rounded-control whitespace-nowrap disabled:cursor-not-allowed disabled:opacity-50";
   
   const variantClasses = {
@@ -48,9 +51,11 @@ export default function Button({
 
   return (
     <button
+      {...props}
+      ref={ref}
       disabled={disabled || isLoading}
       className={combinedClasses}
-      {...props}
+      aria-busy={isLoading || props["aria-busy"]}
     >
       {isLoading && (
         <Spinner
@@ -63,4 +68,6 @@ export default function Button({
       {!isLoading && rightIcon && <span className="flex-shrink-0">{rightIcon}</span>}
     </button>
   );
-}
+});
+
+export default Button;

@@ -11,10 +11,11 @@ import StatGrid from "../../../components/StatGrid";
 import PanelHeader from "../../../components/PanelHeader";
 import RoleLabel from "../../../components/RoleLabel";
 import Alert from "../../../components/Alert";
-import Icon from "../../../components/Icon";
 import Skeleton from "../../../components/Skeleton";
 import OperationsLayout from "../../../components/OperationsLayout";
-import { useRouteLoadingTask } from "../../../components/RouteTransitionProvider";
+import OperationalSectionNav from "../../../components/OperationalSectionNav";
+import ConfirmDialog from "../../../components/ConfirmDialog";
+import { useSectionLoadingTask } from "../../../components/RouteTransitionProvider";
 import {
   fetchManagedUsersByVenue,
   fetchUserAuditEvents,
@@ -29,12 +30,17 @@ import { isVenueManagedRole } from "@/lib/users/policy";
 type StatusFilter = "current" | "ready" | "setup" | "inactive" | "deleted";
 
 type Feedback = { type: "success" | "error"; message: string } | null;
+type PendingUserAction = {
+  kind: "toggle" | "reset-password" | "delete";
+  user: User;
+} | null;
 
 const EMPTY_USERS: User[] = [];
 const EMPTY_AUDIT_EVENTS: UserAuditEvent[] = [];
 
 export default function UserManagement() {
   const t = useTranslations("UserAdmin");
+  const commonT = useTranslations("Common");
   const locale = useLocale();
   const [activeTab, setActiveTab] = useLocalStorage<"create" | "users" | "migrate">(
     "usermgmt:activeTab",
@@ -50,6 +56,8 @@ export default function UserManagement() {
   const [roleFilter, setRoleFilter] = useState<"all" | "shared" | User["role"]>("all");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("current");
   const [busyUserId, setBusyUserId] = useState<string | null>(null);
+  const [pendingUserAction, setPendingUserAction] =
+    useState<PendingUserAction>(null);
   const [setupCredential, setSetupCredential] = useState<{
     userName: string;
     setupCode: string;
@@ -78,7 +86,7 @@ export default function UserManagement() {
   const scopedAuditEvents =
     loadedScopeKey === requestScopeKey ? auditEvents : EMPTY_AUDIT_EVENTS;
   const isCurrentScopeLoading = isLoading || loadedScopeKey !== requestScopeKey;
-  useRouteLoadingTask(activeTab === "users" && isCurrentScopeLoading);
+  useSectionLoadingTask(activeTab === "users" && isCurrentScopeLoading);
 
   useEffect(() => {
     const isKnownTab = ["create", "users", "migrate"].includes(activeTab as string);
@@ -198,12 +206,10 @@ export default function UserManagement() {
   }, [t]);
 
   const handleActiveChange = async (user: User) => {
-    if (!confirm(user.active ? t("deactivateConfirm") : t("activateConfirm"))) return;
     await handleUserUpdate(user.id, { active: !user.active });
   };
 
   const handlePasswordReset = async (user: User) => {
-    if (!confirm(t("resetPasswordConfirm", { name: user.name }))) return;
     setBusyUserId(user.id);
     setFeedback(null);
     try {
@@ -226,7 +232,6 @@ export default function UserManagement() {
   };
 
   const handleUserDelete = async (user: User) => {
-    if (!confirm(t("deleteConfirm", { name: user.name }))) return;
     setBusyUserId(user.id);
     setFeedback(null);
     try {
@@ -244,6 +249,15 @@ export default function UserManagement() {
     } finally {
       setBusyUserId(null);
     }
+  };
+
+  const confirmPendingUserAction = async () => {
+    if (!pendingUserAction) return;
+    const { kind, user } = pendingUserAction;
+    if (kind === "toggle") await handleActiveChange(user);
+    if (kind === "reset-password") await handlePasswordReset(user);
+    if (kind === "delete") await handleUserDelete(user);
+    setPendingUserAction(null);
   };
 
   const copySetupCode = async () => {
@@ -341,8 +355,36 @@ export default function UserManagement() {
   };
 
   const tabInfo = getTabInfo();
+  const pendingActionTitle = pendingUserAction
+    ? pendingUserAction.kind === "toggle"
+      ? pendingUserAction.user.active
+        ? t("deactivateTitle")
+        : t("activateTitle")
+      : pendingUserAction.kind === "reset-password"
+        ? t("resetPasswordTitle")
+        : t("deleteTitle")
+    : "";
+  const pendingActionDescription = pendingUserAction
+    ? pendingUserAction.kind === "toggle"
+      ? pendingUserAction.user.active
+        ? t("deactivateConfirm")
+        : t("activateConfirm")
+      : pendingUserAction.kind === "reset-password"
+        ? t("resetPasswordConfirm", { name: pendingUserAction.user.name })
+        : t("deleteConfirm", { name: pendingUserAction.user.name })
+    : "";
+  const pendingActionLabel = pendingUserAction
+    ? pendingUserAction.kind === "toggle"
+      ? pendingUserAction.user.active
+        ? t("deactivate")
+        : t("activate")
+      : pendingUserAction.kind === "reset-password"
+        ? t("resetPassword")
+        : t("delete")
+    : "";
 
   return (
+    <>
     <OperationsLayout
       title={t("title")}
       dashboard={
@@ -357,50 +399,18 @@ export default function UserManagement() {
             className="app-panel p-4 sm:p-5"
           />
         )}
-        <div className="app-panel p-4 sm:p-5">
-          <div className="mb-4">
-            <h3 className="type-context-title mb-3">
-              {t("section")}
-            </h3>
-            <div className="space-y-2">
-              <button
-                onClick={() => setActiveTab("create")}
-                className={`flex w-full items-center gap-2 p-3 text-left text-sm font-medium transition-colors ${
-                  activeTab === "create"
-                    ? "border border-border-default border-l-2 border-l-action-primary bg-surface-raised text-text-heading"
-                    : "bg-surface-raised text-text-muted hover:text-text-heading border border-border-default"
-                }`}
-              >
-                <Icon name="user-add" size={17} />
-                {t("create")}
-              </button>
-              <button
-                onClick={() => setActiveTab("users")}
-                className={`flex w-full items-center gap-2 p-3 text-left text-sm font-medium transition-colors ${
-                  activeTab === "users"
-                    ? "border border-border-default border-l-2 border-l-action-primary bg-surface-raised text-text-heading"
-                    : "bg-surface-raised text-text-muted hover:text-text-heading border border-border-default"
-                }`}
-              >
-                <Icon name="user" size={17} />
-                {t("users")}
-              </button>
-              {isSuperAdmin && (
-                <button
-                  onClick={() => setActiveTab("migrate")}
-                  className={`flex w-full items-center gap-2 p-3 text-left text-sm font-medium transition-colors ${
-                    activeTab === "migrate"
-                      ? "border border-border-default border-l-2 border-l-action-primary bg-surface-raised text-text-heading"
-                      : "bg-surface-raised text-text-muted hover:text-text-heading border border-border-default"
-                  }`}
-                >
-                  <Icon name="database" size={17} />
-                  {t("migrate")}
-                </button>
-              )}
-            </div>
-          </div>
-        </div>
+        <OperationalSectionNav
+          label={t("section")}
+          items={[
+            { id: "create", label: t("create"), icon: "user-add" },
+            { id: "users", label: t("users"), icon: "user" },
+            ...(isSuperAdmin
+              ? [{ id: "migrate" as const, label: t("migrate"), icon: "database" as const }]
+              : []),
+          ]}
+          activeId={activeTab}
+          onChange={setActiveTab}
+        />
 
         <div className="app-panel p-4 sm:p-5">
           <div className="mb-4">
@@ -600,9 +610,15 @@ export default function UserManagement() {
                       currentUserId={currentUser?.id || null}
                       isBusy={busyUserId === user.id}
                       onUpdate={handleUserUpdate}
-                      onToggleActive={handleActiveChange}
-                      onResetPassword={handlePasswordReset}
-                      onDelete={handleUserDelete}
+                      onToggleActive={async (user) =>
+                        setPendingUserAction({ kind: "toggle", user })
+                      }
+                      onResetPassword={async (user) =>
+                        setPendingUserAction({ kind: "reset-password", user })
+                      }
+                      onDelete={async (user) =>
+                        setPendingUserAction({ kind: "delete", user })
+                      }
                     />
                   ))}
                 </div>
@@ -648,6 +664,24 @@ export default function UserManagement() {
         )}
       </div>
     </OperationsLayout>
+      {pendingUserAction && (
+        <ConfirmDialog
+          open
+          title={pendingActionTitle}
+          description={pendingActionDescription}
+          confirmLabel={pendingActionLabel}
+          cancelLabel={commonT("cancel")}
+          onConfirm={confirmPendingUserAction}
+          onCancel={() => setPendingUserAction(null)}
+          isLoading={busyUserId === pendingUserAction.user.id}
+          tone={
+            pendingUserAction.kind === "toggle" && !pendingUserAction.user.active
+              ? "primary"
+              : "danger"
+          }
+        />
+      )}
+    </>
   );
 }
 

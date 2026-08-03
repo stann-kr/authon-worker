@@ -11,13 +11,14 @@ import StatGrid from "../../../components/StatGrid";
 import PanelHeader from "../../../components/PanelHeader";
 import Alert from "../../../components/Alert";
 import EmptyState from "../../../components/EmptyState";
-import Icon from "../../../components/Icon";
 import Skeleton from "../../../components/Skeleton";
 import OperationsLayout from "../../../components/OperationsLayout";
-import { useRouteLoadingTask } from "../../../components/RouteTransitionProvider";
+import OperationalSectionNav from "../../../components/OperationalSectionNav";
+import { useSectionLoadingTask } from "../../../components/RouteTransitionProvider";
 import { useLatestRequestGuard } from "../../../lib/hooks";
 import { getVenueTypeColor } from "../../../lib/colors";
 import { useTranslations } from "next-intl";
+import { useVenueSelector } from "../../../components/VenueSelector";
 import {
   DEFAULT_CLOSING_TIME,
   DEFAULT_OPENING_TIME,
@@ -76,8 +77,9 @@ export default function VenueManagement() {
   const [formSuccess, setFormSuccess] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [listError, setListError] = useState("");
+  const { refreshVenues: refreshActiveVenues } = useVenueSelector();
   const requestGuard = useLatestRequestGuard();
-  useRouteLoadingTask(isLoading);
+  useSectionLoadingTask(isLoading);
 
   const loadVenues = useCallback(async () => {
     const isLatestRequest = requestGuard.beginRequest();
@@ -154,7 +156,7 @@ export default function VenueManagement() {
         openingTime: DEFAULT_OPENING_TIME,
         closingTime: DEFAULT_CLOSING_TIME,
       });
-      loadVenues();
+      await Promise.all([loadVenues(), refreshActiveVenues()]);
     }
     setIsSubmitting(false);
   };
@@ -165,7 +167,7 @@ export default function VenueManagement() {
       console.error("Failed to update venue:", error);
       setListError(t("updateFailed"));
     } else {
-      loadVenues();
+      await Promise.all([loadVenues(), refreshActiveVenues()]);
     }
   };
 
@@ -187,37 +189,15 @@ export default function VenueManagement() {
       title={t("title")}
       dashboard={
         <>
-        <div className="app-panel p-4 sm:p-5">
-          <div className="mb-4">
-            <h3 className="type-context-title mb-3">
-              {t("section")}
-            </h3>
-            <div className="space-y-2">
-              <button
-                onClick={() => setActiveTab("create")}
-                className={`flex w-full items-center gap-2 p-3 text-left text-sm font-medium transition-colors ${
-                  activeTab === "create"
-                    ? "border border-border-default border-l-2 border-l-action-primary bg-surface-raised text-text-heading"
-                    : "bg-surface-raised text-text-muted hover:text-text-heading border border-border-default"
-                }`}
-              >
-                <Icon name="add" size={17} />
-                {t("create")}
-              </button>
-              <button
-                onClick={() => setActiveTab("list")}
-                className={`flex w-full items-center gap-2 p-3 text-left text-sm font-medium transition-colors ${
-                  activeTab === "list"
-                    ? "border border-border-default border-l-2 border-l-action-primary bg-surface-raised text-text-heading"
-                    : "bg-surface-raised text-text-muted hover:text-text-heading border border-border-default"
-                }`}
-              >
-                <Icon name="store" size={17} />
-                {t("venues")}
-              </button>
-            </div>
-          </div>
-        </div>
+        <OperationalSectionNav
+          label={t("section")}
+          items={[
+            { id: "create", label: t("create"), icon: "add" },
+            { id: "list", label: t("venues"), icon: "store" },
+          ]}
+          activeId={activeTab}
+          onChange={setActiveTab}
+        />
 
         <div className="app-panel p-4 sm:p-5">
           <div className="mb-4">
@@ -279,7 +259,7 @@ export default function VenueManagement() {
                     onChange={(e) =>
                       setFormData({ ...formData, name: e.target.value })
                     }
-                    className="w-full bg-canvas border border-border-default px-4 py-3 text-text-heading text-sm focus:outline-none focus:border-border-focus"
+                    className="w-full bg-canvas border border-border-strong px-4 py-3 text-text-heading text-sm focus:outline-none focus:border-border-focus"
                     placeholder={t("namePlaceholder")}
                     required
                   />
@@ -324,7 +304,7 @@ export default function VenueManagement() {
                     onChange={(e) =>
                       setFormData({ ...formData, address: e.target.value })
                     }
-                    className="w-full bg-canvas border border-border-default px-4 py-3 text-text-heading text-sm focus:outline-none focus:border-border-focus"
+                    className="w-full bg-canvas border border-border-strong px-4 py-3 text-text-heading text-sm focus:outline-none focus:border-border-focus"
                     placeholder={t("addressPlaceholder")}
                   />
                 </div>
@@ -401,7 +381,7 @@ export default function VenueManagement() {
                     onChange={(e) =>
                       setFormData({ ...formData, description: e.target.value })
                     }
-                    className="w-full bg-canvas border border-border-default px-4 py-3 text-text-heading text-sm focus:outline-none focus:border-border-focus resize-none"
+                    className="w-full bg-canvas border border-border-strong px-4 py-3 text-text-heading text-sm focus:outline-none focus:border-border-focus resize-none"
                     rows={3}
                     placeholder={t("descriptionPlaceholder")}
                   />
@@ -525,7 +505,7 @@ export default function VenueManagement() {
                         const { error } = await updateVenue(id, updates);
                         if (!error) {
                           setListError("");
-                          loadVenues();
+                          await Promise.all([loadVenues(), refreshActiveVenues()]);
                         } else {
                           setListError(
                             error === "INVALID_TIMEZONE"

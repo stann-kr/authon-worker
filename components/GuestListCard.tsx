@@ -1,7 +1,8 @@
-import React from "react";
+import React, { useState } from "react";
 import Button from "./Button";
 import Icon from "./Icon";
 import StatusLabel from "./StatusLabel";
+import ConfirmDialog from "./ConfirmDialog";
 import { useTranslations } from "next-intl";
 
 export interface Guest {
@@ -50,6 +51,7 @@ const GuestListCard: React.FC<GuestListCardProps> = ({
   isDeleteLoading = false,
 }) => {
   const t = useTranslations("Common");
+  const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
   const rowTone = index % 2 === 0 ? "bg-surface" : "bg-surface-raised";
   const indicatorTone =
     guest.status === "checked"
@@ -58,11 +60,13 @@ const GuestListCard: React.FC<GuestListCardProps> = ({
         ? "before:bg-border-strong"
         : "before:bg-status-waiting";
   const handleDelete = () => {
-    if (!onDelete || !window.confirm(t("removeGuestConfirm"))) return;
+    if (!onDelete) return;
+    setIsDeleteConfirmOpen(false);
     onDelete();
   };
 
   return (
+    <>
     <article
       className={`guest-list-row relative overflow-hidden px-4 py-3 before:absolute before:inset-y-0 before:left-0 before:w-0.5 sm:px-5 ${rowTone} ${indicatorTone} ${
         guest.status === "deleted" ? "opacity-60" : ""
@@ -140,7 +144,7 @@ const GuestListCard: React.FC<GuestListCardProps> = ({
 
               {mode === "registration" && onDelete && (
                 <Button
-                  onClick={handleDelete}
+                  onClick={() => setIsDeleteConfirmOpen(true)}
                   isLoading={isDeleteLoading}
                   variant="danger"
                   className="px-3 sm:px-4"
@@ -151,7 +155,7 @@ const GuestListCard: React.FC<GuestListCardProps> = ({
 
               {mode === "operations" && onDelete && (
                 <Button
-                  onClick={handleDelete}
+                  onClick={() => setIsDeleteConfirmOpen(true)}
                   isLoading={isDeleteLoading}
                   variant="ghost"
                   className="px-3 sm:px-4 border border-border-default text-text-muted"
@@ -190,7 +194,7 @@ const GuestListCard: React.FC<GuestListCardProps> = ({
               )}
               {mode === "operations" && onDelete && (
                 <Button
-                  onClick={handleDelete}
+                  onClick={() => setIsDeleteConfirmOpen(true)}
                   isLoading={isDeleteLoading}
                   variant="ghost"
                   className="w-8 h-8 sm:w-10 sm:h-10 p-0 border border-border-default text-text-muted"
@@ -210,6 +214,19 @@ const GuestListCard: React.FC<GuestListCardProps> = ({
         </div>
       </div>
     </article>
+      {isDeleteConfirmOpen && (
+        <ConfirmDialog
+          open
+          title={t("deleteGuest")}
+          description={t("removeGuestConfirm")}
+          confirmLabel={t("delete")}
+          cancelLabel={t("cancel")}
+          onConfirm={handleDelete}
+          onCancel={() => setIsDeleteConfirmOpen(false)}
+          isLoading={isDeleteLoading}
+        />
+      )}
+    </>
   );
 };
 

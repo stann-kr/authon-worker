@@ -22,15 +22,14 @@ import Alert from "../../components/Alert";
 import Icon from "../../components/Icon";
 import Skeleton from "../../components/Skeleton";
 import OperationsLayout from "../../components/OperationsLayout";
-import { useRouteLoadingTask } from "../../components/RouteTransitionProvider";
+import { useSectionLoadingTask } from "../../components/RouteTransitionProvider";
 import { getBusinessDate } from "../../lib/date";
 import {
   fetchGuestsByDate,
   updateGuestStatus,
   deleteGuest,
 } from "../../lib/api/guests";
-import { fetchUsersByVenue } from "../../lib/api/users";
-import { fetchExternalLinksByDate } from "../../lib/api/external-links";
+import { fetchGuestOperationsSnapshot } from "../../lib/api/guest-snapshots";
 import type { Guest, UserDirectoryEntry, ExternalDJLink } from "../../lib/api/types";
 import { useLocale, useTranslations } from "next-intl";
 
@@ -104,7 +103,7 @@ function DoorPageContent() {
 
   const hasCurrentScopeData = loadedScopeKey === requestScopeKey;
   const isCurrentScopeFetching = isFetching || !hasCurrentScopeData;
-  useRouteLoadingTask(isCurrentScopeFetching);
+  useSectionLoadingTask(isCurrentScopeFetching);
   const displayData = !hasCurrentScopeData
     ? EMPTY_DISPLAY_DATA
     : isFetching && displayCacheRef.current.scopeKey === requestScopeKey
@@ -133,18 +132,22 @@ function DoorPageContent() {
     setIsFetching(true);
     setFeedback(null);
     try {
-      const [guestRes, userRes, linkRes] = await Promise.all([
-        fetchGuestsByDate(selectedDate, venueId),
-        fetchUsersByVenue(venueId),
-        fetchExternalLinksByDate(venueId, selectedDate),
-      ]);
+      const { data, error } = await fetchGuestOperationsSnapshot(
+        selectedDate,
+        venueId,
+      );
       if (!isLatestRequest()) return;
-      if (guestRes.error || userRes.error || linkRes.error) {
-        setFeedback(t("partialLoadFailed"));
+      if (!data) {
+        setGuests([]);
+        setUsers([]);
+        setExternalLinks([]);
+        setFeedback(t("loadFailed"));
+      } else {
+        if (error) setFeedback(t("partialLoadFailed"));
+        setGuests(data.guests);
+        setUsers(data.users);
+        setExternalLinks(data.externalLinks);
       }
-      setGuests(guestRes.data ?? []);
-      setUsers(userRes.data ?? []);
-      setExternalLinks(linkRes.data ?? []);
       setLoadedScopeKey(requestScopeKey);
     } catch (error) {
       if (!isLatestRequest()) return;

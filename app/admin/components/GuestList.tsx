@@ -16,7 +16,7 @@ import Icon from "../../../components/Icon";
 import Skeleton from "../../../components/Skeleton";
 import DatePicker from "../../../components/DatePicker";
 import OperationsLayout from "../../../components/OperationsLayout";
-import { useRouteLoadingTask } from "../../../components/RouteTransitionProvider";
+import { useSectionLoadingTask } from "../../../components/RouteTransitionProvider";
 import VenueSelector, {
   useVenueSelector,
 } from "../../../components/VenueSelector";
@@ -26,8 +26,7 @@ import {
   updateGuestStatus,
   deleteGuest,
 } from "../../../lib/api/guests";
-import { fetchUsersByVenue } from "../../../lib/api/users";
-import { fetchExternalLinksByDate } from "../../../lib/api/external-links";
+import { fetchGuestOperationsSnapshot } from "../../../lib/api/guest-snapshots";
 import type { Guest, UserDirectoryEntry, ExternalDJLink } from "../../../lib/api/types";
 import { useLocale, useTranslations } from "next-intl";
 
@@ -100,7 +99,7 @@ export default function GuestList({
 
   const hasCurrentScopeData = loadedScopeKey === requestScopeKey;
   const isCurrentScopeFetching = isFetching || !hasCurrentScopeData;
-  useRouteLoadingTask(isCurrentScopeFetching);
+  useSectionLoadingTask(isCurrentScopeFetching);
   const displayData = !hasCurrentScopeData
     ? EMPTY_DISPLAY_DATA
     : isFetching && displayCacheRef.current.scopeKey === requestScopeKey
@@ -125,18 +124,22 @@ export default function GuestList({
     setIsFetching(true);
     setFeedback(null);
     try {
-      const [guestRes, userRes, linkRes] = await Promise.all([
-        fetchGuestsByDate(selectedDate, venueId),
-        fetchUsersByVenue(venueId),
-        fetchExternalLinksByDate(venueId, selectedDate),
-      ]);
+      const { data, error } = await fetchGuestOperationsSnapshot(
+        selectedDate,
+        venueId,
+      );
       if (!isLatestRequest()) return;
-      if (guestRes.error || userRes.error || linkRes.error) {
-        setFeedback(doorT("partialLoadFailed"));
+      if (!data) {
+        setGuests([]);
+        setUsers([]);
+        setExternalLinks([]);
+        setFeedback(doorT("loadFailed"));
+      } else {
+        if (error) setFeedback(doorT("partialLoadFailed"));
+        setGuests(data.guests);
+        setUsers(data.users);
+        setExternalLinks(data.externalLinks);
       }
-      setGuests(guestRes.data ?? []);
-      setUsers(userRes.data ?? []);
-      setExternalLinks(linkRes.data ?? []);
       setLoadedScopeKey(requestScopeKey);
     } catch (err) {
       if (!isLatestRequest()) return;
@@ -318,7 +321,7 @@ export default function GuestList({
                   id="admin-guest-user-filter"
                   value={selectedDJ === "all" ? "" : selectedDJ}
                   onChange={(e) => setSelectedDJ(e.target.value || "all")}
-                  className="w-full appearance-none bg-surface-raised border border-border-default px-4 py-4 pr-10 text-text-heading text-sm font-medium focus:outline-none focus:border-border-focus min-h-[52px]"
+                  className="w-full appearance-none bg-surface-raised border border-border-strong px-4 py-4 pr-10 text-text-heading text-sm font-medium focus:outline-none focus:border-border-focus min-h-[52px]"
                 >
                   <option value="">{t("selectUser")}</option>
                   {filteredUsers.map((u) => (

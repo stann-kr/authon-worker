@@ -1,16 +1,14 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { getUser, type User } from "../../../lib/auth";
 import { createUserViaEdge } from "../../../lib/api/users";
-import { fetchVenues } from "../../../lib/api/venues";
-import type { Venue } from "../../../lib/api/types";
 import PasswordInput from "../../../components/PasswordInput";
 import Alert from "../../../components/Alert";
 import Icon from "../../../components/Icon";
 import { getPasswordPolicyErrorCode } from "../../../lib/auth/password-policy";
 import RoleLabel from "../../../components/RoleLabel";
 import { useTranslations } from "next-intl";
+import { useVenueSelector } from "../../../components/VenueSelector";
 
 export default function InviteUser() {
   const t = useTranslations("UserAdmin");
@@ -32,25 +30,17 @@ export default function InviteUser() {
   const [success, setSuccess] = useState("");
   const [tempPassword, setTempPassword] = useState("");
   const [showTempPassword, setShowTempPassword] = useState(false);
-  const [venues, setVenues] = useState<Venue[]>([]);
-  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const { venues, user: currentUser } = useVenueSelector();
 
   useEffect(() => {
-    const user = getUser();
-    setCurrentUser(user);
-
     // Set default venue_id from current user
-    if (user?.venue_id) {
-      setFormData((prev) => ({ ...prev, venue_id: user.venue_id as string }));
+    if (currentUser?.venue_id) {
+      setFormData((prev) => ({
+        ...prev,
+        venue_id: currentUser.venue_id as string,
+      }));
     }
-
-    // Super admin can choose venue
-    if (user?.role === "super_admin") {
-      fetchVenues().then(({ data }) => {
-        if (data) setVenues(data);
-      });
-    }
-  }, []);
+  }, [currentUser?.venue_id]);
 
   const isSuperAdmin = currentUser?.role === "super_admin";
 
@@ -213,7 +203,7 @@ export default function InviteUser() {
                   onChange={(e) =>
                     setFormData({ ...formData, venue_id: e.target.value })
                   }
-                  className="w-full appearance-none bg-canvas border border-border-default px-4 py-3 pr-10 text-text-heading text-sm focus:outline-none focus:border-border-focus"
+                  className="w-full appearance-none bg-canvas border border-border-strong px-4 py-3 pr-10 text-text-heading text-sm focus:outline-none focus:border-border-focus"
                   required
                 >
                   <option value="">{t("selectVenue")}</option>
@@ -239,7 +229,7 @@ export default function InviteUser() {
               onChange={(e) =>
                 setFormData({ ...formData, email: e.target.value })
               }
-              className="w-full bg-canvas border border-border-default px-4 py-3 text-text-heading text-sm focus:outline-none focus:border-border-focus"
+              className="w-full bg-canvas border border-border-strong px-4 py-3 text-text-heading text-sm focus:outline-none focus:border-border-focus"
               placeholder="user@example.com"
               required
             />
@@ -256,7 +246,7 @@ export default function InviteUser() {
               onChange={(e) =>
                 setFormData({ ...formData, name: e.target.value })
               }
-              className="w-full bg-canvas border border-border-default px-4 py-3 text-text-heading text-sm focus:outline-none focus:border-border-focus"
+              className="w-full bg-canvas border border-border-strong px-4 py-3 text-text-heading text-sm focus:outline-none focus:border-border-focus"
               placeholder={t("namePlaceholder")}
               required
             />
@@ -363,7 +353,7 @@ export default function InviteUser() {
                   const val = e.target.value.replace(/[^0-9]/g, "");
                   setFormData({ ...formData, guest_limit: val });
                 }}
-                className="w-full bg-canvas border border-border-default px-4 py-3 text-text-heading text-sm focus:outline-none focus:border-border-focus"
+                className="w-full bg-canvas border border-border-strong px-4 py-3 text-text-heading text-sm focus:outline-none focus:border-border-focus"
                 placeholder={t("guestLimitPlaceholder")}
               />
             </div>

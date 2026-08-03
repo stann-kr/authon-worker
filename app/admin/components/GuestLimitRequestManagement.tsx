@@ -14,7 +14,7 @@ import {
 import type { GuestLimitRequestView } from "@/lib/api/types";
 import { useLatestRequestGuard } from "@/lib/hooks";
 import { useTranslations } from "next-intl";
-import { useRouteLoadingTask } from "@/components/RouteTransitionProvider";
+import { useSectionLoadingTask } from "@/components/RouteTransitionProvider";
 
 const EMPTY_REQUESTS: GuestLimitRequestView[] = [];
 
@@ -45,7 +45,7 @@ export default function GuestLimitRequestManagement() {
 
   const scopedRequests = loadedVenueId === venueId ? requests : EMPTY_REQUESTS;
   const isCurrentVenueLoading = isLoading || loadedVenueId !== venueId;
-  useRouteLoadingTask(isCurrentVenueLoading);
+  useSectionLoadingTask(isCurrentVenueLoading);
 
   const loadRequests = useCallback(async () => {
     const requestedVenueId = venueId;
@@ -218,7 +218,7 @@ export default function GuestLimitRequestManagement() {
 
           {decided.length > 0 && (
             <details className="border-t border-border-default pt-4">
-            <summary className="cursor-pointer text-sm font-medium text-text-heading">
+            <summary className="flex min-h-11 cursor-pointer items-center text-sm font-medium text-text-heading">
               {t("history", { count: decided.length })}
             </summary>
             <div className="mt-3 divide-y divide-border-subtle border border-border-default bg-canvas">

@@ -4,6 +4,7 @@ import "./globals.css";
 import DesignSystemProvider from "@/components/DesignSystemProvider";
 import VenueBrandProvider from "@/components/VenueBrandProvider";
 import { RouteTransitionProvider } from "@/components/RouteTransitionProvider";
+import { VenueDataProvider } from "@/components/VenueSelector";
 import { getRequestTenantContext } from "@/lib/tenant/server";
 import { NextIntlClientProvider } from "next-intl";
 import { getLocale, getMessages, getTranslations } from "next-intl/server";
@@ -56,12 +57,14 @@ export default async function RootLayout({
           <VenueBrandProvider tenant={tenant}>
             <DesignSystemProvider>
               <RouteTransitionProvider>
-                <a href="#main-content" className="skip-link">
-                  {t("skipToContent")}
-                </a>
-                <div id="main-content" tabIndex={-1}>
-                  {children}
-                </div>
+                <VenueDataProvider>
+                  <a href="#main-content" className="skip-link">
+                    {t("skipToContent")}
+                  </a>
+                  <div id="main-content" tabIndex={-1}>
+                    {children}
+                  </div>
+                </VenueDataProvider>
               </RouteTransitionProvider>
             </DesignSystemProvider>
           </VenueBrandProvider>

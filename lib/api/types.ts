@@ -123,3 +123,16 @@ export interface ExternalDJLink {
   guestUrl?: string | null;
   localeMode: "auto" | "en" | "ko";
 }
+
+export interface GuestOperationsSnapshot {
+  guests: Guest[];
+  users: UserDirectoryEntry[];
+  externalLinks: ExternalDJLink[];
+  failedSections: Array<"guests" | "users" | "externalLinks">;
+}
+
+export interface GuestWorkspaceSnapshot {
+  guests: Guest[];
+  quota: GuestQuota | null;
+  failedSections: Array<"guests" | "quota">;
+}
