@@ -16,6 +16,11 @@ import Skeleton from "../../../components/Skeleton";
 import OperationsLayout from "../../../components/OperationsLayout";
 import { getVenueTypeColor } from "../../../lib/colors";
 import { useTranslations } from "next-intl";
+import {
+  DEFAULT_CLOSING_TIME,
+  DEFAULT_OPENING_TIME,
+  DEFAULT_VENUE_TIMEZONE,
+} from "../../../lib/date";
 
 const VENUE_TYPES = [
   { value: "club", label: "CLUB" },
@@ -23,6 +28,20 @@ const VENUE_TYPES = [
   { value: "lounge", label: "LOUNGE" },
   { value: "festival", label: "FESTIVAL" },
   { value: "private", label: "PRIVATE" },
+] as const;
+
+const TIMEZONE_OPTIONS = [
+  "Asia/Seoul",
+  "Asia/Tokyo",
+  "Asia/Singapore",
+  "Asia/Bangkok",
+  "Europe/London",
+  "Europe/Berlin",
+  "America/New_York",
+  "America/Chicago",
+  "America/Denver",
+  "America/Los_Angeles",
+  "Australia/Sydney",
 ] as const;
 
 export default function VenueManagement() {
@@ -47,6 +66,9 @@ export default function VenueManagement() {
     brandTagline: "",
     primaryDomain: "",
     defaultLocale: "en" as NonNullable<Venue["defaultLocale"]>,
+    timezone: DEFAULT_VENUE_TIMEZONE,
+    openingTime: DEFAULT_OPENING_TIME,
+    closingTime: DEFAULT_CLOSING_TIME,
   });
   const [formError, setFormError] = useState("");
   const [formSuccess, setFormSuccess] = useState("");
@@ -90,11 +112,20 @@ export default function VenueManagement() {
       brandTagline: formData.brandTagline.trim() || undefined,
       primaryDomain: formData.primaryDomain.trim() || undefined,
       defaultLocale: formData.defaultLocale,
+      timezone: formData.timezone.trim(),
+      openingTime: formData.openingTime,
+      closingTime: formData.closingTime,
     });
 
     if (error) {
       console.error("Failed to create venue:", error);
-      setFormError(t("createFailed"));
+      setFormError(
+        error === "INVALID_TIMEZONE"
+          ? t("invalidTimezone")
+          : error === "INVALID_OPERATING_HOURS"
+            ? t("invalidOperatingHours")
+            : t("createFailed"),
+      );
     } else if (data) {
       setFormSuccess(t("created", { name: data.name }));
       setFormData({
@@ -106,6 +137,9 @@ export default function VenueManagement() {
         brandTagline: "",
         primaryDomain: "",
         defaultLocale: "en",
+        timezone: DEFAULT_VENUE_TIMEZONE,
+        openingTime: DEFAULT_OPENING_TIME,
+        closingTime: DEFAULT_CLOSING_TIME,
       });
       loadVenues();
     }
@@ -283,6 +317,67 @@ export default function VenueManagement() {
                 </div>
 
                 <div>
+                  <label htmlFor="venue-create-timezone" className="app-label">
+                    {t("timezone")}
+                  </label>
+                  <input
+                    id="venue-create-timezone"
+                    type="text"
+                    list="venue-timezones"
+                    value={formData.timezone}
+                    onChange={(event) =>
+                      setFormData({ ...formData, timezone: event.target.value })
+                    }
+                    className="app-field"
+                    placeholder="Asia/Seoul"
+                    required
+                  />
+                  <datalist id="venue-timezones">
+                    {TIMEZONE_OPTIONS.map((timezone) => (
+                      <option key={timezone} value={timezone} />
+                    ))}
+                  </datalist>
+                  <p className="app-helper">{t("timezoneHelp")}</p>
+                </div>
+
+                <fieldset>
+                  <legend className="app-label">{t("operatingHours")}</legend>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div>
+                      <label htmlFor="venue-create-opening-time" className="app-label">
+                        {t("openingTime")}
+                      </label>
+                      <input
+                        id="venue-create-opening-time"
+                        type="time"
+                        value={formData.openingTime}
+                        onChange={(event) =>
+                          setFormData({ ...formData, openingTime: event.target.value })
+                        }
+                        className="app-field"
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label htmlFor="venue-create-closing-time" className="app-label">
+                        {t("closingTime")}
+                      </label>
+                      <input
+                        id="venue-create-closing-time"
+                        type="time"
+                        value={formData.closingTime}
+                        onChange={(event) =>
+                          setFormData({ ...formData, closingTime: event.target.value })
+                        }
+                        className="app-field"
+                        required
+                      />
+                    </div>
+                  </div>
+                  <p className="app-helper">{t("operatingHoursHelp")}</p>
+                </fieldset>
+
+                <div>
                   <label htmlFor="venue-create-description" className="app-label">
                     {t("description")}{" "}
                     <span className="text-text-dim">({t("optional")})</span>
@@ -415,7 +510,18 @@ export default function VenueManagement() {
                       onToggleActive={handleToggleActive}
                       onSave={async (id, updates) => {
                         const { error } = await updateVenue(id, updates);
-                        if (!error) loadVenues();
+                        if (!error) {
+                          setListError("");
+                          loadVenues();
+                        } else {
+                          setListError(
+                            error === "INVALID_TIMEZONE"
+                              ? t("invalidTimezone")
+                              : error === "INVALID_OPERATING_HOURS"
+                                ? t("invalidOperatingHours")
+                                : t("updateFailed"),
+                          );
+                        }
                         return error;
                       }}
                     />
@@ -452,6 +558,9 @@ function VenueCard({
       | "brandTagline"
       | "primaryDomain"
       | "defaultLocale"
+      | "timezone"
+      | "openingTime"
+      | "closingTime"
     >>,
   ) => Promise<string | null>;
 }) {
@@ -474,6 +583,9 @@ function VenueCard({
     brandTagline: venue.brandTagline || "",
     primaryDomain: venue.primaryDomain || "",
     defaultLocale: venue.defaultLocale || "en",
+    timezone: venue.timezone,
+    openingTime: venue.openingTime,
+    closingTime: venue.closingTime,
   });
 
   const handleSave = async () => {
@@ -486,6 +598,9 @@ function VenueCard({
       brandTagline: editData.brandTagline,
       primaryDomain: editData.primaryDomain,
       defaultLocale: editData.defaultLocale,
+      timezone: editData.timezone,
+      openingTime: editData.openingTime,
+      closingTime: editData.closingTime,
     });
     if (!error) setIsEditing(false);
   };
@@ -559,6 +674,13 @@ function VenueCard({
                 {venueTypeLabels[venue.type]}
               </p>
             </div>
+          </div>
+          <div className="mb-3 border border-border-subtle bg-canvas p-3">
+            <p className="app-label">{t("localOperations")}</p>
+            <p className="font-mono text-sm text-text-heading">{venue.timezone}</p>
+            <p className="mt-1 font-mono text-xs text-text-muted">
+              {venue.openingTime}–{venue.closingTime}
+            </p>
           </div>
           <div className="grid grid-cols-2 gap-2">
             <button
@@ -654,6 +776,65 @@ function VenueCard({
             />
           </div>
 
+          <div>
+            <label htmlFor={`venue-timezone-${venue.id}`} className="app-label">
+              {t("timezone")}
+            </label>
+            <input
+              id={`venue-timezone-${venue.id}`}
+              type="text"
+              list={`venue-timezones-${venue.id}`}
+              value={editData.timezone}
+              onChange={(event) =>
+                setEditData({ ...editData, timezone: event.target.value })
+              }
+              className="app-field"
+              required
+            />
+            <datalist id={`venue-timezones-${venue.id}`}>
+              {TIMEZONE_OPTIONS.map((timezone) => (
+                <option key={timezone} value={timezone} />
+              ))}
+            </datalist>
+          </div>
+
+          <fieldset>
+            <legend className="app-label">{t("operatingHours")}</legend>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div>
+                <label htmlFor={`venue-opening-time-${venue.id}`} className="app-label">
+                  {t("openingTime")}
+                </label>
+                <input
+                  id={`venue-opening-time-${venue.id}`}
+                  type="time"
+                  value={editData.openingTime}
+                  onChange={(event) =>
+                    setEditData({ ...editData, openingTime: event.target.value })
+                  }
+                  className="app-field"
+                  required
+                />
+              </div>
+              <div>
+                <label htmlFor={`venue-closing-time-${venue.id}`} className="app-label">
+                  {t("closingTime")}
+                </label>
+                <input
+                  id={`venue-closing-time-${venue.id}`}
+                  type="time"
+                  value={editData.closingTime}
+                  onChange={(event) =>
+                    setEditData({ ...editData, closingTime: event.target.value })
+                  }
+                  className="app-field"
+                  required
+                />
+              </div>
+            </div>
+            <p className="app-helper">{t("operatingHoursHelp")}</p>
+          </fieldset>
+
           <div className="grid gap-3 sm:grid-cols-2">
             <div>
               <label htmlFor={`venue-brand-name-${venue.id}`} className="app-label">
@@ -738,6 +919,9 @@ function VenueCard({
                   brandTagline: venue.brandTagline || "",
                   primaryDomain: venue.primaryDomain || "",
                   defaultLocale: venue.defaultLocale || "en",
+                  timezone: venue.timezone,
+                  openingTime: venue.openingTime,
+                  closingTime: venue.closingTime,
                 });
               }}
               className="bg-surface-active hover:bg-border-strong text-text-heading text-xs font-medium py-2 sm:py-3 transition-colors"

@@ -40,6 +40,9 @@ export default function DoorPage() {
 function DoorPageContent() {
   const t = useTranslations("Door");
   const locale = useLocale() as "en" | "ko";
+  const { venueId, venues, selectedVenueId, setSelectedVenueId, isSuperAdmin, currentVenue } =
+    useVenueSelector();
+  const businessDate = getBusinessDate(currentVenue ?? {});
   const [selectedDate, setSelectedDate] = useLocalStorage(
     "door:selectedDate",
     getBusinessDate(),
@@ -80,8 +83,9 @@ function DoorPageContent() {
     ? displayCacheRef.current
     : { guests, users, externalLinks };
 
-  const { venueId, venues, selectedVenueId, setSelectedVenueId, isSuperAdmin } =
-    useVenueSelector();
+  useEffect(() => {
+    if (currentVenue) setSelectedDate(businessDate);
+  }, [businessDate, currentVenue, setSelectedDate]);
 
   const loadData = useCallback(async () => {
     if (!venueId) {
@@ -230,6 +234,7 @@ function DoorPageContent() {
                   <DatePicker
                     value={selectedDate}
                     onChange={setSelectedDate}
+                    businessDate={businessDate}
                   />
                   <div className="context-filter-grid">
                     {isSuperAdmin && (

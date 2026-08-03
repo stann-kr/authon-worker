@@ -25,25 +25,25 @@ export function useVenueSelector() {
   );
 
   useEffect(() => {
-    if (isSuperAdmin) {
-      fetchVenues().then(({ data }) => {
-        if (data) {
-          setVenues(data);
-          if (data.length > 0) {
-            setSelectedVenueId((prev) => prev || data[0].id);
-          }
+    fetchVenues().then(({ data }) => {
+      if (data) {
+        setVenues(data);
+        if (isSuperAdmin && data.length > 0) {
+          setSelectedVenueId((prev) => prev || data[0].id);
         }
-      });
-    }
+      }
+    });
   }, [isSuperAdmin, setSelectedVenueId]);
 
   const venueId = isSuperAdmin ? selectedVenueId : (user?.venue_id ?? "");
+  const currentVenue = venues.find((venue) => venue.id === venueId) ?? null;
 
   return {
     venueId,
     venues,
     selectedVenueId,
     setSelectedVenueId,
+    currentVenue,
     isSuperAdmin,
     user,
   };

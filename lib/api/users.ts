@@ -186,7 +186,13 @@ export async function fetchUsersByVenue(
       .from(users)
       .$dynamic();
 
-    if (effectiveVenueId) query = query.where(eq(users.venueId, effectiveVenueId));
+    if (actor.role === "super_admin") {
+      if (effectiveVenueId) query = query.where(eq(users.venueId, effectiveVenueId));
+    } else {
+      query = query.where(
+        and(eq(users.venueId, effectiveVenueId!), ne(users.role, "super_admin")),
+      );
+    }
 
     const result = await query.orderBy(asc(users.name));
     return {
@@ -217,7 +223,13 @@ export async function fetchManagedUsersByVenue(
     }
 
     let query = db.select(managedUserFields).from(users).$dynamic();
-    if (effectiveVenueId) query = query.where(eq(users.venueId, effectiveVenueId));
+    if (actor.role === "super_admin") {
+      if (effectiveVenueId) query = query.where(eq(users.venueId, effectiveVenueId));
+    } else {
+      query = query.where(
+        and(eq(users.venueId, effectiveVenueId!), ne(users.role, "super_admin")),
+      );
+    }
 
     const result = await query.orderBy(asc(users.name));
     return { data: result.map(toUser), error: null };
@@ -231,17 +243,12 @@ export async function fetchUserAuditEvents(
   venueId?: string | null,
 ): Promise<ApiResponse<UserAuditEvent[]>> {
   try {
-    const actor = await requireRole(["super_admin", "venue_admin"]);
+    await requireRole(["super_admin"]);
     const db = getDb();
-    const effectiveVenueId = actor.role === "super_admin" ? venueId : actor.venueId;
-
-    if (actor.role !== "super_admin" && !effectiveVenueId) {
-      throw new UserActionError("FORBIDDEN");
-    }
 
     let query = db.select().from(userAuditEvents).$dynamic();
-    if (effectiveVenueId) {
-      query = query.where(eq(userAuditEvents.venueId, effectiveVenueId));
+    if (venueId) {
+      query = query.where(eq(userAuditEvents.venueId, venueId));
     }
 
     const result = await query.orderBy(desc(userAuditEvents.createdAt)).limit(50);

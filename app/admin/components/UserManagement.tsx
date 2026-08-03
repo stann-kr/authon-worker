@@ -84,7 +84,7 @@ export default function UserManagement() {
         : effectiveVenueId;
       const [userResult, auditResult] = await Promise.all([
         fetchManagedUsersByVenue(requestedVenueId),
-        fetchUserAuditEvents(requestedVenueId),
+        isSuperAdmin ? fetchUserAuditEvents(requestedVenueId) : Promise.resolve(null),
       ]);
       if (userResult.error) {
         console.error("Failed to load users:", userResult.error);
@@ -92,10 +92,12 @@ export default function UserManagement() {
       } else if (userResult.data) {
         setUsers(userResult.data);
       }
-      if (auditResult.error) {
+      if (auditResult?.error) {
         console.error("Failed to load user activity:", auditResult.error);
-      } else if (auditResult.data) {
+      } else if (auditResult?.data) {
         setAuditEvents(auditResult.data);
+      } else if (!isSuperAdmin) {
+        setAuditEvents([]);
       }
     } catch (error) {
       console.error("Failed to load users:", error);
@@ -513,7 +515,9 @@ export default function UserManagement() {
                     className="app-field"
                   >
                     <option value="all">{t("allRoles")}</option>
-                    <option value="super_admin">{t("roleSuperAdmin")}</option>
+                    {isSuperAdmin && (
+                      <option value="super_admin">{t("roleSuperAdmin")}</option>
+                    )}
                     <option value="venue_admin">{t("roleVenueAdmin")}</option>
                     <option value="door_staff">{t("roleDoorStaff")}</option>
                     <option value="staff">{t("roleStaff")}</option>
@@ -568,6 +572,7 @@ export default function UserManagement() {
                 </div>
               )}
 
+              {isSuperAdmin && (
               <div className="mt-6 border-t border-border-default pt-5">
                 <div className="mb-3 flex items-center justify-between gap-3">
                   <div>
@@ -601,6 +606,7 @@ export default function UserManagement() {
                   </div>
                 )}
               </div>
+              )}
             </div>
           </div>
         )}

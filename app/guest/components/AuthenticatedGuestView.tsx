@@ -71,11 +71,17 @@ export default function AuthenticatedGuestView({ user }: AuthenticatedGuestViewP
     selectedVenueId,
     setSelectedVenueId,
     isSuperAdmin,
+    currentVenue,
   } = useVenueSelector();
   
   const effectiveVenueId = isSuperAdmin
     ? selectedVenueId
     : (user?.venue_id ?? "");
+  const businessDate = getBusinessDate(currentVenue ?? {});
+
+  useEffect(() => {
+    if (currentVenue) setSelectedDate(businessDate);
+  }, [businessDate, currentVenue]);
 
   useEffect(() => {
     if (user?.account_kind !== "shared") return;
@@ -281,6 +287,7 @@ export default function AuthenticatedGuestView({ user }: AuthenticatedGuestViewP
                   <DatePicker
                     value={selectedDate}
                     onChange={setSelectedDate}
+                    businessDate={businessDate}
                   />
                   {isSuperAdmin && (
                     <div className="context-filter-grid">

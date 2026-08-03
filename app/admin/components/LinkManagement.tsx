@@ -37,11 +37,13 @@ import {
 interface LinkManagementProps {
   selectedDate: string;
   onDateChange: (date: string) => void;
+  businessDate: string;
 }
 
 export default function LinkManagement({
   selectedDate,
   onDateChange,
+  businessDate,
 }: LinkManagementProps) {
   const t = useTranslations("LinkAdmin");
   const commonT = useTranslations("Common");
@@ -346,7 +348,11 @@ export default function LinkManagement({
           <>
         {(activeTab === "create" || manageScope === "date") && (
           <div className="context-bar">
-            <DatePicker value={selectedDate} onChange={onDateChange} />
+            <DatePicker
+              value={selectedDate}
+              onChange={onDateChange}
+              businessDate={businessDate}
+            />
           </div>
         )}
         {/* Venue selector for super_admin */}

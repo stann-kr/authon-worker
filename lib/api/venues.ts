@@ -7,6 +7,13 @@ import { requireRole } from "../auth/server";
 import { getDb } from "../db/client";
 import { isPlatformHostname, normalizeHostname } from "../tenant/host";
 import { DEFAULT_LOCALE, isLocale, type Locale } from "@/i18n/config";
+import {
+  DEFAULT_CLOSING_TIME,
+  DEFAULT_OPENING_TIME,
+  DEFAULT_VENUE_TIMEZONE,
+  isValidTimeValue,
+  isValidTimeZone,
+} from "@/lib/date";
 
 type Db = ReturnType<typeof getDb>;
 type VenueRow = typeof venues.$inferSelect;
@@ -25,6 +32,28 @@ function parsePrimaryDomain(value: string | null | undefined): string | null {
 
 function isHostnameError(error: unknown): boolean {
   return error instanceof Error && error.message.toLowerCase().includes("hostname");
+}
+
+function assertVenueTimeSettings(settings: {
+  timezone: string;
+  openingTime: string;
+  closingTime: string;
+}): void {
+  if (!isValidTimeZone(settings.timezone)) throw new Error("INVALID_TIMEZONE");
+  if (
+    !isValidTimeValue(settings.openingTime) ||
+    !isValidTimeValue(settings.closingTime) ||
+    settings.openingTime === settings.closingTime
+  ) {
+    throw new Error("INVALID_OPERATING_HOURS");
+  }
+}
+
+function isVenueTimeError(error: unknown): error is Error {
+  return error instanceof Error && (
+    error.message === "INVALID_TIMEZONE" ||
+    error.message === "INVALID_OPERATING_HOURS"
+  );
 }
 
 function toVenue(
@@ -166,11 +195,20 @@ export async function createVenue(venue: {
   brandFooter?: string;
   primaryDomain?: string;
   defaultLocale?: Locale;
+  timezone?: string;
+  openingTime?: string;
+  closingTime?: string;
 }): Promise<ApiResponse<Venue>> {
   try {
     await requireRole(["super_admin"]);
     const db = getDb();
     const id = crypto.randomUUID();
+    const timeSettings = {
+      timezone: venue.timezone?.trim() || DEFAULT_VENUE_TIMEZONE,
+      openingTime: venue.openingTime || DEFAULT_OPENING_TIME,
+      closingTime: venue.closingTime || DEFAULT_CLOSING_TIME,
+    };
+    assertVenueTimeSettings(timeSettings);
     const primaryDomain = parsePrimaryDomain(venue.primaryDomain);
     if (primaryDomain) {
       const assigned = await db
@@ -190,6 +228,7 @@ export async function createVenue(venue: {
       brandTagline: venue.brandTagline?.trim() || null,
       brandDescription: venue.brandDescription?.trim() || null,
       brandFooter: venue.brandFooter?.trim() || null,
+      ...timeSettings,
       active: true,
     });
     if (primaryDomain) {
@@ -205,7 +244,9 @@ export async function createVenue(venue: {
     console.error("Failed to create venue:", error);
     const message = isHostnameError(error)
       ? "Enter a valid, unused venue domain."
-      : "Unable to create venue right now.";
+      : isVenueTimeError(error)
+        ? error.message
+        : "Unable to create venue right now.";
     return { data: null, error: message };
   }
 }
@@ -223,12 +264,23 @@ export async function updateVenue(
     | "brandFooter"
     | "primaryDomain"
     | "defaultLocale"
+    | "timezone"
+    | "openingTime"
+    | "closingTime"
     | "active"
   >>,
 ): Promise<ApiResponse<Venue>> {
   try {
     await requireRole(["super_admin"]);
     const db = getDb();
+    const currentVenue = await loadVenue(db, id);
+    if (!currentVenue) throw new Error("Venue not found");
+    const timeSettings = {
+      timezone: updates.timezone?.trim() || currentVenue.timezone,
+      openingTime: updates.openingTime || currentVenue.openingTime,
+      closingTime: updates.closingTime || currentVenue.closingTime,
+    };
+    assertVenueTimeSettings(timeSettings);
     const primaryDomain = updates.primaryDomain !== undefined
       ? parsePrimaryDomain(updates.primaryDomain)
       : undefined;
@@ -251,6 +303,9 @@ export async function updateVenue(
     if (updates.brandTagline !== undefined) dbUpdates.brandTagline = updates.brandTagline?.trim() || null;
     if (updates.brandDescription !== undefined) dbUpdates.brandDescription = updates.brandDescription?.trim() || null;
     if (updates.brandFooter !== undefined) dbUpdates.brandFooter = updates.brandFooter?.trim() || null;
+    if (updates.timezone !== undefined) dbUpdates.timezone = timeSettings.timezone;
+    if (updates.openingTime !== undefined) dbUpdates.openingTime = timeSettings.openingTime;
+    if (updates.closingTime !== undefined) dbUpdates.closingTime = timeSettings.closingTime;
     if (updates.active !== undefined) dbUpdates.active = updates.active;
 
     if (Object.keys(dbUpdates).length > 0) {
@@ -280,7 +335,9 @@ export async function updateVenue(
     console.error("Failed to update venue:", error);
     const message = isHostnameError(error)
       ? "Enter a valid, unused venue domain."
-      : "Unable to update venue right now.";
+      : isVenueTimeError(error)
+        ? error.message
+        : "Unable to update venue right now.";
     return { data: null, error: message };
   }
 }

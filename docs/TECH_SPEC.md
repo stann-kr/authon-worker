@@ -50,7 +50,7 @@ Client
 
 | 도메인 | 역할 |
 |---|---|
-| Venue | 베뉴 단위 운영 경계 |
+| Venue | 베뉴 단위 운영 경계와 현지 시간대·운영시간·영업일 기준 |
 | Venue Domain | 요청 host와 베뉴 브랜드·대표 URL의 연결 |
 | User | 운영자, 스태프, DJ 계정과 role, 개인·공용 계정 유형, scope |
 | Guest | 날짜별 게스트 등록, 공용 계정 실제 입력자와 상태 관리 |
@@ -99,6 +99,7 @@ Client
 - 설정 성공 시 계정 상태와 session version을 원자적으로 변경하고 기존 reset token을 모두 사용 처리한다.
 - 설정 요청은 IP와 이메일 조합으로 rate limit하며, 완료된 설정 코드와 경로는 재사용할 수 없다.
 - 운영 화면의 사용자 디렉터리는 식별과 표시를 위한 최소 필드만 반환하고, 관리자 목록도 인증 내부 필드를 제외한 전용 DTO를 사용한다.
+- 베뉴 관리자는 사용자 디렉터리와 관리자 목록에서 `super_admin` 계정을 조회할 수 없으며, 계정 관리 감사 기록은 `super_admin`만 조회한다.
 - 사용자 삭제는 참조 무결성과 운영 감사 기록을 보존하는 soft delete이며, 비활성 계정에서만 실행하고 개인정보·인증 정보를 제거한다.
 - 자기 계정의 Role·상태·삭제·관리자 재설정과 베뉴 관리자의 권한 상승·베뉴 간 변경은 서버에서 거부한다.
 
@@ -106,7 +107,7 @@ Client
 
 | 테이블 | 설명 |
 |---|---|
-| `venues` | 베뉴 정보와 활성 상태 |
+| `venues` | 베뉴 정보, 활성 상태, IANA 시간대와 오픈·클로징 시각 |
 | `venue_domains` | host, platform/venue scope, 베뉴별 대표 도메인과 기본 언어 |
 | `users` | 계정, role, 개인·공용 유형, Door capability, guest limit, venue scope, session/setup 상태, 최근 로그인, 삭제 처리와 선호 언어 |
 | `user_audit_events` | 사용자 계정 관리 작업의 actor, 대상, 작업 종류와 시각 |
@@ -124,6 +125,7 @@ Client
 | 권한/role | route guard, Server Action guard, 계정 유형 capability, venue scoping, session 무효화, 자기 계정·권한 상승 방지 |
 | 도메인/브랜드 | host resolver, venue domain mapping, metadata, email/link canonical URL |
 | 게스트 등록 | external link flow, 공용 계정 입력자, 기본·승인 추가 한도의 원자적 적용, date/status 계산 |
+| 베뉴 시간 기준 | IANA timezone 검증, 자정 통과 운영시간, Guest·Door·Admin 기본 영업일 계산 |
 | D1 schema | Drizzle schema, migration files, affected queries |
 | 배포 runtime | OpenNext compatibility, Worker build result |
 | 이메일 | reset-password route, SES sender configuration, public error message |

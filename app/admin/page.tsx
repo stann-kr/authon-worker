@@ -15,6 +15,7 @@ import { getBusinessDate } from "../../lib/date";
 import { getUser } from "../../lib/auth";
 import Icon, { type IconName } from "../../components/Icon";
 import { useTranslations } from "next-intl";
+import { useVenueSelector } from "../../components/VenueSelector";
 
 type AdminTab = "guests" | "links" | "users" | "venues";
 type GuestAdminTab = "list" | "requests";
@@ -37,6 +38,8 @@ export default function AdminPage() {
 function AdminPageContent() {
   const t = useTranslations("AdminNav");
   const router = useRouter();
+  const { currentVenue } = useVenueSelector();
+  const businessDate = getBusinessDate(currentVenue ?? {});
   const [activeTab, setActiveTab] = useLocalStorage<AdminTab>(
     "admin:activeTab",
     "guests",
@@ -51,6 +54,10 @@ function AdminPageContent() {
   );
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
   const [isRoleReady, setIsRoleReady] = useState(false);
+
+  useEffect(() => {
+    if (currentVenue) setSelectedDate(businessDate);
+  }, [businessDate, currentVenue, setSelectedDate]);
 
   useEffect(() => {
     const user = getUser();
@@ -228,6 +235,7 @@ function AdminPageContent() {
                   <GuestList
                     selectedDate={selectedDate}
                     onDateChange={setSelectedDate}
+                    businessDate={businessDate}
                   />
                 ) : (
                   <GuestLimitRequestManagement />
@@ -238,6 +246,7 @@ function AdminPageContent() {
               <LinkManagement
                 selectedDate={selectedDate}
                 onDateChange={setSelectedDate}
+                businessDate={businessDate}
               />
             )}
             {activeTab === "users" && <UserManagement />}

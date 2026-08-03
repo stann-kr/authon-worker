@@ -29,11 +29,13 @@ import { useLocale, useTranslations } from "next-intl";
 interface GuestListProps {
   selectedDate: string;
   onDateChange: (date: string) => void;
+  businessDate: string;
 }
 
 export default function GuestList({
   selectedDate,
   onDateChange,
+  businessDate,
 }: GuestListProps) {
   const t = useTranslations("AdminGuest");
   const doorT = useTranslations("Door");
@@ -231,7 +233,11 @@ export default function GuestList({
       dashboard={
         <>
         <div className="context-bar">
-          <DatePicker value={selectedDate} onChange={onDateChange} />
+          <DatePicker
+            value={selectedDate}
+            onChange={onDateChange}
+            businessDate={businessDate}
+          />
         </div>
         {feedback && <Alert type="error" message={feedback} />}
         {isSuperAdmin && (

@@ -84,6 +84,10 @@ export function canManageTargetRole(
   );
 }
 
+export function canDiscoverTargetRole(actorRole: Role, targetRole: Role): boolean {
+  return actorRole === "super_admin" || targetRole !== "super_admin";
+}
+
 export function canManageTargetAccount(
   actor: { id: string; role: Role; venueId: string | null },
   target: { id: string; role: Role; venueId: string | null },

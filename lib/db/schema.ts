@@ -11,6 +11,9 @@ export const venues = sqliteTable('venues', {
   brandTagline: text('brand_tagline'),
   brandDescription: text('brand_description'),
   brandFooter: text('brand_footer'),
+  timezone: text('timezone').notNull().default('Asia/Seoul'),
+  openingTime: text('opening_time').notNull().default('22:00'),
+  closingTime: text('closing_time').notNull().default('06:00'),
   active: integer('active', { mode: 'boolean' }).notNull().default(true),
 });
 

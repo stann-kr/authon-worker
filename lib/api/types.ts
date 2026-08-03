@@ -15,6 +15,9 @@ export interface Venue {
   brandFooter?: string | null;
   primaryDomain?: string | null;
   defaultLocale?: "en" | "ko" | null;
+  timezone: string;
+  openingTime: string;
+  closingTime: string;
   active: boolean;
 }
 

@@ -15,6 +15,7 @@ import { useLocale, useTranslations } from "next-intl";
 interface DatePickerProps {
   value: string;
   onChange: (value: string) => void;
+  businessDate?: string;
   className?: string;
 }
 
@@ -36,12 +37,13 @@ function offsetDate(baseYmd: string, deltaDays: number): string {
 export default function DatePicker({
   value,
   onChange,
+  businessDate = getBusinessDate(),
   className = "",
 }: DatePickerProps) {
   const t = useTranslations("Common");
   const locale = useLocale() as "en" | "ko";
   const inputId = useId();
-  const isToday = value === getBusinessDate();
+  const isToday = value === businessDate;
 
   return (
     <div className={`operational-date-control min-w-0 ${className}`}>
@@ -92,7 +94,7 @@ export default function DatePicker({
           </button>
           <button
             type="button"
-            onClick={() => onChange(getBusinessDate())}
+            onClick={() => onChange(businessDate)}
             aria-pressed={isToday}
             aria-label={t("setToday")}
             className={`pressable min-h-11 touch-manipulation px-3 font-mono text-xs font-semibold ${
