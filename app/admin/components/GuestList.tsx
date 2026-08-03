@@ -348,9 +348,11 @@ export default function GuestList({
               {formatDateDisplay(selectedDate, locale)}
             </p>
           </div>
-          <div className="text-center mb-4">
+          <div className="mb-4 text-center" aria-busy={!hasCurrentScopeData}>
             <div className="text-text-heading font-mono text-3xl sm:text-4xl tracking-wider">
-              {pendingGuests.length + checkedGuests.length}
+              {hasCurrentScopeData
+                ? pendingGuests.length + checkedGuests.length
+                : "—"}
             </div>
             <div className="text-xs font-medium text-text-muted">
               {t("totalGuests")}
@@ -358,6 +360,7 @@ export default function GuestList({
           </div>
 
           <StatGrid
+            isLoading={!hasCurrentScopeData}
             items={[
               {
                 label: t("waiting"),

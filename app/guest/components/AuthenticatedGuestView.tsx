@@ -522,6 +522,7 @@ export default function AuthenticatedGuestView({ user }: AuthenticatedGuestViewP
                     onChange={setSearchQuery}
                   />
                   <StatGrid
+                    isLoading={!hasCurrentScopeData}
                     items={[
                       {
                         label: t("waiting"),
