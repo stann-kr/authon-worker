@@ -4,6 +4,13 @@
 
 ## 2026-08-03
 
+### Worker 자동 배포
+
+#### Changed
+
+- `main` 브랜치 push 시 Cloudflare Workers Builds가 OpenNext Worker를 빌드하고 production에 배포하도록 운영 흐름을 전환했다.
+- 로컬 배포 명령도 항상 최신 Worker 산출물을 생성한 뒤 배포하도록 보강했다.
+
 ### Admin 사용자 온보딩 상태 표시
 
 #### Added
