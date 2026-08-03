@@ -15,8 +15,10 @@ import { useTranslations } from "next-intl";
 
 interface MenuItem {
   id: string;
+  category: string;
   title: string;
   description: string;
+  action: string;
   icon: IconName;
   href: string;
   requiredAccess: import("@/lib/users/policy").AccessScope[];
@@ -33,24 +35,30 @@ export default function Home() {
   const menuItems: MenuItem[] = useMemo(() => [
     {
       id: "guest",
+      category: t("guestCategory"),
       title: t("guestTitle"),
       description: t("guestDescription"),
+      action: t("guestAction"),
       icon: "user-add",
       href: "/guest",
       requiredAccess: ["guest"],
     },
     {
       id: "door",
+      category: t("doorCategory"),
       title: t("doorTitle"),
       description: t("doorDescription"),
+      action: t("doorAction"),
       icon: "login",
       href: "/door",
       requiredAccess: ["door"],
     },
     {
       id: "admin",
+      category: t("adminCategory"),
       title: t("adminTitle"),
       description: t("adminDescription"),
+      action: t("adminAction"),
       icon: "settings",
       href: "/admin",
       requiredAccess: ["admin"],
@@ -131,6 +139,20 @@ export default function Home() {
 
   if (!user) return null;
 
+  const workspaceWidthClass =
+    accessibleMenus.length === 1
+      ? "max-w-[34rem]"
+      : accessibleMenus.length === 2
+        ? "max-w-[44rem]"
+        : "max-w-[1040px]";
+
+  const workspaceGridClass =
+    accessibleMenus.length === 1
+      ? "md:grid-cols-1"
+      : accessibleMenus.length === 2
+        ? "md:grid-cols-2"
+        : "md:grid-cols-3";
+
   return (
     <div className="flex min-h-[100dvh] flex-col bg-canvas">
       <AdminHeader />
@@ -162,11 +184,29 @@ export default function Home() {
         {accessibleMenus.length > 0 && (
           <nav
             aria-label={t("availableWorkspaces")}
-            className="mx-auto w-full border-y border-border-default"
+            className={`mx-auto w-full ${workspaceWidthClass}`}
           >
-            {accessibleMenus.map((item, index) => (
-              <WorkspaceLink key={item.id} item={item} index={index} />
-            ))}
+            <div className="mb-4 flex items-end justify-between gap-4 border-b border-border-default pb-3">
+              <div>
+                <p className="text-xs font-medium text-text-muted">
+                  {t("workspaceLabel")}
+                </p>
+                <h1 className="mt-1 text-xl font-semibold tracking-[-0.02em] text-text-heading sm:text-2xl">
+                  {t("workspaceTitle")}
+                </h1>
+              </div>
+              <p className="hidden font-mono text-xs text-text-dim sm:block">
+                {t("keyboardHint")}
+              </p>
+            </div>
+
+            <div
+              className={`grid border-l border-t border-border-default ${workspaceGridClass}`}
+            >
+              {accessibleMenus.map((item, index) => (
+                <WorkspaceLink key={item.id} item={item} index={index} />
+              ))}
+            </div>
           </nav>
         )}
       </main>
@@ -186,25 +226,43 @@ function WorkspaceLink({
   return (
     <TransitionLink
       href={item.href}
-      className="pressable group relative grid min-h-[88px] grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-4 border-b border-border-subtle px-4 py-4 last:border-b-0 hover:bg-surface-raised focus-visible:bg-surface-raised focus-visible:outline-none sm:min-h-[104px] sm:gap-5 sm:px-5 before:absolute before:inset-y-0 before:left-0 before:w-0.5 before:bg-action-primary before:opacity-0 before:transition-opacity hover:before:opacity-100 focus-visible:before:opacity-100"
+      className="pressable group relative flex min-h-[224px] flex-col border-b border-r border-border-default bg-surface hover:bg-surface-raised focus-visible:bg-surface-raised focus-visible:outline-none before:absolute before:inset-x-0 before:top-0 before:h-0.5 before:bg-action-primary before:opacity-0 before:transition-opacity hover:before:opacity-100 focus-visible:before:opacity-100 sm:min-h-[244px]"
     >
-      <Icon name={item.icon} size={22} className="text-text-muted group-hover:text-text-heading" />
-
-      <div className="min-w-0">
-        <h2 className="text-base font-semibold tracking-[-0.015em] text-text-heading sm:text-lg">
-          {item.title}
-        </h2>
-        <p className="mt-1 max-w-2xl text-sm leading-relaxed text-text-muted">
-          {item.description}
-        </p>
+      <div className="flex w-full items-center justify-between border-b border-border-subtle px-4 py-3 sm:px-5">
+        <span className="text-xs font-medium text-text-muted">
+          {item.category}
+        </span>
+        <span className="font-mono text-xs tabular-nums text-text-dim">
+          {String(index + 1).padStart(2, "0")}
+        </span>
       </div>
 
-      <span className="flex items-center gap-3 text-text-muted group-hover:text-text-heading">
-        <kbd className="hidden border border-border-default bg-canvas px-2 py-1 font-mono text-xs text-text-dim sm:inline-block">
-          {index + 1}
-        </kbd>
-        <Icon name="arrow-right" size={18} />
-      </span>
+      <div className="flex w-full flex-1 flex-col p-4 sm:p-5">
+        <div className="grid h-11 w-11 place-items-center border border-border-default bg-canvas text-text-muted group-hover:border-border-strong group-hover:text-text-heading">
+          <Icon name={item.icon} size={22} />
+        </div>
+
+        <div className="mt-5 min-w-0">
+          <h2 className="text-lg font-semibold tracking-[-0.015em] text-text-heading">
+            {item.title}
+          </h2>
+          <p className="mt-2 text-sm leading-relaxed text-text-muted">
+            {item.description}
+          </p>
+        </div>
+      </div>
+
+      <div className="flex w-full items-center justify-between border-t border-border-subtle px-4 py-3 text-xs font-medium text-text-muted sm:px-5">
+        <span className="group-hover:text-text-heading">
+          {item.action}
+        </span>
+        <span className="flex items-center gap-3 group-hover:text-text-heading">
+          <kbd className="border border-border-default bg-canvas px-2 py-1 font-mono text-xs text-text-dim">
+            {index + 1}
+          </kbd>
+          <Icon name="arrow-right" size={18} />
+        </span>
+      </div>
     </TransitionLink>
   );
 }
