@@ -5,9 +5,9 @@ import { externalDjLinks, guestLimitRequests, guests, users } from "../db/schema
 import { getDb } from "../db/client";
 import { requireAccess, type SessionUser } from "../auth/server";
 import { getVenueDeliveryContext } from "../tenant/server";
-import { isExternalLinkLocaleMode } from "@/i18n/config";
 import { canRequestGuestLimit, isAccountKind, isRole } from "@/lib/users/policy";
 import { resolveSnapshotVenueId } from "@/lib/guest-snapshot-policy";
+import { toExternalDJLink } from "@/lib/external-links/domain";
 import type {
   ApiResponse,
   ExternalDJLink,
@@ -107,15 +107,16 @@ async function loadExternalLinksByDate(
     getVenueDeliveryContext(venueId),
   ]);
 
-  return rows.map((link) => ({
-    ...link,
-    localeMode: isExternalLinkLocaleMode(link.localeMode) ? link.localeMode : "auto",
-    guestUrl: `${baseUrl}/guest?token=${encodeURIComponent(link.token)}${
+  return rows.map((link) =>
+    toExternalDJLink(
+      link,
+      `${baseUrl}/guest?token=${encodeURIComponent(link.token)}${
       link.localeMode === "en" || link.localeMode === "ko"
         ? `&lang=${link.localeMode}`
         : ""
-    }`,
-  }));
+      }`,
+    ),
+  );
 }
 
 async function loadGuestQuota(

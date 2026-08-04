@@ -86,9 +86,16 @@ export const externalDjLinks = sqliteTable('external_dj_links', {
   createdBy: text('created_by').references(() => users.id),
   localeMode: text('locale_mode').notNull().default('auto'),
   createdAt: text('created_at'),
+  deletedAt: text('deleted_at'),
+  deletedBy: text('deleted_by').references(() => users.id),
 }, (t) => [
   index('idx_external_dj_links_venue').on(t.venueId),
   index('idx_external_links_venue_created').on(t.venueId, t.createdAt),
+  index('idx_external_links_venue_deleted_created').on(
+    t.venueId,
+    t.deletedAt,
+    t.createdAt,
+  ),
 ]);
 
 export const guests = sqliteTable('guests', {
