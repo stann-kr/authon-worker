@@ -73,6 +73,34 @@ export interface Guest {
   updatedAt: string;
 }
 
+export interface BulkGuestCreateInput {
+  name: string;
+  allowDuplicate?: boolean;
+}
+
+export type BulkGuestCreateStatus =
+  | "created"
+  | "duplicate_requires_confirmation"
+  | "batch_changed"
+  | "invalid_name"
+  | "limit_reached";
+
+export type BulkGuestCreateItemResult =
+  | {
+    index: number;
+    status: "created";
+    guest: Guest;
+  }
+  | {
+    index: number;
+    status: Exclude<BulkGuestCreateStatus, "created">;
+    guest: null;
+  };
+
+export interface BulkGuestCreateResult {
+  items: BulkGuestCreateItemResult[];
+}
+
 export type GuestLimitRequestStatus = "pending" | "approved" | "rejected" | "cancelled";
 
 export interface GuestLimitRequest {
@@ -124,10 +152,16 @@ export interface ExternalDJLink {
   localeMode: "auto" | "en" | "ko";
 }
 
+/** Minimal external contributor identity for Door/Admin guest rosters. */
+export interface ExternalLinkDirectoryEntry {
+  id: string;
+  djName: string;
+}
+
 export interface GuestOperationsSnapshot {
   guests: Guest[];
   users: UserDirectoryEntry[];
-  externalLinks: ExternalDJLink[];
+  externalLinks: ExternalLinkDirectoryEntry[];
   failedSections: Array<"guests" | "users" | "externalLinks">;
 }
 

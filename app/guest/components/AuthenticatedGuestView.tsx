@@ -15,6 +15,7 @@ import Alert from "@/components/Alert";
 import VenueSelector, { useVenueSelector } from "@/components/VenueSelector";
 import DatePicker from "@/components/DatePicker";
 import Button from "@/components/Button";
+import GuestBulkEntry from "@/components/GuestBulkEntry";
 import GuestListCard from "@/components/GuestListCard";
 import GuestSearchInput from "@/components/GuestSearchInput";
 import Skeleton from "@/components/Skeleton";
@@ -23,9 +24,10 @@ import { useSectionLoadingTask } from "@/components/RouteTransitionProvider";
 import { getBusinessDate } from "@/lib/date";
 import {
   createGuest,
+  createGuests,
   deleteGuest,
 } from "@/lib/api/guests";
-import type { Guest } from "@/lib/api/types";
+import type { BulkGuestCreateInput, Guest } from "@/lib/api/types";
 import type { GuestQuota } from "@/lib/api/types";
 import {
   createGuestLimitRequest,
@@ -44,6 +46,7 @@ export default function AuthenticatedGuestView({ user }: AuthenticatedGuestViewP
   const [selectedDate, setSelectedDate] = useState<string>(getBusinessDate());
   const [guestName, setGuestName] = useState<string>("");
   const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [isBulkSubmitting, setIsBulkSubmitting] = useState<boolean>(false);
   const [isFetching, setIsFetching] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [guests, setGuests] = useState<Guest[]>([]);
@@ -121,7 +124,7 @@ export default function AuthenticatedGuestView({ user }: AuthenticatedGuestViewP
       setQuota(null);
       setLoadedScopeKey(requestScopeKey);
       setIsFetching(false);
-      return;
+      return true;
     }
     if (!options?.silent) setIsFetching(true);
     setError(null);
@@ -141,6 +144,7 @@ export default function AuthenticatedGuestView({ user }: AuthenticatedGuestViewP
       setGuests(data?.guests ?? []);
       setQuota(data?.quota ?? null);
       setLoadedScopeKey(requestScopeKey);
+      return !fetchError && data !== null;
     } catch (loadError) {
       if (!isLatestRequest()) return;
       console.error("Failed to fetch guests:", loadError);
@@ -148,6 +152,7 @@ export default function AuthenticatedGuestView({ user }: AuthenticatedGuestViewP
       setQuota(null);
       setLoadedScopeKey(requestScopeKey);
       setError(t("loadFailed"));
+      return false;
     } finally {
       if (isLatestRequest()) setIsFetching(false);
     }
@@ -180,7 +185,7 @@ export default function AuthenticatedGuestView({ user }: AuthenticatedGuestViewP
   useGuestPolling(pollGuests, 15000, !!effectiveVenueId);
 
   const handleSave = async () => {
-    if (!guestName.trim()) return;
+    if (!guestName.trim() || isLoading || isBulkSubmitting) return;
 
     const operationScopeKey = requestScopeKey;
     pollingGuard.invalidateRequests();
@@ -200,39 +205,48 @@ export default function AuthenticatedGuestView({ user }: AuthenticatedGuestViewP
       return;
     }
 
-    const { data, error: createError } = await createGuest({
-      venueId: effectiveVenueId,
-      name: guestName.trim().toUpperCase(),
-      date: selectedDate,
-      registeredByName:
-        user?.account_kind === "shared" ? registeredByName.trim() : null,
-    });
+    let actionFeedback: string | null = null;
+    try {
+      const { data, error: createError } = await createGuest({
+        venueId: effectiveVenueId,
+        name: guestName.trim().toUpperCase(),
+        date: selectedDate,
+        registeredByName:
+          user?.account_kind === "shared" ? registeredByName.trim() : null,
+      });
 
-    if (currentScopeKeyRef.current !== operationScopeKey) {
+      if (currentScopeKeyRef.current !== operationScopeKey) return;
+
+      if (createError) {
+        console.error("Failed to create guest:", createError);
+        actionFeedback =
+          createError === "GUEST_LIMIT_REACHED"
+            ? t("limitReachedServer")
+            : createError === "REGISTERED_BY_REQUIRED"
+              ? t("registeredByRequired")
+              : createError === "DUPLICATE_REQUIRES_CONFIRMATION"
+                ? t("duplicateRequiresConfirmation")
+                : createError === "INVALID_GUEST_NAME"
+                  ? t("registerFailed")
+                  : t("registerResultUnknown");
+      } else if (data) {
+        setGuests((prev) => [...prev, data]);
+        setGuestName("");
+      } else {
+        actionFeedback = t("registerResultUnknown");
+      }
+    } catch (createError) {
+      if (currentScopeKeyRef.current === operationScopeKey) {
+        console.error("Failed to create guest:", createError);
+        actionFeedback = t("registerResultUnknown");
+      }
+    } finally {
+      if (currentScopeKeyRef.current === operationScopeKey) {
+        const refreshed = await loadGuests({ silent: true });
+        if (refreshed === true && actionFeedback) setError(actionFeedback);
+      }
       setIsLoading(false);
-      return;
     }
-
-    if (createError) {
-      console.error("Failed to create guest:", createError);
-      setError(
-        createError === "GUEST_LIMIT_REACHED"
-          ? t("limitReachedServer")
-          : createError === "REGISTERED_BY_REQUIRED"
-            ? t("registeredByRequired")
-            : t("registerFailed"),
-      );
-      setIsLoading(false);
-      return;
-    }
-
-    if (data && currentScopeKeyRef.current === operationScopeKey) {
-      setGuests((prev) => [...prev, data]);
-      setGuestName("");
-      await loadGuests({ silent: true });
-    }
-
-    setIsLoading(false);
   };
 
   const handleDelete = async (id: string) => {
@@ -241,28 +255,69 @@ export default function AuthenticatedGuestView({ user }: AuthenticatedGuestViewP
     setIsLoading(true);
     setError(null);
 
-    const { data, error: deleteError } = await deleteGuest(id);
+    let actionFeedback: string | null = null;
+    try {
+      const { data, error: deleteError } = await deleteGuest(id);
 
-    if (currentScopeKeyRef.current !== operationScopeKey) {
+      if (currentScopeKeyRef.current !== operationScopeKey) return;
+
+      if (deleteError) {
+        console.error("Failed to delete guest:", deleteError);
+        actionFeedback = t("deleteFailed");
+      } else if (data) {
+        setGuests((prev) =>
+          prev.map((guest) => (guest.id === id ? data : guest)),
+        );
+      }
+    } catch (deleteError) {
+      if (currentScopeKeyRef.current === operationScopeKey) {
+        console.error("Failed to delete guest:", deleteError);
+        actionFeedback = t("deleteResultUnknown");
+      }
+    } finally {
+      if (currentScopeKeyRef.current === operationScopeKey) {
+        const refreshed = await loadGuests({ silent: true });
+        if (refreshed === true && actionFeedback) setError(actionFeedback);
+      }
       setIsLoading(false);
-      return;
+    }
+  };
+
+  const handleBulkSave = async (bulkGuests: BulkGuestCreateInput[]) => {
+    const operationScopeKey = requestScopeKey;
+    pollingGuard.invalidateRequests();
+    setError(null);
+
+    if (!effectiveVenueId) {
+      setError(t("selectVenue"));
+      return { data: null, error: "VENUE_REQUIRED" };
     }
 
-    if (deleteError) {
-      console.error("Failed to delete guest:", deleteError);
-      setError(t("deleteFailed"));
-      setIsLoading(false);
-      return;
+    if (user?.account_kind === "shared" && !registeredByName.trim()) {
+      setError(t("registeredByRequired"));
+      return { data: null, error: "REGISTERED_BY_REQUIRED" };
     }
 
-    if (data && currentScopeKeyRef.current === operationScopeKey) {
-      setGuests((prev) =>
-        prev.map((guest) => (guest.id === id ? data : guest)),
+    const response = await createGuests({
+      venueId: effectiveVenueId,
+      date: selectedDate,
+      registeredByName:
+        user?.account_kind === "shared" ? registeredByName.trim() : null,
+      items: bulkGuests,
+    });
+
+    if (currentScopeKeyRef.current !== operationScopeKey) return response;
+
+    if (response.data) {
+      const createdGuests = response.data.items.flatMap((item) =>
+        item.status === "created" && item.guest ? [item.guest] : [],
       );
-      await loadGuests({ silent: true });
+      if (createdGuests.length > 0) {
+        setGuests((current) => [...current, ...createdGuests]);
+      }
     }
 
-    setIsLoading(false);
+    return response;
   };
 
   const filteredGuests = displayDataGuests.filter(
@@ -358,6 +413,7 @@ export default function AuthenticatedGuestView({ user }: AuthenticatedGuestViewP
                     value={selectedDate}
                     onChange={setSelectedDate}
                     businessDate={businessDate}
+                    disabled={isBulkSubmitting}
                   />
                   {isSuperAdmin && (
                     <div className="context-filter-grid">
@@ -365,6 +421,7 @@ export default function AuthenticatedGuestView({ user }: AuthenticatedGuestViewP
                         venues={venues}
                         selectedVenueId={selectedVenueId}
                         onVenueChange={setSelectedVenueId}
+                        disabled={isBulkSubmitting}
                       />
                     </div>
                   )}
@@ -404,9 +461,14 @@ export default function AuthenticatedGuestView({ user }: AuthenticatedGuestViewP
                           placeholder={t("registeredByPlaceholder")}
                           maxLength={80}
                           autoComplete="off"
+                          aria-required="true"
+                          aria-describedby="shared-operator-help"
+                          disabled={isBulkSubmitting}
                           className="app-field"
                         />
-                        <p className="app-helper">{t("registeredByHelp")}</p>
+                        <p id="shared-operator-help" className="app-helper">
+                          {t("registeredByHelp")}
+                        </p>
                       </div>
                     )}
 
@@ -429,13 +491,15 @@ export default function AuthenticatedGuestView({ user }: AuthenticatedGuestViewP
                             value={guestName}
                             onChange={(event) => setGuestName(event.target.value)}
                             placeholder={t("enterFullName")}
+                            maxLength={100}
                             autoComplete="off"
+                            disabled={isLoading || isBulkSubmitting}
                             className="app-field min-h-11"
                           />
                         </div>
                         <Button
                           type="submit"
-                          disabled={!guestName.trim()}
+                          disabled={!guestName.trim() || isLoading || isBulkSubmitting}
                           isLoading={isLoading}
                           size="lg"
                           fullWidth
@@ -451,6 +515,25 @@ export default function AuthenticatedGuestView({ user }: AuthenticatedGuestViewP
                         })}
                       </div>
                     )}
+
+                    <GuestBulkEntry
+                      key={requestScopeKey}
+                      existingNames={filteredGuests.map((guest) => guest.name)}
+                      remaining={remaining}
+                      disabled={
+                        isLoading ||
+                        !effectiveVenueId ||
+                        (user?.account_kind === "shared" &&
+                          !registeredByName.trim())
+                      }
+                      onSubmitChunk={handleBulkSave}
+                      onSubmissionComplete={async () => {
+                        if (currentScopeKeyRef.current === requestScopeKey) {
+                          await loadGuests({ silent: true });
+                        }
+                      }}
+                      onSubmittingChange={setIsBulkSubmitting}
+                    />
 
                     {displayQuota?.pendingRequest ? (
                       <div className="mt-3 border border-status-waiting/60 bg-status-waiting/10 p-3 text-xs text-status-waiting">
@@ -593,6 +676,7 @@ export default function AuthenticatedGuestView({ user }: AuthenticatedGuestViewP
                           : undefined
                       }
                       isDeleteLoading={isLoading}
+                      isDeleteDisabled={isBulkSubmitting}
                     />
                   ))}
                 </div>

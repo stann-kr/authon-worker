@@ -30,13 +30,17 @@ import {
   deleteGuest,
 } from "../../lib/api/guests";
 import { fetchGuestOperationsSnapshot } from "../../lib/api/guest-snapshots";
-import type { Guest, UserDirectoryEntry, ExternalDJLink } from "../../lib/api/types";
+import type {
+  ExternalLinkDirectoryEntry,
+  Guest,
+  UserDirectoryEntry,
+} from "../../lib/api/types";
 import { useLocale, useTranslations } from "next-intl";
 
 const EMPTY_DISPLAY_DATA = {
   guests: [] as Guest[],
   users: [] as UserDirectoryEntry[],
-  externalLinks: [] as ExternalDJLink[],
+  externalLinks: [] as ExternalLinkDirectoryEntry[],
 };
 
 export default function DoorPage() {
@@ -62,7 +66,8 @@ function DoorPageContent() {
     [key: string]: boolean;
   }>({});
   const [users, setUsers] = useState<UserDirectoryEntry[]>([]);
-  const [externalLinks, setExternalLinks] = useState<ExternalDJLink[]>([]);
+  const [externalLinks, setExternalLinks] =
+    useState<ExternalLinkDirectoryEntry[]>([]);
   const [guests, setGuests] = useState<Guest[]>([]);
   const [isFetching, setIsFetching] = useState(true);
   const [loadedScopeKey, setLoadedScopeKey] = useState("");
@@ -78,7 +83,7 @@ function DoorPageContent() {
     scopeKey: string;
     guests: Guest[];
     users: UserDirectoryEntry[];
-    externalLinks: ExternalDJLink[];
+    externalLinks: ExternalLinkDirectoryEntry[];
   }>({
     scopeKey: "",
     guests: [],

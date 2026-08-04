@@ -4,13 +4,11 @@ import { and, asc, desc, eq, ne, sql } from "drizzle-orm";
 import { externalDjLinks, guestLimitRequests, guests, users } from "../db/schema";
 import { getDb } from "../db/client";
 import { requireAccess, type SessionUser } from "../auth/server";
-import { getVenueDeliveryContext } from "../tenant/server";
 import { canRequestGuestLimit, isAccountKind, isRole } from "@/lib/users/policy";
 import { resolveSnapshotVenueId } from "@/lib/guest-snapshot-policy";
-import { toExternalDJLink } from "@/lib/external-links/domain";
 import type {
   ApiResponse,
-  ExternalDJLink,
+  ExternalLinkDirectoryEntry,
   Guest,
   GuestOperationsSnapshot,
   GuestQuota,
@@ -36,17 +34,21 @@ async function loadGuestsByDate(
   db: Db,
   venueId: string,
   date: string,
+  createdByUserId?: string,
 ): Promise<Guest[]> {
+  const conditions = [
+    eq(guests.venueId, venueId),
+    eq(guests.date, date),
+    ne(guests.status, "deleted"),
+  ];
+  if (createdByUserId) {
+    conditions.push(eq(guests.createdByUserId, createdByUserId));
+  }
+
   const rows = await db
     .select()
     .from(guests)
-    .where(
-      and(
-        eq(guests.venueId, venueId),
-        eq(guests.date, date),
-        ne(guests.status, "deleted"),
-      ),
-    )
+    .where(and(...conditions))
     .orderBy(desc(guests.createdAt));
 
   return rows.map((guest) => ({
@@ -92,31 +94,20 @@ async function loadExternalLinksByDate(
   db: Db,
   venueId: string,
   date: string,
-): Promise<ExternalDJLink[]> {
-  const [rows, { baseUrl }] = await Promise.all([
-    db
-      .select()
-      .from(externalDjLinks)
-      .where(
-        and(
-          eq(externalDjLinks.venueId, venueId),
-          eq(externalDjLinks.date, date),
-        ),
-      )
-      .orderBy(desc(externalDjLinks.createdAt)),
-    getVenueDeliveryContext(venueId),
-  ]);
-
-  return rows.map((link) =>
-    toExternalDJLink(
-      link,
-      `${baseUrl}/guest?token=${encodeURIComponent(link.token)}${
-      link.localeMode === "en" || link.localeMode === "ko"
-        ? `&lang=${link.localeMode}`
-        : ""
-      }`,
-    ),
-  );
+): Promise<ExternalLinkDirectoryEntry[]> {
+  return db
+    .select({
+      id: externalDjLinks.id,
+      djName: externalDjLinks.djName,
+    })
+    .from(externalDjLinks)
+    .where(
+      and(
+        eq(externalDjLinks.venueId, venueId),
+        eq(externalDjLinks.date, date),
+      ),
+    )
+    .orderBy(desc(externalDjLinks.createdAt));
 }
 
 async function loadGuestQuota(
@@ -236,7 +227,7 @@ export async function fetchGuestWorkspaceSnapshot(
     const db = getDb();
 
     const [guestResult, quotaResult] = await Promise.allSettled([
-      loadGuestsByDate(db, effectiveVenueId, date),
+      loadGuestsByDate(db, effectiveVenueId, date, actor.id),
       loadGuestQuota(db, actor, date),
     ]);
 

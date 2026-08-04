@@ -83,6 +83,7 @@ Authon UI는 베뉴 현장에서 반복적으로 사용하는 운영 도구다. 
 - button loading은 label 위치를 유지하는 작은 progress indicator를 사용한다.
 - empty state는 원인과 다음 행동을 함께 제시할 수 있어야 한다.
 - error는 영향받는 section 가까이에 표시하고 재시도가 가능한 경우 action을 제공한다.
+- 공개 게스트 쓰기 뒤 서버 명단과 재동기화하지 못한 상태는 기존 입력과 명단을 유지하는 대기색 banner로 표시하고, 최신 명단 조회가 성공할 때까지 등록·삭제 control만 잠근다.
 - destructive action은 red semantic tone과 확인 단계를 함께 사용한다.
 - 상태는 색상만으로 전달하지 않는다. 목록 행은 2px 상태선을 기본 신호로 사용하고, 상태별로 가능한 행동이나 아이콘·텍스트를 함께 제공한다.
 - 입장 행동은 `CHECK IN`, 완료 상태는 `CHECKED IN`으로 구분한다. 모든 대기 행은 왼쪽 상태선과 현재 가능한 행동으로 표현하고 행 안에 `WAITING` label을 반복하지 않는다.
@@ -105,6 +106,7 @@ Authon UI는 베뉴 현장에서 반복적으로 사용하는 운영 도구다. 
 - `PanelHeader`: count, sort, refresh, 추가 action의 위치를 통일한다.
 - `StatGrid`: 통계 수치와 label을 카드 중앙에 정렬하고 현재 조회 범위의 loading 상태를 함께 표현한다.
 - `GuestListCard`: waiting, checked, removed 상태와 registration/operations 작업 모드별 action을 표현한다. 공용 계정 게스트는 계정명과 실제 입력자를 함께 표시하고, checked 상태의 되돌리기는 해당 행 안에서 제공한다.
+- `GuestBulkEntry`: 선택형 disclosure 안에서 줄바꿈 입력, 요약, 최대 25행 미리보기, 행별 중복 확인, 정원 보류와 제출 결과를 한 흐름으로 제공한다. 정상 행은 이름만 표시하고 수정·확인이 필요한 예외 행에만 보조 문구와 control을 둔다.
 - `StatusLabel`: 상태별 아이콘, 텍스트, 색상 규칙을 통일한다.
 - `Alert`: error와 success를 live region으로 전달한다.
 - `Skeleton`: list loading 중 레이아웃 공간을 예약한다.
@@ -115,6 +117,7 @@ Authon UI는 베뉴 현장에서 반복적으로 사용하는 운영 도구다. 
 - 추가 게스트 요청처럼 게스트 한도에 속하는 운영 승인은 사용자 계정 관리가 아니라 Admin의 게스트 하위 작업으로 제공한다. 미처리 요청이 있는 Venue Admin 홈에는 단축키와 혼동되지 않는 상태 문구, 건수와 요청함 직접 이동 action을 함께 표시한다.
 - Links 관리는 기본 상태와 예외 상태를 한 번씩만 표시한다. 목록 범위는 날짜별 보기와 최근 생성 5개·10개 보기로 구분한다.
 - Links의 긴 URL은 기본 목록에 상시 노출하지 않는다. `VIEW` disclosure 안에서 읽기 전용 URL 선택과 새 탭 열기를 제공해 clipboard 실패 시에도 접근할 수 있게 한다.
+- Links의 `템플릿으로 사용`은 업무 설정만 생성 form에 채우고 credential은 복사하지 않는다. 공유 action은 Web Share 지원 여부에 따라 공유 또는 URL 복사 중 하나만 표시해 행의 action 밀도를 유지한다.
 - 반복되는 guest row는 교차 neutral surface를 사용한다. waiting과 checked-in 상태는 각 행의 왼쪽 2px indicator를 공유하되, 모든 waiting 행은 중복 status label을 표시하지 않는다.
 - 되돌리기처럼 특정 guest 상태에 종속된 control은 전역 banner가 아니라 해당 guest 행 안에 표시한다.
 - guest row의 상태는 왼쪽 indicator와 metadata가 전달하고, 우측에는 현재 수행 가능한 action만 둔다. `CHECK IN`과 `UNDO`는 동일한 위치와 최소 폭을 사용한다.
@@ -135,3 +138,4 @@ Authon UI는 베뉴 현장에서 반복적으로 사용하는 운영 도구다. 
 - tab은 arrow, Home, End key 이동과 올바른 ARIA 연결을 유지한다.
 - dialog는 열릴 때 내부 control로 focus를 이동하고, 닫힐 때 trigger로 focus를 복귀하며, 열린 동안 focus가 dialog 밖으로 이동하지 않게 한다.
 - loading, success, error 상태는 적절한 live region을 사용한다.
+- 대량 등록 완료 후 입력란으로 focus를 복귀하고, 링크 생성 검증 실패는 관련 field에 오류 설명과 focus를 연결한다. 링크 생성 성공은 새 결과 region으로 focus를 이동한다. 공개 링크의 재조회 실패는 재시도 heading으로, 재시도 성공은 작업 panel heading으로 focus를 이동한다.
