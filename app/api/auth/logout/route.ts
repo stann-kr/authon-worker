@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
+import { shouldUseSecureAuthCookies } from "@/lib/auth/cookie-policy";
 
 export async function POST(request: Request) {
   try {
@@ -22,13 +23,14 @@ export async function POST(request: Request) {
     }
 
     const response = NextResponse.json({ ok: true, message: "Logged out successfully" });
+    const secureCookies = shouldUseSecureAuthCookies(request);
 
     // Invalidate cookies
     response.cookies.set({
       name: "token",
       value: "",
       httpOnly: true,
-      secure: true,
+      secure: secureCookies,
       sameSite: "lax",
       maxAge: 0,
       path: "/",
@@ -38,7 +40,7 @@ export async function POST(request: Request) {
       name: "sessionId",
       value: "",
       httpOnly: true,
-      secure: true,
+      secure: secureCookies,
       sameSite: "lax",
       maxAge: 0,
       path: "/",
