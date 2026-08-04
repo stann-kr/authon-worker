@@ -56,7 +56,7 @@
     "roleDj": "DJ",
     "roleSharedAccount": "Shared account",
     "sharedAccount": "Shared",
-    "registeredByName": "Entered by {name}",
+    "registeredByName": "Via {name}",
     "loadingContent": "Loading content…",
     "notFoundTitle": "Page not found",
     "notFoundDescription": "The requested {brand} workspace does not exist or is no longer available.",

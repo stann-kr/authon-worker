@@ -212,42 +212,35 @@ function WorkspaceLink({
   return (
     <TransitionLink
       href={item.href}
-      className="pressable group relative flex min-h-[248px] flex-col border-b border-r border-border-default bg-surface hover:bg-surface-raised focus-visible:bg-surface-raised focus-visible:outline-none before:absolute before:inset-x-0 before:top-0 before:h-0.5 before:bg-action-primary before:opacity-0 before:transition-opacity hover:before:opacity-100 focus-visible:before:opacity-100 sm:min-h-[272px]"
+      className="pressable group relative flex min-h-[210px] flex-col border-b border-r border-border-default bg-surface hover:bg-surface-raised focus-visible:bg-surface-raised focus-visible:outline-none before:absolute before:inset-x-0 before:top-0 before:h-0.5 before:bg-action-primary before:opacity-0 before:transition-opacity hover:before:opacity-100 focus-visible:before:opacity-100 sm:min-h-[230px]"
     >
-      <div className="flex w-full items-center justify-between border-b border-border-subtle px-4 py-3 sm:px-5">
-        <span className="text-xs font-medium text-text-muted">
-          {item.category}
-        </span>
-        <span className="font-mono text-xs tabular-nums text-text-dim">
-          {String(index + 1).padStart(2, "0")}
-        </span>
-      </div>
-
-      <div className="flex w-full flex-1 flex-col p-4 sm:p-5">
-        <div className="grid h-11 w-11 place-items-center border border-border-default bg-canvas text-text-muted group-hover:border-border-strong group-hover:text-text-heading">
-          <Icon name={item.icon} size={22} />
+      <div className="flex w-full flex-1 flex-col p-5 sm:p-6">
+        <div className="flex items-start justify-between gap-4">
+          <div className="grid h-11 w-11 place-items-center border border-border-default bg-canvas text-text-muted transition-colors group-hover:border-border-strong group-hover:text-text-heading">
+            <Icon name={item.icon} size={22} />
+          </div>
+          <span className="font-mono text-xs font-semibold tabular-nums text-text-dim group-hover:text-text-muted">
+            {String(index + 1).padStart(2, "0")}
+          </span>
         </div>
 
-        <div className="mt-5 min-w-0">
-          <h2 className="text-lg font-semibold tracking-[-0.015em] text-text-heading">
+        <div className="mt-5 min-w-0 flex-1">
+          <h2 className="text-lg font-semibold tracking-[-0.015em] text-text-heading group-hover:text-action-primary">
             {item.title}
           </h2>
           <p className="mt-2 text-sm leading-relaxed text-text-muted">
             {item.description}
           </p>
         </div>
-      </div>
 
-      <div className="flex w-full items-center justify-between border-t border-border-subtle px-4 py-3 text-xs font-medium text-text-muted sm:px-5">
-        <span className="group-hover:text-text-heading">
-          {item.action}
-        </span>
-        <span className="flex items-center gap-3 group-hover:text-text-heading">
-          <kbd className="border border-border-default bg-canvas px-2 py-1 font-mono text-xs text-text-dim">
-            {index + 1}
-          </kbd>
-          <Icon name="arrow-right" size={18} />
-        </span>
+        <div className="mt-6 flex items-center justify-end">
+          <span className="flex items-center gap-2 text-text-dim transition-colors group-hover:text-text-heading">
+            <kbd className="border border-border-default bg-canvas px-2 py-0.5 font-mono text-xs text-text-dim group-hover:border-border-strong">
+              {index + 1}
+            </kbd>
+            <Icon name="arrow-right" size={18} />
+          </span>
+        </div>
       </div>
     </TransitionLink>
   );

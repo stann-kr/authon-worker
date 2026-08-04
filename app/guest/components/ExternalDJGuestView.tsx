@@ -144,7 +144,7 @@ export default function ExternalDJGuestView({ token }: ExternalDJGuestViewProps)
   };
 
   const externalHeader = (
-    <div className="fixed inset-x-0 top-0 z-50 border-b border-border-default bg-canvas">
+    <div className="fixed inset-x-0 top-0 z-50 border-b border-border-default bg-canvas pt-[env(safe-area-inset-top)]">
       <div className="mx-auto flex h-16 w-full max-w-[1440px] items-center justify-between px-4 sm:px-6 lg:px-10">
         <div className="flex min-w-0 items-center gap-3">
           <div className="grid h-8 w-8 place-items-center border border-border-strong bg-surface font-mono text-xs font-semibold text-text-heading">{brand.name.charAt(0).toUpperCase()}</div>
@@ -166,7 +166,7 @@ export default function ExternalDJGuestView({ token }: ExternalDJGuestViewProps)
     return (
       <div className="min-h-[100dvh] bg-canvas flex flex-col">
         {externalHeader}
-        <div className="flex-1 overflow-x-hidden pt-16 sm:pt-20 flex flex-col">
+        <div className="flex-1 overflow-x-hidden pt-[calc(5rem+env(safe-area-inset-top))] sm:pt-[calc(5.5rem+env(safe-area-inset-top))] flex flex-col">
           <div className="page-container">
             <div className="main-content-panel">
               <Spinner mode="inline" text={commonT("loading")} />
@@ -212,30 +212,40 @@ export default function ExternalDJGuestView({ token }: ExternalDJGuestViewProps)
   return (
     <div className="min-h-[100dvh] bg-canvas flex flex-col">
       {externalHeader}
-      <div className="flex-1 overflow-x-hidden pt-16 sm:pt-20 flex flex-col">
+      <div className="flex-1 overflow-x-hidden pt-[calc(5rem+env(safe-area-inset-top))] sm:pt-[calc(5.5rem+env(safe-area-inset-top))] flex flex-col">
         <div className="page-container">
-          <div className="context-bar mb-4 sm:grid-cols-2 lg:grid-cols-4">
-            <div>
-              <div className="type-context-title">{t("guestOwner")}</div>
-              <div className="text-sm font-medium text-text-heading">
-                {linkInfo?.djName}
-              </div>
+          <div className="context-bar mb-4 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4 p-4 sm:p-5">
+            <div className="flex flex-col">
+              <span className="text-xs font-mono uppercase tracking-wider text-text-dim">
+                {t("guestOwner")}
+              </span>
+              <span className="mt-1 text-sm font-semibold text-text-heading">
+                {linkInfo?.djName ?? "-"}
+              </span>
             </div>
-            <div>
-              <div className="type-context-title">{t("event")}</div>
-              <div className="text-sm text-text-body">{linkInfo?.event}</div>
+            <div className="flex flex-col">
+              <span className="text-xs font-mono uppercase tracking-wider text-text-dim">
+                {t("event")}
+              </span>
+              <span className="mt-1 text-sm font-semibold text-text-heading">
+                {linkInfo?.event ?? "-"}
+              </span>
             </div>
-            <div>
-              <div className="type-context-title">{t("venue")}</div>
-              <div className="text-sm text-text-body">
+            <div className="flex flex-col">
+              <span className="text-xs font-mono uppercase tracking-wider text-text-dim">
+                {t("venue")}
+              </span>
+              <span className="mt-1 text-sm font-semibold text-text-heading">
                 {venueInfo?.name ?? "-"}
-              </div>
+              </span>
             </div>
-            <div>
-              <div className="type-context-title">{t("operationalDate")}</div>
-              <div className="font-mono text-sm text-text-body">
+            <div className="flex flex-col">
+              <span className="text-xs font-mono uppercase tracking-wider text-text-dim">
+                {t("operationalDate")}
+              </span>
+              <span className="mt-1 font-mono text-sm font-semibold text-text-heading">
                 {linkInfo ? formatDateDisplay(linkInfo.date || "", locale) : "-"}
-              </div>
+              </span>
             </div>
           </div>
 
