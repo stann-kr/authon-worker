@@ -241,6 +241,9 @@ export default function LinkManagement({
   };
 
   const handleDeleteLink = async (id: string) => {
+    requestGuard.invalidateRequests();
+    setIsFetching(false);
+    setError(null);
     setSuccess(null);
     setLoadingStates((prev) => ({ ...prev, [`delete_${id}`]: true }));
     const { error } = await deleteExternalLink(id);
@@ -248,6 +251,8 @@ export default function LinkManagement({
       console.error("Failed to delete link:", error);
       setError(t("deleteFailed"));
     } else {
+      requestGuard.invalidateRequests();
+      setIsFetching(false);
       setLinks((prev) => prev.filter((link) => link.id !== id));
       setSuccess(t("deleted"));
     }

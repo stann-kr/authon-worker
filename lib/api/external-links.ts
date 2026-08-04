@@ -1,13 +1,17 @@
 "use server";
 
 import { getCloudflareContext } from "@opennextjs/cloudflare";
-import { eq, and, ne, desc, sql } from "drizzle-orm";
+import { eq, and, ne, desc, isNull, sql } from "drizzle-orm";
 import { externalDjLinks, venues, guests } from "../db/schema";
 import { type ExternalDJLink, type Guest, type Venue, type ApiResponse } from "./types";
 import { requireRole, type SessionUser } from "../auth/server";
 import { getDb } from "../db/client";
 import { getRequestTenantContext, getVenueDeliveryContext } from "../tenant/server";
 import { isExternalLinkLocaleMode } from "@/i18n/config";
+import {
+  getExternalLinkDeletionDisposition,
+  toExternalDJLink,
+} from "../external-links/domain";
 
 type Db = ReturnType<typeof getDb>;
 
@@ -32,7 +36,16 @@ function scopedVenueId(user: SessionUser, requestedVenueId: string): string {
 }
 
 async function getAccessibleLink(db: Db, user: SessionUser, linkId: string) {
-  const rows = await db.select().from(externalDjLinks).where(eq(externalDjLinks.id, linkId)).limit(1);
+  const rows = await db
+    .select()
+    .from(externalDjLinks)
+    .where(
+      and(
+        eq(externalDjLinks.id, linkId),
+        isNull(externalDjLinks.deletedAt),
+      ),
+    )
+    .limit(1);
   const link = rows[0];
   if (!link) throw new Error("External link not found");
   if (user.role !== "super_admin" && link.venueId !== user.venueId) throw new Error("Forbidden");
@@ -43,18 +56,19 @@ function isExpired(expiresAt?: string | null): boolean {
   return !!expiresAt && new Date(expiresAt).getTime() <= Date.now();
 }
 
-async function addGuestUrls<T extends typeof externalDjLinks.$inferSelect>(
+async function addGuestUrls(
   venueId: string,
-  links: T[],
-): Promise<Array<T & { guestUrl: string; localeMode: ExternalDJLink["localeMode"] }>> {
+  links: Array<typeof externalDjLinks.$inferSelect>,
+): Promise<ExternalDJLink[]> {
   const { baseUrl } = await getVenueDeliveryContext(venueId);
-  return links.map((link) => ({
-    ...link,
-    localeMode: isExternalLinkLocaleMode(link.localeMode) ? link.localeMode : "auto",
-    guestUrl: `${baseUrl}/guest?token=${encodeURIComponent(link.token)}${
+  return links.map((link) =>
+    toExternalDJLink(
+      link,
+      `${baseUrl}/guest?token=${encodeURIComponent(link.token)}${
       link.localeMode === "en" || link.localeMode === "ko" ? `&lang=${link.localeMode}` : ""
-    }`,
-  }));
+      }`,
+    ),
+  );
 }
 
 export async function fetchExternalLinks(venueId: string): Promise<ApiResponse<ExternalDJLink[]>> {
@@ -63,7 +77,12 @@ export async function fetchExternalLinks(venueId: string): Promise<ApiResponse<E
     const db = getDb();
     const effectiveVenueId = scopedVenueId(user, venueId);
     const result = await db.select().from(externalDjLinks)
-      .where(eq(externalDjLinks.venueId, effectiveVenueId))
+      .where(
+        and(
+          eq(externalDjLinks.venueId, effectiveVenueId),
+          isNull(externalDjLinks.deletedAt),
+        ),
+      )
       .orderBy(desc(externalDjLinks.createdAt), desc(externalDjLinks.date));
     return { data: await addGuestUrls(effectiveVenueId, result), error: null };
   } catch (error: unknown) {
@@ -78,7 +97,13 @@ export async function fetchExternalLinksByDate(venueId: string, date: string): P
     const db = getDb();
     const effectiveVenueId = scopedVenueId(user, venueId);
     const result = await db.select().from(externalDjLinks)
-      .where(and(eq(externalDjLinks.venueId, effectiveVenueId), eq(externalDjLinks.date, date)))
+      .where(
+        and(
+          eq(externalDjLinks.venueId, effectiveVenueId),
+          eq(externalDjLinks.date, date),
+          isNull(externalDjLinks.deletedAt),
+        ),
+      )
       .orderBy(desc(externalDjLinks.createdAt));
     return { data: await addGuestUrls(effectiveVenueId, result), error: null };
   } catch (error: unknown) {
@@ -99,7 +124,12 @@ export async function fetchRecentExternalLinks(
     const result = await db
       .select()
       .from(externalDjLinks)
-      .where(eq(externalDjLinks.venueId, effectiveVenueId))
+      .where(
+        and(
+          eq(externalDjLinks.venueId, effectiveVenueId),
+          isNull(externalDjLinks.deletedAt),
+        ),
+      )
       .orderBy(desc(externalDjLinks.createdAt), desc(externalDjLinks.date))
       .limit(normalizedLimit);
     return { data: await addGuestUrls(effectiveVenueId, result), error: null };
@@ -157,7 +187,49 @@ export async function deleteExternalLink(linkId: string): Promise<{ error: strin
     const user = await requireRole(["super_admin", "venue_admin"]);
     const db = getDb();
     await getAccessibleLink(db, user, linkId);
-    await db.delete(externalDjLinks).where(eq(externalDjLinks.id, linkId));
+
+    await db
+      .update(externalDjLinks)
+      .set({ active: false })
+      .where(
+        and(
+          eq(externalDjLinks.id, linkId),
+          isNull(externalDjLinks.deletedAt),
+        ),
+      );
+
+    const [guestReference] = await db
+      .select({ id: guests.id })
+      .from(guests)
+      .where(eq(guests.externalLinkId, linkId))
+      .limit(1);
+    const disposition = getExternalLinkDeletionDisposition(Boolean(guestReference));
+
+    if (disposition === "archive") {
+      await db
+        .update(externalDjLinks)
+        .set({
+          active: false,
+          deletedAt: new Date().toISOString(),
+          deletedBy: user.id,
+        })
+        .where(
+          and(
+            eq(externalDjLinks.id, linkId),
+            isNull(externalDjLinks.deletedAt),
+          ),
+        );
+    } else {
+      await db
+        .delete(externalDjLinks)
+        .where(
+          and(
+            eq(externalDjLinks.id, linkId),
+            isNull(externalDjLinks.deletedAt),
+          ),
+        );
+    }
+
     return { error: null };
   } catch (error: unknown) {
     console.error("Failed to delete external link:", error);
@@ -199,7 +271,7 @@ export async function validateExternalToken(token: string): Promise<ApiResponse<
     const linkResult = await db.select().from(externalDjLinks).where(eq(externalDjLinks.token, token));
     const link = linkResult[0];
 
-    if (!link || !link.active || isExpired(link.expiresAt)) {
+    if (!link || link.deletedAt || !link.active || isExpired(link.expiresAt)) {
       return { data: null, error: "Link is invalid, expired, or inactive." };
     }
 
@@ -220,10 +292,7 @@ export async function validateExternalToken(token: string): Promise<ApiResponse<
 
     return {
       data: {
-        link: {
-          ...link,
-          localeMode: isExternalLinkLocaleMode(link.localeMode) ? link.localeMode : "auto",
-        },
+        link: toExternalDJLink(link),
         venue,
         guests: guestsResult.map((g) => ({ ...g, status: g.status as Guest["status"] })),
       },
@@ -252,7 +321,7 @@ export async function createGuestViaExternalLink(params: {
       .where(eq(externalDjLinks.token, params.token));
     const link = linkResult[0];
 
-    if (!link || !link.active || isExpired(link.expiresAt)) {
+    if (!link || link.deletedAt || !link.active || isExpired(link.expiresAt)) {
       return { data: null, error: "Link is invalid, expired, or inactive." };
     }
 
@@ -315,7 +384,7 @@ export async function deleteGuestViaExternalLink(params: {
       .where(eq(externalDjLinks.token, params.token));
     const link = linkResult[0];
 
-    if (!link || !link.active || isExpired(link.expiresAt)) {
+    if (!link || link.deletedAt || !link.active || isExpired(link.expiresAt)) {
       return { error: "Link is invalid, expired, or inactive." };
     }
 
