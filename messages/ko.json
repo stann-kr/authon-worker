@@ -307,6 +307,7 @@
     "guestSections": "게스트 관리 섹션",
     "guestList": "게스트 목록",
     "requests": "추가 요청",
+    "activeTaskAnnouncement": "현재 작업: {task}",
     "links": "링크",
     "users": "사용자",
     "venues": "베뉴"
