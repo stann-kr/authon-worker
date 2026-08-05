@@ -23,6 +23,7 @@
     "sortAlphabetically": "이름순으로 정렬",
     "created": "등록순",
     "refresh": "새로고침",
+    "venueLoadFailed": "베뉴를 불러오지 못했습니다.",
     "removeGuestConfirm": "이 게스트를 목록에서 삭제할까요?",
     "byName": "By {name}",
     "registered": "등록",
@@ -71,6 +72,7 @@
     "emailLoginHelp": "계정에 등록된 이메일 주소를 입력하세요.",
     "emailSetupHelp": "설정 코드를 발급받은 계정 이메일입니다.",
     "password": "비밀번호",
+    "forgotPassword": "비밀번호를 잊으셨나요?",
     "passwordHelp": "일반 로그인은 비밀번호를, 최초 설정 또는 관리자 재설정 계정은 발급받은 설정 코드를 입력하세요.",
     "newPassword": "새 비밀번호",
     "confirmPassword": "비밀번호 확인",
@@ -297,6 +299,7 @@
     "noGuestsForDate": "이 운영일에 게스트가 없습니다"
   },
   "AdminNav": {
+    "title": "관리자",
     "sections": "관리자 섹션",
     "guests": "게스트",
     "guestSections": "게스트 관리 섹션",
@@ -468,6 +471,8 @@
     "status": "상태",
     "edit": "수정",
     "deactivate": "비활성화",
+    "deactivateTitle": "베뉴를 비활성화할까요?",
+    "deactivateDescription": "{name}은(는) 활성 운영 대상에서 제외됩니다. 나중에 다시 활성화할 수 있습니다.",
     "activate": "활성화",
     "save": "저장",
     "emptyDomainHelp": "빈 값으로 저장하면 기본 도메인을 제거합니다.",

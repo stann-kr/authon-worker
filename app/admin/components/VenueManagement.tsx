@@ -14,6 +14,7 @@ import EmptyState from "../../../components/EmptyState";
 import Skeleton from "../../../components/Skeleton";
 import OperationsLayout from "../../../components/OperationsLayout";
 import OperationalSectionNav from "../../../components/OperationalSectionNav";
+import ConfirmDialog from "../../../components/ConfirmDialog";
 import { useSectionLoadingTask } from "../../../components/RouteTransitionProvider";
 import { useLatestRequestGuard } from "../../../lib/hooks";
 import { getVenueTypeColor } from "../../../lib/colors";
@@ -47,7 +48,19 @@ const TIMEZONE_OPTIONS = [
   "Australia/Sydney",
 ] as const;
 
-export default function VenueManagement() {
+export type VenueManagementSection = "list" | "create";
+
+interface VenueManagementProps {
+  activeSection?: VenueManagementSection;
+  onActiveSectionChange?: (section: VenueManagementSection) => void;
+  showSectionNavigation?: boolean;
+}
+
+export default function VenueManagement({
+  activeSection,
+  onActiveSectionChange,
+  showSectionNavigation = true,
+}: VenueManagementProps = {}) {
   const t = useTranslations("VenueAdmin");
   const commonT = useTranslations("Common");
   const venueTypeLabels: Record<Venue["type"], string> = {
@@ -59,7 +72,19 @@ export default function VenueManagement() {
   };
   const [venues, setVenues] = useState<Venue[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<"list" | "create">("list");
+  const [internalActiveSection, setInternalActiveSection] =
+    useState<VenueManagementSection>("list");
+  const activeTab = activeSection ?? internalActiveSection;
+  const setActiveTab = useCallback(
+    (section: VenueManagementSection) => {
+      if (onActiveSectionChange) {
+        onActiveSectionChange(section);
+        return;
+      }
+      setInternalActiveSection(section);
+    },
+    [onActiveSectionChange],
+  );
   const [formData, setFormData] = useState({
     name: "",
     type: "club" as Venue["type"],
@@ -171,55 +196,33 @@ export default function VenueManagement() {
     }
   };
 
-  const getTabInfo = () => {
-    switch (activeTab) {
-      case "create":
-        return { title: t("createVenue"), description: t("createDescription") };
-      case "list":
-        return { title: t("venues"), description: t("venuesDescription") };
-      default:
-        return { title: "", description: "" };
-    }
-  };
-
-  const tabInfo = getTabInfo();
-
   return (
     <OperationsLayout
+      variant="stacked"
       title={t("title")}
       dashboard={
         <>
-        <OperationalSectionNav
-          label={t("section")}
-          items={[
-            { id: "create", label: t("create"), icon: "add" },
-            { id: "list", label: t("venues"), icon: "store" },
-          ]}
-          activeId={activeTab}
-          onChange={setActiveTab}
-        />
+        {showSectionNavigation && (
+          <OperationalSectionNav
+            label={t("section")}
+            items={[
+              { id: "create", label: t("create"), icon: "add" },
+              { id: "list", label: t("venues"), icon: "store" },
+            ]}
+            activeId={activeTab}
+            onChange={setActiveTab}
+          />
+        )}
 
-        <div className="app-panel p-4 sm:p-5">
-          <div className="mb-4">
-            <h2 className="type-panel-title mb-1">
-              {tabInfo.title}
-            </h2>
-            <p className="text-sm text-text-muted">
-              {tabInfo.description}
-            </p>
-          </div>
-          <div className="text-center mb-4">
-            <div className="text-text-heading font-mono text-3xl sm:text-4xl tracking-wider">
-              {activeTab === "list" ? venues.length : "-"}
-            </div>
-            <div className="text-xs font-medium text-text-muted">
-              {activeTab === "list" ? t("totalVenues") : ""}
-            </div>
-          </div>
-
-          {activeTab === "list" && (
+        {activeTab === "list" && (
+          <div className="app-panel p-3 sm:p-4">
             <StatGrid
               items={[
+                {
+                  label: t("totalVenues"),
+                  value: venues.length,
+                  color: "default",
+                },
                 {
                   label: t("active"),
                   value: venues.filter((v) => v.active).length,
@@ -232,8 +235,8 @@ export default function VenueManagement() {
                 },
               ]}
             />
-          )}
-        </div>
+          </div>
+        )}
         </>
       }
     >
@@ -269,7 +272,7 @@ export default function VenueManagement() {
                   <legend className="app-label">
                     {t("type")}
                   </legend>
-                  <div className="grid grid-cols-5 gap-2">
+                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-5">
                     {VENUE_TYPES.map((opt) => (
                       <button
                         key={opt.value}
@@ -281,7 +284,7 @@ export default function VenueManagement() {
                             type: opt.value as Venue["type"],
                           })
                         }
-                        className={`p-3 border text-xs font-medium transition-colors ${
+                      className={`min-h-11 border p-3 text-xs font-medium transition-colors ${
                           formData.type === opt.value
                             ? "border-action-primary bg-action-primary text-action-text"
                             : "bg-canvas text-text-muted border-border-default hover:text-text-heading hover:border-border-strong"
@@ -494,7 +497,10 @@ export default function VenueManagement() {
                 <EmptyState icon="store" message={t("noVenues")} />
               ) : (
                 <div
-                  className={`grid grid-cols-1 md:grid-cols-2 gap-4 transition-opacity duration-200 ${isLoading ? "opacity-50 pointer-events-none" : ""}`}
+                  aria-busy={isLoading}
+                  className={`grid grid-cols-1 gap-4 md:grid-cols-2 ${
+                    isLoading ? "pointer-events-none" : ""
+                  }`}
                 >
                   {venues.map((venue) => (
                     <VenueCard
@@ -539,7 +545,7 @@ function VenueCard({
   onSave,
 }: {
   venue: Venue;
-  onToggleActive: (venue: Venue) => void;
+  onToggleActive: (venue: Venue) => Promise<void>;
   onSave: (
     id: string,
     updates: Partial<Pick<Venue,
@@ -580,6 +586,8 @@ function VenueCard({
     openingTime: venue.openingTime,
     closingTime: venue.closingTime,
   });
+  const [isDeactivateConfirmOpen, setIsDeactivateConfirmOpen] = useState(false);
+  const [isTogglingActive, setIsTogglingActive] = useState(false);
 
   const handleSave = async () => {
     const error = await onSave(venue.id, {
@@ -598,17 +606,23 @@ function VenueCard({
     if (!error) setIsEditing(false);
   };
 
+  const handleToggleActive = async () => {
+    setIsTogglingActive(true);
+    await onToggleActive(venue);
+    setIsTogglingActive(false);
+    setIsDeactivateConfirmOpen(false);
+  };
+
   return (
-    <div
-      className={`app-panel p-4 sm:p-5 transition-opacity duration-200 ${!venue.active ? "opacity-60" : ""}`}
-    >
-      <div className="flex justify-between items-start mb-3">
-        <div>
-          <h3 className="type-row-title font-mono tracking-wider">
+    <>
+      <div className="app-panel p-4 sm:p-5">
+      <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0">
+          <h3 className="type-row-title break-words font-mono tracking-wider">
             {venue.name}
           </h3>
           {venue.address && (
-            <p className="text-text-dim font-mono text-xs mt-1">
+            <p className="mt-1 break-words font-mono text-xs text-text-dim">
               {venue.address}
             </p>
           )}
@@ -630,13 +644,13 @@ function VenueCard({
       {!isEditing ? (
         <div>
           {venue.description && (
-            <p className="text-text-muted font-mono text-xs mb-3">
+            <p className="mb-3 break-words font-mono text-xs text-text-muted">
               {venue.description}
             </p>
           )}
           <div className="mb-3 border border-border-subtle bg-canvas p-3">
             <p className="app-label">{t("brandDomain")}</p>
-            <p className="font-mono text-sm text-text-heading">
+            <p className="break-words font-mono text-sm text-text-heading">
               {venue.brandName || venue.name}
             </p>
             <p className="mt-1 break-all font-mono text-xs text-text-muted">
@@ -672,19 +686,28 @@ function VenueCard({
             <p className="app-label">{t("localOperations")}</p>
             <p className="font-mono text-sm text-text-heading">{venue.timezone}</p>
             <p className="mt-1 font-mono text-xs text-text-muted">
-              {venue.openingTime}–{venue.closingTime}
+              {venue.openingTime} - {venue.closingTime}
             </p>
           </div>
           <div className="grid grid-cols-2 gap-2">
             <button
+              type="button"
               onClick={() => setIsEditing(true)}
-              className="bg-surface-active hover:bg-border-strong text-text-heading text-xs font-medium py-2 sm:py-3 transition-colors"
+              className="min-h-11 bg-surface-active py-2 text-xs font-medium text-text-heading transition-colors hover:bg-border-strong sm:py-3"
             >
               {t("edit")}
             </button>
             <button
-              onClick={() => onToggleActive(venue)}
-              className={`text-xs font-medium py-2 sm:py-3 transition-colors border ${
+              type="button"
+              disabled={isTogglingActive}
+              onClick={() => {
+                if (venue.active) {
+                  setIsDeactivateConfirmOpen(true);
+                } else {
+                  void handleToggleActive();
+                }
+              }}
+              className={`min-h-11 border py-2 text-xs font-medium transition-colors sm:py-3 ${
                 venue.active
                   ? "border-status-danger/70 bg-status-danger/10 text-status-danger hover:bg-status-danger/20"
                   : "bg-surface-raised hover:bg-surface-raised text-text-heading border-border-strong"
@@ -707,7 +730,7 @@ function VenueCard({
               onChange={(e) =>
                 setEditData({ ...editData, name: e.target.value })
               }
-              className="w-full bg-surface-raised border border-border-strong px-3 py-2 sm:py-3 text-text-heading font-mono text-sm focus:outline-none focus:border-border-focus"
+              className="min-h-11 w-full border border-border-strong bg-surface-raised px-3 py-2 font-mono text-sm text-text-heading focus:border-border-focus focus:outline-none sm:py-3"
             />
           </div>
 
@@ -715,7 +738,7 @@ function VenueCard({
             <legend className="app-label">
               {t("type")}
             </legend>
-            <div className="grid grid-cols-5 gap-1">
+            <div className="grid grid-cols-2 gap-1 sm:grid-cols-3 xl:grid-cols-5">
               {VENUE_TYPES.map((opt) => (
                 <button
                   key={opt.value}
@@ -727,7 +750,7 @@ function VenueCard({
                       type: opt.value as Venue["type"],
                     })
                   }
-                  className={`p-2 border text-xs font-medium transition-colors ${
+                  className={`min-h-11 border p-2 text-xs font-medium transition-colors ${
                     editData.type === opt.value
                       ? "border-action-primary bg-action-primary text-action-text"
                       : "bg-surface-raised text-text-muted border-border-strong hover:text-text-heading hover:border-border-strong"
@@ -750,7 +773,7 @@ function VenueCard({
               onChange={(e) =>
                 setEditData({ ...editData, address: e.target.value })
               }
-              className="w-full bg-surface-raised border border-border-strong px-3 py-2 sm:py-3 text-text-heading font-mono text-sm focus:outline-none focus:border-border-focus"
+              className="min-h-11 w-full border border-border-strong bg-surface-raised px-3 py-2 font-mono text-sm text-text-heading focus:border-border-focus focus:outline-none sm:py-3"
             />
           </div>
 
@@ -896,7 +919,7 @@ function VenueCard({
           <div className="grid grid-cols-2 gap-2">
             <button
               onClick={handleSave}
-              className="bg-text-heading hover:bg-text-body text-canvas text-xs font-medium py-2 sm:py-3 transition-colors"
+              className="min-h-11 bg-text-heading py-2 text-xs font-medium text-canvas transition-colors hover:bg-text-body sm:py-3"
             >
               {t("save")}
             </button>
@@ -917,13 +940,24 @@ function VenueCard({
                   closingTime: venue.closingTime,
                 });
               }}
-              className="bg-surface-active hover:bg-border-strong text-text-heading text-xs font-medium py-2 sm:py-3 transition-colors"
+              className="min-h-11 bg-surface-active py-2 text-xs font-medium text-text-heading transition-colors hover:bg-border-strong sm:py-3"
             >
               {commonT("cancel")}
             </button>
           </div>
         </div>
       )}
-    </div>
+      </div>
+      <ConfirmDialog
+        open={isDeactivateConfirmOpen}
+        title={t("deactivateTitle")}
+        description={t("deactivateDescription", { name: venue.name })}
+        confirmLabel={t("deactivate")}
+        cancelLabel={commonT("cancel")}
+        onConfirm={() => void handleToggleActive()}
+        onCancel={() => setIsDeactivateConfirmOpen(false)}
+        isLoading={isTogglingActive}
+      />
+    </>
   );
 }

@@ -25,7 +25,7 @@ export default function RegisterPage() {
   }, [router]);
 
   return (
-    <div className="flex min-h-[100dvh] flex-col bg-canvas">
+    <main id="main-content" tabIndex={-1} className="flex min-h-[100dvh] flex-col bg-canvas">
       <div className="flex-1 flex items-center justify-center px-4">
         <div className="app-panel w-full max-w-sm p-7 text-center sm:p-9">
           <div className="mb-6 flex justify-end">
@@ -58,6 +58,6 @@ export default function RegisterPage() {
       </div>
 
       <Footer />
-    </div>
+    </main>
   );
 }

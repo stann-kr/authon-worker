@@ -6,10 +6,10 @@ import {
   useGuestPolling,
   useLatestRequestGuard,
 } from "@/lib/hooks";
-import AdminHeader from "../../admin/components/AdminHeader";
-import Footer from "@/components/Footer";
 import StatGrid from "@/components/StatGrid";
 import PanelHeader from "@/components/PanelHeader";
+import WorkspaceShell from "@/components/WorkspaceShell";
+import VenueLoadNotice from "@/components/VenueLoadNotice";
 import EmptyState from "@/components/EmptyState";
 import Alert from "@/components/Alert";
 import VenueSelector, { useVenueSelector } from "@/components/VenueSelector";
@@ -42,6 +42,7 @@ interface AuthenticatedGuestViewProps {
 
 export default function AuthenticatedGuestView({ user }: AuthenticatedGuestViewProps) {
   const t = useTranslations("GuestOperations");
+  const commonT = useTranslations("Common");
   const locale = useLocale() as "en" | "ko";
   const [selectedDate, setSelectedDate] = useState<string>(getBusinessDate());
   const [guestName, setGuestName] = useState<string>("");
@@ -75,6 +76,9 @@ export default function AuthenticatedGuestView({ user }: AuthenticatedGuestViewP
     setSelectedVenueId,
     isSuperAdmin,
     currentVenue,
+    isLoadingVenues,
+    venueLoadError,
+    refreshVenues,
   } = useVenueSelector();
   
   const effectiveVenueId = isSuperAdmin
@@ -400,14 +404,17 @@ export default function AuthenticatedGuestView({ user }: AuthenticatedGuestViewP
     : sortedGuests;
 
   return (
-    <div className="flex min-h-[100dvh] flex-col bg-canvas">
-      <AdminHeader />
-      <div className="flex flex-1 flex-col overflow-x-hidden pt-20 sm:pt-24">
-        <div className="page-container">
-          <OperationsLayout
-            title={t("title")}
-            dashboard={
-              <>
+    <WorkspaceShell contentClassName="gap-4 pb-8 lg:gap-6">
+      {venueLoadError && (
+        <VenueLoadNotice
+          onRetry={refreshVenues}
+          isLoading={isLoadingVenues}
+        />
+      )}
+      <OperationsLayout
+        title={commonT("guest")}
+        dashboard={
+          <>
                 <div className="context-bar">
                   <DatePicker
                     value={selectedDate}
@@ -432,14 +439,9 @@ export default function AuthenticatedGuestView({ user }: AuthenticatedGuestViewP
                 <section className="app-panel" aria-labelledby="add-guest-title">
                   <div className="px-4 py-4 sm:px-5">
                     <div className="mb-3 flex items-end justify-between gap-4">
-                      <div>
-                        <h2 id="add-guest-title" className="type-panel-title">
-                          {t("addGuest")}
-                        </h2>
-                        <p className="mt-1 text-sm text-text-muted">
-                          {t("addOneAtATime")}
-                        </p>
-                      </div>
+                      <h2 id="add-guest-title" className="type-panel-title">
+                        {t("addGuest")}
+                      </h2>
                       <div className="text-right">
                         <div className="font-mono text-lg tabular-nums text-text-heading">
                           {remaining ?? "∞"}
@@ -593,48 +595,9 @@ export default function AuthenticatedGuestView({ user }: AuthenticatedGuestViewP
                   </div>
                 </section>
 
-                <section className="app-panel" aria-labelledby="guest-tools-title">
-                  <PanelHeader
-                    title={t("tools")}
-                    headingLevel={2}
-                    headingId="guest-tools-title"
-                    sortMode={sortMode}
-                    onSortToggle={() =>
-                      setSortMode((prev) =>
-                        prev === "default" ? "alpha" : "default",
-                      )
-                    }
-                    onRefresh={loadGuests}
-                    isLoading={isCurrentScopeFetching}
-                  />
-                  <GuestSearchInput
-                    value={searchQuery}
-                    onChange={setSearchQuery}
-                  />
-                  <StatGrid
-                    isLoading={!hasCurrentScopeData}
-                    items={[
-                      {
-                        label: t("waiting"),
-                        value: pendingGuests.length,
-                        color: "waiting",
-                      },
-                      {
-                        label: t("checkedIn"),
-                        value: checkedGuests.length,
-                        color: "checked",
-                      },
-                      {
-                        label: t("total"),
-                        value: activeGuestsCount,
-                        color: "default",
-                      },
-                    ]}
-                  />
-                </section>
-              </>
-            }
-          >
+          </>
+        }
+      >
             <section
               className="main-content-panel"
               aria-labelledby="guest-list-title"
@@ -645,6 +608,38 @@ export default function AuthenticatedGuestView({ user }: AuthenticatedGuestViewP
                 headingLevel={2}
                 headingId="guest-list-title"
                 count={displayGuests.length}
+                sortMode={sortMode}
+                onSortToggle={() =>
+                  setSortMode((prev) =>
+                    prev === "default" ? "alpha" : "default",
+                  )
+                }
+                onRefresh={loadGuests}
+                isLoading={isCurrentScopeFetching}
+              />
+              <GuestSearchInput
+                value={searchQuery}
+                onChange={setSearchQuery}
+              />
+              <StatGrid
+                isLoading={!hasCurrentScopeData}
+                items={[
+                  {
+                    label: t("waiting"),
+                    value: pendingGuests.length,
+                    color: "waiting",
+                  },
+                  {
+                    label: t("checkedIn"),
+                    value: checkedGuests.length,
+                    color: "checked",
+                  },
+                  {
+                    label: t("total"),
+                    value: activeGuestsCount,
+                    color: "default",
+                  },
+                ]}
               />
 
               {isCurrentScopeFetching && displayDataGuests.length === 0 ? (
@@ -660,8 +655,8 @@ export default function AuthenticatedGuestView({ user }: AuthenticatedGuestViewP
                 />
               ) : (
                 <div
-                  className={`divide-y divide-border-subtle transition-opacity duration-200 ${
-                    isCurrentScopeFetching ? "pointer-events-none opacity-50" : ""
+                  className={`divide-y divide-border-subtle ${
+                    isCurrentScopeFetching ? "pointer-events-none" : ""
                   }`}
                 >
                   {displayGuests.map((guest, index) => (
@@ -682,10 +677,7 @@ export default function AuthenticatedGuestView({ user }: AuthenticatedGuestViewP
                 </div>
               )}
             </section>
-          </OperationsLayout>
-        </div>
-        <Footer />
-      </div>
-    </div>
+      </OperationsLayout>
+    </WorkspaceShell>
   );
 }

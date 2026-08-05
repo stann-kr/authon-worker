@@ -98,9 +98,9 @@ export default function LegacyUserMigration() {
           
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-80 overflow-y-auto pr-2 custom-scrollbar">
             {results.map((res, idx) => (
-              <div key={idx} className="bg-canvas border border-border-default p-3 flex items-center justify-between">
-                <div>
-                  <p className="text-text-heading font-mono text-xs truncate w-40">{res.email}</p>
+              <div key={idx} className="flex items-center justify-between gap-2 border border-border-default bg-canvas p-3">
+                <div className="min-w-0 flex-1">
+                  <p className="w-full truncate font-mono text-xs text-text-heading">{res.email}</p>
                 </div>
                 <div className="flex items-center gap-2">
                   {res.status === "success" && <span className="text-text-heading text-xs font-mono font-semibold uppercase border border-border-strong px-2 py-0.5">{t("success")}</span>}
@@ -113,7 +113,7 @@ export default function LegacyUserMigration() {
 
           <button
             onClick={() => setResults(null)}
-            className="w-full border border-border-default py-3 font-mono text-xs uppercase text-text-dim transition-colors hover:border-border-strong hover:text-text-heading"
+            className="min-h-11 w-full border border-border-default py-3 font-mono text-xs uppercase text-text-dim transition-colors hover:border-border-strong hover:text-text-heading"
           >
             {t("reset")}
           </button>

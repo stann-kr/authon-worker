@@ -4,6 +4,25 @@
 
 ## 2026-08-05
 
+### CRM형 운영 대시보드 구조 개선
+
+#### Added
+
+- 권한에 맞는 mobile 전역 navigation과 Admin 업무별 direct link를 추가해 현재 화면에서 다른 운영 업무로 바로 이동할 수 있다.
+- 베뉴 목록을 불러오지 못한 화면에서 오류를 숨기지 않고 해당 영역에서 다시 시도할 수 있다.
+
+#### Changed
+
+- Admin을 desktop 고정 sidebar와 mobile 전체 업무 목록을 갖춘 CRM형 구조로 바꾸고, 하위 화면의 중복 section navigation과 장황한 작업 설명을 정리했다.
+- 홈은 Guest, Door, Admin 이름만 남긴 간결한 작업 행으로 축소하고 역할에 맞는 기본 업무를 먼저 배치한다.
+- Guest, Door, Admin, Profile을 공통 workspace shell로 통합하고 기존 상단 header의 간결한 구성을 유지하면서 320px 화면, mobile safe area, 44px touch target에 맞춰 목록과 작업 control을 재배치했다.
+- 눌림, dialog 진입과 disclosure에만 짧은 motion을 사용하고 reduced-motion 환경에서는 transform 효과를 제거했다.
+
+#### Fixed
+
+- 확인 dialog의 focus trap, 본문 접근 차단, Escape 닫기와 trigger focus 복귀를 보강했다.
+- route 전환 중 이전 화면에 focus가 남는 문제와 상단·하단 고정 navigation이 mobile 콘텐츠를 가릴 수 있는 문제를 수정했다.
+
 ### 여러 이름 붙여넣기 UI 정리
 
 #### Changed

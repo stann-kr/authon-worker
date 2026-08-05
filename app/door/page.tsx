@@ -6,9 +6,7 @@ import {
   useGuestPolling,
   useLatestRequestGuard,
 } from "../../lib/hooks";
-import AdminHeader from "../admin/components/AdminHeader";
 import AuthGuard from "../../components/AuthGuard";
-import Footer from "../../components/Footer";
 import GuestListCard from "../../components/GuestListCard";
 import GuestSearchInput from "../../components/GuestSearchInput";
 import VenueSelector, {
@@ -17,6 +15,8 @@ import VenueSelector, {
 import DatePicker from "../../components/DatePicker";
 import StatGrid from "../../components/StatGrid";
 import PanelHeader from "../../components/PanelHeader";
+import WorkspaceShell from "../../components/WorkspaceShell";
+import VenueLoadNotice from "../../components/VenueLoadNotice";
 import EmptyState from "../../components/EmptyState";
 import Alert from "../../components/Alert";
 import Icon from "../../components/Icon";
@@ -53,9 +53,19 @@ export default function DoorPage() {
 
 function DoorPageContent() {
   const t = useTranslations("Door");
+  const commonT = useTranslations("Common");
   const locale = useLocale() as "en" | "ko";
-  const { venueId, venues, selectedVenueId, setSelectedVenueId, isSuperAdmin, currentVenue } =
-    useVenueSelector();
+  const {
+    venueId,
+    venues,
+    selectedVenueId,
+    setSelectedVenueId,
+    isSuperAdmin,
+    currentVenue,
+    isLoadingVenues,
+    venueLoadError,
+    refreshVenues,
+  } = useVenueSelector();
   const businessDate = getBusinessDate(currentVenue ?? {});
   const [selectedDate, setSelectedDate] = useLocalStorage(
     "door:selectedDate",
@@ -281,14 +291,17 @@ function DoorPageContent() {
   );
 
   return (
-    <div className="flex min-h-[100dvh] flex-col bg-canvas">
-      <AdminHeader />
-      <div className="flex flex-1 flex-col overflow-x-hidden pt-20 sm:pt-24">
-        <div className="page-container">
-          <OperationsLayout
-            title={t("title")}
-            dashboard={
-              <>
+    <WorkspaceShell contentClassName="gap-4 pb-8 lg:gap-6">
+      {venueLoadError && (
+        <VenueLoadNotice
+          onRetry={refreshVenues}
+          isLoading={isLoadingVenues}
+        />
+      )}
+      <OperationsLayout
+        title={commonT("door")}
+        dashboard={
+          <>
                 <div className="context-bar">
                   <DatePicker
                     value={selectedDate}
@@ -340,49 +353,9 @@ function DoorPageContent() {
 
                 {feedback && <Alert type="error" message={feedback} />}
 
-                <section className="app-panel" aria-labelledby="door-dashboard-title">
-                  <PanelHeader
-                    title={t("title")}
-                    headingLevel={2}
-                    headingId="door-dashboard-title"
-                    count={displayGuests.length}
-                    sortMode={sortMode}
-                    onSortToggle={() =>
-                      setSortMode((prev) =>
-                        prev === "default" ? "alpha" : "default",
-                      )
-                    }
-                    onRefresh={loadData}
-                    isLoading={isCurrentScopeFetching}
-                  />
-                  <GuestSearchInput
-                    value={searchQuery}
-                    onChange={setSearchQuery}
-                  />
-                  <StatGrid
-                    isLoading={!hasCurrentScopeData}
-                    items={[
-                      {
-                        label: t("waiting"),
-                        value: pendingGuests.length,
-                        color: "waiting",
-                      },
-                      {
-                        label: t("checkedIn"),
-                        value: checkedGuests.length,
-                        color: "checked",
-                      },
-                      {
-                        label: t("total"),
-                        value: pendingGuests.length + checkedGuests.length,
-                        color: "default",
-                      },
-                    ]}
-                  />
-                </section>
-              </>
-            }
-          >
+          </>
+        }
+      >
             <section
               className="main-content-panel"
               aria-labelledby="door-guest-list-title"
@@ -393,6 +366,38 @@ function DoorPageContent() {
                 headingLevel={2}
                 headingId="door-guest-list-title"
                 count={displayGuests.length}
+                sortMode={sortMode}
+                onSortToggle={() =>
+                  setSortMode((prev) =>
+                    prev === "default" ? "alpha" : "default",
+                  )
+                }
+                onRefresh={loadData}
+                isLoading={isCurrentScopeFetching}
+              />
+              <GuestSearchInput
+                value={searchQuery}
+                onChange={setSearchQuery}
+              />
+              <StatGrid
+                isLoading={!hasCurrentScopeData}
+                items={[
+                  {
+                    label: t("waiting"),
+                    value: pendingGuests.length,
+                    color: "waiting",
+                  },
+                  {
+                    label: t("checkedIn"),
+                    value: checkedGuests.length,
+                    color: "checked",
+                  },
+                  {
+                    label: t("total"),
+                    value: pendingGuests.length + checkedGuests.length,
+                    color: "default",
+                  },
+                ]}
               />
 
               {isCurrentScopeFetching && displayData.guests.length === 0 ? (
@@ -408,8 +413,8 @@ function DoorPageContent() {
                 />
               ) : (
                 <div
-                  className={`divide-y divide-border-subtle transition-opacity duration-200 ${
-                    isCurrentScopeFetching ? "pointer-events-none opacity-50" : ""
+                  className={`divide-y divide-border-subtle ${
+                    isCurrentScopeFetching ? "pointer-events-none" : ""
                   }`}
                 >
                   {displayGuests.map((guest, index) => {
@@ -441,10 +446,7 @@ function DoorPageContent() {
                 </div>
               )}
             </section>
-          </OperationsLayout>
-        </div>
-        <Footer />
-      </div>
-    </div>
+      </OperationsLayout>
+    </WorkspaceShell>
   );
 }

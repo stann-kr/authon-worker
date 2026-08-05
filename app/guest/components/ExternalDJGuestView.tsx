@@ -330,11 +330,11 @@ export default function ExternalDJGuestView({ token }: ExternalDJGuestViewProps)
       <div className="min-h-[100dvh] bg-canvas flex flex-col">
         {externalHeader}
         <div className="flex-1 overflow-x-hidden pt-[calc(5rem+env(safe-area-inset-top))] sm:pt-[calc(5.5rem+env(safe-area-inset-top))] flex flex-col">
-          <div className="page-container">
+          <main id="main-content" tabIndex={-1} className="page-container">
             <div className="main-content-panel">
               <Spinner mode="inline" text={commonT("loading")} />
             </div>
-          </div>
+          </main>
           <Footer />
         </div>
       </div>
@@ -343,7 +343,7 @@ export default function ExternalDJGuestView({ token }: ExternalDJGuestViewProps)
 
   if (hasValidationError) {
     return (
-      <div className="min-h-[100dvh] bg-canvas flex items-center justify-center px-4">
+      <main id="main-content" tabIndex={-1} className="min-h-[100dvh] bg-canvas flex items-center justify-center px-4">
         <div className="app-panel max-w-sm p-7 text-center">
           <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center border border-status-danger/70 bg-status-danger/10">
             <Icon name="warning" size={24} className="text-status-danger" />
@@ -356,7 +356,7 @@ export default function ExternalDJGuestView({ token }: ExternalDJGuestViewProps)
           </p>
           <Footer compact />
         </div>
-      </div>
+      </main>
     );
   }
 
@@ -364,7 +364,7 @@ export default function ExternalDJGuestView({ token }: ExternalDJGuestViewProps)
     return (
       <div className="min-h-[100dvh] bg-canvas flex flex-col">
         {externalHeader}
-        <div className="flex flex-1 items-center justify-center px-4 pt-[calc(5rem+env(safe-area-inset-top))]">
+        <main id="main-content" tabIndex={-1} className="flex flex-1 items-center justify-center px-4 pt-[calc(5rem+env(safe-area-inset-top))]">
           <div
             className="app-panel max-w-sm p-7 text-center"
             aria-labelledby="external-load-error-title"
@@ -392,7 +392,7 @@ export default function ExternalDJGuestView({ token }: ExternalDJGuestViewProps)
               {commonT("refresh")}
             </Button>
           </div>
-        </div>
+        </main>
       </div>
     );
   }
@@ -413,7 +413,7 @@ export default function ExternalDJGuestView({ token }: ExternalDJGuestViewProps)
     <div className="min-h-[100dvh] bg-canvas flex flex-col">
       {externalHeader}
       <div className="flex-1 overflow-x-hidden pt-[calc(5rem+env(safe-area-inset-top))] sm:pt-[calc(5.5rem+env(safe-area-inset-top))] flex flex-col">
-        <div className="page-container">
+        <main id="main-content" tabIndex={-1} className="page-container">
           <div className="context-bar mb-4 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4 p-4 sm:p-5">
             <div className="flex flex-col">
               <span className="text-xs font-mono uppercase tracking-wider text-text-dim">
@@ -658,7 +658,7 @@ export default function ExternalDJGuestView({ token }: ExternalDJGuestViewProps)
               </div>
             )}
           </section>
-        </div>
+        </main>
         <Footer />
       </div>
     </div>

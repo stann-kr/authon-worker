@@ -9,18 +9,28 @@
   --app-surface: #111315;
   --app-surface-raised: #181b1e;
   --app-surface-hover: #202428;
+  --app-surface-active: #292e33;
   --app-border-subtle: #2a2e32;
   --app-border: #42484e;
+  --app-border-strong: #626b73;
   --app-text: #f4f5f5;
   --app-text-body: #d4d7d9;
   --app-text-muted: #aab0b5;
   --app-action: #e7eaec;
+  --app-action-hover: #f4f5f5;
+  --app-action-active: #d4d7d9;
   --app-focus: #f4f5f5;
-  --app-header-height: 4rem;
+  --app-header-height: calc(4rem + env(safe-area-inset-top));
   --app-z-route-overlay: 40;
   --app-z-chrome: 45;
+  --app-z-toast: 50;
+  --app-z-dialog: 60;
+  --app-z-skip-link: 70;
   --app-ease-out: cubic-bezier(0.23, 1, 0.32, 1);
   --app-ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
+  --app-duration-press: 0ms;
+  --app-duration-release: 140ms;
+  --app-duration-enter: 200ms;
   --app-duration-fast: 140ms;
   --app-duration-standard: 200ms;
 }
@@ -109,7 +119,7 @@ input[type="date"] {
 
 @layer components {
   .skip-link {
-    @apply fixed left-4 top-3 z-[100] -translate-y-24 rounded-control bg-action-primary px-4 py-3 text-xs font-semibold text-action-text;
+    @apply fixed left-4 top-3 z-[var(--app-z-skip-link)] -translate-y-24 rounded-control bg-action-primary px-4 py-3 text-xs font-semibold text-action-text;
     transition: transform var(--app-duration-fast) var(--app-ease-out);
   }
 
@@ -123,11 +133,16 @@ input[type="date"] {
   }
 
   .page-scroll {
-    @apply flex-1 overflow-x-hidden pt-20 sm:pt-24 flex flex-col;
+    @apply flex flex-1 flex-col overflow-x-hidden;
+    padding-top: calc(var(--app-header-height) + 1rem);
   }
 
   .page-container {
     @apply mx-auto flex w-full max-w-[1440px] flex-col px-4 sm:px-6 lg:min-h-0 lg:flex-1 lg:px-10;
+  }
+
+  .page-heading {
+    @apply mb-4 flex flex-col gap-4 border-b border-border-subtle pb-4 sm:flex-row sm:items-end sm:justify-between lg:mb-6 lg:pb-5;
   }
 
   .main-content-panel {
@@ -184,13 +199,8 @@ input[type="date"] {
 
   .app-field {
     @apply w-full rounded-control border border-border-strong bg-surface-raised px-4 py-3 text-sm text-text-heading outline-none placeholder:text-text-dim disabled:cursor-not-allowed disabled:opacity-50;
-    transition: border-color var(--app-duration-fast) ease,
-      background-color var(--app-duration-fast) ease;
-  }
-
-  .app-field:focus {
-    @apply border-border-focus;
-    box-shadow: 0 0 0 1px var(--app-focus);
+    transition: border-color var(--app-duration-release) var(--app-ease-out),
+      background-color var(--app-duration-release) var(--app-ease-out);
   }
 
   .app-label {
@@ -230,14 +240,76 @@ input[type="date"] {
   }
 
   .pressable {
-    transition: color var(--app-duration-fast) ease,
-      background-color var(--app-duration-fast) ease,
-      border-color var(--app-duration-fast) ease,
-      opacity var(--app-duration-fast) ease;
+    --app-press-background: var(--app-surface-active);
+    transition: color var(--app-duration-release) var(--app-ease-out),
+      background-color var(--app-duration-release) var(--app-ease-out),
+      border-color var(--app-duration-release) var(--app-ease-out),
+      opacity var(--app-duration-release) var(--app-ease-out);
   }
 
-  .pressable:active:not(:disabled) {
-    @apply bg-surface-active;
+  .pressable.bg-action-primary,
+  .app-button[data-variant="primary"],
+  .app-button[data-variant="confirm"] {
+    --app-press-background: var(--app-action-active);
+  }
+
+  .app-button[data-variant="danger"] {
+    --app-press-background: rgb(204 119 112 / 0.26);
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .app-button[data-variant="primary"]:not(:disabled):hover,
+    .app-button[data-variant="confirm"]:not(:disabled):hover {
+      border-color: var(--app-action-hover);
+      background-color: var(--app-action-hover);
+    }
+
+    .app-button[data-variant="secondary"]:not(:disabled):hover,
+    .app-button[data-variant="outline"]:not(:disabled):hover {
+      border-color: var(--app-border-strong);
+      background-color: var(--app-surface-hover);
+      color: var(--app-text);
+    }
+
+    .app-button[data-variant="danger"]:not(:disabled):hover {
+      background-color: rgb(204 119 112 / 0.2);
+    }
+
+    .app-button[data-variant="ghost"]:not(:disabled):hover {
+      background-color: var(--app-surface-hover);
+      color: var(--app-text);
+    }
+  }
+
+  .pressable:active:not(:disabled),
+  .app-button.pressable:active:not(:disabled) {
+    background-color: var(--app-press-background);
+    transition-duration: var(--app-duration-press);
+  }
+
+  .app-dialog-backdrop {
+    opacity: 1;
+    transition: opacity var(--app-duration-release) var(--app-ease-out);
+
+    @starting-style {
+      opacity: 0;
+    }
+  }
+
+  .app-dialog-panel {
+    transform: scale(1);
+    transform-origin: center;
+    transition: transform var(--app-duration-enter) var(--app-ease-out);
+
+    @starting-style {
+      transform: scale(0.98);
+    }
+  }
+}
+
+@media (min-width: 640px) {
+  .page-scroll {
+    padding-top: calc(var(--app-header-height) + 2rem);
   }
 }
 
@@ -248,21 +320,30 @@ input[type="date"] {
 }
 
 @media (min-width: 768px) {
-  .operations-layout {
+  .operations-layout:not(.operations-layout-stacked) {
     grid-template-columns: minmax(17rem, 20rem) minmax(0, 1fr);
   }
 }
 
 @media (min-width: 1024px) {
-  .operations-layout {
+  .operations-layout:not(.operations-layout-stacked) {
     grid-template-columns: minmax(20rem, 24rem) minmax(0, 1fr);
   }
 }
 
-/* Global focus-visible accessibility polish */
-*:focus-visible {
-  outline: 2px solid var(--app-focus);
-  outline-offset: 3px;
+/* Interactive elements use one keyboard-focus treatment across the app. */
+:where(
+  a[href],
+  button,
+  input,
+  select,
+  textarea,
+  summary,
+  [contenteditable="true"],
+  [tabindex]:not([tabindex="-1"])
+):focus-visible {
+  outline: 2px solid var(--app-focus) !important;
+  outline-offset: 3px !important;
 }
 
 .cds--g100 {
@@ -276,13 +357,27 @@ input[type="date"] {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  html:focus-within {
+    scroll-behavior: auto !important;
+  }
+
   *,
   *::before,
   *::after {
-    scroll-behavior: auto !important;
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
-    transition-duration: 0.01ms !important;
   }
 
+  .app-dialog-panel {
+    transform: none;
+    transition-property: opacity;
+
+    @starting-style {
+      transform: none;
+    }
+  }
+
+  .skip-link {
+    transition-duration: 0.01ms;
+  }
 }

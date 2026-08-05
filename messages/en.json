@@ -23,6 +23,7 @@
     "sortAlphabetically": "Sort alphabetically",
     "created": "Created",
     "refresh": "Refresh",
+    "venueLoadFailed": "Venues could not be loaded.",
     "removeGuestConfirm": "Remove this guest from the list?",
     "byName": "By {name}",
     "registered": "Registered",
@@ -71,6 +72,7 @@
     "emailLoginHelp": "Use the email address registered to your account.",
     "emailSetupHelp": "This is the account email associated with the setup code.",
     "password": "Password",
+    "forgotPassword": "Forgot your password?",
     "passwordHelp": "Enter your password for normal sign-in, or your issued setup code for first-time setup and administrator resets.",
     "newPassword": "New password",
     "confirmPassword": "Confirm password",
@@ -297,6 +299,7 @@
     "noGuestsForDate": "No guests for this date"
   },
   "AdminNav": {
+    "title": "Admin",
     "sections": "Admin sections",
     "guests": "Guests",
     "guestSections": "Guest management sections",
@@ -468,6 +471,8 @@
     "status": "Status",
     "edit": "Edit",
     "deactivate": "Deactivate",
+    "deactivateTitle": "Deactivate venue?",
+    "deactivateDescription": "{name} will no longer be available for active operations. You can reactivate it later.",
     "activate": "Activate",
     "save": "Save",
     "emptyDomainHelp": "Saving an empty value removes the primary domain.",

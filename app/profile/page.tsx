@@ -2,15 +2,15 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import Footer from "@/components/Footer";
 import RouteLoadingFallback from "@/components/RouteLoadingFallback";
 import Alert from "@/components/Alert";
 import RoleLabel from "@/components/RoleLabel";
 import PasswordInput from "@/components/PasswordInput";
 import Icon from "@/components/Icon";
 import Button from "@/components/Button";
-import AdminHeader from "@/app/admin/components/AdminHeader";
 import LanguageSwitcher from "@/components/LanguageSwitcher";
+import PageHeader from "@/components/PageHeader";
+import WorkspaceShell from "@/components/WorkspaceShell";
 import { useTranslations } from "next-intl";
 import { getUser, User } from "@/lib/auth";
 import { updateUserProfile } from "@/lib/api/users";
@@ -101,176 +101,172 @@ export default function ProfilePage() {
   if (!user) return null;
 
   return (
-    <div className="min-h-[100dvh] bg-canvas flex flex-col">
-      <AdminHeader />
-      <div className="flex-1 overflow-x-hidden pt-20 sm:pt-24 flex flex-col">
-        <div className="page-container">
-          <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-            <div className="lg:col-span-1 space-y-4">
-              <div className="app-panel p-4 sm:p-5">
-                <div className="flex flex-col items-center text-center">
-                  <div className="mb-4 flex h-20 w-20 items-center justify-center rounded-panel border border-border-default bg-surface-raised sm:h-24 sm:w-24">
-                    <Icon name="user" size={30} className="text-text-muted" />
-                  </div>
-                  <h2 className="mb-1 text-base font-semibold text-text-heading sm:text-lg">
-                    {user.name}
-                  </h2>
-                  <p className="mb-3 break-all text-xs text-text-muted">
-                    {user.email}
-                  </p>
-                  <div className="flex flex-wrap items-center justify-center gap-2">
-                    <span className="px-2 py-1 bg-canvas border border-border-strong text-xs font-mono text-text-body uppercase">
-                      <RoleLabel role={user.role} />
-                    </span>
-                    <span className="px-2 py-1 bg-canvas border border-border-strong text-xs font-mono text-text-body">
-                      {t("guestLimit")}: {user.guest_limit}
-                    </span>
-                  </div>
-                </div>
+    <WorkspaceShell width="narrow" contentClassName="gap-6">
+      <PageHeader
+        titleId="profile-page-title"
+        title={t("title")}
+      />
+
+      <section
+        aria-labelledby="profile-page-title"
+        className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,18rem)_minmax(0,1fr)]"
+      >
+        <aside
+          className="app-panel self-start p-4 sm:p-5"
+          aria-labelledby="account-info-title"
+        >
+          <h2
+            id="account-info-title"
+            className="text-xs font-medium text-text-muted sm:text-sm"
+          >
+            {t("accountInfo")}
+          </h2>
+
+          <div className="mt-4 flex flex-col items-center text-center">
+            <div className="mb-4 flex h-20 w-20 items-center justify-center rounded-panel border border-border-default bg-surface-raised sm:h-24 sm:w-24">
+              <Icon name="user" size={30} className="text-text-muted" />
+            </div>
+            <p className="mb-1 max-w-full break-words text-base font-semibold text-text-heading sm:text-lg">
+              {user.name}
+            </p>
+            <p className="break-all text-xs text-text-muted">{user.email}</p>
+          </div>
+
+          <dl className="mt-5 space-y-3 border-t border-border-default pt-4">
+            <div className="flex items-center justify-between gap-3">
+              <dt className="text-xs text-text-dim">{t("role")}</dt>
+              <dd className="text-right text-xs text-text-heading">
+                <RoleLabel role={user.role} />
+              </dd>
+            </div>
+            <div className="flex items-center justify-between gap-3">
+              <dt className="text-xs text-text-dim">{t("guestLimit")}</dt>
+              <dd className="font-mono text-xs text-text-heading">
+                {user.guest_limit}
+              </dd>
+            </div>
+            <div className="flex items-center justify-between gap-3">
+              <dt className="text-xs text-text-dim">{t("status")}</dt>
+              <dd className="text-xs text-text-heading">{t("active")}</dd>
+            </div>
+          </dl>
+        </aside>
+
+        <div className="space-y-6">
+          {showSuccess && (
+            <Alert
+              type="success"
+              message={t("profileUpdated")}
+              className="mb-6"
+            />
+          )}
+
+          {error && <Alert type="error" message={error} className="mb-6" />}
+
+          <div className="app-panel overflow-hidden">
+            <div className="space-y-4 border-b border-border-default p-4">
+              <div>
+                <h2 className="text-sm font-semibold text-text-heading">
+                  {t("accountSettings")}
+                </h2>
               </div>
 
-              <div className="app-panel p-4 sm:p-5">
-                <h3 className="text-xs font-medium text-text-muted sm:text-sm mb-3">
-                  {t("accountInfo")}
-                </h3>
-                <div className="space-y-3">
-                  <div className="flex justify-between items-center gap-3">
-                    <span className="text-xs text-text-dim">
-                      {t("role")}
-                    </span>
-                    <span className="text-xs text-text-heading text-right">
-                      <RoleLabel role={user.role} />
-                    </span>
-                  </div>
-                  <div className="flex justify-between items-center gap-3">
-                    <span className="text-xs text-text-dim">
-                      {t("guestLimit")}
-                    </span>
-                    <span className="text-text-heading font-mono text-xs">
-                      {user.guest_limit}
-                    </span>
-                  </div>
-                  <div className="flex justify-between items-center gap-3">
-                    <span className="text-xs text-text-dim">
-                      {t("status")}
-                    </span>
-                    <span className="text-xs text-text-heading">
-                      {t("active")}
-                    </span>
-                  </div>
-                </div>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setActiveSection("profile")}
+                  aria-pressed={activeSection === "profile"}
+                  className={`min-h-11 rounded-control border px-4 py-3 text-sm font-medium ${
+                    activeSection === "profile"
+                      ? "border-action-primary bg-action-primary text-action-text"
+                      : "bg-canvas text-text-muted border-border-default hover:text-text-heading hover:border-border-strong"
+                  }`}
+                >
+                  {t("basicInfo")}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveSection("security")}
+                  aria-pressed={activeSection === "security"}
+                  className={`min-h-11 rounded-control border px-4 py-3 text-sm font-medium ${
+                    activeSection === "security"
+                      ? "border-action-primary bg-action-primary text-action-text"
+                      : "bg-canvas text-text-muted border-border-default hover:text-text-heading hover:border-border-strong"
+                  }`}
+                >
+                  {t("security")}
+                </button>
               </div>
             </div>
 
-            <div className="lg:col-span-3 space-y-6">
-              {showSuccess && (
-                <Alert
-                  type="success"
-                  message={t("profileUpdated")}
-                  className="mb-6"
-                />
-              )}
+            {activeSection === "profile" ? (
+              <div>
+                <div className="border-b border-border-default p-4">
+                  <h3 className="text-xs font-semibold text-text-heading sm:text-sm">
+                    {t("editProfile")}
+                  </h3>
+                </div>
 
-              {error && <Alert type="error" message={error} className="mb-6" />}
-
-              <div className="app-panel overflow-hidden">
-                <div className="border-b border-border-default p-4 space-y-4">
+                <form
+                  onSubmit={handleSubmit}
+                  className="space-y-6 p-4 sm:p-6"
+                  aria-busy={isSaving}
+                >
                   <div>
-                    <h3 className="text-sm font-semibold text-text-heading">
-                      {t("accountSettings")}
-                    </h3>
-                    <p className="mt-2 text-sm leading-relaxed text-text-muted">
-                      {t("accountSettingsHelp")}
+                    <label htmlFor="profile-name" className="app-label">
+                      {t("name")}
+                    </label>
+                    <input
+                      id="profile-name"
+                      type="text"
+                      value={formData.name}
+                      onChange={(e) =>
+                        setFormData({ ...formData, name: e.target.value })
+                      }
+                      disabled={isSaving}
+                      className="app-field"
+                      required
+                      aria-describedby="profile-name-helper"
+                      aria-invalid={error ? "true" : "false"}
+                    />
+                    <p id="profile-name-helper" className="app-helper">
+                      {t("nameHelp")}
                     </p>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setActiveSection("profile")}
-                      aria-pressed={activeSection === "profile"}
-                      className={`min-h-11 rounded-control border px-4 py-3 text-sm font-medium ${
-                        activeSection === "profile"
-                          ? "border-action-primary bg-action-primary text-action-text"
-                          : "bg-canvas text-text-muted border-border-default hover:text-text-heading hover:border-border-strong"
-                      }`}
-                    >
-                      {t("basicInfo")}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setActiveSection("security")}
-                      aria-pressed={activeSection === "security"}
-                      className={`min-h-11 rounded-control border px-4 py-3 text-sm font-medium ${
-                        activeSection === "security"
-                          ? "border-action-primary bg-action-primary text-action-text"
-                          : "bg-canvas text-text-muted border-border-default hover:text-text-heading hover:border-border-strong"
-                      }`}
-                    >
-                      {t("security")}
-                    </button>
-                  </div>
-                </div>
-
-                {activeSection === "profile" ? (
                   <div>
-                    <div className="border-b border-border-default p-4">
-                      <h3 className="text-xs font-semibold text-text-heading sm:text-sm">
-                        {t("editProfile")}
-                      </h3>
-                    </div>
-
-                    <form onSubmit={handleSubmit} className="p-4 sm:p-6 space-y-6" aria-busy={isSaving}>
-                      <div>
-                        <label htmlFor="profile-name" className="app-label">
-                          {t("name")}
-                        </label>
-                        <input
-                          id="profile-name"
-                          type="text"
-                          value={formData.name}
-                          onChange={(e) =>
-                            setFormData({ ...formData, name: e.target.value })
-                          }
-                          disabled={isSaving}
-                          className="app-field"
-                          required
-                          aria-describedby="profile-name-helper"
-                          aria-invalid={error ? "true" : "false"}
-                        />
-                        <p id="profile-name-helper" className="app-helper">
-                          {t("nameHelp")}
-                        </p>
-                      </div>
-
-                      <div>
-                        <p className="app-label">{t("preferredLanguage")}</p>
-                        <LanguageSwitcher />
-                        <p className="app-helper">{t("preferredLanguageHelp")}</p>
-                      </div>
-
-                      <Button type="submit" isLoading={isSaving} fullWidth size="lg" leftIcon={<Icon name="save" size={17} />}>
-                        {commonT("saveChanges")}
-                      </Button>
-                    </form>
+                    <p className="app-label">{t("preferredLanguage")}</p>
+                    <LanguageSwitcher />
+                    <p className="app-helper">
+                      {t("preferredLanguageHelp")}
+                    </p>
                   </div>
-                ) : (
-                  <div>
-                    <div className="border-b border-border-default p-4">
-                      <h3 className="text-xs font-semibold text-text-heading sm:text-sm">
-                        {t("changePassword")}
-                      </h3>
-                    </div>
-                    <PasswordChangeForm />
-                  </div>
-                )}
+
+                  <Button
+                    type="submit"
+                    isLoading={isSaving}
+                    fullWidth
+                    size="lg"
+                    leftIcon={<Icon name="save" size={17} />}
+                  >
+                    {commonT("saveChanges")}
+                  </Button>
+                </form>
               </div>
-            </div>
+            ) : (
+              <div>
+                <div className="border-b border-border-default p-4">
+                  <h3 className="text-xs font-semibold text-text-heading sm:text-sm">
+                    {t("changePassword")}
+                  </h3>
+                </div>
+                <PasswordChangeForm />
+              </div>
+            )}
           </div>
         </div>
-        <Footer />
-      </div>
-    </div>
+      </section>
+    </WorkspaceShell>
   );
 }
 

@@ -164,7 +164,7 @@ function ResetPasswordContent() {
   };
 
   return (
-    <div className="flex min-h-[100dvh] items-center justify-center bg-canvas px-4 py-10 sm:px-6 lg:px-8">
+    <main id="main-content" tabIndex={-1} className="flex min-h-[100dvh] items-center justify-center bg-canvas px-4 py-10 sm:px-6 lg:px-8">
       <div className="w-full max-w-sm sm:max-w-md">
         <div className="app-panel p-6 sm:p-8 lg:p-10">
           <div className="mb-5 flex justify-end">
@@ -352,7 +352,7 @@ function ResetPasswordContent() {
           <Footer compact />
         </div>
       </div>
-    </div>
+    </main>
   );
 }
 
@@ -361,9 +361,9 @@ export default function ResetPasswordPage() {
   return (
     <Suspense
       fallback={
-        <div className="flex min-h-[100dvh] items-center justify-center bg-canvas">
+        <main id="main-content" tabIndex={-1} className="flex min-h-[100dvh] items-center justify-center bg-canvas">
           <Spinner mode="inline" text={t("loading")} />
-        </div>
+        </main>
       }
     >
       <ResetPasswordContent />

@@ -36,7 +36,7 @@ export default function StatGrid({
         ? "grid-cols-2"
         : items.length === 3
           ? "grid-cols-3"
-          : "grid-cols-4";
+          : "grid-cols-2 sm:grid-cols-4";
 
   return (
     <dl
@@ -57,7 +57,7 @@ export default function StatGrid({
             <dd
               className={`order-1 font-mono text-lg sm:text-xl ${statColorMap[item.color ?? "default"]}`}
             >
-              {isLoading ? "—" : item.value}
+              {isLoading ? "-" : item.value}
             </dd>
           </div>
         );

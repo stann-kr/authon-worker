@@ -269,7 +269,7 @@ export default function InviteUser() {
                         accountKind === "shared" ? formData.door_access_enabled : false,
                     })
                   }
-                  className={`border p-3 text-xs font-medium transition-colors ${
+                  className={`min-h-11 border p-3 text-xs font-medium transition-colors ${
                     formData.account_kind === accountKind
                       ? "border-action-primary bg-action-primary text-action-text"
                       : "border-border-default bg-canvas text-text-muted hover:border-border-strong hover:text-text-heading"
@@ -291,7 +291,11 @@ export default function InviteUser() {
             <legend className="app-label">
               {t("role")}
             </legend>
-            <div className={`grid gap-2 ${isSuperAdmin ? "grid-cols-4" : "grid-cols-3"}`}>
+            <div
+              className={`grid grid-cols-2 gap-2 ${
+                isSuperAdmin ? "sm:grid-cols-4" : "sm:grid-cols-3"
+              }`}
+            >
               {roleOptions.map((opt) => (
                 <button
                   key={opt.value}
@@ -300,7 +304,7 @@ export default function InviteUser() {
                   onClick={() =>
                     setFormData({ ...formData, role: opt.value as typeof formData.role })
                   }
-                  className={`p-3 border text-xs font-medium transition-colors ${
+                  className={`min-h-11 border p-3 text-xs font-medium transition-colors ${
                     formData.role === opt.value
                       ? "border-action-primary bg-action-primary text-action-text"
                       : "bg-canvas text-text-muted border-border-default hover:text-text-heading hover:border-border-strong"
@@ -411,12 +415,12 @@ export default function InviteUser() {
               <p className="text-text-heading text-xs font-medium">
                 {tempPassword ? t("accountCreated") : t("invitationSent")}
               </p>
-              <p className="text-text-heading font-mono text-xs tracking-wider">
+              <p className="break-words text-text-heading font-mono text-xs tracking-wider">
                 {success}
               </p>
               {tempPassword && (
-                <div className="mt-2 border border-border-strong p-2 flex items-center justify-between gap-2">
-                  <span className="font-mono text-xs text-text-heading tracking-wider">
+                <div className="mt-2 flex flex-col gap-2 border border-border-strong p-2 sm:flex-row sm:items-center sm:justify-between">
+                  <span className="min-w-0 break-all font-mono text-xs text-text-heading tracking-wider">
                     {t("tempPassword")}:{" "}
                     <span className="select-all">
                       {showTempPassword ? tempPassword : "•".repeat(tempPassword.length)}
@@ -426,14 +430,14 @@ export default function InviteUser() {
                     <button
                       type="button"
                       onClick={() => setShowTempPassword((v) => !v)}
-                      className="text-text-heading hover:text-xs text-text-heading"
+                      className="min-h-11 px-2 text-xs font-medium text-text-heading"
                     >
                       {showTempPassword ? t("hide") : t("show")}
                     </button>
                     <button
                       type="button"
                       onClick={() => navigator.clipboard.writeText(tempPassword)}
-                      className="text-text-heading hover:text-xs text-text-heading"
+                      className="min-h-11 px-2 text-xs font-medium text-text-heading"
                     >
                       {t("copy")}
                     </button>

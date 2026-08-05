@@ -69,21 +69,41 @@ interface LinkActionFeedback {
   result: Extract<ExternalLinkShareResult, "shared" | "copied">;
 }
 
+export type LinkManagementSection = "create" | "manage";
+
 interface LinkManagementProps {
   selectedDate: string;
   onDateChange: (date: string) => void;
   businessDate: string;
+  activeSection?: LinkManagementSection;
+  onActiveSectionChange?: (section: LinkManagementSection) => void;
+  showSectionNavigation?: boolean;
 }
 
 export default function LinkManagement({
   selectedDate,
   onDateChange,
   businessDate,
+  activeSection,
+  onActiveSectionChange,
+  showSectionNavigation = true,
 }: LinkManagementProps) {
   const t = useTranslations("LinkAdmin");
   const commonT = useTranslations("Common");
   const locale = useLocale() as "en" | "ko";
-  const [activeTab, setActiveTab] = useState<"create" | "manage">("create");
+  const [internalActiveSection, setInternalActiveSection] =
+    useState<LinkManagementSection>("create");
+  const activeTab = activeSection ?? internalActiveSection;
+  const setActiveTab = useCallback(
+    (section: LinkManagementSection) => {
+      if (onActiveSectionChange) {
+        onActiveSectionChange(section);
+        return;
+      }
+      setInternalActiveSection(section);
+    },
+    [onActiveSectionChange],
+  );
   const [manageScope, setManageScope] = useState<"date" | "recent">("date");
   const [recentLimit, setRecentLimit] = useState<5 | 10>(5);
   const [manageFilter, setManageFilter] = useState<ManageFilter>("all");
@@ -510,25 +530,10 @@ export default function LinkManagement({
     [filteredLinks, locale, manageScope, manageSort],
   );
 
-  const getTabInfo = () => {
-    switch (activeTab) {
-      case "create":
-        return {
-          title: t("createLink"),
-          description: t("createDescription"),
-        };
-      case "manage":
-        return { title: t("manageLinks"), description: t("manageDescription") };
-      default:
-        return { title: "", description: "" };
-    }
-  };
-
-  const tabInfo = getTabInfo();
-
   return (
     <>
       <OperationsLayout
+        variant="stacked"
         title={t("title")}
         dashboard={
           <>
@@ -552,19 +557,24 @@ export default function LinkManagement({
             className="app-panel p-4 sm:p-5"
           />
         )}
-        <div>
-          <OperationalSectionNav
-            label={t("section")}
-            items={[
-              { id: "create", label: t("create"), icon: "add" },
-              { id: "manage", label: t("manage"), icon: "link" },
-            ]}
-            activeId={activeTab}
-            onChange={setActiveTab}
-            disabled={isGenerating}
-          />
+        {(showSectionNavigation || activeTab === "manage") && (
+          <div>
+            {showSectionNavigation && (
+              <OperationalSectionNav
+                label={t("section")}
+                items={[
+                  { id: "create", label: t("create"), icon: "add" },
+                  { id: "manage", label: t("manage"), icon: "link" },
+                ]}
+                activeId={activeTab}
+                onChange={setActiveTab}
+                disabled={isGenerating}
+              />
+            )}
             {activeTab === "manage" && (
-              <div className="app-panel mt-4 p-4 sm:p-5">
+              <div
+                className={`app-panel p-4 sm:p-5 ${showSectionNavigation ? "mt-4" : ""}`}
+              >
                 <p className="app-label">{t("view")}</p>
                 <div className="grid grid-cols-2 gap-2">
                   {(["date", "recent"] as const).map((scope) => (
@@ -610,23 +620,11 @@ export default function LinkManagement({
                 )}
               </div>
             )}
-        </div>
-
-        <div className="app-panel p-4 sm:p-5">
-          <div className="mb-4">
-            <h2 className="type-panel-title mb-1">
-              {tabInfo.title}
-            </h2>
-            <p className="text-sm text-text-muted">
-              {tabInfo.description}
-            </p>
-            <p className="text-sm text-text-muted mt-1">
-              {activeTab === "manage" && manageScope === "recent"
-                ? t("latestCreated", { count: recentLimit })
-                : formatDateDisplay(selectedDate, locale)}
-            </p>
           </div>
-          {activeTab === "manage" && (
+        )}
+
+        {activeTab === "manage" && (
+          <div className="app-panel p-3 sm:p-4">
             <StatGrid
               items={[
                 { label: t("total"), value: dashboardStats.total, color: "default" },
@@ -634,8 +632,8 @@ export default function LinkManagement({
                 { label: t("attention"), value: dashboardStats.attention, color: "danger" },
               ]}
             />
-          )}
-        </div>
+          </div>
+        )}
           </>
         }
       >
@@ -644,14 +642,9 @@ export default function LinkManagement({
         {activeTab === "create" && (
           <div className="space-y-6">
             <div className="app-panel p-4 sm:p-6">
-              <div className="mb-6">
-                <h2 className="type-panel-title font-mono uppercase tracking-wider mb-1">
-                  {t("createAccessLink")}
-                </h2>
-                <p className="text-text-muted text-xs font-medium">
-                  {t("createAccessDescription")}
-                </p>
-              </div>
+              <h2 className="type-panel-title mb-6 font-mono uppercase tracking-wider">
+                {t("createAccessLink")}
+              </h2>
 
               {templateNotice && (
                 <Alert
@@ -748,7 +741,7 @@ export default function LinkManagement({
                           dj: e.target.value.toUpperCase(),
                         });
                       }}
-                      className={`w-full border bg-canvas px-4 py-3 text-sm uppercase text-text-heading focus:outline-none focus:border-border-focus disabled:cursor-not-allowed disabled:opacity-60 ${
+                      className={`w-full border bg-canvas px-4 py-3 text-sm uppercase text-text-heading focus-visible:border-border-focus disabled:cursor-not-allowed disabled:opacity-60 ${
                         formValidationError?.field === "dj"
                           ? "border-status-danger"
                           : "border-border-strong"
@@ -794,7 +787,7 @@ export default function LinkManagement({
                         event: e.target.value.toUpperCase(),
                       });
                     }}
-                    className={`w-full border bg-canvas px-4 py-3 text-sm uppercase text-text-heading focus:outline-none focus:border-border-focus disabled:cursor-not-allowed disabled:opacity-60 ${
+                    className={`w-full border bg-canvas px-4 py-3 text-sm uppercase text-text-heading focus-visible:border-border-focus disabled:cursor-not-allowed disabled:opacity-60 ${
                       formValidationError?.field === "event"
                         ? "border-status-danger"
                         : "border-border-strong"
@@ -842,7 +835,7 @@ export default function LinkManagement({
                           e.target.value === "" ? "" : Number(e.target.value),
                       });
                     }}
-                    className={`w-full border bg-canvas px-4 py-3 text-sm text-text-heading focus:outline-none focus:border-border-focus disabled:cursor-not-allowed disabled:opacity-60 ${
+                    className={`w-full border bg-canvas px-4 py-3 text-sm text-text-heading focus-visible:border-border-focus disabled:cursor-not-allowed disabled:opacity-60 ${
                       formValidationError?.field === "maxGuests"
                         ? "border-status-danger"
                         : "border-border-strong"
@@ -947,7 +940,7 @@ export default function LinkManagement({
                   </h3>
                   <p
                     id="generated-link-summary"
-                    className="text-text-muted font-mono text-xs"
+                    className="break-words font-mono text-xs text-text-muted"
                   >
                     {generatedLink.djName} / {generatedLink.event} | {t("max")}:{" "}
                     {generatedLink.maxGuests}
@@ -1070,7 +1063,10 @@ export default function LinkManagement({
                 <Skeleton rows={5} />
               ) : (
                 <div
-                  className={`divide-y divide-border-default lg:overflow-y-auto transition-opacity duration-200 ${isCurrentScopeFetching ? "opacity-50 pointer-events-none" : ""}`}
+                  aria-busy={isCurrentScopeFetching}
+                  className={`divide-y divide-border-default lg:overflow-y-auto ${
+                    isCurrentScopeFetching ? "pointer-events-none" : ""
+                  }`}
                 >
                   {sortedLinks.length === 0 ? (
                     <EmptyState
@@ -1189,7 +1185,7 @@ export default function LinkManagement({
                         {isLinkVisible && (
                           <div
                             id={`link-url-panel-${link.id}`}
-                            className="mt-3 border border-border-default bg-canvas p-3 ml-10 sm:ml-11"
+                            className="mt-3 border border-border-default bg-canvas p-3 sm:ml-11"
                           >
                             <label
                               htmlFor={`link-url-${link.id}`}
@@ -1222,7 +1218,7 @@ export default function LinkManagement({
                           </div>
                         )}
 
-                        <div className="mt-3 flex flex-wrap justify-end gap-2 pl-10 sm:pl-11">
+                        <div className="mt-3 flex flex-wrap justify-end gap-2 sm:pl-11">
                           <button
                             type="button"
                             onClick={() => handleUseAsTemplate(link)}
@@ -1323,7 +1319,7 @@ export default function LinkManagement({
       </OperationsLayout>
 
       {linkActionToast && (
-        <div className="fixed bottom-5 right-5 z-40 border border-border-strong bg-surface-raised px-4 py-3 text-text-heading" role="status" aria-live="polite" aria-atomic="true">
+        <div className="fixed bottom-[calc(5rem+env(safe-area-inset-bottom))] right-4 z-[var(--app-z-toast)] max-w-[calc(100vw-2rem)] border border-border-strong bg-surface-raised px-4 py-3 text-text-heading md:bottom-5 md:right-5" role="status" aria-live="polite" aria-atomic="true">
           <p className="text-xs font-medium uppercase tracking-[0.05em]">
             {linkActionToast}
           </p>

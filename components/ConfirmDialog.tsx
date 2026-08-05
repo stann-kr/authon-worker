@@ -6,6 +6,7 @@ import {
   useRef,
   type ReactNode,
 } from "react";
+import { createPortal } from "react-dom";
 import Button from "./Button";
 
 interface ConfirmDialogProps {
@@ -51,13 +52,19 @@ export default function ConfirmDialog({
 
     previousFocusRef.current = document.activeElement as HTMLElement | null;
     const previousOverflow = document.body.style.overflow;
+    const mainContent = document.getElementById("main-content");
+    const mainContentWasInert = mainContent?.hasAttribute("inert") ?? false;
     document.body.style.overflow = "hidden";
+    if (mainContent && !mainContentWasInert) {
+      mainContent.setAttribute("inert", "");
+    }
     cancelRef.current?.focus();
 
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape" && !isLoadingRef.current) {
+      if (event.key === "Escape") {
         event.preventDefault();
-        onCancelRef.current();
+        event.stopPropagation();
+        if (!isLoadingRef.current) onCancelRef.current();
         return;
       }
 
@@ -67,10 +74,18 @@ export default function ConfirmDialog({
           'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
         ),
       );
+      if (focusable.length === 0) {
+        event.preventDefault();
+        dialogRef.current.focus();
+        return;
+      }
       const first = focusable[0];
       const last = focusable[focusable.length - 1];
 
-      if (event.shiftKey && document.activeElement === first) {
+      if (!dialogRef.current.contains(document.activeElement)) {
+        event.preventDefault();
+        first.focus();
+      } else if (event.shiftKey && document.activeElement === first) {
         event.preventDefault();
         last?.focus();
       } else if (!event.shiftKey && document.activeElement === last) {
@@ -83,21 +98,28 @@ export default function ConfirmDialog({
     return () => {
       document.removeEventListener("keydown", handleKeyDown);
       document.body.style.overflow = previousOverflow;
+      if (mainContent && !mainContentWasInert) {
+        mainContent.removeAttribute("inert");
+      }
       previousFocusRef.current?.focus();
     };
   }, [open]);
 
   if (!open) return null;
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-canvas/80 px-4 py-8">
+  if (typeof document === "undefined") return null;
+
+  return createPortal(
+    <div className="app-dialog-backdrop fixed inset-0 z-[var(--app-z-dialog)] flex items-center justify-center bg-canvas/80 p-4">
       <div
         ref={dialogRef}
         role="alertdialog"
         aria-modal="true"
+        aria-busy={isLoading}
         aria-labelledby={titleId}
         aria-describedby={descriptionId}
-        className="w-full max-w-md border border-border-strong bg-canvas p-5 sm:p-6"
+        tabIndex={-1}
+        className="app-dialog-panel max-h-[calc(100dvh-2rem)] w-full max-w-md overflow-y-auto border border-border-strong bg-canvas p-5 sm:p-6"
       >
         <h2 id={titleId} className="type-panel-title">
           {title}
@@ -126,6 +148,7 @@ export default function ConfirmDialog({
           </Button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

@@ -27,15 +27,15 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(function Button(
   },
   ref,
 ) {
-  const baseClasses = "pressable inline-flex min-w-11 touch-manipulation items-center justify-center gap-2 rounded-control whitespace-nowrap disabled:cursor-not-allowed disabled:opacity-50";
+  const baseClasses = "app-button pressable inline-flex min-w-11 touch-manipulation items-center justify-center gap-2 whitespace-nowrap rounded-control disabled:cursor-not-allowed disabled:opacity-50";
   
   const variantClasses = {
-    primary: "border border-action-primary bg-action-primary font-semibold text-action-text hover:border-action-hover hover:bg-action-hover",
-    secondary: "border border-border-default bg-surface-raised font-medium text-text-heading hover:border-border-strong hover:bg-surface-hover",
-    outline: "border border-border-default bg-transparent font-medium text-text-heading hover:border-border-strong hover:bg-surface-hover",
-    danger: "border border-status-danger/70 bg-status-danger/10 font-semibold text-status-danger hover:bg-status-danger/20",
-    confirm: "border border-action-primary bg-action-primary font-semibold text-action-text hover:border-action-hover hover:bg-action-hover",
-    ghost: "border border-transparent bg-transparent font-medium text-text-muted hover:bg-surface-hover hover:text-text-heading",
+    primary: "border border-action-primary bg-action-primary font-semibold text-action-text",
+    secondary: "border border-border-strong bg-surface-raised font-medium text-text-heading",
+    outline: "border border-border-strong bg-transparent font-medium text-text-heading",
+    danger: "border border-status-danger/70 bg-status-danger/10 font-semibold text-status-danger",
+    confirm: "border border-action-primary bg-action-primary font-semibold text-action-text",
+    ghost: "border border-transparent bg-transparent font-medium text-text-muted",
   };
 
   const sizeClasses = {
@@ -55,6 +55,7 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(function Button(
       ref={ref}
       disabled={disabled || isLoading}
       className={combinedClasses}
+      data-variant={variant}
       aria-busy={isLoading || props["aria-busy"]}
     >
       {isLoading && (
