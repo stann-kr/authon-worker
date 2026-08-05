@@ -26,6 +26,15 @@ import {
   activateExternalLink,
 } from "../../../lib/api/external-links";
 import type { ExternalDJLink } from "../../../lib/api/types";
+import {
+  MAX_EXTERNAL_LINK_DJ_NAME_LENGTH,
+  MAX_EXTERNAL_LINK_EVENT_LENGTH,
+  prepareExternalLinkCreateInput,
+  shareExternalLink,
+  toExternalLinkShareData,
+  toExternalLinkTemplateDraft,
+  type ExternalLinkShareResult,
+} from "../../../lib/external-links/domain";
 import { useLocale, useTranslations } from "next-intl";
 import {
   deriveLinkStatus,
@@ -39,6 +48,26 @@ import {
 } from "./linkStatus";
 
 const EMPTY_LINKS: ExternalDJLink[] = [];
+
+interface LinkFormData {
+  date: string;
+  dj: string;
+  event: string;
+  maxGuests: number | "";
+  localeMode: ExternalDJLink["localeMode"];
+}
+
+type LinkFormField = "date" | "dj" | "event" | "maxGuests" | "localeMode";
+
+interface LinkFormValidationError {
+  field: LinkFormField;
+  message: string;
+}
+
+interface LinkActionFeedback {
+  id: string;
+  result: Extract<ExternalLinkShareResult, "shared" | "copied">;
+}
 
 interface LinkManagementProps {
   selectedDate: string;
@@ -60,7 +89,7 @@ export default function LinkManagement({
   const [manageFilter, setManageFilter] = useState<ManageFilter>("all");
   const [manageSort, setManageSort] = useState<ManageSort>("newest");
   const [now, setNow] = useState(() => Date.now());
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<LinkFormData>({
     date: selectedDate,
     dj: "",
     event: "",
@@ -71,21 +100,35 @@ export default function LinkManagement({
     null,
   );
   const [isGenerating, setIsGenerating] = useState(false);
-  const [isCopying, setIsCopying] = useState(false);
+  const [isGeneratedLinkActionPending, setIsGeneratedLinkActionPending] =
+    useState(false);
+  const [nativeShareAvailable, setNativeShareAvailable] = useState(false);
   const [links, setLinks] = useState<ExternalDJLink[]>([]);
   const [isFetching, setIsFetching] = useState(false);
   const [loadedScopeKey, setLoadedScopeKey] = useState("");
-  const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [linkActionFeedback, setLinkActionFeedback] =
+    useState<LinkActionFeedback | null>(null);
   const [visibleLinkId, setVisibleLinkId] = useState<string | null>(null);
   const [loadingStates, setLoadingStates] = useState<{
     [key: string]: boolean;
   }>({});
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
-  const [copyToast, setCopyToast] = useState<string | null>(null);
+  const [linkActionToast, setLinkActionToast] = useState<string | null>(null);
+  const [templateNotice, setTemplateNotice] = useState<string | null>(null);
+  const [formValidationError, setFormValidationError] =
+    useState<LinkFormValidationError | null>(null);
   const [pendingDeleteLink, setPendingDeleteLink] = useState<ExternalDJLink | null>(null);
   const [pendingDeactivateLink, setPendingDeactivateLink] =
     useState<ExternalDJLink | null>(null);
+  const linkDateInputRef = useRef<HTMLInputElement>(null);
+  const linkDjInputRef = useRef<HTMLInputElement>(null);
+  const linkEventInputRef = useRef<HTMLInputElement>(null);
+  const linkMaxGuestsInputRef = useRef<HTMLInputElement>(null);
+  const linkLocaleInputRef = useRef<HTMLButtonElement>(null);
+  const generatedLinkPanelRef = useRef<HTMLDivElement>(null);
+  const shouldFocusTemplateDateRef = useRef(false);
+  const shouldFocusGeneratedLinkRef = useRef(false);
 
   // 로딩 중 이전 데이터를 유지하여 화면 깜빡임 방지
   const displayCacheRef = useRef<{ scopeKey: string; links: ExternalDJLink[] }>({
@@ -99,7 +142,6 @@ export default function LinkManagement({
     selectedVenueId,
     setSelectedVenueId,
     isSuperAdmin,
-    user,
   } = useVenueSelector();
 
   const requestScopeKey = `${venueId}:${manageScope}:${
@@ -125,6 +167,9 @@ export default function LinkManagement({
   // Update form date when selectedDate prop changes
   useEffect(() => {
     setFormData((prev) => ({ ...prev, date: selectedDate }));
+    setFormValidationError((current) =>
+      current?.field === "date" ? null : current,
+    );
   }, [selectedDate]);
 
   const loadLinks = useCallback(async () => {
@@ -171,6 +216,72 @@ export default function LinkManagement({
     return () => window.clearInterval(intervalId);
   }, []);
 
+  useEffect(() => {
+    setNativeShareAvailable(typeof navigator.share === "function");
+  }, []);
+
+  useEffect(() => {
+    if (activeTab !== "create" || !shouldFocusTemplateDateRef.current) return;
+    shouldFocusTemplateDateRef.current = false;
+    const frameId = window.requestAnimationFrame(() => {
+      linkDateInputRef.current?.focus();
+    });
+    return () => window.cancelAnimationFrame(frameId);
+  }, [activeTab, templateNotice]);
+
+  useEffect(() => {
+    if (!generatedLink || !shouldFocusGeneratedLinkRef.current) return;
+    shouldFocusGeneratedLinkRef.current = false;
+    const frameId = window.requestAnimationFrame(() => {
+      generatedLinkPanelRef.current?.focus();
+    });
+    return () => window.cancelAnimationFrame(frameId);
+  }, [generatedLink]);
+
+  const clearFormFieldError = (field: LinkFormField) => {
+    setFormValidationError((current) =>
+      current?.field === field ? null : current,
+    );
+  };
+
+  const focusFormField = (field: LinkFormField) => {
+    const target = {
+      date: linkDateInputRef,
+      dj: linkDjInputRef,
+      event: linkEventInputRef,
+      maxGuests: linkMaxGuestsInputRef,
+      localeMode: linkLocaleInputRef,
+    }[field];
+    window.requestAnimationFrame(() => target.current?.focus());
+  };
+
+  const applyFormValidationError = (code: string): boolean => {
+    const validationError: LinkFormValidationError | null = (() => {
+      switch (code) {
+        case "INVALID_DATE":
+          return { field: "date", message: t("invalidDate") };
+        case "INVALID_DJ_NAME":
+        case "DJ_NAME_TOO_LONG":
+          return { field: "dj", message: t("invalidDjName") };
+        case "INVALID_EVENT":
+        case "EVENT_TOO_LONG":
+          return { field: "event", message: t("invalidEvent") };
+        case "INVALID_MAX_GUESTS":
+          return { field: "maxGuests", message: t("invalidMaxGuests") };
+        case "INVALID_LOCALE_MODE":
+          return { field: "localeMode", message: t("invalidLocaleMode") };
+        default:
+          return null;
+      }
+    })();
+    if (!validationError) return false;
+
+    setError(null);
+    setFormValidationError(validationError);
+    focusFormField(validationError.field);
+    return true;
+  };
+
   const getGuestPageUrl = (token: string, guestUrl?: string | null) => {
     if (guestUrl) return guestUrl;
     if (typeof window === "undefined") return "";
@@ -179,65 +290,140 @@ export default function LinkManagement({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.date || !formData.dj || !formData.event || !venueId) return;
+    if (!venueId || isGenerating) return;
+
+    const prepared = prepareExternalLinkCreateInput({
+      date: formData.date,
+      djName: formData.dj,
+      event: formData.event,
+      maxGuests: formData.maxGuests,
+      localeMode: formData.localeMode,
+    });
+    if (prepared.error || !prepared.draft) {
+      if (!applyFormValidationError(prepared.error ?? "INVALID_INPUT")) {
+        setError(t("invalidCreateInput"));
+      }
+      return;
+    }
 
     setIsGenerating(true);
     setError(null);
-
-    const { data, error } = await createExternalLink({
-      venueId,
-      djName: formData.dj,
-      event: formData.event,
-      date: formData.date,
-      maxGuests: formData.maxGuests,
-      localeMode: formData.localeMode,
-      createdBy: user?.id,
-    });
-
-    if (error) {
-      console.error("Failed to create link:", error);
-      setError(t("createFailed"));
-    } else if (data) {
-      setGeneratedLink(data);
-      setFormData({
-        date: selectedDate,
-        dj: "",
-        event: "",
-        maxGuests: 5,
-        localeMode: "auto",
-      });
-    }
-
-    setIsGenerating(false);
-  };
-
-  const copyToClipboard = async (text: string, id?: string) => {
-    if (id) {
-      setLoadingStates((prev) => ({ ...prev, [`copy_${id}`]: true }));
-    } else {
-      setIsCopying(true);
-    }
+    setFormValidationError(null);
 
     try {
-      await navigator.clipboard.writeText(text);
-      if (id) {
-        setCopiedId(id);
-        setTimeout(() => setCopiedId(null), 2000);
+      const { data, error } = await createExternalLink({
+        venueId,
+        ...prepared.draft,
+      });
+
+      if (error) {
+        console.error("Failed to create link:", error);
+        if (!applyFormValidationError(error)) {
+          setError(t("createFailed"));
+        }
+      } else if (data) {
+        shouldFocusGeneratedLinkRef.current = true;
+        setGeneratedLink(data);
+        setTemplateNotice(null);
+        setFormData({
+          date: selectedDate,
+          dj: "",
+          event: "",
+          maxGuests: 5,
+          localeMode: "auto",
+        });
       }
-      setCopyToast(id ? t("guestLinkCopied") : t("generatedLinkCopied"));
-      setTimeout(() => setCopyToast(null), 2200);
-    } catch (err) {
-      console.error("Copy failed:", err);
-      setError(t("copyFailed"));
+    } catch (createError) {
+      console.error("Failed to create link:", createError);
+      setError(t("createFailed"));
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
+  const shareOrCopyLink = async (
+    link: ExternalDJLink,
+    url: string,
+    id?: string,
+  ) => {
+    if (id) {
+      setLoadingStates((prev) => ({ ...prev, [`share_${id}`]: true }));
+    } else {
+      setIsGeneratedLinkActionPending(true);
+    }
+    setError(null);
+
+    const shareData = toExternalLinkShareData(
+      url,
+      t("shareTitle", { djName: link.djName }),
+      t("shareText", {
+        event: link.event || t("untitledEvent"),
+        date: link.date ? formatDateDisplay(link.date, locale) : t("noDate"),
+      }),
+    );
+    const result = await shareExternalLink(shareData, {
+      share:
+        typeof navigator.share === "function"
+          ? (data) => navigator.share(data)
+          : undefined,
+      canShare:
+        typeof navigator.canShare === "function"
+          ? (data) => navigator.canShare(data)
+          : undefined,
+      copy: async (value) => {
+        if (!navigator.clipboard?.writeText) {
+          throw new Error("Clipboard API is unavailable");
+        }
+        await navigator.clipboard.writeText(value);
+      },
+    });
+
+    if (result === "shared" || result === "copied") {
+      if (id) {
+        setLinkActionFeedback({ id, result });
+        window.setTimeout(() => {
+          setLinkActionFeedback((current) =>
+            current?.id === id ? null : current,
+          );
+        }, 2000);
+      }
+      setLinkActionToast(
+        result === "shared"
+          ? id
+            ? t("guestLinkShared")
+            : t("generatedLinkShared")
+          : id
+            ? t("guestLinkCopied")
+            : t("generatedLinkCopied"),
+      );
+      window.setTimeout(() => setLinkActionToast(null), 2200);
+    } else if (result === "failed") {
+      setError(t("shareFailed"));
     }
 
-    setTimeout(() => {
-      if (id) {
-        setLoadingStates((prev) => ({ ...prev, [`copy_${id}`]: false }));
-      } else {
-        setIsCopying(false);
-      }
-    }, 100);
+    if (id) {
+      setLoadingStates((prev) => ({ ...prev, [`share_${id}`]: false }));
+    } else {
+      setIsGeneratedLinkActionPending(false);
+    }
+  };
+
+  const handleUseAsTemplate = (link: ExternalDJLink) => {
+    const draft = toExternalLinkTemplateDraft(link, selectedDate);
+    setFormData({
+      date: draft.date,
+      dj: draft.djName,
+      event: draft.event,
+      maxGuests: draft.maxGuests,
+      localeMode: draft.localeMode,
+    });
+    setGeneratedLink(null);
+    setError(null);
+    setFormValidationError(null);
+    setSuccess(null);
+    setTemplateNotice(t("templateReady", { djName: draft.djName }));
+    shouldFocusTemplateDateRef.current = true;
+    setActiveTab("create");
   };
 
   const handleDeleteLink = async (id: string) => {
@@ -352,6 +538,7 @@ export default function LinkManagement({
               value={selectedDate}
               onChange={onDateChange}
               businessDate={businessDate}
+              disabled={isGenerating}
             />
           </div>
         )}
@@ -361,6 +548,7 @@ export default function LinkManagement({
             venues={venues}
             selectedVenueId={selectedVenueId}
             onVenueChange={setSelectedVenueId}
+            disabled={isGenerating}
             className="app-panel p-4 sm:p-5"
           />
         )}
@@ -373,6 +561,7 @@ export default function LinkManagement({
             ]}
             activeId={activeTab}
             onChange={setActiveTab}
+            disabled={isGenerating}
           />
             {activeTab === "manage" && (
               <div className="app-panel mt-4 p-4 sm:p-5">
@@ -464,9 +653,20 @@ export default function LinkManagement({
                 </p>
               </div>
 
+              {templateNotice && (
+                <Alert
+                  type="success"
+                  message={templateNotice}
+                  className="mb-4"
+                />
+              )}
               {error && <Alert type="error" message={error} className="mb-4" />}
 
-              <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-6">
+              <form
+                onSubmit={handleSubmit}
+                className="space-y-4 sm:space-y-6"
+                aria-busy={isGenerating}
+              >
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
                   <div>
                     <label htmlFor="link-date" className="app-label">
@@ -474,7 +674,13 @@ export default function LinkManagement({
                     </label>
                     <div className="relative h-[46px] group">
                       {/* Mirroring UI Layer */}
-                      <div className="absolute inset-0 bg-canvas border border-border-strong px-4 py-3 flex items-center justify-between pointer-events-none group-focus-within:border-border-focus transition-colors">
+                      <div
+                        className={`absolute inset-0 flex items-center justify-between border bg-canvas px-4 py-3 transition-colors pointer-events-none group-focus-within:border-border-focus ${
+                          formValidationError?.field === "date"
+                            ? "border-status-danger"
+                            : "border-border-strong"
+                        }`}
+                      >
                         <span className="text-text-heading text-sm">
                           {formatDateDisplay(formData.date, locale)}
                         </span>
@@ -484,16 +690,36 @@ export default function LinkManagement({
                       {/* Hidden Native Input */}
                       <input
                         id="link-date"
+                        ref={linkDateInputRef}
                         type="date"
                         value={formData.date}
-                        onChange={(e) =>
-                          setFormData({ ...formData, date: e.target.value })
+                        disabled={isGenerating}
+                        aria-invalid={
+                          formValidationError?.field === "date" || undefined
                         }
+                        aria-describedby={
+                          formValidationError?.field === "date"
+                            ? "link-date-error"
+                            : undefined
+                        }
+                        onChange={(e) => {
+                          clearFormFieldError("date");
+                          setFormData({ ...formData, date: e.target.value });
+                        }}
                         onClick={(e) => (e.target as HTMLInputElement).showPicker?.()}
                         className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10 [color-scheme:dark]"
                         required
                       />
                     </div>
+                    {formValidationError?.field === "date" && (
+                      <p
+                        id="link-date-error"
+                        className="mt-1 text-xs text-status-danger"
+                        role="alert"
+                      >
+                        {formValidationError.message}
+                      </p>
+                    )}
                   </div>
 
                   <div>
@@ -502,18 +728,43 @@ export default function LinkManagement({
                     </label>
                     <input
                       id="link-dj-name"
+                      ref={linkDjInputRef}
                       type="text"
                       value={formData.dj}
-                      onChange={(e) =>
+                      disabled={isGenerating}
+                      aria-invalid={
+                        formValidationError?.field === "dj" || undefined
+                      }
+                      aria-describedby={
+                        formValidationError?.field === "dj"
+                          ? "link-dj-name-error"
+                          : undefined
+                      }
+                      maxLength={MAX_EXTERNAL_LINK_DJ_NAME_LENGTH}
+                      onChange={(e) => {
+                        clearFormFieldError("dj");
                         setFormData({
                           ...formData,
                           dj: e.target.value.toUpperCase(),
-                        })
-                      }
-                      className="w-full bg-canvas border border-border-strong px-4 py-3 text-text-heading text-sm focus:outline-none focus:border-border-focus uppercase"
+                        });
+                      }}
+                      className={`w-full border bg-canvas px-4 py-3 text-sm uppercase text-text-heading focus:outline-none focus:border-border-focus disabled:cursor-not-allowed disabled:opacity-60 ${
+                        formValidationError?.field === "dj"
+                          ? "border-status-danger"
+                          : "border-border-strong"
+                      }`}
                       placeholder={t("djName")}
                       required
                     />
+                    {formValidationError?.field === "dj" && (
+                      <p
+                        id="link-dj-name-error"
+                        className="mt-1 text-xs text-status-danger"
+                        role="alert"
+                      >
+                        {formValidationError.message}
+                      </p>
+                    )}
                   </div>
                 </div>
 
@@ -523,18 +774,43 @@ export default function LinkManagement({
                   </label>
                   <input
                     id="link-event-name"
+                    ref={linkEventInputRef}
                     type="text"
                     value={formData.event}
-                    onChange={(e) =>
+                    disabled={isGenerating}
+                    aria-invalid={
+                      formValidationError?.field === "event" || undefined
+                    }
+                    aria-describedby={
+                      formValidationError?.field === "event"
+                        ? "link-event-name-error"
+                        : undefined
+                    }
+                    maxLength={MAX_EXTERNAL_LINK_EVENT_LENGTH}
+                    onChange={(e) => {
+                      clearFormFieldError("event");
                       setFormData({
                         ...formData,
                         event: e.target.value.toUpperCase(),
-                      })
-                    }
-                    className="w-full bg-canvas border border-border-strong px-4 py-3 text-text-heading text-sm focus:outline-none focus:border-border-focus uppercase"
+                      });
+                    }}
+                    className={`w-full border bg-canvas px-4 py-3 text-sm uppercase text-text-heading focus:outline-none focus:border-border-focus disabled:cursor-not-allowed disabled:opacity-60 ${
+                      formValidationError?.field === "event"
+                        ? "border-status-danger"
+                        : "border-border-strong"
+                    }`}
                     placeholder={t("eventName")}
                     required
                   />
+                  {formValidationError?.field === "event" && (
+                    <p
+                      id="link-event-name-error"
+                      className="mt-1 text-xs text-status-danger"
+                      role="alert"
+                    >
+                      {formValidationError.message}
+                    </p>
+                  )}
                 </div>
 
                 <div>
@@ -543,21 +819,57 @@ export default function LinkManagement({
                   </label>
                   <input
                     id="link-max-guests"
+                    ref={linkMaxGuestsInputRef}
                     type="number"
                     min="1"
                     max="999"
+                    step="1"
                     value={formData.maxGuests}
-                    onChange={(e) =>
+                    disabled={isGenerating}
+                    aria-invalid={
+                      formValidationError?.field === "maxGuests" || undefined
+                    }
+                    aria-describedby={
+                      formValidationError?.field === "maxGuests"
+                        ? "link-max-guests-error"
+                        : undefined
+                    }
+                    onChange={(e) => {
+                      clearFormFieldError("maxGuests");
                       setFormData({
                         ...formData,
-                        maxGuests: parseInt(e.target.value),
-                      })
-                    }
-                    className="w-full bg-canvas border border-border-strong px-4 py-3 text-text-heading text-sm focus:outline-none focus:border-border-focus"
+                        maxGuests:
+                          e.target.value === "" ? "" : Number(e.target.value),
+                      });
+                    }}
+                    className={`w-full border bg-canvas px-4 py-3 text-sm text-text-heading focus:outline-none focus:border-border-focus disabled:cursor-not-allowed disabled:opacity-60 ${
+                      formValidationError?.field === "maxGuests"
+                        ? "border-status-danger"
+                        : "border-border-strong"
+                    }`}
+                    required
                   />
+                  {formValidationError?.field === "maxGuests" && (
+                    <p
+                      id="link-max-guests-error"
+                      className="mt-1 text-xs text-status-danger"
+                      role="alert"
+                    >
+                      {formValidationError.message}
+                    </p>
+                  )}
                 </div>
 
-                <fieldset>
+                <fieldset
+                  aria-invalid={
+                    formValidationError?.field === "localeMode" || undefined
+                  }
+                  aria-describedby={
+                    formValidationError?.field === "localeMode"
+                      ? "link-locale-error"
+                      : undefined
+                  }
+                >
                   <legend className="app-label">{t("guestPageLanguage")}</legend>
                   <div className="grid grid-cols-3 gap-2">
                     {([
@@ -567,12 +879,19 @@ export default function LinkManagement({
                     ] as const).map((option) => (
                       <button
                         key={option.value}
-                        type="button"
-                        aria-pressed={formData.localeMode === option.value}
-                        onClick={() =>
-                          setFormData({ ...formData, localeMode: option.value })
+                        ref={
+                          option.value === "auto"
+                            ? linkLocaleInputRef
+                            : undefined
                         }
-                        className={`min-h-11 border px-3 py-2 text-xs font-medium ${
+                        type="button"
+                        disabled={isGenerating}
+                        aria-pressed={formData.localeMode === option.value}
+                        onClick={() => {
+                          clearFormFieldError("localeMode");
+                          setFormData({ ...formData, localeMode: option.value });
+                        }}
+                        className={`min-h-11 border px-3 py-2 text-xs font-medium disabled:cursor-not-allowed disabled:opacity-50 ${
                           formData.localeMode === option.value
                             ? "border-action-primary bg-action-primary text-action-text"
                             : "border-border-default bg-canvas text-text-muted hover:border-border-strong hover:text-text-heading"
@@ -585,6 +904,15 @@ export default function LinkManagement({
                   <p className="app-helper">
                     {t("autoHelp")}
                   </p>
+                  {formValidationError?.field === "localeMode" && (
+                    <p
+                      id="link-locale-error"
+                      className="mt-1 text-xs text-status-danger"
+                      role="alert"
+                    >
+                      {formValidationError.message}
+                    </p>
+                  )}
                 </fieldset>
 
                 <button
@@ -605,12 +933,22 @@ export default function LinkManagement({
             </div>
 
             {generatedLink && (
-              <div className="app-panel p-4 sm:p-6">
+              <div
+                ref={generatedLinkPanelRef}
+                className="app-panel p-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-border-focus sm:p-6"
+                role="region"
+                aria-labelledby="generated-link-title"
+                aria-describedby="generated-link-summary"
+                tabIndex={-1}
+              >
                 <div className="mb-4">
-                  <h3 className="type-panel-title mb-2">
+                  <h3 id="generated-link-title" className="type-panel-title mb-2">
                     {t("generatedAccessLink")}
                   </h3>
-                  <p className="text-text-muted font-mono text-xs">
+                  <p
+                    id="generated-link-summary"
+                    className="text-text-muted font-mono text-xs"
+                  >
                     {generatedLink.djName} / {generatedLink.event} | {t("max")}:{" "}
                     {generatedLink.maxGuests}
                   </p>
@@ -629,19 +967,26 @@ export default function LinkManagement({
                 </div>
 
                 <button
+                  type="button"
                   onClick={() =>
-                    copyToClipboard(getGuestPageUrl(generatedLink.token, generatedLink.guestUrl))
+                    shareOrCopyLink(
+                      generatedLink,
+                      getGuestPageUrl(
+                        generatedLink.token,
+                        generatedLink.guestUrl,
+                      ),
+                    )
                   }
-                  disabled={isCopying}
-                  className="w-full bg-action-primary py-3 text-xs font-semibold text-action-text transition-colors hover:bg-action-hover disabled:opacity-50"
+                  disabled={isGeneratedLinkActionPending}
+                  className="min-h-11 w-full bg-action-primary py-3 text-xs font-semibold text-action-text transition-colors hover:bg-action-hover disabled:opacity-50"
                 >
-                  {isCopying ? (
+                  {isGeneratedLinkActionPending ? (
                     <div className="flex items-center justify-center gap-2">
                       <div className="w-3 h-3 border-2 border-canvas border-t-transparent rounded-full animate-spin"></div>
-                      {t("copying")}
+                      {nativeShareAvailable ? t("sharing") : t("copying")}
                     </div>
                   ) : (
-                    t("copyLink")
+                    nativeShareAvailable ? t("shareLink") : t("copyLink")
                   )}
                 </button>
               </div>
@@ -737,6 +1082,10 @@ export default function LinkManagement({
                       const status = deriveLinkStatus(link, now);
                       const guestPageUrl = getGuestPageUrl(link.token, link.guestUrl);
                       const isLinkVisible = visibleLinkId === link.id;
+                      const completedLinkAction =
+                        linkActionFeedback?.id === link.id
+                          ? linkActionFeedback.result
+                          : null;
                       const usageTone = status.full
                         ? "bg-status-danger"
                         : status.usagePercent >= 80
@@ -876,6 +1225,13 @@ export default function LinkManagement({
                         <div className="mt-3 flex flex-wrap justify-end gap-2 pl-10 sm:pl-11">
                           <button
                             type="button"
+                            onClick={() => handleUseAsTemplate(link)}
+                            className="min-h-11 border border-border-default bg-surface px-3 py-2 text-xs font-medium text-text-muted hover:border-border-strong hover:bg-surface-raised hover:text-text-heading"
+                          >
+                            {t("useAsTemplate")}
+                          </button>
+                          <button
+                            type="button"
                             onClick={() =>
                               setVisibleLinkId((current) =>
                                 current === link.id ? null : link.id,
@@ -892,20 +1248,28 @@ export default function LinkManagement({
                             {isLinkVisible ? t("hide") : t("view")}
                           </button>
                           <button
+                            type="button"
                             onClick={() =>
-                              copyToClipboard(guestPageUrl, link.id)
+                              shareOrCopyLink(link, guestPageUrl, link.id)
                             }
-                            disabled={loadingStates[`copy_${link.id}`]}
-                            className="min-h-11 bg-action-primary px-4 py-2 text-xs font-semibold text-action-text transition-colors hover:bg-action-hover disabled:opacity-50"
+                            disabled={loadingStates[`share_${link.id}`]}
+                            className="inline-flex min-h-11 items-center justify-center gap-2 bg-action-primary px-4 py-2 text-xs font-semibold text-action-text transition-colors hover:bg-action-hover disabled:opacity-50"
                           >
-                            {loadingStates[`copy_${link.id}`] ? (
-                              <div className="flex items-center justify-center">
-                                <div className="w-3 h-3 border-2 border-canvas border-t-transparent rounded-full animate-spin"></div>
-                              </div>
-                            ) : copiedId === link.id ? (
+                            {loadingStates[`share_${link.id}`] ? (
+                              <>
+                                <span className="h-3 w-3 animate-spin rounded-full border-2 border-canvas border-t-transparent" />
+                                {nativeShareAvailable
+                                  ? t("sharing")
+                                  : t("copying")}
+                              </>
+                            ) : completedLinkAction === "shared" ? (
+                              t("shared")
+                            ) : completedLinkAction === "copied" ? (
                               t("copied")
                             ) : (
-                              t("copyLink")
+                              nativeShareAvailable
+                                ? t("shareLink")
+                                : t("copyLink")
                             )}
                           </button>
                           {status.expired ? (
@@ -958,10 +1322,10 @@ export default function LinkManagement({
       </div>
       </OperationsLayout>
 
-      {copyToast && (
-        <div className="fixed bottom-5 right-5 z-40 border border-border-strong bg-surface-raised px-4 py-3 text-text-heading" role="status" aria-live="polite">
+      {linkActionToast && (
+        <div className="fixed bottom-5 right-5 z-40 border border-border-strong bg-surface-raised px-4 py-3 text-text-heading" role="status" aria-live="polite" aria-atomic="true">
           <p className="text-xs font-medium uppercase tracking-[0.05em]">
-            {copyToast}
+            {linkActionToast}
           </p>
         </div>
       )}

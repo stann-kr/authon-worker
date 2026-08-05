@@ -178,6 +178,7 @@ interface VenueSelectorProps {
   /** 빈 값 선택 시 표시할 텍스트. 기본값: "-- Select Venue --" */
   placeholder?: string;
   className?: string;
+  disabled?: boolean;
 }
 
 export default function VenueSelector({
@@ -186,6 +187,7 @@ export default function VenueSelector({
   onVenueChange,
   placeholder,
   className = "",
+  disabled = false,
 }: VenueSelectorProps) {
   const t = useTranslations("Common");
   const selectId = useId();
@@ -199,8 +201,9 @@ export default function VenueSelector({
         <select
           id={selectId}
           value={selectedVenueId}
+          disabled={disabled}
           onChange={(e) => onVenueChange(e.target.value)}
-          className="app-field appearance-none pr-10"
+          className="app-field appearance-none pr-10 disabled:cursor-not-allowed disabled:opacity-60"
         >
           <option value="">{placeholder ?? t("selectVenue")}</option>
           {venues.map((v) => (

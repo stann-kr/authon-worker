@@ -33,6 +33,7 @@ interface GuestListCardProps {
   isCheckLoading?: boolean;
   isUndoLoading?: boolean;
   isDeleteLoading?: boolean;
+  isDeleteDisabled?: boolean;
 }
 
 const GuestListCard: React.FC<GuestListCardProps> = ({
@@ -49,6 +50,7 @@ const GuestListCard: React.FC<GuestListCardProps> = ({
   isCheckLoading = false,
   isUndoLoading = false,
   isDeleteLoading = false,
+  isDeleteDisabled = false,
 }) => {
   const t = useTranslations("Common");
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
@@ -146,6 +148,7 @@ const GuestListCard: React.FC<GuestListCardProps> = ({
                 <Button
                   onClick={() => setIsDeleteConfirmOpen(true)}
                   isLoading={isDeleteLoading}
+                  disabled={isDeleteDisabled}
                   variant="danger"
                   className="px-3 sm:px-4"
                 >
@@ -157,6 +160,7 @@ const GuestListCard: React.FC<GuestListCardProps> = ({
                 <Button
                   onClick={() => setIsDeleteConfirmOpen(true)}
                   isLoading={isDeleteLoading}
+                  disabled={isDeleteDisabled}
                   variant="ghost"
                   className="px-3 sm:px-4 border border-border-default text-text-muted"
                   aria-label={t("deleteGuest")}
@@ -196,6 +200,7 @@ const GuestListCard: React.FC<GuestListCardProps> = ({
                 <Button
                   onClick={() => setIsDeleteConfirmOpen(true)}
                   isLoading={isDeleteLoading}
+                  disabled={isDeleteDisabled}
                   variant="ghost"
                   className="w-8 h-8 sm:w-10 sm:h-10 p-0 border border-border-default text-text-muted"
                   aria-label={t("removeGuest")}

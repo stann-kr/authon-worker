@@ -17,6 +17,7 @@ interface DatePickerProps {
   onChange: (value: string) => void;
   businessDate?: string;
   className?: string;
+  disabled?: boolean;
 }
 
 function offsetDate(baseYmd: string, deltaDays: number): string {
@@ -39,6 +40,7 @@ export default function DatePicker({
   onChange,
   businessDate = getBusinessDate(),
   className = "",
+  disabled = false,
 }: DatePickerProps) {
   const t = useTranslations("Common");
   const locale = useLocale() as "en" | "ko";
@@ -46,7 +48,9 @@ export default function DatePicker({
   const isToday = value === businessDate;
 
   return (
-    <div className={`operational-date-control min-w-0 ${className}`}>
+    <div
+      className={`operational-date-control min-w-0 ${disabled ? "opacity-60" : ""} ${className}`}
+    >
       <label htmlFor={inputId} className="type-context-title">
         {t("operationalDate")}
       </label>
@@ -66,6 +70,7 @@ export default function DatePicker({
             name="operational-date"
             type="date"
             value={value}
+            disabled={disabled}
             autoComplete="off"
             onChange={(e) => onChange(e.target.value)}
             onClick={(e) => {
@@ -74,7 +79,7 @@ export default function DatePicker({
               };
               input.showPicker?.();
             }}
-            className="absolute inset-0 z-10 h-full w-full cursor-pointer opacity-0 [color-scheme:dark]"
+            className="absolute inset-0 z-10 h-full w-full cursor-pointer opacity-0 disabled:cursor-not-allowed [color-scheme:dark]"
           />
         </div>
 
@@ -85,19 +90,21 @@ export default function DatePicker({
         >
           <button
             type="button"
+            disabled={disabled}
             onClick={() => onChange(offsetDate(value, -1))}
             aria-label={t("previousDate")}
-            className="pressable flex min-h-11 touch-manipulation items-center justify-center gap-1 bg-surface-raised px-3 font-mono text-xs text-text-body hover:bg-surface-hover hover:text-text-heading"
+            className="pressable flex min-h-11 touch-manipulation items-center justify-center gap-1 bg-surface-raised px-3 font-mono text-xs text-text-body hover:bg-surface-hover hover:text-text-heading disabled:cursor-not-allowed"
           >
             <Icon name="chevron-left" size={15} />
             <span>-1D</span>
           </button>
           <button
             type="button"
+            disabled={disabled}
             onClick={() => onChange(businessDate)}
             aria-pressed={isToday}
             aria-label={t("setToday")}
-            className={`pressable min-h-11 touch-manipulation px-3 font-mono text-xs font-semibold ${
+            className={`pressable min-h-11 touch-manipulation px-3 font-mono text-xs font-semibold disabled:cursor-not-allowed ${
               isToday
                 ? "bg-action-primary text-action-text"
                 : "bg-surface-raised text-text-body hover:bg-surface-hover hover:text-text-heading"
@@ -107,9 +114,10 @@ export default function DatePicker({
           </button>
           <button
             type="button"
+            disabled={disabled}
             onClick={() => onChange(offsetDate(value, 1))}
             aria-label={t("nextDate")}
-            className="pressable flex min-h-11 touch-manipulation items-center justify-center gap-1 bg-surface-raised px-3 font-mono text-xs text-text-body hover:bg-surface-hover hover:text-text-heading"
+            className="pressable flex min-h-11 touch-manipulation items-center justify-center gap-1 bg-surface-raised px-3 font-mono text-xs text-text-body hover:bg-surface-hover hover:text-text-heading disabled:cursor-not-allowed"
           >
             <span>+1D</span>
             <Icon name="chevron-right" size={15} />

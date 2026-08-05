@@ -6,6 +6,7 @@ import { users } from "@/lib/db/schema";
 import { verifyPassword, hashPassword } from "@/lib/auth/password";
 import { requireAuth } from "@/lib/auth/server";
 import { getPasswordPolicyError } from "@/lib/auth/password-policy";
+import { shouldUseSecureAuthCookies } from "@/lib/auth/cookie-policy";
 
 function getAuthErrorStatus(error: unknown): number | null {
   if (!(error instanceof Error)) return null;
@@ -59,8 +60,25 @@ export async function PUT(request: Request) {
       message: "비밀번호가 변경되어 다시 로그인해야 합니다.",
       reauthRequired: true,
     });
-    response.cookies.set({ name: "token", value: "", httpOnly: true, secure: true, sameSite: "lax", maxAge: 0, path: "/" });
-    response.cookies.set({ name: "sessionId", value: "", httpOnly: true, secure: true, sameSite: "lax", maxAge: 0, path: "/" });
+    const secureCookies = shouldUseSecureAuthCookies(request);
+    response.cookies.set({
+      name: "token",
+      value: "",
+      httpOnly: true,
+      secure: secureCookies,
+      sameSite: "lax",
+      maxAge: 0,
+      path: "/",
+    });
+    response.cookies.set({
+      name: "sessionId",
+      value: "",
+      httpOnly: true,
+      secure: secureCookies,
+      sameSite: "lax",
+      maxAge: 0,
+      path: "/",
+    });
 
     return response;
   } catch (error: unknown) {

@@ -1,15 +1,15 @@
 import { getCloudflareContext } from "@opennextjs/cloudflare";
+import {
+  decideRateLimit,
+  type RateLimitWindowState,
+} from "./rate-limit-policy";
 
 interface RateLimitOptions {
   namespace: string;
   identifier: string;
   limit: number;
   windowSeconds: number;
-}
-
-interface RateLimitState {
-  count: number;
-  resetAt: number;
+  cost?: number;
 }
 
 export interface RateLimitResult {
@@ -22,10 +22,10 @@ function getKey(namespace: string, identifier: string) {
   return `rate-limit:${namespace}:${identifier}`;
 }
 
-function parseState(raw: string | null): RateLimitState | null {
+function parseState(raw: string | null): RateLimitWindowState | null {
   if (!raw) return null;
   try {
-    const parsed = JSON.parse(raw) as RateLimitState;
+    const parsed = JSON.parse(raw) as RateLimitWindowState;
     if (typeof parsed?.count === "number" && typeof parsed?.resetAt === "number") {
       return parsed;
     }
@@ -35,11 +35,15 @@ function parseState(raw: string | null): RateLimitState | null {
   return null;
 }
 
-export function getRequestIp(request: Request): string {
-  const cfIp = request.headers.get("cf-connecting-ip");
+interface RequestHeaders {
+  get(name: string): string | null;
+}
+
+export function getRequestIpFromHeaders(headers: RequestHeaders): string {
+  const cfIp = headers.get("cf-connecting-ip");
   if (cfIp) return cfIp.trim();
 
-  const forwardedFor = request.headers.get("x-forwarded-for");
+  const forwardedFor = headers.get("x-forwarded-for");
   if (forwardedFor) {
     return forwardedFor.split(",")[0]?.trim() || "unknown";
   }
@@ -47,35 +51,36 @@ export function getRequestIp(request: Request): string {
   return "unknown";
 }
 
+export function getRequestIp(request: Request): string {
+  return getRequestIpFromHeaders(request.headers);
+}
+
 export async function consumeRateLimit(options: RateLimitOptions): Promise<RateLimitResult> {
   const { env } = getCloudflareContext();
   const now = Date.now();
   const key = getKey(options.namespace, options.identifier);
   const state = parseState(await env.SESSIONS.get(key));
-
-  if (state && now < state.resetAt && state.count >= options.limit) {
-    return {
-      allowed: false,
-      remaining: 0,
-      retryAfterSeconds: Math.max(1, Math.ceil((state.resetAt - now) / 1000)),
-    };
-  }
-
-  const resetAt = state && now < state.resetAt
-    ? state.resetAt
-    : now + options.windowSeconds * 1000;
-  const count = state && now < state.resetAt
-    ? state.count + 1
-    : 1;
-
-  await env.SESSIONS.put(key, JSON.stringify({ count, resetAt }), {
-    expirationTtl: Math.max(1, Math.ceil((resetAt - now) / 1000)),
+  const decision = decideRateLimit({
+    state,
+    now,
+    limit: options.limit,
+    windowSeconds: options.windowSeconds,
+    cost: options.cost,
   });
 
+  if (decision.nextState) {
+    await env.SESSIONS.put(key, JSON.stringify(decision.nextState), {
+      // Workers KV requires expiration TTLs of at least 60 seconds. Keeping an
+      // expired JSON window slightly longer is harmless because the pure
+      // policy resets it from `resetAt` on the next request.
+      expirationTtl: Math.max(60, decision.retryAfterSeconds),
+    });
+  }
+
   return {
-    allowed: true,
-    remaining: Math.max(0, options.limit - count),
-    retryAfterSeconds: Math.max(0, Math.ceil((resetAt - now) / 1000)),
+    allowed: decision.allowed,
+    remaining: decision.remaining,
+    retryAfterSeconds: decision.retryAfterSeconds,
   };
 }
 

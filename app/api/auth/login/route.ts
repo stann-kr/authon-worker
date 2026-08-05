@@ -5,6 +5,7 @@ import { eq } from "drizzle-orm";
 import { SignJWT } from "jose";
 import { users } from "@/lib/db/schema";
 import { verifyPassword, hashPassword, needsRehash } from "@/lib/auth/password";
+import { shouldUseSecureAuthCookies } from "@/lib/auth/cookie-policy";
 import { clearRateLimit, consumeRateLimit, getRequestIp } from "@/lib/auth/rate-limit";
 import { getTenantContextForRequest } from "@/lib/tenant/server";
 import {
@@ -138,12 +139,13 @@ export async function POST(request: Request) {
         preferredLocale: isLocale(user.preferredLocale) ? user.preferredLocale : null,
       },
     });
+    const secureCookies = shouldUseSecureAuthCookies(request);
 
     response.cookies.set({
       name: "token",
       value: token,
       httpOnly: true,
-      secure: true,
+      secure: secureCookies,
       sameSite: "lax",
       maxAge: 60 * 60 * 24,
       path: "/",
@@ -153,7 +155,7 @@ export async function POST(request: Request) {
       name: "sessionId",
       value: sessionId,
       httpOnly: true,
-      secure: true,
+      secure: secureCookies,
       sameSite: "lax",
       maxAge: 60 * 60 * 24,
       path: "/",
@@ -164,7 +166,7 @@ export async function POST(request: Request) {
         name: LOCALE_COOKIE_NAME,
         value: user.preferredLocale,
         sameSite: "lax",
-        secure: new URL(request.url).protocol === "https:",
+        secure: secureCookies,
         maxAge: LOCALE_COOKIE_MAX_AGE,
         path: "/",
       });

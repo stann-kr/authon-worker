@@ -1,12 +1,31 @@
 "use server";
 
 import { getCloudflareContext } from "@opennextjs/cloudflare";
-import { eq, and, ne, desc, sql } from "drizzle-orm";
-import { guests, externalDjLinks } from "../db/schema";
-import { type Guest, type ApiResponse } from "./types";
+import { eq, and, ne, desc, inArray } from "drizzle-orm";
+import { guests } from "../db/schema";
+import {
+  type ApiResponse,
+  type BulkGuestCreateInput,
+  type BulkGuestCreateItemResult,
+  type BulkGuestCreateResult,
+  type Guest,
+} from "./types";
 import { requireAccess, requireAuth, requireRole, type SessionUser } from "../auth/server";
 import { getDb } from "../db/client";
 import { hasAccess } from "@/lib/users/policy";
+import {
+  MAX_BULK_WRITE_NAMES,
+  prepareGuestName,
+  toStoredGuestName,
+} from "@/lib/guests/bulk-entry";
+import {
+  DECREMENT_EXTERNAL_LINK_AFTER_CHANGE_SQL,
+  DECREMENT_EXTERNAL_LINK_FOR_ACTIVE_GUEST_SQL,
+  INTERNAL_BULK_GUEST_INSERT_SQL,
+  PERMANENT_DELETE_GUEST_SQL,
+  SOFT_DELETE_GUEST_SQL,
+  UPDATE_ACTIVE_GUEST_STATUS_SQL,
+} from "@/lib/guests/atomic-sql";
 
 type Db = ReturnType<typeof getDb>;
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
@@ -15,6 +34,25 @@ function isValidDate(value: string): boolean {
   if (!DATE_PATTERN.test(value)) return false;
   const parsed = new Date(`${value}T00:00:00.000Z`);
   return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
+}
+
+function parseBulkGuestCreateInput(value: unknown): {
+  name: string;
+  allowDuplicate: boolean;
+} | null {
+  if (!value || typeof value !== "object") return null;
+  const candidate = value as { name?: unknown; allowDuplicate?: unknown };
+  if (typeof candidate.name !== "string") return null;
+  if (
+    candidate.allowDuplicate !== undefined &&
+    typeof candidate.allowDuplicate !== "boolean"
+  ) {
+    return null;
+  }
+  return {
+    name: candidate.name,
+    allowDuplicate: candidate.allowDuplicate === true,
+  };
 }
 
 function scopedVenueId(user: SessionUser, requestedVenueId?: string | null): string | undefined {
@@ -44,7 +82,7 @@ async function getAccessibleGuest(db: Db, user: SessionUser, guestId: string) {
 
 export async function fetchGuestsByDate(date: string, venueId?: string): Promise<ApiResponse<Guest[]>> {
   try {
-    const user = await requireAccess("guest");
+    const user = await requireAccess("door");
     const db = getDb();
     const effectiveVenueId = scopedVenueId(user, venueId);
     const conditions = [eq(guests.date, date), ne(guests.status, "deleted")];
@@ -63,7 +101,7 @@ export async function fetchGuestsByDate(date: string, venueId?: string): Promise
 
 export async function fetchAllGuests(venueId?: string): Promise<ApiResponse<Guest[]>> {
   try {
-    const user = await requireAccess("guest");
+    const user = await requireAccess("admin");
     const db = getDb();
     const effectiveVenueId = scopedVenueId(user, venueId);
     const baseQuery = db.select().from(guests);
@@ -84,61 +122,214 @@ export async function createGuest(guest: {
   registeredByName?: string | null;
   date: string;
 }): Promise<ApiResponse<Guest>> {
+  const response = await createGuests({
+    venueId: guest.venueId,
+    date: guest.date,
+    registeredByName: guest.registeredByName,
+    items: [{ name: guest.name, allowDuplicate: false }],
+  });
+  if (response.error || !response.data) {
+    return { data: null, error: response.error };
+  }
+
+  const [result] = response.data.items;
+  if (result?.status === "created" && result.guest) {
+    return { data: result.guest, error: null };
+  }
+  if (result?.status === "duplicate_requires_confirmation") {
+    return { data: null, error: "DUPLICATE_REQUIRES_CONFIRMATION" };
+  }
+  if (result?.status === "limit_reached") {
+    return { data: null, error: "GUEST_LIMIT_REACHED" };
+  }
+  if (result?.status === "invalid_name") {
+    return { data: null, error: "INVALID_GUEST_NAME" };
+  }
+  return { data: null, error: "Unable to create guest right now." };
+}
+
+interface PendingBulkGuest {
+  index: number;
+  id: string;
+  name: string;
+  key: string;
+  allowDuplicate: boolean;
+}
+
+export async function createGuests(params: {
+  venueId: string;
+  date: string;
+  registeredByName?: string | null;
+  items: BulkGuestCreateInput[];
+}): Promise<ApiResponse<BulkGuestCreateResult>> {
   try {
     const user = await requireAccess("guest");
     const db = getDb();
-    const effectiveVenueId = scopedVenueId(user, guest.venueId);
+    const effectiveVenueId = scopedVenueId(user, params.venueId);
     if (!effectiveVenueId) throw new Error("Venue is required");
+    if (!isValidDate(params.date)) return { data: null, error: "INVALID_DATE" };
+    if (!Array.isArray(params.items) || params.items.length > MAX_BULK_WRITE_NAMES) {
+      return { data: null, error: "BULK_LIMIT_EXCEEDED" };
+    }
 
-    const name = guest.name.trim();
-    if (!name || name.length > 100) return { data: null, error: "INVALID_GUEST_NAME" };
-    if (!isValidDate(guest.date)) return { data: null, error: "INVALID_DATE" };
-    const registeredByName = guest.registeredByName?.trim() || null;
-    if (user.accountKind === "shared" && (!registeredByName || registeredByName.length > 80)) {
+    const preparedRegisteredByName = prepareGuestName(params.registeredByName);
+    const registeredByName =
+      preparedRegisteredByName.error === null &&
+      preparedRegisteredByName.name.length <= 80
+        ? preparedRegisteredByName.name
+        : null;
+    if (
+      user.accountKind === "shared" &&
+      (!registeredByName || registeredByName.length > 80)
+    ) {
       return { data: null, error: "REGISTERED_BY_REQUIRED" };
     }
 
-    const id = crypto.randomUUID();
+    const existingNames = await db
+      .select({ name: guests.name })
+      .from(guests)
+      .where(
+        and(
+          eq(guests.venueId, effectiveVenueId),
+          eq(guests.date, params.date),
+          eq(guests.createdByUserId, user.id),
+          ne(guests.status, "deleted"),
+        ),
+      );
+    const seenKeys = new Set<string>();
+    for (const existing of existingNames) {
+      const prepared = prepareGuestName(existing.name);
+      if (prepared.error === null) seenKeys.add(prepared.key);
+    }
+
+    const itemResults: BulkGuestCreateItemResult[] = params.items.map((_, index) => ({
+      index,
+      status: "invalid_name",
+      guest: null,
+    }));
+    const pendingGuests: PendingBulkGuest[] = [];
+
+    for (let index = 0; index < params.items.length; index += 1) {
+      const input = parseBulkGuestCreateInput(params.items[index]);
+      if (!input) continue;
+      const prepared = prepareGuestName(input.name);
+      if (prepared.error !== null) continue;
+
+      if (seenKeys.has(prepared.key) && !input.allowDuplicate) {
+        itemResults[index] = {
+          index,
+          status: "duplicate_requires_confirmation",
+          guest: null,
+        };
+        continue;
+      }
+
+      seenKeys.add(prepared.key);
+      pendingGuests.push({
+        index,
+        id: crypto.randomUUID(),
+        name: toStoredGuestName(prepared.name),
+        key: prepared.key,
+        allowDuplicate: input.allowDuplicate,
+      });
+    }
+
+    if (pendingGuests.length === 0) {
+      return { data: { items: itemResults }, error: null };
+    }
+
     const now = new Date().toISOString();
     const { env } = getCloudflareContext();
-    const inserted = await env.DB.prepare(
-      `INSERT INTO guests (
-        id, venue_id, name, external_link_id, created_by_user_id, registered_by_name,
-        date, status, created_at, updated_at
-      )
-      SELECT ?, ?, ?, NULL, ?, ?, ?, 'pending', ?, ?
-      WHERE ? IS NULL OR (
-        SELECT count(*) FROM guests
-        WHERE created_by_user_id = ? AND date = ? AND status != 'deleted'
-      ) < ? + coalesce((
-        SELECT sum(approved_extra) FROM guest_limit_requests
-        WHERE user_id = ? AND date = ? AND status = 'approved'
-      ), 0)
-      RETURNING id`,
-    )
-      .bind(
-        id,
+    const statements = pendingGuests.map((pending) =>
+      env.DB.prepare(INTERNAL_BULK_GUEST_INSERT_SQL).bind(
+        pending.id,
         effectiveVenueId,
-        name,
+        pending.name,
         user.id,
         user.accountKind === "shared" ? registeredByName : null,
-        guest.date,
+        params.date,
         now,
         now,
+        pending.allowDuplicate ? 1 : 0,
+        effectiveVenueId,
+        user.id,
+        params.date,
+        pending.name,
         user.guestLimit,
         user.id,
-        guest.date,
+        params.date,
         user.guestLimit ?? 0,
         user.id,
-        guest.date,
-      )
-      .first<{ id: string }>();
-    if (!inserted) return { data: null, error: "GUEST_LIMIT_REACHED" };
-    const result = await db.select().from(guests).where(eq(guests.id, id));
-    return { data: result[0] ? { ...result[0], status: result[0].status as Guest["status"] } : null, error: null };
+        params.date,
+      ),
+    );
+    const insertResults = await env.DB.batch<{ id: string }>(statements);
+    const createdIds = pendingGuests
+      .filter((pending, index) => insertResults[index]?.results[0]?.id === pending.id)
+      .map((pending) => pending.id);
+    const createdRows = createdIds.length > 0
+      ? await db.select().from(guests).where(inArray(guests.id, createdIds))
+      : [];
+    const createdById = new Map(createdRows.map((row) => [row.id, row]));
+    const failedUnconfirmedNames = Array.from(
+      new Set(
+        pendingGuests
+          .filter(
+            (pending, index) =>
+              !pending.allowDuplicate &&
+              insertResults[index]?.results[0]?.id !== pending.id,
+          )
+          .map((pending) => pending.name),
+      ),
+    );
+    const concurrentDuplicateRows = failedUnconfirmedNames.length > 0
+      ? await db
+        .select({ name: guests.name })
+        .from(guests)
+        .where(
+          and(
+            eq(guests.venueId, effectiveVenueId),
+            eq(guests.date, params.date),
+            eq(guests.createdByUserId, user.id),
+            ne(guests.status, "deleted"),
+            inArray(guests.name, failedUnconfirmedNames),
+          ),
+        )
+      : [];
+    const concurrentDuplicateKeys = new Set(
+      concurrentDuplicateRows.flatMap((row) => {
+        const prepared = prepareGuestName(row.name);
+        return prepared.error === null ? [prepared.key] : [];
+      }),
+    );
+
+    for (let pendingIndex = 0; pendingIndex < pendingGuests.length; pendingIndex += 1) {
+      const pending = pendingGuests[pendingIndex];
+      const wasCreated = insertResults[pendingIndex]?.results[0]?.id === pending.id;
+      const row = wasCreated ? createdById.get(pending.id) : undefined;
+      if (wasCreated && !row) throw new Error("Bulk guest insert could not be read back");
+      if (wasCreated && row) {
+        itemResults[pending.index] = {
+          index: pending.index,
+          status: "created",
+          guest: { ...row, status: row.status as Guest["status"] },
+        };
+      } else {
+        itemResults[pending.index] = {
+          index: pending.index,
+          status:
+            !pending.allowDuplicate && concurrentDuplicateKeys.has(pending.key)
+              ? "duplicate_requires_confirmation"
+              : "limit_reached",
+          guest: null,
+        };
+      }
+    }
+
+    return { data: { items: itemResults }, error: null };
   } catch (error: unknown) {
-    console.error("Failed to create guest:", error);
-    return { data: null, error: "Unable to create guest right now." };
+    console.error("Failed to create guests:", error);
+    return { data: null, error: "Unable to create guests right now." };
   }
 }
 
@@ -147,20 +338,26 @@ export async function updateGuestStatus(
   status: "pending" | "checked",
 ): Promise<ApiResponse<Guest>> {
   try {
+    if (status !== "pending" && status !== "checked") {
+      return { data: null, error: "INVALID_GUEST_STATUS" };
+    }
     const user = await requireAccess("door");
     const db = getDb();
-    await getAccessibleGuest(db, user, guestId);
+    const current = await getAccessibleGuest(db, user, guestId);
+    const now = new Date().toISOString();
+    const checkInTime = status === "checked" ? now : null;
+    const { env } = getCloudflareContext();
+    const updated = await env.DB.prepare(UPDATE_ACTIVE_GUEST_STATUS_SQL)
+      .bind(status, checkInTime, now, guestId, current.venueId, status)
+      .first<{ id: string }>();
+    if (!updated) throw new Error("Guest is deleted or no longer accessible");
 
-    const updateData: Partial<typeof guests.$inferInsert> = { status, updatedAt: new Date().toISOString() };
-
-    if (status === "checked") {
-      updateData.checkInTime = new Date().toISOString();
-    } else if (status === "pending") {
-      updateData.checkInTime = null;
-    }
-
-    await db.update(guests).set(updateData).where(eq(guests.id, guestId));
-    const result = await db.select().from(guests).where(eq(guests.id, guestId));
+    const result = await db
+      .select()
+      .from(guests)
+      .where(and(eq(guests.id, guestId), eq(guests.venueId, current.venueId)))
+      .limit(1);
+    if (!result[0]) throw new Error("Guest is no longer accessible");
     return { data: result[0] ? { ...result[0], status: result[0].status as Guest["status"] } : null, error: null };
   } catch (error: unknown) {
     console.error("Failed to update guest status:", error);
@@ -172,27 +369,42 @@ export async function deleteGuest(guestId: string): Promise<ApiResponse<Guest>> 
   try {
     const user = await requireAuth();
     const db = getDb();
+    const { env } = getCloudflareContext();
 
-    // 현재 상태 확인 — 이미 deleted이면 카운터 이중 차감 방지
     const current = await getAccessibleGuest(db, user, guestId);
-    if (!hasAccess(user, ["door"]) && current.createdByUserId !== user.id) {
+    const canDeleteVenueWide = hasAccess(user, ["door"]);
+    if (!canDeleteVenueWide && current.createdByUserId !== user.id) {
       throw new Error("Forbidden");
     }
-    const wasAlreadyDeleted = current.status === "deleted";
-
-    const updateData: Partial<typeof guests.$inferInsert> = {
-      status: "deleted",
-      updatedAt: new Date().toISOString(),
-    };
-    await db.update(guests).set(updateData).where(eq(guests.id, guestId));
-    const updatedRows = await db.select().from(guests).where(eq(guests.id, guestId));
-    const updated = updatedRows[0];
-
-    if (!wasAlreadyDeleted && current.externalLinkId) {
-      await db.update(externalDjLinks)
-        .set({ usedGuests: sql`max(0, ${externalDjLinks.usedGuests} - 1)` })
-        .where(eq(externalDjLinks.id, current.externalLinkId));
+    const now = new Date().toISOString();
+    const statements = [
+      env.DB.prepare(SOFT_DELETE_GUEST_SQL).bind(
+        now,
+        guestId,
+        current.venueId,
+        canDeleteVenueWide ? 1 : 0,
+        user.id,
+      ),
+    ];
+    if (current.externalLinkId) {
+      statements.push(
+        env.DB.prepare(DECREMENT_EXTERNAL_LINK_AFTER_CHANGE_SQL).bind(
+          current.externalLinkId,
+        ),
+      );
     }
+    const deleteResults = await env.DB.batch<{ id: string }>(statements);
+    if (deleteResults[0]?.results[0]?.id !== guestId) {
+      throw new Error("Guest is deleted or no longer accessible");
+    }
+
+    const updatedRows = await db
+      .select()
+      .from(guests)
+      .where(and(eq(guests.id, guestId), eq(guests.venueId, current.venueId)))
+      .limit(1);
+    const updated = updatedRows[0];
+    if (!updated) throw new Error("Guest is no longer accessible");
 
     return { data: updated ? { ...updated, status: updated.status as Guest["status"] } : null, error: null };
   } catch (error: unknown) {
@@ -205,8 +417,28 @@ export async function permanentlyDeleteGuest(guestId: string): Promise<{ error: 
   try {
     const user = await requireRole(["super_admin", "venue_admin"]);
     const db = getDb();
-    await getAccessibleGuest(db, user, guestId);
-    await db.delete(guests).where(eq(guests.id, guestId));
+    const { env } = getCloudflareContext();
+    const current = await getAccessibleGuest(db, user, guestId);
+    const deleteStatement = env.DB.prepare(PERMANENT_DELETE_GUEST_SQL).bind(
+      guestId,
+      current.venueId,
+    );
+    const statements = current.externalLinkId
+      ? [
+        env.DB.prepare(DECREMENT_EXTERNAL_LINK_FOR_ACTIVE_GUEST_SQL).bind(
+          current.externalLinkId,
+          guestId,
+          current.externalLinkId,
+          current.venueId,
+        ),
+        deleteStatement,
+      ]
+      : [deleteStatement];
+    const deleteResults = await env.DB.batch<{ id: string }>(statements);
+    const deleteResultIndex = current.externalLinkId ? 1 : 0;
+    if (deleteResults[deleteResultIndex]?.results[0]?.id !== guestId) {
+      throw new Error("Guest is no longer accessible");
+    }
     return { error: null };
   } catch (error: unknown) {
     console.error("Failed to permanently delete guest:", error);
@@ -235,16 +467,38 @@ export async function updateGuest(
     }
     const updateData: Partial<typeof guests.$inferInsert> = { updatedAt: new Date().toISOString() };
 
-    if (updates.name !== undefined) updateData.name = updates.name;
-    if (updates.date !== undefined) updateData.date = updates.date;
+    if (updates.name !== undefined) {
+      const preparedName = prepareGuestName(updates.name);
+      if (preparedName.error !== null) {
+        return { data: null, error: "INVALID_GUEST_NAME" };
+      }
+      updateData.name = toStoredGuestName(preparedName.name);
+    }
+    if (updates.date !== undefined) {
+      if (!isValidDate(updates.date)) {
+        return { data: null, error: "INVALID_DATE" };
+      }
+      updateData.date = updates.date;
+    }
     if (updates.venueId !== undefined) {
       const effectiveVenueId = scopedVenueId(user, updates.venueId);
       if (!effectiveVenueId) throw new Error("Venue is required");
       updateData.venueId = effectiveVenueId;
     }
 
-    await db.update(guests).set(updateData).where(eq(guests.id, guestId));
-    const result = await db.select().from(guests).where(eq(guests.id, guestId));
+    const updateConditions = [
+      eq(guests.id, guestId),
+      eq(guests.venueId, current.venueId),
+    ];
+    if (!canAdministerGuests) {
+      updateConditions.push(eq(guests.createdByUserId, user.id));
+    }
+    const result = await db
+      .update(guests)
+      .set(updateData)
+      .where(and(...updateConditions))
+      .returning();
+    if (!result[0]) throw new Error("Guest is no longer accessible");
     return { data: result[0] ? { ...result[0], status: result[0].status as Guest["status"] } : null, error: null };
   } catch (error: unknown) {
     console.error("Failed to update guest:", error);

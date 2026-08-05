@@ -26,7 +26,7 @@ function GuestPageRouter() {
 
   // Case 1: External DJ flow (token-based)
   if (token) {
-    return <ExternalDJGuestView token={token} />;
+    return <ExternalDJGuestView key={token} token={token} />;
   }
 
   // Case 2: Authenticated DJ flow

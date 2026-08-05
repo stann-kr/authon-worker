@@ -4,12 +4,15 @@ import { execFileSync } from "node:child_process";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
+import { resolveLocalTestPassword } from "./local-test-password.mjs";
 
 const database = "authon-db";
 const venueId = "local-test-venue";
 const now = new Date().toISOString();
-const suppliedPassword = process.env.LOCAL_TEST_PASSWORD?.trim();
-const password = suppliedPassword || `Local!${crypto.randomBytes(9).toString("base64url")}`;
+const projectRoot = fileURLToPath(new URL("../../", import.meta.url));
+const accountDocumentPath = path.join(projectRoot, ".docs", "LOCAL_TEST_ACCOUNTS.md");
+const password = await resolveLocalTestPassword({ documentPath: accountDocumentPath });
 const passwordHash = pbkdf2Hash(password);
 
 const accounts = [
@@ -56,5 +59,5 @@ try {
 }
 
 console.log("Seeded local venue domain: http://faust.localhost:3000");
-console.log(`Seeded ${accounts.length} local accounts using password: ${password}`);
+console.log(`Seeded ${accounts.length} local accounts using the documented local credential.`);
 console.log(`Emails: ${accounts.map(([email]) => email).join(", ")}`);
