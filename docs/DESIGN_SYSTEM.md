@@ -129,7 +129,7 @@ Authon UI는 베뉴 현장에서 반복적으로 사용하는 운영 도구다. 
 - Links의 `템플릿으로 사용`은 업무 설정만 생성 form에 채우고 credential은 복사하지 않는다. 공유 action은 Web Share 지원 여부에 따라 공유 또는 URL 복사 중 하나만 표시해 행의 action 밀도를 유지한다.
 - 반복되는 guest row는 안정적인 단일 neutral surface를 사용한다. waiting과 checked-in 상태는 각 행의 왼쪽 2px indicator를 공유하되, 모든 waiting 행은 중복 status label을 표시하지 않는다.
 - 되돌리기처럼 특정 guest 상태에 종속된 control은 전역 banner가 아니라 해당 guest 행 안에 표시한다.
-- guest row의 상태는 왼쪽 indicator와 metadata가 전달하고, 우측에는 현재 수행 가능한 action만 둔다. `CHECK IN`과 `UNDO`는 동일한 위치와 최소 폭을 사용한다.
+- guest row의 상태는 왼쪽 indicator와 metadata가 전달하고, 우측에는 현재 수행 가능한 action만 둔다. mobile에서도 action은 행 우측의 내용 폭 button으로 유지하며, `CHECK IN`과 `UNDO`는 동일한 위치와 최소 폭을 사용한다.
 - 등록자처럼 선택적인 metadata는 값이 없을 때 공간을 예약하지 않는다. 행 본문과 우측 action은 전체 행 높이를 기준으로 수직 중앙 정렬한다.
 - 추가 게스트 요청은 요청 수량을 주요 control로 두고 선택 사유임을 label과 helper text에서 명확히 표시한다. 승인 목록은 요청값, 승인값과 처리 상태를 함께 보여준다.
 - Door 목록의 `입장 대기 우선`은 기본 활성화하며 사용자가 끄면 입장 확인 뒤에도 등록 순서를 유지한다. 선택은 같은 브라우저에 보존한다.

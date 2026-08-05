@@ -71,7 +71,7 @@ const GuestListCard: React.FC<GuestListCardProps> = ({
     <article
       className={`guest-list-row relative overflow-hidden bg-surface px-4 py-3 transition-colors before:absolute before:inset-y-0 before:left-0 before:w-0.5 sm:px-5 ${indicatorTone}`}
     >
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex items-center justify-between gap-3">
         <div className="flex min-w-0 flex-1 items-start gap-3 sm:gap-4">
           <span className="mt-0.5 w-7 shrink-0 font-mono text-xs tabular-nums text-text-dim">
             {String(index + 1).padStart(2, "0")}
@@ -129,7 +129,7 @@ const GuestListCard: React.FC<GuestListCardProps> = ({
           </div>
         </div>
 
-        <div className="flex w-full flex-shrink-0 flex-wrap items-center justify-end gap-2 sm:w-auto">
+        <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
           {guest.status === "pending" && (
             <>
               <span className="sr-only">{t("waitingStatus")}</span>
@@ -139,7 +139,7 @@ const GuestListCard: React.FC<GuestListCardProps> = ({
                   isLoading={isCheckLoading}
                   variant="confirm"
                   size="md"
-                  className="w-full px-2 sm:w-36 sm:px-4"
+                  className="w-28 px-3 sm:w-36 sm:px-4"
                 >
                   {t("checkIn")}
                 </Button>
@@ -151,7 +151,7 @@ const GuestListCard: React.FC<GuestListCardProps> = ({
                   isLoading={isDeleteLoading}
                   disabled={isDeleteDisabled}
                   variant="danger"
-                  className="w-full px-3 sm:w-auto sm:px-4"
+                  className="min-w-20 px-3 sm:px-4"
                 >
                   {t("delete")}
                 </Button>
@@ -182,7 +182,7 @@ const GuestListCard: React.FC<GuestListCardProps> = ({
                   variant="outline"
                   size="md"
                   leftIcon={<Icon name="undo" size={16} />}
-                  className="w-full px-2 sm:w-36 sm:px-4"
+                  className="w-28 px-3 sm:w-36 sm:px-4"
                   aria-label={t("undoCheckIn", { name: guest.name })}
                 >
                   {t("undo")}
