@@ -49,7 +49,7 @@ Authon UI는 베뉴 현장에서 반복적으로 사용하는 운영 도구다. 
 - interactive control은 최소 `44px × 44px` touch target을 제공한다.
 - form field와 선택 control은 `border-strong`을 사용해 인접 surface와 3:1 이상의 비텍스트 대비를 확보하고, panel 구획선은 `border-default` 또는 `border-subtle`을 사용한다.
 - Guest와 Door는 모바일에서 dashboard와 list를 한 열로 쌓고, `768px` 이상에서는 좌측 운영 dashboard와 우측 guest list의 master-detail 구조를 사용한다.
-- 인증 화면은 공통 workspace shell을 사용한다. 상단 header는 기존의 brand·현재 맥락·계정 action만 유지하고, Admin에서는 desktop 좌측 업무 navigation을 제공한다. 모바일에서는 safe area를 반영한 하단 전역 navigation을 고정하고 footer보다 높은 전용 layer와 본문 하단 여백을 함께 예약한다.
+- 인증 화면은 공통 workspace shell을 사용한다. 상단 header는 기존의 brand·현재 맥락·계정 action만 유지하고 brand를 홈 진입점으로 사용한다. Admin에서는 desktop 좌측 업무 navigation을 제공하며 모바일에는 별도 고정 하단 전역 navigation을 두지 않는다.
 - Admin 업무 navigation은 desktop에서 항상 보이는 grouped sidebar를 사용한다. 모바일에서는 전체 업무를 3열 바로가기 목록으로 압축해 선택형 control 없이 항상 노출한다.
 - 날짜 입력은 viewport가 아니라 component container 폭을 기준으로 배치한다. 좁은 container에서는 날짜와 quick control을 두 줄로 표시한다.
 - 고정 또는 sticky 영역은 목록의 첫 행을 가리지 않아야 하며, 페이지 안에 불필요한 중첩 scroll container를 만들지 않는다.
@@ -110,7 +110,7 @@ Authon UI는 베뉴 현장에서 반복적으로 사용하는 운영 도구다. 
 - `Button`: primary, confirm, secondary, outline, danger, ghost variant와 loading state를 제공한다. 실행 action에 사용하며 기본 `type`은 `button`이다. 반복 check-in의 confirm variant는 CSS semantic token으로 배경·경계·텍스트를 함께 적용해 색상 일부만 누락되지 않게 한다.
 - `ButtonLink`: route 이동에 사용하는 링크를 `Button`과 같은 variant·크기·icon 규칙으로 표현한다. 화면 이동을 `button` click handler로 흉내 내지 않는다.
 - `ConfirmDialog`: 확인이 필요한 작업의 제목·설명·action, focus trap, Escape 닫기, 취소 종료 motion과 trigger focus 복귀를 통일한다. 종료 중에는 action을 잠그며 native confirm dialog는 사용하지 않는다.
-- `WorkspaceShell`: 인증 화면의 header, 본문 폭, mobile bottom navigation, safe area와 공통 scroll 여백을 통일한다.
+- `WorkspaceShell`: 인증 화면의 header, 본문 폭, footer와 공통 scroll 여백을 통일한다.
 - `AdminTaskSwitcher`: 권한에 맞는 Admin 업무를 direct link로 제공하고 desktop grouped sidebar와 mobile 바로가기 grid의 선택 상태를 통일한다.
 - `OperationalSectionNav`: 독립적으로 표시되는 관리 component의 내부 section 선택 상태를 통일한다. 상위 Admin task navigation과 함께 사용할 때는 중복 표시하지 않는다.
 - `PanelHeader`: count, sort, 화면별 context action, refresh의 위치를 통일하며 refresh는 작업 묶음의 가장 오른쪽에 둔다. 최초 조회에서 count가 아직 확정되지 않았으면 `0` 대신 `-`를 표시한다.
@@ -127,6 +127,7 @@ Authon UI는 베뉴 현장에서 반복적으로 사용하는 운영 도구다. 
 - 운영 날짜는 Guest, Door, Admin에서 같은 `DatePicker`와 날짜 이동 control을 사용한다. container가 좁으면 날짜 입력과 quick control을 두 줄로 배치한다.
 - Guest와 Door는 태블릿 이상에서 공통 `OperationsLayout`의 split variant를 사용한다. Admin 하위 작업은 상위 CRM navigation 옆에서 stacked variant를 사용해 중첩 sidebar를 만들지 않는다.
 - 추가 게스트 요청처럼 게스트 한도에 속하는 운영 승인은 사용자 계정 관리가 아니라 Admin의 게스트 하위 작업으로 제공한다. 미처리 요청이 있는 Venue Admin 홈에는 단축키와 혼동되지 않는 상태 문구, 건수와 요청함 직접 이동 action을 함께 표시한다.
+- 홈 작업 카드는 모바일에서 아이콘과 제목을 같은 행에 두고 설명은 두 column 전체 폭을 사용한다. 설명은 핵심 행동 한 문장으로 제한하고 `text-wrap: pretty`를 적용해 좁은 화면의 불균형한 줄바꿈을 줄인다.
 - Links 관리는 기본 상태와 예외 상태를 한 번씩만 표시한다. 목록 범위는 날짜별 보기와 최근 생성 5개·10개 보기로 구분한다.
 - Links의 긴 URL은 기본 목록에 상시 노출하지 않는다. `VIEW` disclosure 안에서 읽기 전용 URL 선택과 새 탭 열기를 제공해 clipboard 실패 시에도 접근할 수 있게 한다.
 - Links의 `템플릿으로 사용`은 업무 설정만 생성 form에 채우고 credential은 복사하지 않는다. 공유 action은 Web Share 지원 여부에 따라 공유 또는 URL 복사 중 하나만 표시해 행의 action 밀도를 유지한다.
