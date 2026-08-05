@@ -32,6 +32,7 @@ Authon UI는 베뉴 현장에서 반복적으로 사용하는 운영 도구다. 
 | `text-body` | `#D4D7D9` | 본문 |
 | `text-muted` | `#AAB0B5` | 보조 정보 |
 | `action-primary` | `#E7EAEC` | primary action과 선택 |
+| `action-confirm` | `#D4D7D9` | 목록에서 반복되는 확인 action |
 | `action-primary-text` | `#111315` | primary action 텍스트 |
 | `status-checked` | `#86A98D` | check-in 완료와 성공 |
 | `status-waiting` | `#C2A56C` | 대기 상태 |

@@ -25,6 +25,7 @@ module.exports = {
           primary: "#E7EAEC",
           hover: "#F4F5F5",
           text: "#111315",
+          confirm: "#D4D7D9",
         },
         status: {
           checked: "#86A98D",

@@ -34,7 +34,7 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(function Button(
     secondary: "border border-border-strong bg-surface-raised font-medium text-text-heading",
     outline: "border border-border-strong bg-transparent font-medium text-text-heading",
     danger: "border border-status-danger/70 bg-status-danger/10 font-semibold text-status-danger",
-    confirm: "border border-action-primary bg-action-primary font-semibold text-action-text",
+    confirm: "border border-action-confirm bg-action-confirm font-semibold text-action-text",
     ghost: "border border-transparent bg-transparent font-medium text-text-muted",
   };
 
