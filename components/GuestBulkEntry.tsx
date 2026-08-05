@@ -3,6 +3,7 @@
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import Button from "./Button";
+import Icon from "./Icon";
 import type {
   ApiResponse,
   BulkGuestCreateInput,
@@ -287,17 +288,24 @@ export default function GuestBulkEntry({
   };
 
   return (
-    <details className="mt-3 border border-border-default bg-canvas">
-      <summary className="pressable flex min-h-11 cursor-pointer items-center justify-between gap-3 px-3 py-2 text-sm font-medium text-text-heading hover:bg-surface-hover">
-        <span>{t("title")}</span>
-        <span className="shrink-0 font-mono text-xs tabular-nums text-text-muted">
-          {preview.lines.length > 0
-            ? t("nameCount", { count: preview.lines.length })
-            : t("optional")}
+    <details className="group mt-4 border-t border-border-subtle pt-2">
+      <summary className="pressable -mx-1 flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 px-1 py-2 text-sm font-medium text-text-muted hover:text-text-heading group-open:text-text-heading [&::-webkit-details-marker]:hidden">
+        <span className="min-w-0">{t("title")}</span>
+        <span className="flex shrink-0 items-center gap-2">
+          <span className="font-mono text-xs tabular-nums text-text-dim group-open:text-text-muted">
+            {preview.lines.length > 0
+              ? t("nameCount", { count: preview.lines.length })
+              : t("optional")}
+          </span>
+          <Icon
+            name="chevron-down"
+            size={16}
+            className="shrink-0 group-open:rotate-180"
+          />
         </span>
       </summary>
 
-      <div className="border-t border-border-default p-3">
+      <div className="pb-1 pt-2">
         <label htmlFor={fieldId} className="app-label">
           {t("fieldLabel")}
         </label>
@@ -306,7 +314,7 @@ export default function GuestBulkEntry({
           ref={textareaRef}
           value={rawInput}
           onChange={(event) => handleRawInputChange(event.target.value)}
-          rows={6}
+          rows={5}
           disabled={disabled}
           readOnly={isSubmitting}
           aria-busy={isSubmitting}
@@ -326,7 +334,7 @@ export default function GuestBulkEntry({
           }
           placeholder={t("placeholder")}
           autoComplete="off"
-          className="app-field min-h-36 resize-y font-mono leading-relaxed read-only:cursor-wait read-only:opacity-70"
+          className="app-field min-h-32 resize-y leading-relaxed read-only:cursor-wait read-only:opacity-70"
         />
         <p id={helperId} className="app-helper">
           {t("helper")}
@@ -378,7 +386,7 @@ export default function GuestBulkEntry({
               </div>
             )}
 
-            <ol className="max-h-64 overflow-y-auto border border-border-default bg-surface">
+            <ol className="divide-y divide-border-subtle border-y border-border-default lg:max-h-56 lg:overflow-y-auto">
               {preview.lines.filter((line) => line.inPasteLimit).map((line) => {
                 const isDuplicate =
                   line.isDuplicateExisting || line.isDuplicateInInput;
@@ -387,7 +395,7 @@ export default function GuestBulkEntry({
                 return (
                   <li
                     key={`${line.lineNumber}:${line.key}`}
-                    className="grid grid-cols-[2.5rem_minmax(0,1fr)] gap-2 border-b border-border-subtle px-3 py-2 last:border-b-0"
+                    className="grid grid-cols-[2.5rem_minmax(0,1fr)] gap-2 px-3 py-2"
                   >
                     <span className="pt-0.5 font-mono text-xs tabular-nums text-text-dim">
                       {String(line.lineNumber).padStart(2, "0")}
@@ -441,10 +449,10 @@ export default function GuestBulkEntry({
               </Button>
               <Button
                 type="button"
-                variant="outline"
+                variant="ghost"
                 onClick={clearInput}
                 disabled={isSubmitting || disabled}
-                className="sm:min-w-24"
+                className="sm:min-w-20"
               >
                 {t("clear")}
               </Button>
