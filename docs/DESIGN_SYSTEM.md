@@ -139,7 +139,7 @@ Authon UI는 베뉴 현장에서 반복적으로 사용하는 운영 도구다. 
 - panel과 tab group의 외곽선은 가장 바깥 container가 한 번만 그리며, 자식은 내부 구획선만 담당한다.
 - 검색 초기화는 공통 clear button 하나만 제공하고 브라우저 native search cancel control은 숨긴다.
 - 권한에 따라 개수가 달라지는 보조 panel은 빈 grid column을 예약하지 않고 실제 항목 수에 맞춰 폭을 자동 분배한다.
-- 홈 작업 메뉴는 Guest, Door, Admin의 고정 순서와 `1`, `2`, `3` 단축키를 일치시키고, 독립된 큰 카드의 단일 shortcut rail에서 아이콘과 번호를 한눈에 구분한다. 메뉴 3개는 tablet 2열, desktop 3열로 배치하며 권한이 없는 항목만 제거하고 설명·분류·중복 action label은 표시하지 않는다.
+- 홈 작업 메뉴는 Guest, Door, Admin의 고정 순서와 `1`, `2`, `3` 단축키를 일치시키고, 아이콘·단축키·메뉴명·이동 방향을 분할 rail 없이 하나의 큰 카드 표면에 배치한다. 메뉴 3개는 tablet 2열, desktop 3열로 배치하고 메뉴가 1~2개면 동일한 카드 폭 감각을 유지하도록 grid 최대 폭을 줄인다. 권한이 없는 항목만 제거하며 설명·분류·중복 action label은 표시하지 않는다.
 
 ## 접근성 기준
 
