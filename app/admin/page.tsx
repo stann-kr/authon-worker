@@ -127,7 +127,12 @@ function AdminPageContent() {
 
   const changeTask = useCallback(
     (task: AdminTask, historyMode: "push" | "replace" = "push") => {
-      if (!isAdminTaskAvailable(task, isSuperAdmin)) return;
+      if (
+        task === activeTask ||
+        !isAdminTaskAvailable(task, isSuperAdmin)
+      ) {
+        return;
+      }
       setActiveTask(task);
       const nextUrl = `/admin${getAdminTaskSearch(task)}`;
       if (historyMode === "replace") {
@@ -135,15 +140,8 @@ function AdminPageContent() {
       } else {
         window.history.pushState(null, "", nextUrl);
       }
-      if (window.matchMedia("(max-width: 1023px)").matches) {
-        window.requestAnimationFrame(() => {
-          const workspace = document.getElementById("admin-workspace");
-          workspace?.scrollIntoView({ block: "start" });
-          workspace?.focus({ preventScroll: true });
-        });
-      }
     },
-    [isSuperAdmin],
+    [activeTask, isSuperAdmin],
   );
 
   useEffect(() => {
@@ -256,6 +254,14 @@ function AdminPageContent() {
       <h1 id="admin-page-title" className="sr-only">
         {t("title")}
       </h1>
+      <p
+        className="sr-only"
+        role="status"
+        aria-live="polite"
+        aria-atomic="true"
+      >
+        {t("activeTaskAnnouncement", { task: activeTaskLabel })}
+      </p>
       {venueLoadError && (
         <VenueLoadNotice
           onRetry={refreshVenues}
@@ -278,8 +284,7 @@ function AdminPageContent() {
         <section
           id="admin-workspace"
           aria-label={activeTaskLabel}
-          tabIndex={-1}
-          className="min-h-0 scroll-mt-[calc(var(--app-header-height)+1rem)]"
+          className="min-h-0"
         >
         {activeTask === "guest-list" && (
           <GuestList

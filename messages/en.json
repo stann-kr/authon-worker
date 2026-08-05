@@ -307,6 +307,7 @@
     "guestSections": "Guest management sections",
     "guestList": "Guest list",
     "requests": "Requests",
+    "activeTaskAnnouncement": "Current task: {task}",
     "links": "Links",
     "users": "Users",
     "venues": "Venues"

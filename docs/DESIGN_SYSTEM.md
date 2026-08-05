@@ -50,7 +50,7 @@ Authon UI는 베뉴 현장에서 반복적으로 사용하는 운영 도구다. 
 - form field와 선택 control은 `border-strong`을 사용해 인접 surface와 3:1 이상의 비텍스트 대비를 확보하고, panel 구획선은 `border-default` 또는 `border-subtle`을 사용한다.
 - Guest와 Door는 모바일에서 dashboard와 list를 한 열로 쌓고, `768px` 이상에서는 좌측 운영 dashboard와 우측 guest list의 master-detail 구조를 사용한다.
 - 인증 화면은 공통 workspace shell을 사용한다. 상단 header는 기존의 brand·현재 맥락·계정 action만 유지하고 brand를 홈 진입점으로 사용한다. Admin에서는 desktop 좌측 업무 navigation을 제공하며 모바일에는 별도 고정 하단 전역 navigation을 두지 않는다.
-- Admin 업무 navigation은 desktop에서 항상 보이는 grouped sidebar를 사용한다. 모바일에서는 전체 업무를 3열 바로가기 목록으로 압축해 선택형 control 없이 항상 노출한다.
+- Admin 업무 navigation은 desktop에서 항상 보이는 grouped sidebar를 사용한다. 모바일에서는 전체 업무를 3열 바로가기 목록으로 압축해 선택형 control 없이 항상 노출한다. 업무 전환은 선택 link와 현재 scroll 위치를 보존하고 작업 영역으로 강제 이동하지 않는다.
 - 날짜 입력은 viewport가 아니라 component container 폭을 기준으로 배치한다. 좁은 container에서는 날짜와 quick control을 두 줄로 표시한다.
 - 고정 또는 sticky 영역은 목록의 첫 행을 가리지 않아야 하며, 페이지 안에 불필요한 중첩 scroll container를 만들지 않는다.
 
@@ -153,5 +153,6 @@ Authon UI는 베뉴 현장에서 반복적으로 사용하는 운영 도구다. 
 - tab은 arrow, Home, End key 이동과 올바른 ARIA 연결을 유지한다.
 - dialog는 document body portal에 표시하고 열릴 때 내부 control로 focus를 이동한다. 열린 동안 본문을 inert 처리하고 focus를 가두며, 닫힐 때 trigger로 focus를 복귀한다.
 - loading, success, error 상태는 적절한 live region을 사용한다.
+- Admin 업무 전환처럼 같은 route 안의 주요 내용이 바뀌는 경우 화면 위치나 focus를 강제로 옮기지 않고 현재 업무명을 polite live status로 전달한다.
 - 여러 단계 흐름은 순서가 있는 목록과 현재 단계로 구조를 전달한다. 필드 오류는 영향받은 입력에만 `aria-invalid`와 오류 설명을 연결하고 client 검증에서 발견한 첫 오류 입력으로 focus를 이동한다.
 - 대량 등록 완료 후 입력란으로 focus를 복귀하고, 링크 생성 검증 실패는 관련 field에 오류 설명과 focus를 연결한다. 링크 생성 성공은 새 결과 region으로 focus를 이동한다. 공개 링크의 재조회 실패는 재시도 heading으로, 재시도 성공은 작업 panel heading으로 focus를 이동한다.
