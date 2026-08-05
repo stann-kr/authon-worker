@@ -24,6 +24,7 @@ import Skeleton from "../../components/Skeleton";
 import OperationsLayout from "../../components/OperationsLayout";
 import { useSectionLoadingTask } from "../../components/RouteTransitionProvider";
 import { getBusinessDate } from "../../lib/date";
+import { orderGuestDisplayList } from "../../lib/guests/display-order";
 import {
   fetchGuestsByDate,
   updateGuestStatus,
@@ -86,6 +87,10 @@ function DoorPageContent() {
   const [sortMode, setSortMode] = useLocalStorage<"default" | "alpha">(
     "door:sortMode",
     "default",
+  );
+  const [prioritizeWaiting, setPrioritizeWaiting] = useLocalStorage(
+    "door:prioritizeWaiting",
+    true,
   );
 
   // 로딩 중 이전 데이터를 유지하여 화면 깜빡임 방지
@@ -251,25 +256,11 @@ function DoorPageContent() {
   const checkedGuests = filteredGuests.filter(
     (guest) => guest.status === "checked",
   );
-  const sortedGuests =
-    sortMode === "alpha"
-      ? [...filteredGuests].sort((a, b) =>
-          a.status === b.status
-            ? (a.name || "").localeCompare(b.name || "", locale === "ko" ? "ko-KR" : "en-US", {
-                sensitivity: "base",
-              })
-            : a.status === "pending"
-              ? -1
-              : 1,
-        )
-      : [...filteredGuests].sort((a, b) => {
-          if (a.status !== b.status) {
-            return a.status === "pending" ? -1 : 1;
-          }
-          const timeA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
-          const timeB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
-          return timeA - timeB;
-        });
+  const sortedGuests = orderGuestDisplayList(filteredGuests, {
+    sortMode,
+    locale: locale === "ko" ? "ko-KR" : "en-US",
+    prioritizeWaiting,
+  });
   const displayGuests = searchQuery
     ? sortedGuests.filter((g) =>
         (g.name || "").toLowerCase().includes(searchQuery.toLowerCase()),
@@ -374,12 +365,28 @@ function DoorPageContent() {
                 }
                 onRefresh={loadData}
                 isLoading={isCurrentScopeFetching}
+                actions={
+                  <button
+                    type="button"
+                    aria-pressed={prioritizeWaiting}
+                    title={t("prioritizeWaitingHelp")}
+                    onClick={() => setPrioritizeWaiting((current) => !current)}
+                    className={`pressable min-h-11 whitespace-nowrap border px-3 py-2 text-xs font-medium ${
+                      prioritizeWaiting
+                        ? "border-action-primary bg-surface-active text-text-heading"
+                        : "border-border-default bg-surface-raised text-text-muted hover:border-border-strong hover:text-text-heading"
+                    }`}
+                  >
+                    {t("prioritizeWaiting")}
+                  </button>
+                }
               />
               <GuestSearchInput
                 value={searchQuery}
                 onChange={setSearchQuery}
               />
               <StatGrid
+                variant="embedded"
                 isLoading={!hasCurrentScopeData}
                 items={[
                   {

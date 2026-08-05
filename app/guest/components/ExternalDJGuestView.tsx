@@ -10,6 +10,7 @@ import EmptyState from "@/components/EmptyState";
 import Alert from "@/components/Alert";
 import Button from "@/components/Button";
 import GuestBulkEntry from "@/components/GuestBulkEntry";
+import GuestCapacityIndicator from "@/components/GuestCapacityIndicator";
 import { useVenueBrand } from "@/components/VenueBrandProvider";
 import GuestListCard from "@/components/GuestListCard";
 import GuestSearchInput from "@/components/GuestSearchInput";
@@ -492,7 +493,7 @@ export default function ExternalDJGuestView({ token }: ExternalDJGuestViewProps)
 
           <section className="main-content-panel">
             <div className="border-b border-border-subtle px-4 py-4 sm:px-5">
-              <div className="mb-3 flex items-end justify-between gap-4">
+              <div className="mb-4 flex items-start justify-between gap-4">
                 <div>
                   <h1
                     ref={contentHeadingRef}
@@ -505,12 +506,10 @@ export default function ExternalDJGuestView({ token }: ExternalDJGuestViewProps)
                     {t("addOneAtATime")}
                   </p>
                 </div>
-                <div className="text-right">
-                  <div className="font-mono text-lg tabular-nums text-text-heading">
-                    {remaining}
-                  </div>
-                  <div className="text-xs text-text-muted">{t("remaining")}</div>
-                </div>
+                <GuestCapacityIndicator
+                  label={t("remaining")}
+                  value={remaining}
+                />
               </div>
 
               {!isAtLimit ? (
@@ -594,6 +593,7 @@ export default function ExternalDJGuestView({ token }: ExternalDJGuestViewProps)
             </div>
 
             <StatGrid
+              variant="embedded"
               items={[
                 { label: t("registered"), value: guests.length, color: "checked" },
                 {

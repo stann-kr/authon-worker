@@ -76,10 +76,10 @@ export default function AdminTaskSwitcher({
                 aria-disabled={disabled || undefined}
                 tabIndex={disabled ? -1 : undefined}
                 onClick={(event) => handleTaskClick(event, option.id)}
-                className={`flex min-h-14 min-w-0 flex-col items-center justify-center gap-1 border px-1.5 py-2 text-center text-[0.6875rem] font-medium leading-tight ${
+                className={`pressable flex min-h-14 min-w-0 flex-col items-center justify-center gap-1 border px-1.5 py-2 text-center text-[0.6875rem] font-medium leading-tight ${
                   isActive
                     ? "border-action-primary bg-surface-active text-text-heading"
-                    : "border-transparent bg-surface text-text-muted"
+                    : "border-transparent bg-surface text-text-muted hover:bg-surface-raised hover:text-text-heading"
                 } ${disabled ? "pointer-events-none opacity-50" : ""}`}
               >
                 <Icon name={groupIcons[option.group]} size={15} />
@@ -120,10 +120,10 @@ export default function AdminTaskSwitcher({
                         onClick={(event) =>
                           handleTaskClick(event, option.id)
                         }
-                        className={`flex min-h-11 w-full items-center justify-between border-l-2 px-3 py-2 text-left text-sm font-medium ${
+                        className={`pressable flex min-h-11 w-full items-center justify-between border-l-2 px-3 py-2 text-left text-sm font-medium ${
                           isActive
                             ? "border-action-primary bg-surface-active text-text-heading"
-                            : "border-transparent bg-surface text-text-muted"
+                            : "border-transparent bg-surface text-text-muted hover:bg-surface-raised hover:text-text-heading"
                         } ${disabled ? "pointer-events-none opacity-50" : ""}`}
                       >
                         <span>{option.label}</span>

@@ -22,12 +22,15 @@ interface StatGridProps {
   isLoading?: boolean;
   /** 라벨 텍스트 크기 오버라이드 (기본: 'text-xs') */
   labelClassName?: string;
+  /** list panel 안에서는 필요한 하단 구획선과 inset을 함께 제공한다. */
+  variant?: "quiet" | "embedded";
 }
 
 export default function StatGrid({
   items,
   isLoading = false,
   labelClassName,
+  variant = "quiet",
 }: StatGridProps) {
   const colsClass =
     items.length === 1
@@ -40,14 +43,18 @@ export default function StatGrid({
 
   return (
     <dl
-      className={`grid ${colsClass} divide-x divide-border-subtle border-y border-border-subtle`}
+      className={`grid ${colsClass} gap-2 ${
+        variant === "embedded"
+          ? "border-b border-border-subtle p-3 sm:p-4"
+          : ""
+      }`}
       aria-busy={isLoading}
     >
       {items.map((item) => {
         return (
           <div
             key={item.label}
-            className="flex min-w-0 flex-col items-center bg-surface px-3 py-2.5 text-center sm:px-4"
+            className="flex min-w-0 flex-col items-center justify-center bg-surface-raised px-3 py-3 text-center sm:px-4"
           >
             <dt
               className={`${statLabelColorMap[item.color ?? "default"]} order-2 mt-0.5 font-medium leading-tight ${labelClassName ?? "text-xs"}`}
@@ -55,7 +62,7 @@ export default function StatGrid({
               {item.label}
             </dt>
             <dd
-              className={`order-1 font-mono text-lg sm:text-xl ${statColorMap[item.color ?? "default"]}`}
+              className={`order-1 font-mono text-lg tabular-nums sm:text-xl ${statColorMap[item.color ?? "default"]}`}
             >
               {isLoading ? "-" : item.value}
             </dd>

@@ -3,7 +3,7 @@
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import Button from "./Button";
-import Icon from "./Icon";
+import DisclosureSection from "./DisclosureSection";
 import type {
   ApiResponse,
   BulkGuestCreateInput,
@@ -288,24 +288,14 @@ export default function GuestBulkEntry({
   };
 
   return (
-    <details className="group mt-4 border-t border-border-subtle pt-2">
-      <summary className="pressable -mx-1 flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 px-1 py-2 text-sm font-medium text-text-muted hover:text-text-heading group-open:text-text-heading [&::-webkit-details-marker]:hidden">
-        <span className="min-w-0">{t("title")}</span>
-        <span className="flex shrink-0 items-center gap-2">
-          <span className="font-mono text-xs tabular-nums text-text-dim group-open:text-text-muted">
-            {preview.lines.length > 0
-              ? t("nameCount", { count: preview.lines.length })
-              : t("optional")}
-          </span>
-          <Icon
-            name="chevron-down"
-            size={16}
-            className="shrink-0 group-open:rotate-180"
-          />
-        </span>
-      </summary>
-
-      <div className="pb-1 pt-2">
+    <DisclosureSection
+      title={t("title")}
+      meta={
+        preview.lines.length > 0
+          ? t("nameCount", { count: preview.lines.length })
+          : t("optional")
+      }
+    >
         <label htmlFor={fieldId} className="app-label">
           {t("fieldLabel")}
         </label>
@@ -471,7 +461,6 @@ export default function GuestBulkEntry({
             {feedback.message}
           </div>
         )}
-      </div>
-    </details>
+    </DisclosureSection>
   );
 }

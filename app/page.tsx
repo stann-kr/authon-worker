@@ -27,7 +27,8 @@ export default function Home() {
   const [pendingGuestRequestCount, setPendingGuestRequestCount] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const router = useRouter();
-  const { startRouteTransition } = useRouteTransition();
+  const { isRouteTransitionActive, startRouteTransition } =
+    useRouteTransition();
   const requestGuard = useLatestRequestGuard();
   const menuItems: MenuItem[] = useMemo(() => [
     {
@@ -99,6 +100,18 @@ export default function Home() {
     if (!user || accessibleMenus.length === 0) return;
 
     const handleKeyDown = (event: KeyboardEvent) => {
+      if (
+        isRouteTransitionActive ||
+        event.defaultPrevented ||
+        event.metaKey ||
+        event.ctrlKey ||
+        event.altKey ||
+        event.shiftKey ||
+        document.querySelector('[role="alertdialog"][aria-modal="true"]')
+      ) {
+        return;
+      }
+
       const target = event.target as HTMLElement | null;
       if (
         target &&
@@ -112,6 +125,7 @@ export default function Home() {
 
       const keyIndex = Number.parseInt(event.key, 10) - 1;
       if (!Number.isNaN(keyIndex) && accessibleMenus[keyIndex]) {
+        event.preventDefault();
         const href = accessibleMenus[keyIndex].href;
         if (startRouteTransition(href)) router.push(href);
       }
@@ -119,7 +133,13 @@ export default function Home() {
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [accessibleMenus, router, startRouteTransition, user]);
+  }, [
+    accessibleMenus,
+    isRouteTransitionActive,
+    router,
+    startRouteTransition,
+    user,
+  ]);
 
   if (isLoading) {
     return <RouteLoadingFallback />;
@@ -127,24 +147,18 @@ export default function Home() {
 
   if (!user) return null;
 
-  const preferredPrimaryId =
-    user.role === "super_admin" || user.role === "venue_admin"
-      ? "admin"
-      : user.role === "door_staff"
-        ? "door"
-        : "guest";
-  const primaryWorkspace =
-    accessibleMenus.find((item) => item.id === preferredPrimaryId) ??
-    accessibleMenus[0];
-  const orderedWorkspaces = primaryWorkspace
-    ? [
-        primaryWorkspace,
-        ...accessibleMenus.filter((item) => item.id !== primaryWorkspace.id),
-      ]
-    : accessibleMenus;
-  const shortcutIndexById = new Map(
-    accessibleMenus.map((item, index) => [item.id, index]),
-  );
+  const workspaceWidthClass =
+    accessibleMenus.length === 1
+      ? "max-w-[34rem]"
+      : accessibleMenus.length === 2
+        ? "max-w-[44rem]"
+        : "max-w-[1040px]";
+  const workspaceGridClass =
+    accessibleMenus.length === 1
+      ? "md:grid-cols-1"
+      : accessibleMenus.length === 2
+        ? "md:grid-cols-2"
+        : "md:grid-cols-3";
 
   return (
     <WorkspaceShell width="home" contentClassName="gap-4 pb-8">
@@ -153,7 +167,7 @@ export default function Home() {
       {user.role === "venue_admin" && pendingGuestRequestCount > 0 && (
         <TransitionLink
           href="/admin?tab=guests&view=requests"
-          className="group flex min-h-14 items-center gap-3 border border-status-waiting/70 bg-status-waiting/10 px-4 py-3 text-status-waiting hover:border-status-waiting sm:px-5"
+          className="pressable group flex min-h-14 items-center gap-3 border border-status-waiting/70 bg-status-waiting/10 px-4 py-3 text-status-waiting hover:border-status-waiting sm:px-5"
         >
           <Icon name="warning" size={20} />
           <span className="min-w-0 flex-1 text-sm font-semibold text-text-heading">
@@ -163,18 +177,18 @@ export default function Home() {
         </TransitionLink>
       )}
 
-      {orderedWorkspaces.length > 0 && (
+      {accessibleMenus.length > 0 && (
         <nav
           aria-label={t("availableWorkspaces")}
-          className="app-panel divide-y divide-border-subtle"
+          className={`mx-auto w-full ${workspaceWidthClass}`}
         >
-          {orderedWorkspaces.map((item) => (
-            <WorkspaceLink
-              key={item.id}
-              item={item}
-              index={shortcutIndexById.get(item.id) ?? 0}
-            />
-          ))}
+          <div
+            className={`home-workspace-grid grid border-l border-t border-border-default ${workspaceGridClass}`}
+          >
+            {accessibleMenus.map((item, index) => (
+              <WorkspaceLink key={item.id} item={item} index={index} />
+            ))}
+          </div>
         </nav>
       )}
     </WorkspaceShell>
@@ -191,18 +205,29 @@ function WorkspaceLink({
   return (
     <TransitionLink
       href={item.href}
-      className="pressable group flex min-h-16 items-center gap-3 bg-surface px-4 py-3 hover:bg-surface-raised focus-visible:bg-surface-raised sm:gap-4 sm:px-5"
+      aria-keyshortcuts={String(index + 1)}
+      className="home-workspace-card pressable group relative flex min-h-[11rem] flex-col border-b border-r border-border-default bg-surface p-5 hover:bg-surface-raised focus-visible:bg-surface-raised sm:min-h-[13rem] sm:p-6"
     >
-      <div className="grid h-10 w-10 shrink-0 place-items-center border border-border-default bg-canvas text-text-muted group-hover:border-border-strong group-hover:text-text-heading">
-        <Icon name={item.icon} size={20} />
+      <div className="flex items-start justify-between gap-4">
+        <div className="grid h-12 w-12 shrink-0 place-items-center border border-border-default bg-canvas text-text-muted transition-colors group-hover:border-border-strong group-hover:text-text-heading">
+          <Icon name={item.icon} size={23} />
+        </div>
+        <span className="font-mono text-xs font-semibold tabular-nums text-text-dim transition-colors group-hover:text-text-muted">
+          {String(index + 1).padStart(2, "0")}
+        </span>
       </div>
-      <span className="min-w-0 flex-1 text-sm font-semibold text-text-heading sm:text-base">
-        {item.title}
-      </span>
-      <kbd className="hidden border border-border-default bg-canvas px-2 py-0.5 font-mono text-xs tabular-nums text-text-dim group-hover:border-border-strong sm:block">
-        {index + 1}
-      </kbd>
-      <Icon name="arrow-right" size={17} className="text-text-muted" />
+
+      <div className="mt-6 flex min-w-0 flex-1 items-end justify-between gap-4">
+        <h2 className="text-xl font-semibold tracking-[-0.02em] text-text-heading">
+          {item.title}
+        </h2>
+        <span className="flex shrink-0 items-center gap-2 text-text-dim transition-colors group-hover:text-text-heading">
+          <kbd className="border border-border-default bg-canvas px-2 py-0.5 font-mono text-xs tabular-nums transition-colors group-hover:border-border-strong">
+            {index + 1}
+          </kbd>
+          <Icon name="arrow-right" size={19} />
+        </span>
+      </div>
     </TransitionLink>
   );
 }

@@ -20,6 +20,8 @@ import GuestListCard from "@/components/GuestListCard";
 import GuestSearchInput from "@/components/GuestSearchInput";
 import Skeleton from "@/components/Skeleton";
 import OperationsLayout from "@/components/OperationsLayout";
+import DisclosureSection from "@/components/DisclosureSection";
+import GuestCapacityIndicator from "@/components/GuestCapacityIndicator";
 import { useSectionLoadingTask } from "@/components/RouteTransitionProvider";
 import { getBusinessDate } from "@/lib/date";
 import {
@@ -349,31 +351,38 @@ export default function AuthenticatedGuestView({ user }: AuthenticatedGuestViewP
   };
 
   const handleExtraRequest = async () => {
+    if (isRequestingExtra) return;
+
     const operationScopeKey = requestScopeKey;
     pollingGuard.invalidateRequests();
     const extra = Number.parseInt(requestedExtra, 10);
     setIsRequestingExtra(true);
     setError(null);
-    const { error: requestError } = await createGuestLimitRequest({
-      date: selectedDate,
-      requestedExtra: extra,
-      reason: requestReason,
-    });
-    if (currentScopeKeyRef.current !== operationScopeKey) {
+    try {
+      const { error: requestError } = await createGuestLimitRequest({
+        date: selectedDate,
+        requestedExtra: extra,
+        reason: requestReason,
+      });
+      if (currentScopeKeyRef.current !== operationScopeKey) return;
+      if (requestError) {
+        setError(
+          requestError === "PENDING_REQUEST_EXISTS"
+            ? t("requestAlreadyPending")
+            : t("requestFailed"),
+        );
+      } else {
+        setRequestReason("");
+        await loadGuests({ silent: true });
+      }
+    } catch (requestError) {
+      if (currentScopeKeyRef.current === operationScopeKey) {
+        console.error("Failed to request additional guests:", requestError);
+        setError(t("requestFailed"));
+      }
+    } finally {
       setIsRequestingExtra(false);
-      return;
     }
-    if (requestError) {
-      setError(
-        requestError === "PENDING_REQUEST_EXISTS"
-          ? t("requestAlreadyPending")
-          : t("requestFailed"),
-      );
-    } else {
-      setRequestReason("");
-      await loadGuests({ silent: true });
-    }
-    setIsRequestingExtra(false);
   };
 
   const sortGuestsByName = (list: Guest[]) => {
@@ -438,16 +447,19 @@ export default function AuthenticatedGuestView({ user }: AuthenticatedGuestViewP
 
                 <section className="app-panel" aria-labelledby="add-guest-title">
                   <div className="px-4 py-4 sm:px-5">
-                    <div className="mb-3 flex items-end justify-between gap-4">
-                      <h2 id="add-guest-title" className="type-panel-title">
-                        {t("addGuest")}
-                      </h2>
-                      <div className="text-right">
-                        <div className="font-mono text-lg tabular-nums text-text-heading">
-                          {remaining ?? "∞"}
-                        </div>
-                        <div className="text-xs text-text-muted">{t("remaining")}</div>
+                    <div className="mb-4 flex items-start justify-between gap-4">
+                      <div className="min-w-0">
+                        <h2 id="add-guest-title" className="type-panel-title">
+                          {t("addGuest")}
+                        </h2>
+                        <p className="mt-1 text-sm leading-relaxed text-text-muted">
+                          {t("addOneAtATime")}
+                        </p>
                       </div>
+                      <GuestCapacityIndicator
+                        label={t("remaining")}
+                        value={remaining ?? "∞"}
+                      />
                     </div>
 
                     {user?.account_kind === "shared" && (
@@ -538,17 +550,14 @@ export default function AuthenticatedGuestView({ user }: AuthenticatedGuestViewP
                     />
 
                     {displayQuota?.pendingRequest ? (
-                      <div className="mt-3 border border-status-waiting/60 bg-status-waiting/10 p-3 text-xs text-status-waiting">
+                      <div className="mt-4 border-t border-status-waiting/60 bg-status-waiting/10 px-3 py-3 text-xs leading-relaxed text-status-waiting">
                         {t("requestPending", {
                           count: displayQuota.pendingRequest.requestedExtra,
                         })}
                       </div>
                     ) : displayQuota?.canRequestExtra ? (
-                      <details className="mt-3 border border-border-default bg-canvas p-3">
-                        <summary className="flex min-h-11 cursor-pointer items-center text-sm font-medium text-text-heading">
-                          {t("requestExtra")}
-                        </summary>
-                        <div className="mt-3 space-y-3">
+                      <DisclosureSection title={t("requestExtra")}>
+                        <div className="space-y-3">
                           <div>
                             <label htmlFor="extra-guest-count" className="app-label">
                               {t("requestCount")}
@@ -590,7 +599,7 @@ export default function AuthenticatedGuestView({ user }: AuthenticatedGuestViewP
                             {t("submitRequest")}
                           </Button>
                         </div>
-                      </details>
+                      </DisclosureSection>
                     ) : null}
                   </div>
                 </section>
@@ -622,6 +631,7 @@ export default function AuthenticatedGuestView({ user }: AuthenticatedGuestViewP
                 onChange={setSearchQuery}
               />
               <StatGrid
+                variant="embedded"
                 isLoading={!hasCurrentScopeData}
                 items={[
                   {

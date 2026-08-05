@@ -196,7 +196,15 @@ export function RouteTransitionProvider({ children }: { children: ReactNode }) {
     if (phase === "idle" && shouldRestoreFocusRef.current) {
       shouldRestoreFocusRef.current = false;
       window.requestAnimationFrame(() => {
-        document.getElementById("main-content")?.focus();
+        const mainContent = document.getElementById("main-content");
+        if (!mainContent) return;
+        mainContent.dataset.routeFocus = "true";
+        mainContent.addEventListener(
+          "blur",
+          () => delete mainContent.dataset.routeFocus,
+          { once: true },
+        );
+        mainContent.focus({ preventScroll: true });
       });
     }
   }, [phase]);

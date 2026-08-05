@@ -203,7 +203,7 @@
     "optional": "Optional",
     "nameCount": "{count, plural, one {# name} other {# names}}",
     "fieldLabel": "Names to paste",
-    "placeholder": "One name per line\nMINA PARK\nJUN SEO",
+    "placeholder": "One name per line\nGUEST A\nGUEST B",
     "helper": "Paste one name per line, up to 25. Review duplicates before adding.",
     "readyCount": "{count} ready",
     "duplicateCount": "{count, plural, one {# duplicate to review} other {# duplicates to review}}",
@@ -296,7 +296,9 @@
     "total": "Total",
     "guestList": "Guest list",
     "noSearchResults": "No guests match this search",
-    "noGuestsForDate": "No guests for this date"
+    "noGuestsForDate": "No guests for this date",
+    "prioritizeWaiting": "Prioritize waiting",
+    "prioritizeWaitingHelp": "When enabled, waiting guests appear before checked-in guests."
   },
   "AdminNav": {
     "title": "Admin",

@@ -1,9 +1,11 @@
 "use client";
 
 import {
+  useCallback,
   useEffect,
   useId,
   useRef,
+  useState,
   type ReactNode,
 } from "react";
 import { createPortal } from "react-dom";
@@ -39,6 +41,9 @@ export default function ConfirmDialog({
   const previousFocusRef = useRef<HTMLElement | null>(null);
   const onCancelRef = useRef(onCancel);
   const isLoadingRef = useRef(isLoading);
+  const isClosingRef = useRef(false);
+  const closeTimerRef = useRef<number | null>(null);
+  const [isClosing, setIsClosing] = useState(false);
   const titleId = useId();
   const descriptionId = useId();
 
@@ -46,6 +51,43 @@ export default function ConfirmDialog({
     onCancelRef.current = onCancel;
     isLoadingRef.current = isLoading;
   }, [isLoading, onCancel]);
+
+  const requestCancel = useCallback(() => {
+    if (isLoadingRef.current || isClosingRef.current) return;
+    const shouldReduceMotion = window.matchMedia(
+      "(prefers-reduced-motion: reduce)",
+    ).matches;
+    if (shouldReduceMotion) {
+      onCancelRef.current();
+      return;
+    }
+
+    isClosingRef.current = true;
+    setIsClosing(true);
+    closeTimerRef.current = window.setTimeout(() => {
+      closeTimerRef.current = null;
+      onCancelRef.current();
+    }, 140);
+  }, []);
+
+  useEffect(
+    () => () => {
+      if (closeTimerRef.current !== null) {
+        window.clearTimeout(closeTimerRef.current);
+      }
+    },
+    [],
+  );
+
+  useEffect(() => {
+    if (open) return;
+    if (closeTimerRef.current !== null) {
+      window.clearTimeout(closeTimerRef.current);
+      closeTimerRef.current = null;
+    }
+    isClosingRef.current = false;
+    setIsClosing(false);
+  }, [open]);
 
   useEffect(() => {
     if (!open) return;
@@ -64,7 +106,7 @@ export default function ConfirmDialog({
       if (event.key === "Escape") {
         event.preventDefault();
         event.stopPropagation();
-        if (!isLoadingRef.current) onCancelRef.current();
+        requestCancel();
         return;
       }
 
@@ -103,23 +145,26 @@ export default function ConfirmDialog({
       }
       previousFocusRef.current?.focus();
     };
-  }, [open]);
+  }, [open, requestCancel]);
 
   if (!open) return null;
 
   if (typeof document === "undefined") return null;
 
   return createPortal(
-    <div className="app-dialog-backdrop fixed inset-0 z-[var(--app-z-dialog)] flex items-center justify-center bg-canvas/80 p-4">
+    <div
+      className="app-dialog-backdrop fixed inset-0 z-[var(--app-z-dialog)] flex items-center justify-center bg-canvas/80 p-4"
+      data-state={isClosing ? "closing" : "open"}
+    >
       <div
         ref={dialogRef}
         role="alertdialog"
         aria-modal="true"
-        aria-busy={isLoading}
+        aria-busy={isLoading || isClosing}
         aria-labelledby={titleId}
         aria-describedby={descriptionId}
         tabIndex={-1}
-        className="app-dialog-panel max-h-[calc(100dvh-2rem)] w-full max-w-md overflow-y-auto border border-border-strong bg-canvas p-5 sm:p-6"
+        className="app-dialog-panel max-h-[calc(100dvh-2rem)] w-full max-w-md overscroll-contain overflow-y-auto border border-border-strong bg-canvas p-5 sm:p-6"
       >
         <h2 id={titleId} className="type-panel-title">
           {title}
@@ -133,8 +178,8 @@ export default function ConfirmDialog({
             ref={cancelRef}
             type="button"
             variant="outline"
-            onClick={onCancel}
-            disabled={isLoading}
+            onClick={requestCancel}
+            disabled={isLoading || isClosing}
           >
             {cancelLabel}
           </Button>
@@ -143,6 +188,7 @@ export default function ConfirmDialog({
             variant={tone === "danger" ? "danger" : "primary"}
             onClick={onConfirm}
             isLoading={isLoading}
+            disabled={isClosing}
           >
             {confirmLabel}
           </Button>

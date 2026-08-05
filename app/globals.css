@@ -23,12 +23,14 @@
   --app-header-height: calc(4rem + env(safe-area-inset-top));
   --app-z-route-overlay: 40;
   --app-z-chrome: 45;
+  --app-z-bottom-nav: 46;
   --app-z-toast: 50;
   --app-z-dialog: 60;
   --app-z-skip-link: 70;
   --app-ease-out: cubic-bezier(0.23, 1, 0.32, 1);
   --app-ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
-  --app-duration-press: 0ms;
+  --app-mobile-nav-height: 4rem;
+  --app-duration-press: 90ms;
   --app-duration-release: 140ms;
   --app-duration-enter: 200ms;
   --app-duration-fast: 140ms;
@@ -78,10 +80,18 @@ button {
   touch-action: manipulation;
   min-block-size: 2.75rem;
   min-inline-size: 2.75rem;
+  transition-property: transform, color, background-color, border-color, opacity;
+  transition-duration: var(--app-duration-release);
+  transition-timing-function: var(--app-ease-out);
 }
 
 button:not(:disabled) {
   cursor: pointer;
+}
+
+button:active:not(:disabled) {
+  transform: scale(0.985);
+  transition-duration: var(--app-duration-press);
 }
 
 code,
@@ -133,7 +143,8 @@ input[type="date"] {
   }
 
   .page-scroll {
-    @apply flex flex-1 flex-col overflow-x-hidden;
+    @apply flex flex-1 flex-col;
+    overflow-x: clip;
     padding-top: calc(var(--app-header-height) + 1rem);
   }
 
@@ -241,7 +252,9 @@ input[type="date"] {
 
   .pressable {
     --app-press-background: var(--app-surface-active);
-    transition: color var(--app-duration-release) var(--app-ease-out),
+    transform: scale(1);
+    transition: transform var(--app-duration-release) var(--app-ease-out),
+      color var(--app-duration-release) var(--app-ease-out),
       background-color var(--app-duration-release) var(--app-ease-out),
       border-color var(--app-duration-release) var(--app-ease-out),
       opacity var(--app-duration-release) var(--app-ease-out);
@@ -284,7 +297,26 @@ input[type="date"] {
   .pressable:active:not(:disabled),
   .app-button.pressable:active:not(:disabled) {
     background-color: var(--app-press-background);
+    transform: scale(0.985);
     transition-duration: var(--app-duration-press);
+  }
+
+  .disclosure-chevron {
+    transform: rotate(0deg);
+    transition: transform var(--app-duration-release) var(--app-ease-out);
+  }
+
+  .disclosure-section[open] .disclosure-chevron {
+    transform: rotate(180deg);
+  }
+
+  .disclosure-section[open] > .disclosure-content {
+    animation: disclosure-enter var(--app-duration-enter) var(--app-ease-out)
+      both;
+  }
+
+  .skeleton-pulse {
+    animation: skeleton-breathe 1.4s var(--app-ease-in-out) infinite;
   }
 
   .app-dialog-backdrop {
@@ -297,13 +329,47 @@ input[type="date"] {
   }
 
   .app-dialog-panel {
+    opacity: 1;
     transform: scale(1);
     transform-origin: center;
-    transition: transform var(--app-duration-enter) var(--app-ease-out);
+    transition: transform var(--app-duration-enter) var(--app-ease-out),
+      opacity var(--app-duration-release) var(--app-ease-out);
 
     @starting-style {
+      opacity: 0;
       transform: scale(0.98);
     }
+  }
+
+  .app-dialog-backdrop[data-state="closing"] {
+    opacity: 0;
+  }
+
+  .app-dialog-backdrop[data-state="closing"] .app-dialog-panel {
+    opacity: 0;
+    transform: scale(0.985);
+    transition-duration: var(--app-duration-release);
+  }
+}
+
+@keyframes disclosure-enter {
+  from {
+    opacity: 0;
+    transform: translateY(-0.25rem);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes skeleton-breathe {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.62;
   }
 }
 
@@ -331,6 +397,12 @@ input[type="date"] {
   }
 }
 
+@media (hover: hover) and (pointer: fine) {
+  .home-workspace-card:hover {
+    transform: translateY(-0.125rem);
+  }
+}
+
 /* Interactive elements use one keyboard-focus treatment across the app. */
 :where(
   a[href],
@@ -344,6 +416,15 @@ input[type="date"] {
 ):focus-visible {
   outline: 2px solid var(--app-focus) !important;
   outline-offset: 3px !important;
+}
+
+main[tabindex="-1"]:focus-visible {
+  outline: 2px solid var(--app-focus);
+  outline-offset: 3px;
+}
+
+main[tabindex="-1"][data-route-focus="true"]:focus-visible {
+  outline: none;
 }
 
 .cds--g100 {
@@ -366,6 +447,16 @@ input[type="date"] {
   *::after {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+
+  button:active:not(:disabled),
+  .pressable:active:not(:disabled) {
+    transform: none !important;
+  }
+
+  .home-workspace-card:hover {
+    transform: none;
   }
 
   .app-dialog-panel {
@@ -375,6 +466,10 @@ input[type="date"] {
     @starting-style {
       transform: none;
     }
+  }
+
+  .app-dialog-backdrop[data-state="closing"] .app-dialog-panel {
+    transform: none;
   }
 
   .skip-link {

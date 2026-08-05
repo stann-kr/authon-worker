@@ -110,7 +110,7 @@ export default function AdminHeader() {
       {accessibleWorkspaces.length > 0 && (
         <nav
           aria-label={homeT("availableWorkspaces")}
-          className="fixed inset-x-0 bottom-0 z-[var(--app-z-chrome)] border-t border-border-strong bg-canvas pb-[env(safe-area-inset-bottom)] md:hidden"
+          className="fixed inset-x-0 bottom-0 z-[var(--app-z-bottom-nav)] border-t border-border-strong bg-canvas pb-[env(safe-area-inset-bottom)] md:hidden"
         >
           <div
             className="mx-auto grid w-full max-w-xl divide-x divide-border-subtle"

@@ -54,7 +54,6 @@ const GuestListCard: React.FC<GuestListCardProps> = ({
 }) => {
   const t = useTranslations("Common");
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
-  const rowTone = index % 2 === 0 ? "bg-surface" : "bg-surface-raised";
   const indicatorTone =
     guest.status === "checked"
       ? "before:bg-status-checked"
@@ -70,7 +69,7 @@ const GuestListCard: React.FC<GuestListCardProps> = ({
   return (
     <>
     <article
-      className={`guest-list-row relative overflow-hidden px-4 py-3 before:absolute before:inset-y-0 before:left-0 before:w-0.5 sm:px-5 ${rowTone} ${indicatorTone}`}
+      className={`guest-list-row relative overflow-hidden bg-surface px-4 py-3 transition-colors before:absolute before:inset-y-0 before:left-0 before:w-0.5 sm:px-5 ${indicatorTone}`}
     >
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex min-w-0 flex-1 items-start gap-3 sm:gap-4">

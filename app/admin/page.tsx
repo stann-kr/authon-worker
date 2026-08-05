@@ -264,7 +264,7 @@ function AdminPageContent() {
       )}
 
       <div className="grid min-h-0 gap-4 lg:grid-cols-[14rem_minmax(0,1fr)] lg:items-start lg:gap-6">
-        <aside className="lg:sticky lg:top-24 lg:self-start">
+        <aside className="lg:sticky lg:top-[calc(var(--app-header-height)+2rem)] lg:self-start">
           <AdminTaskSwitcher
             label={t("sections")}
             groupLabels={groupLabels}
