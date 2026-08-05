@@ -21,7 +21,7 @@ export default function WorkspaceShell({
   return (
     <div className="page-shell">
       <AdminHeader />
-      <div className="page-scroll pb-[calc(var(--app-mobile-nav-height)+1rem+env(safe-area-inset-bottom))] md:pb-0">
+      <div className="page-scroll">
         <main
           id="main-content"
           tabIndex={-1}

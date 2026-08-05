@@ -214,7 +214,7 @@ function WorkspaceLink({
     <TransitionLink
       href={item.href}
       aria-keyshortcuts={String(index + 1)}
-      className="home-workspace-card pressable group relative flex h-full min-h-[12rem] flex-col overflow-hidden border border-border-default bg-surface p-5 hover:border-border-strong hover:bg-surface-raised focus-visible:border-border-strong focus-visible:bg-surface-raised sm:min-h-[13rem] sm:p-6"
+      className="home-workspace-card pressable group relative flex h-full min-h-[11rem] flex-col overflow-hidden border border-border-default bg-surface p-5 hover:border-border-strong hover:bg-surface-raised focus-visible:border-border-strong focus-visible:bg-surface-raised sm:min-h-[13rem] sm:p-6"
     >
       <div className="flex items-center justify-between gap-4">
         <p className="text-xs font-medium text-text-muted">
@@ -225,21 +225,19 @@ function WorkspaceLink({
         </kbd>
       </div>
 
-      <div className="mt-6 flex min-w-0 items-start gap-4">
-        <span className="grid h-11 w-11 shrink-0 place-items-center border border-border-default bg-canvas text-text-muted transition-colors group-hover:border-border-strong group-hover:text-text-heading">
+      <div className="mt-5 grid min-w-0 grid-cols-[auto_minmax(0,1fr)] items-center gap-x-3 gap-y-3 sm:mt-6 sm:items-start sm:gap-x-4 sm:gap-y-2">
+        <span className="grid h-10 w-10 shrink-0 place-items-center border border-border-default bg-canvas text-text-muted transition-colors group-hover:border-border-strong group-hover:text-text-heading sm:row-span-2 sm:h-11 sm:w-11">
           <Icon name={item.icon} size={22} />
         </span>
-        <div className="min-w-0">
-          <h2 className="text-xl font-semibold tracking-[-0.025em] text-text-heading sm:text-2xl">
-            {item.title}
-          </h2>
-          <p className="mt-2 text-sm leading-relaxed text-text-muted">
-            {item.description}
-          </p>
-        </div>
+        <h2 className="min-w-0 text-xl font-semibold tracking-[-0.025em] text-text-heading sm:text-2xl">
+          {item.title}
+        </h2>
+        <p className="col-span-2 text-pretty text-sm leading-6 text-text-muted sm:col-span-1">
+          {item.description}
+        </p>
       </div>
 
-      <div className="mt-auto flex items-center justify-between border-t border-border-subtle pt-4 transition-colors group-hover:border-border-default">
+      <div className="mt-5 flex items-center justify-between border-t border-border-subtle pt-4 transition-colors group-hover:border-border-default sm:mt-auto">
         <span className="text-xs font-semibold text-text-muted transition-colors group-hover:text-text-heading">
           {item.action}
         </span>

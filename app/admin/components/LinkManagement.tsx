@@ -1321,7 +1321,7 @@ export default function LinkManagement({
       </OperationsLayout>
 
       {linkActionToast && (
-        <div className="fixed bottom-[calc(5rem+env(safe-area-inset-bottom))] right-4 z-[var(--app-z-toast)] max-w-[calc(100vw-2rem)] border border-border-strong bg-surface-raised px-4 py-3 text-text-heading md:bottom-5 md:right-5" role="status" aria-live="polite" aria-atomic="true">
+        <div className="fixed bottom-[calc(1rem+env(safe-area-inset-bottom))] right-4 z-[var(--app-z-toast)] max-w-[calc(100vw-2rem)] border border-border-strong bg-surface-raised px-4 py-3 text-text-heading md:bottom-5 md:right-5" role="status" aria-live="polite" aria-atomic="true">
           <p className="text-xs font-medium">
             {linkActionToast}
           </p>
