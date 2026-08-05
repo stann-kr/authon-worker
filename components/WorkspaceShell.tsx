@@ -4,13 +4,12 @@ import Footer from "@/components/Footer";
 
 interface WorkspaceShellProps {
   children: ReactNode;
-  width?: "default" | "home" | "narrow";
+  width?: "default" | "narrow";
   contentClassName?: string;
 }
 
 const widthClasses = {
   default: "max-w-[1440px]",
-  home: "max-w-[1040px]",
   narrow: "max-w-[1040px]",
 } as const;
 

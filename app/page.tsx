@@ -147,12 +147,6 @@ export default function Home() {
 
   if (!user) return null;
 
-  const workspaceWidthClass =
-    accessibleMenus.length === 1
-      ? "max-w-[34rem]"
-      : accessibleMenus.length === 2
-        ? "max-w-[44rem]"
-        : "max-w-[1040px]";
   const workspaceGridClass =
     accessibleMenus.length === 1
       ? "md:grid-cols-1"
@@ -161,7 +155,7 @@ export default function Home() {
         : "md:grid-cols-3";
 
   return (
-    <WorkspaceShell width="home" contentClassName="gap-4 pb-8">
+    <WorkspaceShell contentClassName="gap-4 pb-8 sm:gap-5">
       <h1 className="sr-only">{t("availableWorkspaces")}</h1>
 
       {user.role === "venue_admin" && pendingGuestRequestCount > 0 && (
@@ -178,12 +172,9 @@ export default function Home() {
       )}
 
       {accessibleMenus.length > 0 && (
-        <nav
-          aria-label={t("availableWorkspaces")}
-          className={`mx-auto w-full ${workspaceWidthClass}`}
-        >
+        <nav aria-label={t("availableWorkspaces")} className="w-full">
           <div
-            className={`home-workspace-grid grid border-l border-t border-border-default ${workspaceGridClass}`}
+            className={`home-workspace-grid grid gap-3 sm:gap-4 ${workspaceGridClass}`}
           >
             {accessibleMenus.map((item, index) => (
               <WorkspaceLink key={item.id} item={item} index={index} />
@@ -206,25 +197,22 @@ function WorkspaceLink({
     <TransitionLink
       href={item.href}
       aria-keyshortcuts={String(index + 1)}
-      className="home-workspace-card pressable group relative flex min-h-[11rem] flex-col border-b border-r border-border-default bg-surface p-5 hover:bg-surface-raised focus-visible:bg-surface-raised sm:min-h-[13rem] sm:p-6"
+      className="home-workspace-card pressable group relative grid min-h-[8.5rem] grid-cols-[4.5rem_minmax(0,1fr)] overflow-hidden border border-border-default bg-surface hover:border-border-strong hover:bg-surface-raised focus-visible:border-border-strong focus-visible:bg-surface-raised sm:min-h-[10rem] sm:grid-cols-[5.25rem_minmax(0,1fr)]"
     >
-      <div className="flex items-start justify-between gap-4">
-        <div className="grid h-12 w-12 shrink-0 place-items-center border border-border-default bg-canvas text-text-muted transition-colors group-hover:border-border-strong group-hover:text-text-heading">
-          <Icon name={item.icon} size={23} />
-        </div>
-        <span className="font-mono text-xs font-semibold tabular-nums text-text-dim transition-colors group-hover:text-text-muted">
-          {String(index + 1).padStart(2, "0")}
+      <div className="flex flex-col items-center justify-between border-r border-border-subtle bg-canvas px-3 py-4 transition-colors group-hover:border-border-default sm:py-5">
+        <span className="grid h-10 w-10 shrink-0 place-items-center border border-border-default bg-surface text-text-muted transition-colors group-hover:border-border-strong group-hover:text-text-heading">
+          <Icon name={item.icon} size={21} />
         </span>
+        <kbd className="grid h-7 min-w-7 place-items-center border border-border-subtle bg-surface px-1.5 font-mono text-xs font-semibold tabular-nums text-text-dim transition-colors group-hover:border-border-default group-hover:text-text-muted">
+          {index + 1}
+        </kbd>
       </div>
 
-      <div className="mt-6 flex min-w-0 flex-1 items-end justify-between gap-4">
-        <h2 className="text-xl font-semibold tracking-[-0.02em] text-text-heading">
+      <div className="flex min-w-0 items-center justify-between gap-5 px-5 py-5 sm:px-6 sm:py-6">
+        <h2 className="truncate text-xl font-semibold tracking-[-0.025em] text-text-heading sm:text-2xl">
           {item.title}
         </h2>
-        <span className="flex shrink-0 items-center gap-2 text-text-dim transition-colors group-hover:text-text-heading">
-          <kbd className="border border-border-default bg-canvas px-2 py-0.5 font-mono text-xs tabular-nums transition-colors group-hover:border-border-strong">
-            {index + 1}
-          </kbd>
+        <span className="grid h-11 w-11 shrink-0 place-items-center border border-border-subtle bg-canvas text-text-dim transition-[border-color,color,transform] duration-150 group-hover:translate-x-0.5 group-hover:border-border-default group-hover:text-text-heading">
           <Icon name="arrow-right" size={19} />
         </span>
       </div>
