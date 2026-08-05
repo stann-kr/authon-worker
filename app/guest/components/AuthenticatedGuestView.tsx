@@ -571,9 +571,6 @@ export default function AuthenticatedGuestView({ user }: AuthenticatedGuestViewP
                         <h2 id="add-guest-title" className="type-panel-title">
                           {t("addGuest")}
                         </h2>
-                        <p className="mt-1 text-sm leading-relaxed text-text-muted">
-                          {t("addOneAtATime")}
-                        </p>
                       </div>
                       <GuestCapacityIndicator
                         label={t("remaining")}

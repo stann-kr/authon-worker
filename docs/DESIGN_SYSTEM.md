@@ -106,7 +106,7 @@ Authon UI는 베뉴 현장에서 반복적으로 사용하는 운영 도구다. 
 
 ## 주요 component
 
-- `Button`: primary, secondary, outline, danger, ghost variant와 loading state를 제공한다.
+- `Button`: primary, confirm, secondary, outline, danger, ghost variant와 loading state를 제공한다. 반복 check-in의 confirm variant는 CSS semantic token으로 배경·경계·텍스트를 함께 적용해 색상 일부만 누락되지 않게 한다.
 - `ConfirmDialog`: 확인이 필요한 작업의 제목·설명·action, focus trap, Escape 닫기, 취소 종료 motion과 trigger focus 복귀를 통일한다. 종료 중에는 action을 잠그며 native confirm dialog는 사용하지 않는다.
 - `WorkspaceShell`: 인증 화면의 header, 본문 폭, mobile bottom navigation, safe area와 공통 scroll 여백을 통일한다.
 - `AdminTaskSwitcher`: 권한에 맞는 Admin 업무를 direct link로 제공하고 desktop grouped sidebar와 mobile 바로가기 grid의 선택 상태를 통일한다.

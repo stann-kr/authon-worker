@@ -502,9 +502,6 @@ export default function ExternalDJGuestView({ token }: ExternalDJGuestViewProps)
                   >
                     {t("addGuest")}
                   </h1>
-                  <p className="mt-1 text-sm text-text-muted">
-                    {t("addOneAtATime")}
-                  </p>
                 </div>
                 <GuestCapacityIndicator
                   label={t("remaining")}

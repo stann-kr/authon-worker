@@ -17,6 +17,7 @@
   --app-text-body: #d4d7d9;
   --app-text-muted: #aab0b5;
   --app-action: #e7eaec;
+  --app-action-text: #111315;
   --app-action-hover: #f4f5f5;
   --app-action-active: #d4d7d9;
   --app-action-confirm: #d4d7d9;
@@ -270,6 +271,9 @@ input[type="date"] {
 
   .app-button[data-variant="confirm"] {
     --app-press-background: var(--app-action-confirm-active);
+    border-color: var(--app-action-confirm);
+    background-color: var(--app-action-confirm);
+    color: var(--app-action-text);
   }
 
   .app-button[data-variant="danger"] {
