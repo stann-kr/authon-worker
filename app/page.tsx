@@ -152,7 +152,7 @@ export default function Home() {
       ? "md:grid-cols-1"
       : accessibleMenus.length === 2
         ? "md:grid-cols-2"
-        : "md:grid-cols-3";
+        : "md:grid-cols-2 lg:grid-cols-3";
 
   return (
     <WorkspaceShell contentClassName="gap-4 pb-8 sm:gap-5">
