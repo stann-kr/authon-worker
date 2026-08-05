@@ -111,7 +111,7 @@ Authon UI는 베뉴 현장에서 반복적으로 사용하는 운영 도구다. 
 - `WorkspaceShell`: 인증 화면의 header, 본문 폭, mobile bottom navigation, safe area와 공통 scroll 여백을 통일한다.
 - `AdminTaskSwitcher`: 권한에 맞는 Admin 업무를 direct link로 제공하고 desktop grouped sidebar와 mobile 바로가기 grid의 선택 상태를 통일한다.
 - `OperationalSectionNav`: 독립적으로 표시되는 관리 component의 내부 section 선택 상태를 통일한다. 상위 Admin task navigation과 함께 사용할 때는 중복 표시하지 않는다.
-- `PanelHeader`: count, sort, refresh, 추가 action의 위치를 통일한다.
+- `PanelHeader`: count, sort, 화면별 context action, refresh의 위치를 통일하며 refresh는 작업 묶음의 가장 오른쪽에 둔다.
 - `StatGrid`: 통계 수치와 label을 선 없는 quiet tile 중앙에 정렬하고, 독립 영역과 목록 안의 `embedded` 배치를 구분하며 현재 조회 범위의 loading 상태를 함께 표현한다.
 - `GuestListCard`: waiting, checked, removed 상태와 registration/operations 작업 모드별 action을 표현한다. 공용 계정 게스트는 계정명과 실제 입력자를 함께 표시하고, checked 상태의 되돌리기는 해당 행 안에서 제공한다.
 - `GuestBulkEntry`: 선택형 disclosure 안에서 줄바꿈 입력, 요약, 최대 25행 미리보기, 행별 중복 확인, 정원 보류와 제출 결과를 한 흐름으로 제공한다. 정상 행은 이름만 표시하고 수정·확인이 필요한 예외 행에만 보조 문구와 control을 둔다.

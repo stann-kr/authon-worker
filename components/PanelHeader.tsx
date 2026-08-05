@@ -5,7 +5,7 @@ import { useTranslations } from "next-intl";
 
 /**
  * PanelHeader — 리스트 패널(main-content-panel 등)의 공통 헤더.
- * border-b 구분선, 제목, 그리고 Sort / Refresh 등 액션 버튼을 통일.
+ * border-b 구분선, 제목, 그리고 Sort / Context / Refresh 액션 순서를 통일.
  *
  * 사용 예:
  * <PanelHeader
@@ -72,6 +72,7 @@ export default function PanelHeader({
               {sortMode === "alpha" ? "A-Z" : t("created")}
             </button>
           )}
+          {actions}
           {onRefresh && (
             <button
               type="button"
@@ -83,7 +84,6 @@ export default function PanelHeader({
               {t("refresh")}
             </button>
           )}
-          {actions}
         </div>
       )}
     </div>
