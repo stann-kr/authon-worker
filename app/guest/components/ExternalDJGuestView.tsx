@@ -10,6 +10,7 @@ import EmptyState from "@/components/EmptyState";
 import Alert from "@/components/Alert";
 import Button from "@/components/Button";
 import GuestBulkEntry from "@/components/GuestBulkEntry";
+import GuestCapacityIndicator from "@/components/GuestCapacityIndicator";
 import { useVenueBrand } from "@/components/VenueBrandProvider";
 import GuestListCard from "@/components/GuestListCard";
 import GuestSearchInput from "@/components/GuestSearchInput";
@@ -330,11 +331,11 @@ export default function ExternalDJGuestView({ token }: ExternalDJGuestViewProps)
       <div className="min-h-[100dvh] bg-canvas flex flex-col">
         {externalHeader}
         <div className="flex-1 overflow-x-hidden pt-[calc(5rem+env(safe-area-inset-top))] sm:pt-[calc(5.5rem+env(safe-area-inset-top))] flex flex-col">
-          <div className="page-container">
+          <main id="main-content" tabIndex={-1} className="page-container">
             <div className="main-content-panel">
               <Spinner mode="inline" text={commonT("loading")} />
             </div>
-          </div>
+          </main>
           <Footer />
         </div>
       </div>
@@ -343,7 +344,7 @@ export default function ExternalDJGuestView({ token }: ExternalDJGuestViewProps)
 
   if (hasValidationError) {
     return (
-      <div className="min-h-[100dvh] bg-canvas flex items-center justify-center px-4">
+      <main id="main-content" tabIndex={-1} className="min-h-[100dvh] bg-canvas flex items-center justify-center px-4">
         <div className="app-panel max-w-sm p-7 text-center">
           <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center border border-status-danger/70 bg-status-danger/10">
             <Icon name="warning" size={24} className="text-status-danger" />
@@ -356,7 +357,7 @@ export default function ExternalDJGuestView({ token }: ExternalDJGuestViewProps)
           </p>
           <Footer compact />
         </div>
-      </div>
+      </main>
     );
   }
 
@@ -364,7 +365,7 @@ export default function ExternalDJGuestView({ token }: ExternalDJGuestViewProps)
     return (
       <div className="min-h-[100dvh] bg-canvas flex flex-col">
         {externalHeader}
-        <div className="flex flex-1 items-center justify-center px-4 pt-[calc(5rem+env(safe-area-inset-top))]">
+        <main id="main-content" tabIndex={-1} className="flex flex-1 items-center justify-center px-4 pt-[calc(5rem+env(safe-area-inset-top))]">
           <div
             className="app-panel max-w-sm p-7 text-center"
             aria-labelledby="external-load-error-title"
@@ -392,7 +393,7 @@ export default function ExternalDJGuestView({ token }: ExternalDJGuestViewProps)
               {commonT("refresh")}
             </Button>
           </div>
-        </div>
+        </main>
       </div>
     );
   }
@@ -413,34 +414,34 @@ export default function ExternalDJGuestView({ token }: ExternalDJGuestViewProps)
     <div className="min-h-[100dvh] bg-canvas flex flex-col">
       {externalHeader}
       <div className="flex-1 overflow-x-hidden pt-[calc(5rem+env(safe-area-inset-top))] sm:pt-[calc(5.5rem+env(safe-area-inset-top))] flex flex-col">
-        <div className="page-container">
+        <main id="main-content" tabIndex={-1} className="page-container">
           <div className="context-bar mb-4 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4 p-4 sm:p-5">
             <div className="flex flex-col">
-              <span className="text-xs font-mono uppercase tracking-wider text-text-dim">
+              <span className="type-context-title mb-0">
                 {t("guestOwner")}
               </span>
-              <span className="mt-1 text-sm font-semibold text-text-heading">
+              <span className="mt-1 break-words text-sm font-semibold text-text-heading">
                 {linkInfo?.djName ?? "-"}
               </span>
             </div>
             <div className="flex flex-col">
-              <span className="text-xs font-mono uppercase tracking-wider text-text-dim">
+              <span className="type-context-title mb-0">
                 {t("event")}
               </span>
-              <span className="mt-1 text-sm font-semibold text-text-heading">
+              <span className="mt-1 break-words text-sm font-semibold text-text-heading">
                 {linkInfo?.event ?? "-"}
               </span>
             </div>
             <div className="flex flex-col">
-              <span className="text-xs font-mono uppercase tracking-wider text-text-dim">
+              <span className="type-context-title mb-0">
                 {t("venue")}
               </span>
-              <span className="mt-1 text-sm font-semibold text-text-heading">
+              <span className="mt-1 break-words text-sm font-semibold text-text-heading">
                 {venueInfo?.name ?? "-"}
               </span>
             </div>
             <div className="flex flex-col">
-              <span className="text-xs font-mono uppercase tracking-wider text-text-dim">
+              <span className="type-context-title mb-0">
                 {t("operationalDate")}
               </span>
               <span className="mt-1 font-mono text-sm font-semibold text-text-heading">
@@ -491,28 +492,22 @@ export default function ExternalDJGuestView({ token }: ExternalDJGuestViewProps)
           )}
 
           <section className="main-content-panel">
-            <div className="border-b border-border-subtle px-4 py-4 sm:px-5">
-              <div className="mb-3 flex items-end justify-between gap-4">
-                <div>
-                  <h1
-                    ref={contentHeadingRef}
-                    tabIndex={-1}
-                    className="type-panel-title outline-none focus-visible:ring-2 focus-visible:ring-focus"
-                  >
-                    {t("addGuest")}
-                  </h1>
-                  <p className="mt-1 text-sm text-text-muted">
-                    {t("addOneAtATime")}
-                  </p>
-                </div>
-                <div className="text-right">
-                  <div className="font-mono text-lg tabular-nums text-text-heading">
-                    {remaining}
-                  </div>
-                  <div className="text-xs text-text-muted">{t("remaining")}</div>
-                </div>
-              </div>
+            <div className="relative flex items-center justify-between gap-4 border-b border-border-subtle px-4 py-3 sm:px-5">
+              <h1
+                ref={contentHeadingRef}
+                tabIndex={-1}
+                className="type-panel-title outline-none focus-visible:ring-2 focus-visible:ring-focus"
+              >
+                {t("addGuest")}
+              </h1>
+              <GuestCapacityIndicator
+                label={t("remaining")}
+                remaining={remaining}
+                limit={linkInfo?.maxGuests ?? null}
+              />
+            </div>
 
+            <div className="border-b border-border-subtle px-4 py-4 sm:px-5">
               {!isAtLimit ? (
                 <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
                   <div className="min-w-0 flex-1">
@@ -521,11 +516,13 @@ export default function ExternalDJGuestView({ token }: ExternalDJGuestViewProps)
                     </label>
                     <input
                       id="external-guest-name"
+                      name="external-guest-name"
                       type="text"
                       value={guestName}
                       onChange={(event) => setGuestName(event.target.value)}
                       placeholder={t("enterFullName")}
                       maxLength={100}
+                      autoComplete="off"
                       disabled={
                         requiresReconciliation ||
                         isReconciling ||
@@ -594,6 +591,7 @@ export default function ExternalDJGuestView({ token }: ExternalDJGuestViewProps)
             </div>
 
             <StatGrid
+              variant="embedded"
               items={[
                 { label: t("registered"), value: guests.length, color: "checked" },
                 {
@@ -658,7 +656,7 @@ export default function ExternalDJGuestView({ token }: ExternalDJGuestViewProps)
               </div>
             )}
           </section>
-        </div>
+        </main>
         <Footer />
       </div>
     </div>

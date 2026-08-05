@@ -1,11 +1,14 @@
 "use client";
 
 import {
+  useCallback,
   useEffect,
   useId,
   useRef,
+  useState,
   type ReactNode,
 } from "react";
+import { createPortal } from "react-dom";
 import Button from "./Button";
 
 interface ConfirmDialogProps {
@@ -38,6 +41,9 @@ export default function ConfirmDialog({
   const previousFocusRef = useRef<HTMLElement | null>(null);
   const onCancelRef = useRef(onCancel);
   const isLoadingRef = useRef(isLoading);
+  const isClosingRef = useRef(false);
+  const closeTimerRef = useRef<number | null>(null);
+  const [isClosing, setIsClosing] = useState(false);
   const titleId = useId();
   const descriptionId = useId();
 
@@ -46,18 +52,61 @@ export default function ConfirmDialog({
     isLoadingRef.current = isLoading;
   }, [isLoading, onCancel]);
 
+  const requestCancel = useCallback(() => {
+    if (isLoadingRef.current || isClosingRef.current) return;
+    const shouldReduceMotion = window.matchMedia(
+      "(prefers-reduced-motion: reduce)",
+    ).matches;
+    if (shouldReduceMotion) {
+      onCancelRef.current();
+      return;
+    }
+
+    isClosingRef.current = true;
+    setIsClosing(true);
+    closeTimerRef.current = window.setTimeout(() => {
+      closeTimerRef.current = null;
+      onCancelRef.current();
+    }, 140);
+  }, []);
+
+  useEffect(
+    () => () => {
+      if (closeTimerRef.current !== null) {
+        window.clearTimeout(closeTimerRef.current);
+      }
+    },
+    [],
+  );
+
+  useEffect(() => {
+    if (open) return;
+    if (closeTimerRef.current !== null) {
+      window.clearTimeout(closeTimerRef.current);
+      closeTimerRef.current = null;
+    }
+    isClosingRef.current = false;
+    setIsClosing(false);
+  }, [open]);
+
   useEffect(() => {
     if (!open) return;
 
     previousFocusRef.current = document.activeElement as HTMLElement | null;
     const previousOverflow = document.body.style.overflow;
+    const mainContent = document.getElementById("main-content");
+    const mainContentWasInert = mainContent?.hasAttribute("inert") ?? false;
     document.body.style.overflow = "hidden";
+    if (mainContent && !mainContentWasInert) {
+      mainContent.setAttribute("inert", "");
+    }
     cancelRef.current?.focus();
 
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape" && !isLoadingRef.current) {
+      if (event.key === "Escape") {
         event.preventDefault();
-        onCancelRef.current();
+        event.stopPropagation();
+        requestCancel();
         return;
       }
 
@@ -67,10 +116,18 @@ export default function ConfirmDialog({
           'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
         ),
       );
+      if (focusable.length === 0) {
+        event.preventDefault();
+        dialogRef.current.focus();
+        return;
+      }
       const first = focusable[0];
       const last = focusable[focusable.length - 1];
 
-      if (event.shiftKey && document.activeElement === first) {
+      if (!dialogRef.current.contains(document.activeElement)) {
+        event.preventDefault();
+        first.focus();
+      } else if (event.shiftKey && document.activeElement === first) {
         event.preventDefault();
         last?.focus();
       } else if (!event.shiftKey && document.activeElement === last) {
@@ -83,21 +140,31 @@ export default function ConfirmDialog({
     return () => {
       document.removeEventListener("keydown", handleKeyDown);
       document.body.style.overflow = previousOverflow;
+      if (mainContent && !mainContentWasInert) {
+        mainContent.removeAttribute("inert");
+      }
       previousFocusRef.current?.focus();
     };
-  }, [open]);
+  }, [open, requestCancel]);
 
   if (!open) return null;
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-canvas/80 px-4 py-8">
+  if (typeof document === "undefined") return null;
+
+  return createPortal(
+    <div
+      className="app-dialog-backdrop fixed inset-0 z-[var(--app-z-dialog)] flex items-center justify-center bg-canvas/80 p-4"
+      data-state={isClosing ? "closing" : "open"}
+    >
       <div
         ref={dialogRef}
         role="alertdialog"
         aria-modal="true"
+        aria-busy={isLoading || isClosing}
         aria-labelledby={titleId}
         aria-describedby={descriptionId}
-        className="w-full max-w-md border border-border-strong bg-canvas p-5 sm:p-6"
+        tabIndex={-1}
+        className="app-dialog-panel max-h-[calc(100dvh-2rem)] w-full max-w-md overscroll-contain overflow-y-auto border border-border-strong bg-canvas p-5 sm:p-6"
       >
         <h2 id={titleId} className="type-panel-title">
           {title}
@@ -111,8 +178,8 @@ export default function ConfirmDialog({
             ref={cancelRef}
             type="button"
             variant="outline"
-            onClick={onCancel}
-            disabled={isLoading}
+            onClick={requestCancel}
+            disabled={isLoading || isClosing}
           >
             {cancelLabel}
           </Button>
@@ -121,11 +188,13 @@ export default function ConfirmDialog({
             variant={tone === "danger" ? "danger" : "primary"}
             onClick={onConfirm}
             isLoading={isLoading}
+            disabled={isClosing}
           >
             {confirmLabel}
           </Button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

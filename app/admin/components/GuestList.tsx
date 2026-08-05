@@ -286,6 +286,7 @@ export default function GuestList({
 
   return (
     <OperationsLayout
+      variant="stacked"
       title={t("title")}
       dashboard={
         <>
@@ -312,6 +313,7 @@ export default function GuestList({
             </label>
             <div className="space-y-2">
               <button
+                type="button"
                 onClick={() => setSelectedDJ("all")}
                 className={`w-full p-3 text-sm font-medium transition-colors ${
                   selectedDJ === "all"
@@ -324,9 +326,11 @@ export default function GuestList({
               <div className="relative">
                 <select
                   id="admin-guest-user-filter"
+                  name="admin-guest-user-filter"
                   value={selectedDJ === "all" ? "" : selectedDJ}
+                  autoComplete="off"
                   onChange={(e) => setSelectedDJ(e.target.value || "all")}
-                  className="w-full appearance-none bg-surface-raised border border-border-strong px-4 py-4 pr-10 text-text-heading text-sm font-medium focus:outline-none focus:border-border-focus min-h-[52px]"
+                  className="app-field min-h-[52px] appearance-none py-4 pr-10 font-medium"
                 >
                   <option value="">{t("selectUser")}</option>
                   {filteredUsers.map((u) => (
@@ -352,10 +356,10 @@ export default function GuestList({
 
         <div className="app-panel p-4 sm:p-5">
           <div className="mb-4">
-            <h2 className="type-panel-title mb-1">
+            <h2 className="type-panel-title mb-1 break-words">
               {selectedDJInfo.name}
             </h2>
-            <p className="text-sm text-text-muted mb-1">
+            <p className="mb-1 break-words text-sm text-text-muted">
               {selectedDJInfo.event}
             </p>
             <p className="text-sm text-text-muted">
@@ -366,7 +370,7 @@ export default function GuestList({
             <div className="text-text-heading font-mono text-3xl sm:text-4xl tracking-wider">
               {hasCurrentScopeData
                 ? pendingGuests.length + checkedGuests.length
-                : "—"}
+                : "-"}
             </div>
             <div className="text-xs font-medium text-text-muted">
               {t("totalGuests")}
@@ -416,7 +420,7 @@ export default function GuestList({
             />
           ) : (
             <div
-              className={`divide-y divide-border-default lg:overflow-y-auto transition-opacity duration-200 ${isCurrentScopeFetching ? "opacity-50 pointer-events-none" : ""}`}
+              className={`divide-y divide-border-default lg:overflow-y-auto ${isCurrentScopeFetching ? "pointer-events-none" : ""}`}
             >
               {displayGuests.map((guest, index) => {
                 const contributor = getContributor(guest);

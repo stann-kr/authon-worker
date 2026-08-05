@@ -5,7 +5,7 @@ import { useTranslations } from "next-intl";
 
 /**
  * PanelHeader — 리스트 패널(main-content-panel 등)의 공통 헤더.
- * border-b 구분선, 제목, 그리고 Sort / Refresh 등 액션 버튼을 통일.
+ * border-b 구분선, 제목, 그리고 Sort / Context / Refresh 액션 순서를 통일.
  *
  * 사용 예:
  * <PanelHeader
@@ -48,14 +48,15 @@ export default function PanelHeader({
   const hasButtons =
     (sortMode !== undefined && onSortToggle) || onRefresh || actions;
   const Heading = headingLevel === 1 ? "h1" : headingLevel === 2 ? "h2" : "h3";
+  const displayedCount = isLoading && count === 0 ? "-" : count;
 
   return (
     <div className="flex flex-shrink-0 flex-wrap items-center justify-between gap-3 border-b border-border-subtle px-4 py-3 sm:px-5">
       <Heading id={headingId} className="type-panel-title">
         {title}
-        {count !== undefined && (
+        {displayedCount !== undefined && (
           <span className="ml-2 font-mono text-xs font-normal tabular-nums text-text-dim">
-            {count}
+            {displayedCount}
           </span>
         )}
       </Heading>
@@ -72,6 +73,7 @@ export default function PanelHeader({
               {sortMode === "alpha" ? "A-Z" : t("created")}
             </button>
           )}
+          {actions}
           {onRefresh && (
             <button
               type="button"
@@ -83,7 +85,6 @@ export default function PanelHeader({
               {t("refresh")}
             </button>
           )}
-          {actions}
         </div>
       )}
     </div>

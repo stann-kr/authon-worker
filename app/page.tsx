@@ -3,12 +3,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { getUser, logout, hasAccess, type User } from "../lib/auth";
-import Footer from "@/components/Footer";
 import RouteLoadingFallback from "@/components/RouteLoadingFallback";
 import Icon, { type IconName } from "@/components/Icon";
 import TransitionLink from "@/components/TransitionLink";
 import { useRouteTransition } from "@/components/RouteTransitionProvider";
-import AdminHeader from "@/app/admin/components/AdminHeader";
+import WorkspaceShell from "@/components/WorkspaceShell";
 import { fetchMyVenuePendingGuestLimitRequestCount } from "@/lib/api/guest-limits";
 import { useLatestRequestGuard } from "@/lib/hooks";
 import { useTranslations } from "next-intl";
@@ -30,7 +29,8 @@ export default function Home() {
   const [pendingGuestRequestCount, setPendingGuestRequestCount] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const router = useRouter();
-  const { startRouteTransition } = useRouteTransition();
+  const { isRouteTransitionActive, startRouteTransition } =
+    useRouteTransition();
   const requestGuard = useLatestRequestGuard();
   const menuItems: MenuItem[] = useMemo(() => [
     {
@@ -111,6 +111,18 @@ export default function Home() {
     if (!user || accessibleMenus.length === 0) return;
 
     const handleKeyDown = (event: KeyboardEvent) => {
+      if (
+        isRouteTransitionActive ||
+        event.defaultPrevented ||
+        event.metaKey ||
+        event.ctrlKey ||
+        event.altKey ||
+        event.shiftKey ||
+        document.querySelector('[role="alertdialog"][aria-modal="true"]')
+      ) {
+        return;
+      }
+
       const target = event.target as HTMLElement | null;
       if (
         target &&
@@ -124,6 +136,7 @@ export default function Home() {
 
       const keyIndex = Number.parseInt(event.key, 10) - 1;
       if (!Number.isNaN(keyIndex) && accessibleMenus[keyIndex]) {
+        event.preventDefault();
         const href = accessibleMenus[keyIndex].href;
         if (startRouteTransition(href)) router.push(href);
       }
@@ -131,7 +144,13 @@ export default function Home() {
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [accessibleMenus, router, startRouteTransition, user]);
+  }, [
+    accessibleMenus,
+    isRouteTransitionActive,
+    router,
+    startRouteTransition,
+    user,
+  ]);
 
   if (isLoading) {
     return <RouteLoadingFallback />;
@@ -141,11 +160,10 @@ export default function Home() {
 
   const workspaceWidthClass =
     accessibleMenus.length === 1
-      ? "max-w-[34rem]"
+      ? "max-w-[28rem]"
       : accessibleMenus.length === 2
-        ? "max-w-[44rem]"
-        : "max-w-[1040px]";
-
+        ? "max-w-[58rem]"
+        : "max-w-none";
   const workspaceGridClass =
     accessibleMenus.length === 1
       ? "md:grid-cols-1"
@@ -154,51 +172,34 @@ export default function Home() {
         : "md:grid-cols-3";
 
   return (
-    <div className="flex min-h-[100dvh] flex-col bg-canvas">
-      <AdminHeader />
+    <WorkspaceShell contentClassName="gap-4 pb-8 sm:gap-5">
+      <h1 className="sr-only">{t("availableWorkspaces")}</h1>
 
-      <main className="mx-auto flex w-full max-w-[1040px] flex-1 flex-col px-4 pb-8 pt-20 sm:px-6 sm:pt-24 lg:px-10">
-        {user.role === "venue_admin" && pendingGuestRequestCount > 0 && (
-          <TransitionLink
-            href="/admin?tab=guests&view=requests"
-            className="group mb-4 grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-4 border border-status-waiting/70 bg-status-waiting/10 px-4 py-4 text-status-waiting hover:border-status-waiting focus-visible:outline-none sm:px-5"
+      {user.role === "venue_admin" && pendingGuestRequestCount > 0 && (
+        <TransitionLink
+          href="/admin?tab=guests&view=requests"
+          className="pressable group flex min-h-14 items-center gap-3 border border-status-waiting/70 bg-status-waiting/10 px-4 py-3 text-status-waiting hover:border-status-waiting sm:px-5"
+        >
+          <Icon name="warning" size={20} />
+          <span className="min-w-0 flex-1 text-sm font-semibold text-text-heading">
+            {t("pendingGuestRequests", { count: pendingGuestRequestCount })}
+          </span>
+          <Icon name="arrow-right" size={18} />
+        </TransitionLink>
+      )}
+
+      {accessibleMenus.length > 0 && (
+        <nav aria-label={t("availableWorkspaces")} className="w-full">
+          <div
+            className={`home-workspace-grid mx-auto grid gap-3 sm:gap-4 ${workspaceWidthClass} ${workspaceGridClass}`}
           >
-            <Icon name="warning" size={22} />
-            <div className="min-w-0">
-              <p className="text-sm font-semibold text-text-heading">
-                {t("pendingGuestRequests", { count: pendingGuestRequestCount })}
-              </p>
-              <p className="mt-1 text-xs text-text-muted">
-                {t("pendingGuestRequestsDescription")}
-              </p>
-            </div>
-            <span className="flex items-center gap-3">
-              <span className="font-mono text-xs tabular-nums text-status-waiting">
-                {t("pendingGuestRequestCount", { count: pendingGuestRequestCount })}
-              </span>
-              <Icon name="arrow-right" size={18} />
-            </span>
-          </TransitionLink>
-        )}
-
-        {accessibleMenus.length > 0 && (
-          <nav
-            aria-label={t("availableWorkspaces")}
-            className={`mx-auto w-full ${workspaceWidthClass}`}
-          >
-            <div
-              className={`grid border-l border-t border-border-default ${workspaceGridClass}`}
-            >
-              {accessibleMenus.map((item, index) => (
-                <WorkspaceLink key={item.id} item={item} index={index} />
-              ))}
-            </div>
-          </nav>
-        )}
-      </main>
-
-      <Footer />
-    </div>
+            {accessibleMenus.map((item, index) => (
+              <WorkspaceLink key={item.id} item={item} index={index} />
+            ))}
+          </div>
+        </nav>
+      )}
+    </WorkspaceShell>
   );
 }
 
@@ -212,35 +213,39 @@ function WorkspaceLink({
   return (
     <TransitionLink
       href={item.href}
-      className="pressable group relative flex min-h-[210px] flex-col border-b border-r border-border-default bg-surface hover:bg-surface-raised focus-visible:bg-surface-raised focus-visible:outline-none before:absolute before:inset-x-0 before:top-0 before:h-0.5 before:bg-action-primary before:opacity-0 before:transition-opacity hover:before:opacity-100 focus-visible:before:opacity-100 sm:min-h-[230px]"
+      aria-keyshortcuts={String(index + 1)}
+      className="home-workspace-card pressable group relative flex h-full min-h-[12rem] flex-col overflow-hidden border border-border-default bg-surface p-5 hover:border-border-strong hover:bg-surface-raised focus-visible:border-border-strong focus-visible:bg-surface-raised sm:min-h-[13rem] sm:p-6"
     >
-      <div className="flex w-full flex-1 flex-col p-5 sm:p-6">
-        <div className="flex items-start justify-between gap-4">
-          <div className="grid h-11 w-11 place-items-center border border-border-default bg-canvas text-text-muted transition-colors group-hover:border-border-strong group-hover:text-text-heading">
-            <Icon name={item.icon} size={22} />
-          </div>
-          <span className="font-mono text-xs font-semibold tabular-nums text-text-dim group-hover:text-text-muted">
-            {String(index + 1).padStart(2, "0")}
-          </span>
-        </div>
+      <div className="flex items-center justify-between gap-4">
+        <p className="text-xs font-medium text-text-muted">
+          {item.category}
+        </p>
+        <kbd className="font-mono text-xs font-semibold tabular-nums text-text-dim transition-colors group-hover:text-text-muted">
+          [{index + 1}]
+        </kbd>
+      </div>
 
-        <div className="mt-5 min-w-0 flex-1">
-          <h2 className="text-lg font-semibold tracking-[-0.015em] text-text-heading group-hover:text-action-primary">
+      <div className="mt-6 flex min-w-0 items-start gap-4">
+        <span className="grid h-11 w-11 shrink-0 place-items-center border border-border-default bg-canvas text-text-muted transition-colors group-hover:border-border-strong group-hover:text-text-heading">
+          <Icon name={item.icon} size={22} />
+        </span>
+        <div className="min-w-0">
+          <h2 className="text-xl font-semibold tracking-[-0.025em] text-text-heading sm:text-2xl">
             {item.title}
           </h2>
           <p className="mt-2 text-sm leading-relaxed text-text-muted">
             {item.description}
           </p>
         </div>
+      </div>
 
-        <div className="mt-6 flex items-center justify-end">
-          <span className="flex items-center gap-2 text-text-dim transition-colors group-hover:text-text-heading">
-            <kbd className="border border-border-default bg-canvas px-2 py-0.5 font-mono text-xs text-text-dim group-hover:border-border-strong">
-              {index + 1}
-            </kbd>
-            <Icon name="arrow-right" size={18} />
-          </span>
-        </div>
+      <div className="mt-auto flex items-center justify-between border-t border-border-subtle pt-4 transition-colors group-hover:border-border-default">
+        <span className="text-xs font-semibold text-text-muted transition-colors group-hover:text-text-heading">
+          {item.action}
+        </span>
+        <span className="grid h-8 w-8 shrink-0 place-items-center text-text-dim transition-[color,transform] duration-150 group-hover:translate-x-1 group-hover:text-text-heading">
+          <Icon name="arrow-right" size={19} />
+        </span>
       </div>
     </TransitionLink>
   );

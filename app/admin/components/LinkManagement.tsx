@@ -14,6 +14,7 @@ import DatePicker from "../../../components/DatePicker";
 import OperationsLayout from "../../../components/OperationsLayout";
 import OperationalSectionNav from "../../../components/OperationalSectionNav";
 import ConfirmDialog from "../../../components/ConfirmDialog";
+import Button from "../../../components/Button";
 import { useSectionLoadingTask } from "../../../components/RouteTransitionProvider";
 import { useLatestRequestGuard } from "../../../lib/hooks";
 import { formatDateDisplay } from "../../../lib/date";
@@ -69,21 +70,41 @@ interface LinkActionFeedback {
   result: Extract<ExternalLinkShareResult, "shared" | "copied">;
 }
 
+export type LinkManagementSection = "create" | "manage";
+
 interface LinkManagementProps {
   selectedDate: string;
   onDateChange: (date: string) => void;
   businessDate: string;
+  activeSection?: LinkManagementSection;
+  onActiveSectionChange?: (section: LinkManagementSection) => void;
+  showSectionNavigation?: boolean;
 }
 
 export default function LinkManagement({
   selectedDate,
   onDateChange,
   businessDate,
+  activeSection,
+  onActiveSectionChange,
+  showSectionNavigation = true,
 }: LinkManagementProps) {
   const t = useTranslations("LinkAdmin");
   const commonT = useTranslations("Common");
   const locale = useLocale() as "en" | "ko";
-  const [activeTab, setActiveTab] = useState<"create" | "manage">("create");
+  const [internalActiveSection, setInternalActiveSection] =
+    useState<LinkManagementSection>("create");
+  const activeTab = activeSection ?? internalActiveSection;
+  const setActiveTab = useCallback(
+    (section: LinkManagementSection) => {
+      if (onActiveSectionChange) {
+        onActiveSectionChange(section);
+        return;
+      }
+      setInternalActiveSection(section);
+    },
+    [onActiveSectionChange],
+  );
   const [manageScope, setManageScope] = useState<"date" | "recent">("date");
   const [recentLimit, setRecentLimit] = useState<5 | 10>(5);
   const [manageFilter, setManageFilter] = useState<ManageFilter>("all");
@@ -510,25 +531,10 @@ export default function LinkManagement({
     [filteredLinks, locale, manageScope, manageSort],
   );
 
-  const getTabInfo = () => {
-    switch (activeTab) {
-      case "create":
-        return {
-          title: t("createLink"),
-          description: t("createDescription"),
-        };
-      case "manage":
-        return { title: t("manageLinks"), description: t("manageDescription") };
-      default:
-        return { title: "", description: "" };
-    }
-  };
-
-  const tabInfo = getTabInfo();
-
   return (
     <>
       <OperationsLayout
+        variant="stacked"
         title={t("title")}
         dashboard={
           <>
@@ -552,19 +558,24 @@ export default function LinkManagement({
             className="app-panel p-4 sm:p-5"
           />
         )}
-        <div>
-          <OperationalSectionNav
-            label={t("section")}
-            items={[
-              { id: "create", label: t("create"), icon: "add" },
-              { id: "manage", label: t("manage"), icon: "link" },
-            ]}
-            activeId={activeTab}
-            onChange={setActiveTab}
-            disabled={isGenerating}
-          />
+        {(showSectionNavigation || activeTab === "manage") && (
+          <div>
+            {showSectionNavigation && (
+              <OperationalSectionNav
+                label={t("section")}
+                items={[
+                  { id: "create", label: t("create"), icon: "add" },
+                  { id: "manage", label: t("manage"), icon: "link" },
+                ]}
+                activeId={activeTab}
+                onChange={setActiveTab}
+                disabled={isGenerating}
+              />
+            )}
             {activeTab === "manage" && (
-              <div className="app-panel mt-4 p-4 sm:p-5">
+              <div
+                className={`app-panel p-4 sm:p-5 ${showSectionNavigation ? "mt-4" : ""}`}
+              >
                 <p className="app-label">{t("view")}</p>
                 <div className="grid grid-cols-2 gap-2">
                   {(["date", "recent"] as const).map((scope) => (
@@ -576,7 +587,7 @@ export default function LinkManagement({
                         setManageScope(scope);
                         setManageFilter("all");
                       }}
-                      className={`min-h-11 border px-3 py-2 text-xs font-medium uppercase ${
+                      className={`min-h-11 border px-3 py-2 text-xs font-medium ${
                         manageScope === scope
                           ? "border-action-primary bg-action-primary text-action-text"
                           : "border-border-default bg-surface-raised text-text-muted"
@@ -610,23 +621,11 @@ export default function LinkManagement({
                 )}
               </div>
             )}
-        </div>
-
-        <div className="app-panel p-4 sm:p-5">
-          <div className="mb-4">
-            <h2 className="type-panel-title mb-1">
-              {tabInfo.title}
-            </h2>
-            <p className="text-sm text-text-muted">
-              {tabInfo.description}
-            </p>
-            <p className="text-sm text-text-muted mt-1">
-              {activeTab === "manage" && manageScope === "recent"
-                ? t("latestCreated", { count: recentLimit })
-                : formatDateDisplay(selectedDate, locale)}
-            </p>
           </div>
-          {activeTab === "manage" && (
+        )}
+
+        {activeTab === "manage" && (
+          <div className="app-panel p-3 sm:p-4">
             <StatGrid
               items={[
                 { label: t("total"), value: dashboardStats.total, color: "default" },
@@ -634,8 +633,8 @@ export default function LinkManagement({
                 { label: t("attention"), value: dashboardStats.attention, color: "danger" },
               ]}
             />
-          )}
-        </div>
+          </div>
+        )}
           </>
         }
       >
@@ -644,14 +643,9 @@ export default function LinkManagement({
         {activeTab === "create" && (
           <div className="space-y-6">
             <div className="app-panel p-4 sm:p-6">
-              <div className="mb-6">
-                <h2 className="type-panel-title font-mono uppercase tracking-wider mb-1">
-                  {t("createAccessLink")}
-                </h2>
-                <p className="text-text-muted text-xs font-medium">
-                  {t("createAccessDescription")}
-                </p>
-              </div>
+              <h2 className="type-panel-title mb-6">
+                {t("createAccessLink")}
+              </h2>
 
               {templateNotice && (
                 <Alert
@@ -690,8 +684,10 @@ export default function LinkManagement({
                       {/* Hidden Native Input */}
                       <input
                         id="link-date"
+                        name="link-date"
                         ref={linkDateInputRef}
                         type="date"
+                        autoComplete="off"
                         value={formData.date}
                         disabled={isGenerating}
                         aria-invalid={
@@ -728,8 +724,10 @@ export default function LinkManagement({
                     </label>
                     <input
                       id="link-dj-name"
+                      name="dj-name"
                       ref={linkDjInputRef}
                       type="text"
+                      autoComplete="off"
                       value={formData.dj}
                       disabled={isGenerating}
                       aria-invalid={
@@ -748,7 +746,7 @@ export default function LinkManagement({
                           dj: e.target.value.toUpperCase(),
                         });
                       }}
-                      className={`w-full border bg-canvas px-4 py-3 text-sm uppercase text-text-heading focus:outline-none focus:border-border-focus disabled:cursor-not-allowed disabled:opacity-60 ${
+                      className={`app-field uppercase ${
                         formValidationError?.field === "dj"
                           ? "border-status-danger"
                           : "border-border-strong"
@@ -774,8 +772,10 @@ export default function LinkManagement({
                   </label>
                   <input
                     id="link-event-name"
+                    name="event-name"
                     ref={linkEventInputRef}
                     type="text"
+                    autoComplete="off"
                     value={formData.event}
                     disabled={isGenerating}
                     aria-invalid={
@@ -794,7 +794,7 @@ export default function LinkManagement({
                         event: e.target.value.toUpperCase(),
                       });
                     }}
-                    className={`w-full border bg-canvas px-4 py-3 text-sm uppercase text-text-heading focus:outline-none focus:border-border-focus disabled:cursor-not-allowed disabled:opacity-60 ${
+                    className={`app-field uppercase ${
                       formValidationError?.field === "event"
                         ? "border-status-danger"
                         : "border-border-strong"
@@ -819,8 +819,10 @@ export default function LinkManagement({
                   </label>
                   <input
                     id="link-max-guests"
+                    name="max-guests"
                     ref={linkMaxGuestsInputRef}
                     type="number"
+                    autoComplete="off"
                     min="1"
                     max="999"
                     step="1"
@@ -842,7 +844,7 @@ export default function LinkManagement({
                           e.target.value === "" ? "" : Number(e.target.value),
                       });
                     }}
-                    className={`w-full border bg-canvas px-4 py-3 text-sm text-text-heading focus:outline-none focus:border-border-focus disabled:cursor-not-allowed disabled:opacity-60 ${
+                    className={`app-field ${
                       formValidationError?.field === "maxGuests"
                         ? "border-status-danger"
                         : "border-border-strong"
@@ -915,20 +917,14 @@ export default function LinkManagement({
                   )}
                 </fieldset>
 
-                <button
+                <Button
                   type="submit"
-                  disabled={isGenerating}
-                  className="w-full bg-action-primary py-3 text-sm font-semibold text-action-text transition-colors hover:bg-action-hover disabled:bg-border-strong disabled:text-text-muted disabled:opacity-50 sm:py-4"
+                  isLoading={isGenerating}
+                  fullWidth
+                  size="lg"
                 >
-                  {isGenerating ? (
-                    <div className="flex items-center justify-center gap-2">
-                      <div className="w-4 h-4 border-2 border-canvas border-t-transparent rounded-full animate-spin"></div>
-                      {t("generating")}
-                    </div>
-                  ) : (
-                    t("generateLink")
-                  )}
-                </button>
+                  {isGenerating ? t("generating") : t("generateLink")}
+                </Button>
               </form>
             </div>
 
@@ -947,7 +943,7 @@ export default function LinkManagement({
                   </h3>
                   <p
                     id="generated-link-summary"
-                    className="text-text-muted font-mono text-xs"
+                    className="break-words font-mono text-xs text-text-muted"
                   >
                     {generatedLink.djName} / {generatedLink.event} | {t("max")}:{" "}
                     {generatedLink.maxGuests}
@@ -966,7 +962,7 @@ export default function LinkManagement({
                   </div>
                 </div>
 
-                <button
+                <Button
                   type="button"
                   onClick={() =>
                     shareOrCopyLink(
@@ -977,18 +973,17 @@ export default function LinkManagement({
                       ),
                     )
                   }
-                  disabled={isGeneratedLinkActionPending}
-                  className="min-h-11 w-full bg-action-primary py-3 text-xs font-semibold text-action-text transition-colors hover:bg-action-hover disabled:opacity-50"
+                  isLoading={isGeneratedLinkActionPending}
+                  fullWidth
                 >
-                  {isGeneratedLinkActionPending ? (
-                    <div className="flex items-center justify-center gap-2">
-                      <div className="w-3 h-3 border-2 border-canvas border-t-transparent rounded-full animate-spin"></div>
-                      {nativeShareAvailable ? t("sharing") : t("copying")}
-                    </div>
-                  ) : (
-                    nativeShareAvailable ? t("shareLink") : t("copyLink")
-                  )}
-                </button>
+                  {isGeneratedLinkActionPending
+                    ? nativeShareAvailable
+                      ? t("sharing")
+                      : t("copying")
+                    : nativeShareAvailable
+                      ? t("shareLink")
+                      : t("copyLink")}
+                </Button>
               </div>
             )}
           </div>
@@ -1020,7 +1015,7 @@ export default function LinkManagement({
                         type="button"
                         onClick={() => setManageFilter(filter.key as ManageFilter)}
                         aria-pressed={manageFilter === filter.key}
-                        className={`min-h-11 border px-3 py-2 text-xs font-medium uppercase transition-colors ${
+                        className={`min-h-11 border px-3 py-2 text-xs font-medium transition-colors ${
                           manageFilter === filter.key
                             ? "border-action-primary bg-action-primary text-action-text"
                             : "border-border-default bg-canvas text-text-muted hover:border-border-strong hover:text-text-heading"
@@ -1039,11 +1034,13 @@ export default function LinkManagement({
                       <div className="relative">
                         <select
                           id="link-sort"
+                          name="link-sort"
                           value={manageSort}
+                          autoComplete="off"
                           onChange={(event) =>
                             setManageSort(event.target.value as ManageSort)
                           }
-                          className="app-field min-h-11 appearance-none py-2.5 pl-4 pr-12 text-xs uppercase"
+                          className="app-field min-h-11 appearance-none py-2.5 pl-4 pr-12 text-xs"
                         >
                           <option value="newest">{t("newestCreated")}</option>
                           <option value="expiresSoonest">{t("expiresSoonest")}</option>
@@ -1070,7 +1067,10 @@ export default function LinkManagement({
                 <Skeleton rows={5} />
               ) : (
                 <div
-                  className={`divide-y divide-border-default lg:overflow-y-auto transition-opacity duration-200 ${isCurrentScopeFetching ? "opacity-50 pointer-events-none" : ""}`}
+                  aria-busy={isCurrentScopeFetching}
+                  className={`divide-y divide-border-default lg:overflow-y-auto ${
+                    isCurrentScopeFetching ? "pointer-events-none" : ""
+                  }`}
                 >
                   {sortedLinks.length === 0 ? (
                     <EmptyState
@@ -1189,7 +1189,7 @@ export default function LinkManagement({
                         {isLinkVisible && (
                           <div
                             id={`link-url-panel-${link.id}`}
-                            className="mt-3 border border-border-default bg-canvas p-3 ml-10 sm:ml-11"
+                            className="mt-3 border border-border-default bg-canvas p-3 sm:ml-11"
                           >
                             <label
                               htmlFor={`link-url-${link.id}`}
@@ -1200,7 +1200,9 @@ export default function LinkManagement({
                             <div className="flex flex-col gap-2 sm:flex-row">
                               <input
                                 id={`link-url-${link.id}`}
+                                name={`link-url-${link.id}`}
                                 type="text"
+                                autoComplete="off"
                                 readOnly
                                 value={guestPageUrl}
                                 onFocus={(event) => event.currentTarget.select()}
@@ -1222,15 +1224,17 @@ export default function LinkManagement({
                           </div>
                         )}
 
-                        <div className="mt-3 flex flex-wrap justify-end gap-2 pl-10 sm:pl-11">
-                          <button
+                        <div className="mt-3 flex flex-wrap justify-end gap-2 sm:pl-11">
+                          <Button
                             type="button"
                             onClick={() => handleUseAsTemplate(link)}
-                            className="min-h-11 border border-border-default bg-surface px-3 py-2 text-xs font-medium text-text-muted hover:border-border-strong hover:bg-surface-raised hover:text-text-heading"
+                            variant="ghost"
+                            size="sm"
+                            className="border border-border-default bg-surface"
                           >
                             {t("useAsTemplate")}
-                          </button>
-                          <button
+                          </Button>
+                          <Button
                             type="button"
                             onClick={() =>
                               setVisibleLinkId((current) =>
@@ -1239,77 +1243,71 @@ export default function LinkManagement({
                             }
                             aria-expanded={isLinkVisible}
                             aria-controls={`link-url-panel-${link.id}`}
-                            className="inline-flex min-h-11 items-center gap-2 border border-border-default bg-surface px-3 py-2 text-xs font-medium text-text-heading hover:bg-surface-raised"
+                            variant="secondary"
+                            size="sm"
+                            leftIcon={
+                              <Icon
+                                name={isLinkVisible ? "view-off" : "view"}
+                                size={16}
+                              />
+                            }
                           >
-                            <Icon
-                              name={isLinkVisible ? "view-off" : "view"}
-                              size={16}
-                            />
                             {isLinkVisible ? t("hide") : t("view")}
-                          </button>
-                          <button
+                          </Button>
+                          <Button
                             type="button"
                             onClick={() =>
                               shareOrCopyLink(link, guestPageUrl, link.id)
                             }
-                            disabled={loadingStates[`share_${link.id}`]}
-                            className="inline-flex min-h-11 items-center justify-center gap-2 bg-action-primary px-4 py-2 text-xs font-semibold text-action-text transition-colors hover:bg-action-hover disabled:opacity-50"
+                            isLoading={loadingStates[`share_${link.id}`]}
+                            size="sm"
                           >
-                            {loadingStates[`share_${link.id}`] ? (
-                              <>
-                                <span className="h-3 w-3 animate-spin rounded-full border-2 border-canvas border-t-transparent" />
-                                {nativeShareAvailable
-                                  ? t("sharing")
-                                  : t("copying")}
-                              </>
-                            ) : completedLinkAction === "shared" ? (
-                              t("shared")
-                            ) : completedLinkAction === "copied" ? (
-                              t("copied")
-                            ) : (
-                              nativeShareAvailable
-                                ? t("shareLink")
-                                : t("copyLink")
-                            )}
-                          </button>
+                            {loadingStates[`share_${link.id}`]
+                              ? nativeShareAvailable
+                                ? t("sharing")
+                                : t("copying")
+                              : completedLinkAction === "shared"
+                                ? t("shared")
+                                : completedLinkAction === "copied"
+                                  ? t("copied")
+                                  : nativeShareAvailable
+                                    ? t("shareLink")
+                                    : t("copyLink")}
+                          </Button>
                           {status.expired ? (
                             <span className="inline-flex min-h-11 items-center border border-status-danger/70 px-3 text-xs text-status-danger">
                               {t("expired")}
                             </span>
                           ) : link.active ? (
-                            <button
+                            <Button
+                              type="button"
                               onClick={() => setPendingDeactivateLink(link)}
-                              disabled={loadingStates[`deactivate_${link.id}`]}
-                              className="min-h-11 border border-border-default bg-surface px-3 py-2 text-xs font-medium text-text-muted hover:bg-surface-raised disabled:opacity-50"
+                              variant="secondary"
+                              size="sm"
+                              isLoading={loadingStates[`deactivate_${link.id}`]}
                             >
-                              {loadingStates[`deactivate_${link.id}`]
-                                ? "..."
-                                : t("deactivate")}
-                            </button>
+                              {t("deactivate")}
+                            </Button>
                           ) : (
-                            <button
+                            <Button
+                              type="button"
                               onClick={() => handleActivateLink(link.id)}
-                              disabled={loadingStates[`activate_${link.id}`]}
-                              className="min-h-11 border border-border-default bg-surface px-3 py-2 text-xs font-medium text-text-heading hover:bg-surface-raised disabled:opacity-50"
+                              variant="secondary"
+                              size="sm"
+                              isLoading={loadingStates[`activate_${link.id}`]}
                             >
-                              {loadingStates[`activate_${link.id}`]
-                                ? "..."
-                                : t("activate")}
-                            </button>
+                              {t("activate")}
+                            </Button>
                           )}
-                          <button
+                          <Button
+                            type="button"
                             onClick={() => requestDeleteLink(link)}
-                            disabled={loadingStates[`delete_${link.id}`]}
-                            className="min-h-11 border border-status-danger/70 bg-status-danger/10 px-3 py-2 text-xs font-medium text-status-danger hover:bg-status-danger/20 disabled:opacity-50"
+                            variant="danger"
+                            size="sm"
+                            isLoading={loadingStates[`delete_${link.id}`]}
                           >
-                            {loadingStates[`delete_${link.id}`] ? (
-                              <div className="flex items-center justify-center">
-                                <div className="h-3 w-3 animate-spin rounded-full border-2 border-status-danger border-t-transparent"></div>
-                              </div>
-                            ) : (
-                              t("delete")
-                            )}
-                          </button>
+                            {t("delete")}
+                          </Button>
                         </div>
                       </article>
                     )})
@@ -1323,8 +1321,8 @@ export default function LinkManagement({
       </OperationsLayout>
 
       {linkActionToast && (
-        <div className="fixed bottom-5 right-5 z-40 border border-border-strong bg-surface-raised px-4 py-3 text-text-heading" role="status" aria-live="polite" aria-atomic="true">
-          <p className="text-xs font-medium uppercase tracking-[0.05em]">
+        <div className="fixed bottom-[calc(5rem+env(safe-area-inset-bottom))] right-4 z-[var(--app-z-toast)] max-w-[calc(100vw-2rem)] border border-border-strong bg-surface-raised px-4 py-3 text-text-heading md:bottom-5 md:right-5" role="status" aria-live="polite" aria-atomic="true">
+          <p className="text-xs font-medium">
             {linkActionToast}
           </p>
         </div>

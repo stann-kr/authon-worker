@@ -10,7 +10,12 @@ interface SkeletonProps {
 export default function Skeleton({ rows = 5, compact = false }: SkeletonProps) {
   const t = useTranslations("Common");
   return (
-    <div className="animate-pulse" role="status" aria-label={t("loadingContent")}>
+    <div
+      role="status"
+      aria-busy="true"
+      aria-label={t("loadingContent")}
+      className="skeleton-pulse"
+    >
       {Array.from({ length: rows }, (_, index) => (
         <div
           key={index}

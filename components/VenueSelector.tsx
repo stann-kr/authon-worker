@@ -19,11 +19,12 @@ import Icon from "./Icon";
 import { useTranslations } from "next-intl";
 import { useSectionLoadingTask } from "./RouteTransitionProvider";
 
-type VenueDataStatus = "idle" | "loading" | "ready";
+type VenueDataStatus = "idle" | "loading" | "ready" | "error";
 
 interface VenueDataContextValue {
   venues: Venue[];
   status: VenueDataStatus;
+  hasLoadError: boolean;
   selectedVenueId: string;
   setSelectedVenueId: ReturnType<typeof useLocalStorage<string>>[1];
   ensureVenues: () => Promise<void>;
@@ -58,15 +59,17 @@ export function VenueDataProvider({ children }: { children: ReactNode }) {
     setStatus("loading");
 
     const requestPromise = (async () => {
+      let didLoad = false;
       try {
         const { data, error } = await fetchVenues();
         if (!isLatestRequest()) return;
         if (!data) {
           if (error) console.error("Failed to load venues:", error);
-          return;
+          throw new Error("VENUE_LOAD_FAILED");
         }
 
         const nextVenues = data;
+        didLoad = true;
         setVenues(nextVenues);
         if (getUser()?.role === "super_admin") {
           setSelectedVenueId((previousVenueId) => {
@@ -82,8 +85,9 @@ export function VenueDataProvider({ children }: { children: ReactNode }) {
         }
       } finally {
         if (isLatestRequest()) {
-          statusRef.current = "ready";
-          setStatus("ready");
+          const nextStatus = didLoad ? "ready" : "error";
+          statusRef.current = nextStatus;
+          setStatus(nextStatus);
         }
       }
     })();
@@ -101,6 +105,7 @@ export function VenueDataProvider({ children }: { children: ReactNode }) {
     () => ({
       venues,
       status,
+      hasLoadError: status === "error",
       selectedVenueId,
       setSelectedVenueId,
       ensureVenues,
@@ -141,12 +146,13 @@ export function useVenueSelector() {
   const {
     venues,
     status,
+    hasLoadError,
     selectedVenueId,
     setSelectedVenueId,
     ensureVenues,
     refreshVenues,
   } = context;
-  useSectionLoadingTask(status !== "ready");
+  useSectionLoadingTask(status === "idle" || status === "loading");
 
   useEffect(() => {
     void ensureVenues();
@@ -163,7 +169,8 @@ export function useVenueSelector() {
     currentVenue,
     isSuperAdmin,
     user,
-    isLoadingVenues: status !== "ready",
+    isLoadingVenues: status === "idle" || status === "loading",
+    venueLoadError: hasLoadError,
     refreshVenues,
   };
 }
@@ -200,8 +207,10 @@ export default function VenueSelector({
       <div className="relative">
         <select
           id={selectId}
+          name="venue-selector"
           value={selectedVenueId}
           disabled={disabled}
+          autoComplete="off"
           onChange={(e) => onVenueChange(e.target.value)}
           className="app-field appearance-none pr-10 disabled:cursor-not-allowed disabled:opacity-60"
         >

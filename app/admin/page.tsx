@@ -1,36 +1,41 @@
 "use client";
 
-import { useState, useEffect, useMemo, type KeyboardEvent as ReactKeyboardEvent } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useLocalStorage } from "../../lib/hooks";
-import AdminHeader from "./components/AdminHeader";
 import GuestList from "./components/GuestList";
-import LinkManagement from "./components/LinkManagement";
-import UserManagement from "./components/UserManagement";
-import VenueManagement from "./components/VenueManagement";
+import LinkManagement, {
+  type LinkManagementSection,
+} from "./components/LinkManagement";
+import UserManagement, {
+  type UserManagementSection,
+} from "./components/UserManagement";
+import VenueManagement, {
+  type VenueManagementSection,
+} from "./components/VenueManagement";
 import GuestLimitRequestManagement from "./components/GuestLimitRequestManagement";
+import AdminTaskSwitcher, {
+  type AdminTaskOption,
+} from "./components/AdminTaskSwitcher";
 import AuthGuard from "../../components/AuthGuard";
-import Footer from "../../components/Footer";
+import WorkspaceShell from "../../components/WorkspaceShell";
+import VenueLoadNotice from "../../components/VenueLoadNotice";
 import { getBusinessDate } from "../../lib/date";
 import { getUser } from "../../lib/auth";
-import Icon, { type IconName } from "../../components/Icon";
 import { useTranslations } from "next-intl";
 import { useVenueSelector } from "../../components/VenueSelector";
 import {
   useRouteLoadingTask,
   useRouteTransition,
 } from "../../components/RouteTransitionProvider";
-
-type AdminTab = "guests" | "links" | "users" | "venues";
-type GuestAdminTab = "list" | "requests";
-const GUEST_ADMIN_TABS: GuestAdminTab[] = ["list", "requests"];
-
-interface AdminTabDefinition {
-  id: AdminTab;
-  label: string;
-  icon: IconName;
-  shortcut: string;
-}
+import {
+  getAdminGroupDefaultTasks,
+  getAdminTaskSearch,
+  isAdminTaskAvailable,
+  parseAdminTask,
+  type AdminTask,
+  type AdminTaskGroup,
+} from "../../lib/admin-navigation";
 
 export default function AdminPage() {
   return (
@@ -42,23 +47,24 @@ export default function AdminPage() {
 
 function AdminPageContent() {
   const t = useTranslations("AdminNav");
+  const linkT = useTranslations("LinkAdmin");
+  const userT = useTranslations("UserAdmin");
+  const venueT = useTranslations("VenueAdmin");
   const router = useRouter();
   const { isRouteTransitionActive, startRouteTransition } =
     useRouteTransition();
-  const { currentVenue } = useVenueSelector();
+  const {
+    currentVenue,
+    isLoadingVenues,
+    venueLoadError,
+    refreshVenues,
+  } = useVenueSelector();
   const businessDate = getBusinessDate(currentVenue ?? {});
-  const [activeTab, setActiveTab] = useLocalStorage<AdminTab>(
-    "admin:activeTab",
-    "guests",
-  );
   const [selectedDate, setSelectedDate] = useLocalStorage(
     "admin:selectedDate",
     getBusinessDate(),
   );
-  const [activeGuestTab, setActiveGuestTab] = useLocalStorage<GuestAdminTab>(
-    "admin:guestTab",
-    "list",
-  );
+  const [activeTask, setActiveTask] = useState<AdminTask>("guest-list");
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
   const [isRoleReady, setIsRoleReady] = useState(false);
   useRouteLoadingTask(!isRoleReady);
@@ -69,51 +75,117 @@ function AdminPageContent() {
 
   useEffect(() => {
     const user = getUser();
-    setIsSuperAdmin(user?.role === "super_admin");
+    const nextIsSuperAdmin = user?.role === "super_admin";
+    const requestedTask = parseAdminTask(
+      new URLSearchParams(window.location.search),
+    );
+    const nextTask =
+      requestedTask && isAdminTaskAvailable(requestedTask, nextIsSuperAdmin)
+        ? requestedTask
+        : "guest-list";
+    setIsSuperAdmin(nextIsSuperAdmin);
+    setActiveTask(nextTask);
+
+    const nextSearch = getAdminTaskSearch(nextTask);
+    if (window.location.search !== nextSearch) {
+      window.history.replaceState(null, "", `/admin${nextSearch}`);
+    }
     setIsRoleReady(true);
   }, []);
 
-  const tabs = useMemo<AdminTabDefinition[]>(
-    () => [
-      { id: "guests", label: t("guests"), icon: "users" as IconName, shortcut: "1" },
-      { id: "links", label: t("links"), icon: "link" as IconName, shortcut: "2" },
-      { id: "users", label: t("users"), icon: "user-admin" as IconName, shortcut: "3" },
-      ...(isSuperAdmin
-        ? [{ id: "venues" as const, label: t("venues"), icon: "store" as IconName, shortcut: "4" }]
-        : []),
-    ],
-    [isSuperAdmin, t],
+  const taskOptions = useMemo<AdminTaskOption[]>(
+    () =>
+      [
+        { id: "guest-list", group: "guests", label: t("guestList") },
+        { id: "guest-requests", group: "guests", label: t("requests") },
+        { id: "link-create", group: "links", label: linkT("createLink") },
+        { id: "link-manage", group: "links", label: linkT("manageLinks") },
+        { id: "user-create", group: "users", label: userT("createUser") },
+        { id: "user-list", group: "users", label: userT("users") },
+        ...(isSuperAdmin
+          ? [
+              {
+                id: "user-migrate" as const,
+                group: "users" as const,
+                label: userT("migration"),
+              },
+              {
+                id: "venue-list" as const,
+                group: "venues" as const,
+                label: venueT("venues"),
+              },
+              {
+                id: "venue-create" as const,
+                group: "venues" as const,
+                label: venueT("createVenue"),
+              },
+            ]
+          : []),
+      ],
+    [isSuperAdmin, linkT, t, userT, venueT],
+  );
+
+  const changeTask = useCallback(
+    (task: AdminTask, historyMode: "push" | "replace" = "push") => {
+      if (!isAdminTaskAvailable(task, isSuperAdmin)) return;
+      setActiveTask(task);
+      const nextUrl = `/admin${getAdminTaskSearch(task)}`;
+      if (historyMode === "replace") {
+        window.history.replaceState(null, "", nextUrl);
+      } else {
+        window.history.pushState(null, "", nextUrl);
+      }
+      if (window.matchMedia("(max-width: 1023px)").matches) {
+        window.requestAnimationFrame(() => {
+          const workspace = document.getElementById("admin-workspace");
+          workspace?.scrollIntoView({ block: "start" });
+          workspace?.focus({ preventScroll: true });
+        });
+      }
+    },
+    [isSuperAdmin],
   );
 
   useEffect(() => {
-    if (isRoleReady && !tabs.some((tab) => tab.id === activeTab)) {
-      setActiveTab("guests");
+    if (!isRoleReady) return;
+    if (!isAdminTaskAvailable(activeTask, isSuperAdmin)) {
+      changeTask("guest-list", "replace");
     }
-  }, [activeTab, isRoleReady, setActiveTab, tabs]);
+  }, [activeTask, changeTask, isRoleReady, isSuperAdmin]);
 
   useEffect(() => {
     if (!isRoleReady) return;
-    const requestedTab = new URLSearchParams(window.location.search).get("tab");
-    const requestedGuestTab = new URLSearchParams(window.location.search).get("view");
-    if (requestedTab === "requests") {
-      setActiveTab("guests");
-      setActiveGuestTab("requests");
-      return;
-    }
-    const matchingTab = tabs.find((tab) => tab.id === requestedTab);
-    if (matchingTab) setActiveTab(matchingTab.id);
-    if (
-      requestedTab === "guests" &&
-      (requestedGuestTab === "list" || requestedGuestTab === "requests")
-    ) {
-      setActiveGuestTab(requestedGuestTab);
-    }
-  }, [isRoleReady, setActiveGuestTab, setActiveTab, tabs]);
+    const handlePopState = () => {
+      const requestedTask = parseAdminTask(
+        new URLSearchParams(window.location.search),
+      );
+      if (
+        requestedTask &&
+        isAdminTaskAvailable(requestedTask, isSuperAdmin)
+      ) {
+        setActiveTask(requestedTask);
+      } else {
+        setActiveTask("guest-list");
+      }
+    };
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, [isRoleReady, isSuperAdmin]);
 
   // Keyboard shortcut listener for tab switching & home return
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (isRouteTransitionActive) return;
+      if (
+        isRouteTransitionActive ||
+        e.defaultPrevented ||
+        e.metaKey ||
+        e.ctrlKey ||
+        e.altKey ||
+        e.shiftKey ||
+        document.querySelector('[role="alertdialog"][aria-modal="true"]')
+      ) {
+        return;
+      }
 
       const target = e.target as HTMLElement | null;
       if (
@@ -130,188 +202,129 @@ function AdminPageContent() {
         if (startRouteTransition("/")) router.push("/");
       } else {
         const shortcutIndex = Number.parseInt(e.key, 10) - 1;
-        if (!Number.isNaN(shortcutIndex) && tabs[shortcutIndex]) {
-          setActiveTab(tabs[shortcutIndex].id);
+        const shortcutTasks = getAdminGroupDefaultTasks(isSuperAdmin);
+        if (!Number.isNaN(shortcutIndex) && shortcutTasks[shortcutIndex]) {
+          changeTask(shortcutTasks[shortcutIndex]);
         }
       }
     };
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [isRouteTransitionActive, tabs, setActiveTab, router, startRouteTransition]);
+  }, [
+    changeTask,
+    isRouteTransitionActive,
+    isSuperAdmin,
+    router,
+    startRouteTransition,
+  ]);
 
-  const handleTabKeyDown = (
-    event: ReactKeyboardEvent<HTMLButtonElement>,
-    tabIndex: number,
-  ) => {
-    if (isRouteTransitionActive) return;
-
-    let nextIndex: number | null = null;
-
-    if (event.key === "ArrowRight" || event.key === "ArrowDown") {
-      nextIndex = (tabIndex + 1) % tabs.length;
-    } else if (event.key === "ArrowLeft" || event.key === "ArrowUp") {
-      nextIndex = (tabIndex - 1 + tabs.length) % tabs.length;
-    } else if (event.key === "Home") {
-      nextIndex = 0;
-    } else if (event.key === "End") {
-      nextIndex = tabs.length - 1;
-    }
-
-    if (nextIndex === null) return;
-    event.preventDefault();
-    const nextTab = tabs[nextIndex];
-    setActiveTab(nextTab.id);
-    document.getElementById(`tab-${nextTab.id}`)?.focus();
+  const groupLabels: Record<AdminTaskGroup, string> = {
+    guests: t("guests"),
+    links: t("links"),
+    users: t("users"),
+    venues: t("venues"),
   };
 
-  const handleGuestTabKeyDown = (
-    event: ReactKeyboardEvent<HTMLButtonElement>,
-    tabIndex: number,
-  ) => {
-    if (isRouteTransitionActive) return;
-
-    let nextIndex: number | null = null;
-    if (event.key === "ArrowRight" || event.key === "ArrowDown") {
-      nextIndex = (tabIndex + 1) % GUEST_ADMIN_TABS.length;
-    } else if (event.key === "ArrowLeft" || event.key === "ArrowUp") {
-      nextIndex =
-        (tabIndex - 1 + GUEST_ADMIN_TABS.length) % GUEST_ADMIN_TABS.length;
-    } else if (event.key === "Home") {
-      nextIndex = 0;
-    } else if (event.key === "End") {
-      nextIndex = GUEST_ADMIN_TABS.length - 1;
-    }
-
-    if (nextIndex === null) return;
-    event.preventDefault();
-    const nextTab = GUEST_ADMIN_TABS[nextIndex];
-    setActiveGuestTab(nextTab);
-    document.getElementById(`guest-tab-${nextTab}`)?.focus();
-  };
+  const handleLinkSectionChange = useCallback(
+    (section: LinkManagementSection) =>
+      changeTask(section === "create" ? "link-create" : "link-manage"),
+    [changeTask],
+  );
+  const handleUserSectionChange = useCallback(
+    (section: UserManagementSection) => {
+      const task: AdminTask =
+        section === "create"
+          ? "user-create"
+          : section === "users"
+            ? "user-list"
+            : "user-migrate";
+      changeTask(task);
+    },
+    [changeTask],
+  );
+  const handleVenueSectionChange = useCallback(
+    (section: VenueManagementSection) =>
+      changeTask(section === "create" ? "venue-create" : "venue-list"),
+    [changeTask],
+  );
+  const activeTaskLabel =
+    taskOptions.find((option) => option.id === activeTask)?.label ?? t("title");
 
   return (
-    <div className="min-h-[100dvh] bg-canvas flex flex-col">
-      <AdminHeader />
-      <div className="flex flex-1 flex-col overflow-x-hidden pt-20 sm:pt-24">
-        <div className="page-container">
-          {/* Tab Bar */}
-          <div className="mb-4 lg:mb-6 flex-shrink-0">
-            <div
-              role="tablist"
-              aria-label={t("sections")}
-              aria-orientation="horizontal"
-              className={`grid ${tabs.length === 4 ? "grid-cols-4" : "grid-cols-3"} divide-x divide-border-subtle border border-border-subtle bg-surface`}
-            >
-              {tabs.map((tab, tabIndex) => {
-                const isActive = activeTab === tab.id;
-                return (
-                  <button
-                    key={tab.id}
-                    role="tab"
-                    id={`tab-${tab.id}`}
-                    aria-selected={isActive}
-                    aria-controls={`panel-${tab.id}`}
-                    disabled={isRouteTransitionActive}
-                    tabIndex={isActive ? 0 : -1}
-                    onClick={() => {
-                      if (!isRouteTransitionActive) setActiveTab(tab.id);
-                    }}
-                    onKeyDown={(event) => handleTabKeyDown(event, tabIndex)}
-                    className={`relative z-10 min-h-14 p-3 text-sm font-medium after:absolute after:inset-x-0 after:-bottom-px after:h-px after:content-[''] focus-visible:outline-none sm:p-4 ${
-                      isActive
-                        ? "bg-surface-raised font-semibold text-text-heading after:bg-action-primary"
-                        : "bg-surface text-text-muted after:bg-transparent hover:bg-surface-raised hover:text-text-heading"
-                    }`}
-                  >
-                    <div className="flex items-center justify-center gap-2">
-                      <Icon name={tab.icon} size={18} />
-                      <span className="text-xs sm:text-sm">{tab.label}</span>
-                      <span className="ml-1 hidden border border-border-default px-1 py-0.5 font-mono text-xs text-text-dim lg:inline-block">
-                        [{tab.shortcut}]
-                      </span>
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
+    <WorkspaceShell contentClassName="gap-4 pb-8">
+      <h1 id="admin-page-title" className="sr-only">
+        {t("title")}
+      </h1>
+      {venueLoadError && (
+        <VenueLoadNotice
+          onRetry={refreshVenues}
+          isLoading={isLoadingVenues}
+        />
+      )}
 
-          {/* Active Tab Panel */}
-          <div
-            role="tabpanel"
-            id={`panel-${activeTab}`}
-            aria-labelledby={`tab-${activeTab}`}
-            className="flex min-h-0 flex-col"
-          >
-            {activeTab === "guests" && (
-              <>
-                <div
-                  role="tablist"
-                  aria-label={t("guestSections")}
-                  className="mb-4 grid grid-cols-2 divide-x divide-border-subtle border border-border-subtle bg-surface"
-                >
-                  {GUEST_ADMIN_TABS.map((guestTab, guestTabIndex) => {
-                    const isActive = activeGuestTab === guestTab;
-                    return (
-                      <button
-                        key={guestTab}
-                        id={`guest-tab-${guestTab}`}
-                        type="button"
-                        role="tab"
-                        aria-selected={isActive}
-                        aria-controls={`guest-panel-${guestTab}`}
-                        disabled={isRouteTransitionActive}
-                        tabIndex={isActive ? 0 : -1}
-                        onClick={() => {
-                          if (!isRouteTransitionActive) {
-                            setActiveGuestTab(guestTab);
-                          }
-                        }}
-                        onKeyDown={(event) =>
-                          handleGuestTabKeyDown(event, guestTabIndex)
-                        }
-                        className={`min-h-11 px-4 py-2 text-sm font-medium focus-visible:outline-none ${
-                          isActive
-                            ? "bg-surface-raised text-text-heading"
-                            : "text-text-muted hover:bg-surface-raised hover:text-text-heading"
-                        }`}
-                      >
-                        {guestTab === "list" ? t("guestList") : t("requests")}
-                      </button>
-                    );
-                  })}
-                </div>
-                <div
-                  role="tabpanel"
-                  id={`guest-panel-${activeGuestTab}`}
-                  aria-labelledby={`guest-tab-${activeGuestTab}`}
-                >
-                  {activeGuestTab === "list" ? (
-                    <GuestList
-                      selectedDate={selectedDate}
-                      onDateChange={setSelectedDate}
-                      businessDate={businessDate}
-                    />
-                  ) : (
-                    <GuestLimitRequestManagement />
-                  )}
-                </div>
-              </>
-            )}
-            {activeTab === "links" && (
-              <LinkManagement
-                selectedDate={selectedDate}
-                onDateChange={setSelectedDate}
-                businessDate={businessDate}
-              />
-            )}
-            {activeTab === "users" && <UserManagement />}
-            {activeTab === "venues" && <VenueManagement />}
-          </div>
-        </div>
-        <Footer />
+      <div className="grid min-h-0 gap-4 lg:grid-cols-[14rem_minmax(0,1fr)] lg:items-start lg:gap-6">
+        <aside className="lg:sticky lg:top-[calc(var(--app-header-height)+2rem)] lg:self-start">
+          <AdminTaskSwitcher
+            label={t("sections")}
+            groupLabels={groupLabels}
+            options={taskOptions}
+            value={activeTask}
+            onChange={changeTask}
+            disabled={!isRoleReady || isRouteTransitionActive}
+          />
+        </aside>
+
+        <section
+          id="admin-workspace"
+          aria-label={activeTaskLabel}
+          tabIndex={-1}
+          className="min-h-0 scroll-mt-[calc(var(--app-header-height)+1rem)]"
+        >
+        {activeTask === "guest-list" && (
+          <GuestList
+            selectedDate={selectedDate}
+            onDateChange={setSelectedDate}
+            businessDate={businessDate}
+          />
+        )}
+        {activeTask === "guest-requests" && <GuestLimitRequestManagement />}
+        {(activeTask === "link-create" || activeTask === "link-manage") && (
+          <LinkManagement
+            selectedDate={selectedDate}
+            onDateChange={setSelectedDate}
+            businessDate={businessDate}
+            activeSection={
+              activeTask === "link-create" ? "create" : "manage"
+            }
+            onActiveSectionChange={handleLinkSectionChange}
+            showSectionNavigation={false}
+          />
+        )}
+        {(activeTask === "user-create" ||
+          activeTask === "user-list" ||
+          activeTask === "user-migrate") && (
+          <UserManagement
+            activeSection={
+              activeTask === "user-create"
+                ? "create"
+                : activeTask === "user-list"
+                  ? "users"
+                  : "migrate"
+            }
+            onActiveSectionChange={handleUserSectionChange}
+            showSectionNavigation={false}
+          />
+        )}
+        {(activeTask === "venue-list" || activeTask === "venue-create") && (
+          <VenueManagement
+            activeSection={activeTask === "venue-create" ? "create" : "list"}
+            onActiveSectionChange={handleVenueSectionChange}
+            showSectionNavigation={false}
+          />
+        )}
+        </section>
       </div>
-    </div>
+    </WorkspaceShell>
   );
 }

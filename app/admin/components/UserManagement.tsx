@@ -15,6 +15,8 @@ import Skeleton from "../../../components/Skeleton";
 import OperationsLayout from "../../../components/OperationsLayout";
 import OperationalSectionNav from "../../../components/OperationalSectionNav";
 import ConfirmDialog from "../../../components/ConfirmDialog";
+import Button from "../../../components/Button";
+import EmptyState from "../../../components/EmptyState";
 import { useSectionLoadingTask } from "../../../components/RouteTransitionProvider";
 import {
   fetchManagedUsersByVenue,
@@ -28,6 +30,7 @@ import { useLocale, useTranslations } from "next-intl";
 import { isVenueManagedRole } from "@/lib/users/policy";
 
 type StatusFilter = "current" | "ready" | "setup" | "inactive" | "deleted";
+export type UserManagementSection = "create" | "users" | "migrate";
 
 type Feedback = { type: "success" | "error"; message: string } | null;
 type PendingUserAction = {
@@ -38,13 +41,35 @@ type PendingUserAction = {
 const EMPTY_USERS: User[] = [];
 const EMPTY_AUDIT_EVENTS: UserAuditEvent[] = [];
 
-export default function UserManagement() {
+interface UserManagementProps {
+  activeSection?: UserManagementSection;
+  onActiveSectionChange?: (section: UserManagementSection) => void;
+  showSectionNavigation?: boolean;
+}
+
+export default function UserManagement({
+  activeSection,
+  onActiveSectionChange,
+  showSectionNavigation = true,
+}: UserManagementProps = {}) {
   const t = useTranslations("UserAdmin");
   const commonT = useTranslations("Common");
   const locale = useLocale();
-  const [activeTab, setActiveTab] = useLocalStorage<"create" | "users" | "migrate">(
+  const [internalActiveSection, setInternalActiveSection] =
+    useLocalStorage<UserManagementSection>(
     "usermgmt:activeTab",
     "create",
+  );
+  const activeTab = activeSection ?? internalActiveSection;
+  const setActiveTab = useCallback(
+    (section: UserManagementSection) => {
+      if (onActiveSectionChange) {
+        onActiveSectionChange(section);
+        return;
+      }
+      setInternalActiveSection(section);
+    },
+    [onActiveSectionChange, setInternalActiveSection],
   );
   const [users, setUsers] = useState<User[]>([]);
   const [auditEvents, setAuditEvents] = useState<UserAuditEvent[]>([]);
@@ -338,23 +363,6 @@ export default function UserManagement() {
     }
   };
 
-  const getTabInfo = () => {
-    switch (activeTab) {
-      case "create":
-        return {
-          title: t("createUser"),
-          description: t("createDescription"),
-        };
-      case "users":
-        return { title: t("users"), description: t("usersDescription") };
-      case "migrate":
-        return { title: t("migration"), description: t("migrationDescription") };
-      default:
-        return { title: "", description: "" };
-    }
-  };
-
-  const tabInfo = getTabInfo();
   const pendingActionTitle = pendingUserAction
     ? pendingUserAction.kind === "toggle"
       ? pendingUserAction.user.active
@@ -386,6 +394,7 @@ export default function UserManagement() {
   return (
     <>
     <OperationsLayout
+      variant="stacked"
       title={t("title")}
       dashboard={
         <>
@@ -399,38 +408,57 @@ export default function UserManagement() {
             className="app-panel p-4 sm:p-5"
           />
         )}
-        <OperationalSectionNav
-          label={t("section")}
-          items={[
-            { id: "create", label: t("create"), icon: "user-add" },
-            { id: "users", label: t("users"), icon: "user" },
-            ...(isSuperAdmin
-              ? [{ id: "migrate" as const, label: t("migrate"), icon: "database" as const }]
-              : []),
-          ]}
-          activeId={activeTab}
-          onChange={setActiveTab}
-        />
+        {showSectionNavigation && (
+          <OperationalSectionNav
+            label={t("section")}
+            items={[
+              { id: "create", label: t("create"), icon: "user-add" },
+              { id: "users", label: t("users"), icon: "user" },
+              ...(isSuperAdmin
+                ? [{ id: "migrate" as const, label: t("migrate"), icon: "database" as const }]
+                : []),
+            ]}
+            activeId={activeTab}
+            onChange={setActiveTab}
+          />
+        )}
 
-        <div className="app-panel p-4 sm:p-5">
-          <div className="mb-4">
-            <h2 className="type-panel-title mb-1">
-              {tabInfo.title}
-            </h2>
-            <p className="text-sm text-text-muted">
-              {tabInfo.description}
-            </p>
-          </div>
-          <div className="text-center mb-4">
-            <div className="text-text-heading font-mono text-3xl sm:text-4xl tracking-wider">
-              {activeTab === "users" ? currentUsers.length : "-"}
-            </div>
-            <div className="text-xs font-medium text-text-muted">
-              {activeTab === "users" ? t("totalUsers") : ""}
-            </div>
-          </div>
-
-          {activeTab === "users" && (
+        {activeTab === "users" && (
+          <div className="app-panel space-y-3 p-3 sm:p-4">
+            <StatGrid
+              items={[
+                {
+                  label: t("totalUsers"),
+                  value: currentUsers.length,
+                  color: "default",
+                },
+                {
+                  label: t("ready"),
+                  value: currentUsers.filter(
+                    (u) =>
+                      u.active &&
+                      (u.migrationStatus !== "pending_reset" ||
+                        !!u.passwordSetAt),
+                  ).length,
+                  color: "default",
+                },
+                {
+                  label: t("setupPending"),
+                  value: currentUsers.filter(
+                    (u) =>
+                      u.active &&
+                      u.migrationStatus === "pending_reset" &&
+                      !u.passwordSetAt,
+                  ).length,
+                  color: "waiting",
+                },
+                {
+                  label: t("inactive"),
+                  value: currentUsers.filter((u) => !u.active).length,
+                  color: "danger",
+                },
+              ]}
+            />
             <div className="space-y-3">
               <StatGrid
                 items={[
@@ -456,32 +484,9 @@ export default function UserManagement() {
                   },
                 ]}
               />
-              <StatGrid
-                items={[
-                  {
-                    label: t("ready"),
-                    value: currentUsers.filter(
-                      (u) => u.active && (u.migrationStatus !== "pending_reset" || !!u.passwordSetAt),
-                    ).length,
-                    color: "default",
-                  },
-                  {
-                    label: t("setupPending"),
-                    value: currentUsers.filter(
-                      (u) => u.active && u.migrationStatus === "pending_reset" && !u.passwordSetAt,
-                    ).length,
-                    color: "waiting",
-                  },
-                  {
-                    label: t("inactive"),
-                    value: currentUsers.filter((u) => !u.active).length,
-                    color: "danger",
-                  },
-                ]}
-              />
             </div>
-          )}
-        </div>
+          </div>
+        )}
         </>
       }
     >
@@ -505,8 +510,8 @@ export default function UserManagement() {
               {setupCredential && (
                 <div className="mb-4 border border-status-waiting/70 bg-status-waiting/10 p-4" role="status">
                   <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                    <div>
-                      <p className="font-mono text-xs font-semibold uppercase tracking-wider text-status-waiting">
+                    <div className="min-w-0">
+                      <p className="break-words text-sm font-semibold text-status-waiting">
                         {t("setupCodeTitle", { name: setupCredential.userName })}
                       </p>
                       <p className="mt-2 text-xs leading-relaxed text-text-muted">
@@ -520,14 +525,14 @@ export default function UserManagement() {
                       <button
                         type="button"
                         onClick={copySetupCode}
-                        className="bg-action-primary px-3 py-2 text-xs font-semibold text-action-text hover:bg-action-hover"
+                        className="min-h-11 bg-action-primary px-3 py-2 text-xs font-semibold text-action-text hover:bg-action-hover"
                       >
                         {t("copySetupCode")}
                       </button>
                       <button
                         type="button"
                         onClick={() => setSetupCredential(null)}
-                        className="border border-border-default px-3 py-2 text-xs text-text-muted hover:text-text-heading"
+                        className="min-h-11 border border-border-default px-3 py-2 text-xs text-text-muted hover:text-text-heading"
                       >
                         {t("closeSetupCode")}
                       </button>
@@ -536,18 +541,21 @@ export default function UserManagement() {
                 </div>
               )}
 
-              <div className="mb-4 grid gap-2 md:grid-cols-[minmax(0,1fr)_180px_180px]">
+              <div className="mb-4 grid gap-2 xl:grid-cols-[minmax(0,1fr)_180px_180px]">
                 <div>
                   <label htmlFor="user-search" className="app-label">
                     {t("searchUsers")}
                   </label>
                   <input
                     id="user-search"
+                    name="user-search"
                     type="search"
                     value={searchQuery}
                     onChange={(event) => setSearchQuery(event.target.value)}
                     className="app-field"
                     placeholder={t("searchPlaceholder")}
+                    autoComplete="off"
+                    spellCheck={false}
                   />
                 </div>
                 <div>
@@ -556,7 +564,9 @@ export default function UserManagement() {
                   </label>
                   <select
                     id="user-role-filter"
+                    name="user-role-filter"
                     value={roleFilter}
+                    autoComplete="off"
                     onChange={(event) => setRoleFilter(event.target.value as typeof roleFilter)}
                     className="app-field"
                   >
@@ -577,7 +587,9 @@ export default function UserManagement() {
                   </label>
                   <select
                     id="user-status-filter"
+                    name="user-status-filter"
                     value={statusFilter}
+                    autoComplete="off"
                     onChange={(event) => setStatusFilter(event.target.value as StatusFilter)}
                     className="app-field"
                   >
@@ -593,14 +605,20 @@ export default function UserManagement() {
               {isCurrentScopeLoading && scopedUsers.length === 0 ? (
                 <Skeleton rows={5} />
               ) : filteredUsers.length === 0 ? (
-                <div className="text-center py-8">
-                  <p className="text-text-muted font-mono text-sm">
-                    {scopedUsers.length === 0 ? t("noUsers") : t("noMatchingUsers")}
-                  </p>
-                </div>
+                <EmptyState
+                  icon="users"
+                  message={
+                    scopedUsers.length === 0
+                      ? t("noUsers")
+                      : t("noMatchingUsers")
+                  }
+                />
               ) : (
                 <div
-                  className={`grid grid-cols-1 md:grid-cols-2 gap-4 transition-opacity duration-200 ${isCurrentScopeLoading ? "opacity-50 pointer-events-none" : ""}`}
+                  aria-busy={isCurrentScopeLoading}
+                  className={`grid grid-cols-1 gap-4 md:grid-cols-2 ${
+                    isCurrentScopeLoading ? "pointer-events-none" : ""
+                  }`}
                 >
                   {filteredUsers.map((user) => (
                     <UserCard
@@ -627,10 +645,7 @@ export default function UserManagement() {
               {isSuperAdmin && (
               <div className="mt-6 border-t border-border-default pt-5">
                 <div className="mb-3 flex items-center justify-between gap-3">
-                  <div>
-                    <h3 className="type-panel-title">{t("activityTitle")}</h3>
-                    <p className="mt-1 text-xs text-text-muted">{t("activityDescription")}</p>
-                  </div>
+                  <h3 className="type-panel-title">{t("activityTitle")}</h3>
                   <span className="font-mono text-xs text-text-dim">{scopedAuditEvents.length}</span>
                 </div>
                 {scopedAuditEvents.length === 0 ? (
@@ -640,8 +655,8 @@ export default function UserManagement() {
                 ) : (
                   <div className="max-h-80 divide-y divide-border-subtle overflow-y-auto border border-border-default bg-canvas">
                     {scopedAuditEvents.map((event) => (
-                      <div key={event.id} className="grid gap-1 p-3 text-xs sm:grid-cols-[1fr_auto] sm:items-center">
-                        <p className="text-text-body">
+                      <div key={event.id} className="grid gap-1 p-3 text-xs sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
+                        <p className="min-w-0 break-words text-text-body">
                           <span className="font-semibold text-text-heading">
                             {resolveAuditUserName(event.actorUserId)}
                           </span>{" "}
@@ -650,7 +665,7 @@ export default function UserManagement() {
                             {resolveAuditUserName(event.targetUserId)}
                           </span>
                         </p>
-                        <time className="font-mono text-text-dim" dateTime={event.createdAt}>
+                        <time className="shrink-0 font-mono text-text-dim" dateTime={event.createdAt}>
                           {formatActivityDate(event.createdAt)}
                         </time>
                       </div>
@@ -789,24 +804,20 @@ function UserCard({
       : t("inactive");
 
   return (
-    <div
-      className={`app-panel p-4 sm:p-5 transition-opacity duration-200 ${!user.active || isDeleted ? "opacity-70" : ""}`}
-      aria-busy={isBusy}
-    >
-      <div className="flex justify-between items-start mb-3">
+    <div className="app-panel p-4 sm:p-5" aria-busy={isBusy}>
+      <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
-          <h3 className="type-row-title font-mono tracking-wider">
+          <h3 className="type-row-title break-words">
             {user.name}
           </h3>
           <p className="truncate text-text-muted font-mono text-xs sm:text-sm">
             {isDeleted ? t("deletedAccount") : user.email}
           </p>
         </div>
-        <div className="flex flex-wrap items-center justify-end gap-2">
+        <div className="flex flex-wrap items-center gap-2 sm:justify-end">
           {isSetupPending && (
             <span
               className="border border-status-waiting/70 bg-status-waiting/10 px-2 py-1 font-mono text-xs uppercase tracking-wider text-status-waiting"
-              aria-label={t("firstLoginPending")}
             >
               {t("setupPending")}
             </span>
@@ -830,7 +841,7 @@ function UserCard({
                 {t("guestLimit")}
               </p>
               <p className="text-text-heading font-mono text-xs sm:text-sm">
-                {user.guestLimit ?? "—"}
+                {user.guestLimit ?? "-"}
               </p>
             </div>
             <div>
@@ -868,7 +879,7 @@ function UserCard({
           </div>
           {isSetupPending && (
             <div className="mb-3 border border-status-waiting/60 bg-status-waiting/10 p-3">
-              <p className="font-mono text-xs font-medium uppercase tracking-wider text-status-waiting">
+              <p className="text-xs font-semibold text-status-waiting">
                 {t("firstLoginIncomplete")}
               </p>
               <p className="mt-1 text-xs leading-relaxed text-text-muted">
@@ -884,45 +895,49 @@ function UserCard({
           {canManage && (
             <div className="grid grid-cols-2 gap-2">
               {canEditDetails && (
-                <button
+                <Button
                   type="button"
                   onClick={() => setIsEditing(true)}
                   disabled={isBusy}
-                  className="bg-surface-active py-2 text-xs font-medium text-text-heading transition-colors hover:bg-border-strong disabled:opacity-50 sm:py-3"
+                  variant="secondary"
+                  size="sm"
+                  fullWidth
                 >
                   {t("edit")}
-                </button>
+                </Button>
               )}
-              <button
+              <Button
                 type="button"
                 onClick={() => onResetPassword(user)}
                 disabled={isBusy || !user.active}
                 title={!user.active ? t("inactiveResetUnavailable") : undefined}
-                className="border border-border-default bg-canvas py-2 text-xs font-medium text-text-body transition-colors hover:border-border-strong hover:text-text-heading disabled:cursor-not-allowed disabled:opacity-40 sm:py-3"
+                variant="outline"
+                size="sm"
+                fullWidth
               >
                 {t("resetPassword")}
-              </button>
-              <button
+              </Button>
+              <Button
                 type="button"
                 onClick={() => onToggleActive(user)}
                 disabled={isBusy}
-                className={`py-2 text-xs font-medium transition-colors disabled:opacity-50 sm:py-3 ${
-                  user.active
-                    ? "border border-status-danger/70 bg-status-danger/10 text-status-danger hover:bg-status-danger/20"
-                    : "bg-action-primary text-action-text hover:bg-action-hover"
-                }`}
+                variant={user.active ? "danger" : "primary"}
+                size="sm"
+                fullWidth
               >
                 {user.active ? t("deactivate") : t("activate")}
-              </button>
+              </Button>
               {!user.active && (
-                <button
+                <Button
                   type="button"
                   onClick={() => onDelete(user)}
                   disabled={isBusy}
-                  className="border border-status-danger/70 bg-status-danger/10 py-2 font-mono text-xs uppercase tracking-wider text-status-danger transition-colors hover:bg-status-danger/20 disabled:opacity-50 sm:py-3"
+                  variant="danger"
+                  size="sm"
+                  fullWidth
                 >
                   {t("delete")}
-                </button>
+                </Button>
               )}
             </div>
           )}
@@ -935,12 +950,14 @@ function UserCard({
             </label>
             <input
               id={`user-name-${user.id}`}
+              name={`user-name-${user.id}`}
               type="text"
               value={editData.name}
               onChange={(event) => setEditData({ ...editData, name: event.target.value })}
               className="app-field"
               maxLength={100}
               disabled={isBusy}
+              autoComplete="off"
             />
           </div>
           {canEditRole && (
@@ -962,7 +979,7 @@ function UserCard({
                       })
                     }
                     disabled={isBusy}
-                    className={`border p-2 text-xs font-medium transition-colors disabled:opacity-50 sm:p-3 ${
+                    className={`min-h-11 border p-2 text-xs font-medium transition-colors disabled:opacity-50 sm:p-3 ${
                       editData.accountKind === accountKind
                         ? "border-action-primary bg-action-primary text-action-text"
                         : "border-border-strong bg-surface-raised text-text-muted hover:text-text-heading"
@@ -980,7 +997,7 @@ function UserCard({
               <legend className="app-label">
                 {t("role")}
               </legend>
-              <div className="grid grid-cols-4 gap-1">
+              <div className="grid grid-cols-2 gap-1 sm:grid-cols-4">
                 {editableRoles.map((role) => (
                   <button
                     key={role}
@@ -990,7 +1007,7 @@ function UserCard({
                       setEditData({ ...editData, role: role as User["role"] })
                     }
                     disabled={isBusy}
-                    className={`p-2 sm:p-3 border text-xs font-medium transition-colors disabled:opacity-50 ${
+                    className={`min-h-11 border p-2 text-xs font-medium transition-colors disabled:opacity-50 sm:p-3 ${
                       editData.role === role
                         ? "border-action-primary bg-action-primary text-action-text"
                         : "bg-surface-raised text-text-muted border-border-strong hover:text-text-heading hover:border-border-strong"
@@ -1006,6 +1023,7 @@ function UserCard({
           {canEditRole && editData.accountKind === "shared" && (
             <label className="flex items-start gap-3 border border-border-default bg-surface-raised p-3">
               <input
+                name={`user-door-access-${user.id}`}
                 type="checkbox"
                 checked={editData.doorAccessEnabled}
                 onChange={(event) =>
@@ -1013,6 +1031,7 @@ function UserCard({
                 }
                 disabled={isBusy}
                 className="mt-0.5 h-4 w-4"
+                autoComplete="off"
               />
               <span className="text-sm text-text-heading">{t("doorAccess")}</span>
             </label>
@@ -1024,6 +1043,7 @@ function UserCard({
             </label>
             <input
               id={`user-guest-limit-${user.id}`}
+              name={`user-guest-limit-${user.id}`}
               type="number"
               value={editData.guestLimit ?? ""}
               onChange={(e) =>
@@ -1032,23 +1052,25 @@ function UserCard({
                   guestLimit: e.target.value ? parseInt(e.target.value) : null,
                 })
               }
-              className="w-full bg-surface-raised border border-border-strong px-3 py-2 sm:py-3 text-text-heading font-mono text-sm focus:outline-none focus:border-border-focus"
+              className="app-field font-mono tabular-nums"
               min="0"
               max="999"
               disabled={isBusy}
+              autoComplete="off"
             />
           </div>
 
           <div className="grid grid-cols-2 gap-2">
-            <button
+            <Button
               type="button"
               onClick={handleSave}
               disabled={isBusy}
-              className="bg-text-heading hover:bg-text-body text-canvas text-xs font-medium py-2 sm:py-3 transition-colors disabled:opacity-50"
+              size="sm"
+              fullWidth
             >
               {t("save")}
-            </button>
-            <button
+            </Button>
+            <Button
               type="button"
               disabled={isBusy}
               onClick={() => {
@@ -1061,10 +1083,12 @@ function UserCard({
                   guestLimit: user.guestLimit,
                 });
               }}
-              className="bg-surface-active hover:bg-border-strong text-text-heading text-xs font-medium py-2 sm:py-3 transition-colors disabled:opacity-50"
+              variant="secondary"
+              size="sm"
+              fullWidth
             >
               {commonT("cancel")}
-            </button>
+            </Button>
           </div>
         </div>
       )}

@@ -21,5 +21,9 @@ export default function RouteLoadingFallback() {
     return <RouteLoadingShell />;
   }
 
-  return <Spinner mode="fullscreen" text={t("loading")} />;
+  return (
+    <main id="main-content" tabIndex={-1}>
+      <Spinner mode="fullscreen" text={t("loading")} />
+    </main>
+  );
 }

@@ -155,17 +155,17 @@ export default function GuestLimitRequestManagement() {
               {pending.map((request) => (
                 <article key={request.id} className="border border-border-default bg-canvas p-4">
                 <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <h3 className="type-row-title">{request.userName}</h3>
+                  <div className="min-w-0">
+                    <h3 className="type-row-title break-words">{request.userName}</h3>
                     <p className="mt-1 text-xs text-text-muted">
                       <RoleLabel role={request.userRole} /> · {request.date}
                     </p>
                   </div>
-                  <span className="font-mono text-lg text-text-heading">
+                  <span className="shrink-0 font-mono text-lg text-text-heading">
                     +{request.requestedExtra}
                   </span>
                 </div>
-                <p className="mt-3 min-h-5 text-sm text-text-body">
+                <p className="mt-3 min-h-5 break-words text-sm text-text-body">
                   {request.reason || t("noReason")}
                 </p>
                 <div className="mt-4 grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto_auto]">
@@ -175,6 +175,7 @@ export default function GuestLimitRequestManagement() {
                     </label>
                     <input
                       id={`approved-extra-${request.id}`}
+                      name={`approved-extra-${request.id}`}
                       type="number"
                       min="1"
                       max={request.requestedExtra}
@@ -186,6 +187,7 @@ export default function GuestLimitRequestManagement() {
                         }))
                       }
                       className="app-field"
+                      autoComplete="off"
                       disabled={busyId === request.id}
                     />
                   </div>
@@ -198,7 +200,7 @@ export default function GuestLimitRequestManagement() {
                       approvedAmounts[request.id] < 1 ||
                       approvedAmounts[request.id] > request.requestedExtra
                     }
-                    className="bg-action-primary px-4 py-2 text-xs font-semibold text-action-text disabled:opacity-50"
+                    className="min-h-11 bg-action-primary px-4 py-2 text-xs font-semibold text-action-text disabled:opacity-50"
                   >
                     {t("approve")}
                   </button>
@@ -206,7 +208,7 @@ export default function GuestLimitRequestManagement() {
                     type="button"
                     onClick={() => handleDecision(request, "reject")}
                     disabled={busyId === request.id}
-                    className="border border-status-danger/70 bg-status-danger/10 px-4 py-2 text-xs font-semibold text-status-danger disabled:opacity-50"
+                    className="min-h-11 border border-status-danger/70 bg-status-danger/10 px-4 py-2 text-xs font-semibold text-status-danger disabled:opacity-50"
                   >
                     {t("reject")}
                   </button>
@@ -223,11 +225,11 @@ export default function GuestLimitRequestManagement() {
             </summary>
             <div className="mt-3 divide-y divide-border-subtle border border-border-default bg-canvas">
               {decided.slice(0, 20).map((request) => (
-                <div key={request.id} className="flex items-center justify-between gap-3 p-3 text-xs">
-                  <span className="text-text-body">
+                <div key={request.id} className="flex items-start justify-between gap-3 p-3 text-xs">
+                  <span className="min-w-0 break-words text-text-body">
                     {request.userName} · {request.date}
                   </span>
-                  <span className="font-mono text-text-muted">
+                  <span className="shrink-0 text-right font-mono text-text-muted">
                     {request.status === "approved"
                       ? t("approvedHistory", { count: request.approvedExtra })
                       : t("rejectedHistory")}

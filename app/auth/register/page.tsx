@@ -3,8 +3,8 @@
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Footer from '@/components/Footer';
-import Link from 'next/link';
 import Icon from '@/components/Icon';
+import ButtonLink from '@/components/ButtonLink';
 import LanguageSwitcher from '@/components/LanguageSwitcher';
 import { useTranslations } from 'next-intl';
 
@@ -25,7 +25,7 @@ export default function RegisterPage() {
   }, [router]);
 
   return (
-    <div className="flex min-h-[100dvh] flex-col bg-canvas">
+    <main id="main-content" tabIndex={-1} className="flex min-h-[100dvh] flex-col bg-canvas">
       <div className="flex-1 flex items-center justify-center px-4">
         <div className="app-panel w-full max-w-sm p-7 text-center sm:p-9">
           <div className="mb-6 flex justify-end">
@@ -48,16 +48,17 @@ export default function RegisterPage() {
             {t('redirectingInSeconds')}
           </p>
           
-          <Link 
+          <ButtonLink
             href="/auth/login"
-            className="pressable inline-flex min-h-11 w-full items-center justify-center rounded-control bg-action-primary px-4 py-3 text-center text-sm font-semibold text-action-text hover:bg-action-hover"
+            fullWidth
+            size="lg"
           >
             {t('goToLogin')}
-          </Link>
+          </ButtonLink>
         </div>
       </div>
 
       <Footer />
-    </div>
+    </main>
   );
 }

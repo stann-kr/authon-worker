@@ -10,6 +10,8 @@ export default function RouteLoadingShell() {
     <div className="flex min-h-[100dvh] flex-col bg-canvas">
       <AdminHeader />
       <main
+        id="main-content"
+        tabIndex={-1}
         className="flex-1 pt-[var(--app-header-height)]"
         aria-hidden="true"
       />

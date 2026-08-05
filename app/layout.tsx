@@ -61,9 +61,7 @@ export default async function RootLayout({
                   <a href="#main-content" className="skip-link">
                     {t("skipToContent")}
                   </a>
-                  <div id="main-content" tabIndex={-1}>
-                    {children}
-                  </div>
+                  {children}
                 </VenueDataProvider>
               </RouteTransitionProvider>
             </DesignSystemProvider>

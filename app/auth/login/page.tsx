@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import Footer from "@/components/Footer";
 import Alert from "@/components/Alert";
@@ -175,7 +176,7 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="flex min-h-[100dvh] items-center justify-center bg-canvas px-4 py-10 sm:px-6 lg:px-8">
+    <main id="main-content" tabIndex={-1} className="flex min-h-[100dvh] items-center justify-center bg-canvas px-4 py-10 sm:px-6 lg:px-8">
       <div className="w-full max-w-sm sm:max-w-md">
         <LanguageSwitcher className="mb-4 flex justify-end" compact />
         <div className="app-panel p-6 sm:p-8 lg:p-10">
@@ -183,7 +184,7 @@ export default function LoginPage() {
             <div className="mx-auto mb-5 grid h-11 w-11 place-items-center border border-border-strong bg-surface font-mono text-sm font-semibold text-text-heading">
               {brand.name.charAt(0).toUpperCase()}
             </div>
-            <h1 className="mb-2 text-2xl font-semibold tracking-[-0.03em] text-text-heading sm:text-3xl">{brand.name}</h1>
+            <h1 className="mb-2 max-w-full break-words text-2xl font-semibold tracking-[-0.03em] text-text-heading sm:text-3xl">{brand.name}</h1>
             <p className="text-sm text-text-muted">
               {mode === "login" ? t("signInTitle") : t("setupTitle")}
             </p>
@@ -214,12 +215,14 @@ export default function LoginPage() {
               </label>
               <input
                 id="email"
+                name="email"
                 type="email"
                 value={formData.email}
                 onChange={(e) => setFormData({...formData, email: e.target.value})}
                 className="app-field"
                 placeholder="name@example.com"
                 autoComplete="email"
+                spellCheck={false}
                 required
                 disabled={isLoading}
                 readOnly={mode === "setup"}
@@ -244,6 +247,7 @@ export default function LoginPage() {
                 </label>
                 <PasswordInput
                   id="password"
+                  name="password"
                   value={formData.password}
                   onChange={(e) => setFormData({...formData, password: e.target.value})}
                   inputClassName="app-field pr-12"
@@ -257,6 +261,14 @@ export default function LoginPage() {
                 <p id="password-helper" className="app-helper">
                   {t("passwordHelp")}
                 </p>
+                <div className="flex justify-end">
+                  <Link
+                    href="/auth/reset-password"
+                    className="pressable inline-flex min-h-11 items-center rounded-control px-2 text-sm font-medium text-text-muted underline decoration-border-strong underline-offset-4 hover:text-text-heading"
+                  >
+                    {t("forgotPassword")}
+                  </Link>
+                </div>
               </div>
             ) : (
               <div className="space-y-5">
@@ -266,6 +278,7 @@ export default function LoginPage() {
                   </label>
                   <PasswordInput
                     id="setup-password"
+                    name="new-password"
                     value={setupPassword}
                     onChange={(event) => setSetupPassword(event.target.value)}
                     inputClassName="app-field pr-12"
@@ -286,6 +299,7 @@ export default function LoginPage() {
                   </label>
                   <PasswordInput
                     id="setup-password-confirm"
+                    name="confirm-password"
                     value={confirmPassword}
                     onChange={(event) => setConfirmPassword(event.target.value)}
                     inputClassName="app-field pr-12"
@@ -319,7 +333,7 @@ export default function LoginPage() {
                 type="button"
                 onClick={returnToLogin}
                 disabled={isLoading}
-                className="pressable w-full rounded-control py-2 text-sm font-medium text-text-muted hover:bg-surface-hover hover:text-text-heading disabled:opacity-50"
+                className="pressable min-h-11 w-full touch-manipulation rounded-control py-2 text-sm font-medium text-text-muted hover:bg-surface-hover hover:text-text-heading disabled:opacity-50"
               >
                 {t("backToSignIn")}
               </button>
@@ -340,6 +354,6 @@ export default function LoginPage() {
           <Footer compact />
         </div>
       </div>
-    </div>
+    </main>
   );
 }

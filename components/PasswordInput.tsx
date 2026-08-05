@@ -20,6 +20,9 @@ export default function PasswordInput({
   className,
   onKeyDown,
   onKeyUp,
+  id,
+  name,
+  autoComplete = "off",
   "aria-describedby": ariaDescribedBy,
   ...props
 }: PasswordInputProps) {
@@ -43,6 +46,9 @@ export default function PasswordInput({
       <div className="relative">
         <input
           {...props}
+          id={id}
+          name={name ?? id}
+          autoComplete={autoComplete}
           type={isVisible ? "text" : "password"}
           className={inputClassName ?? defaultInputClassName}
           aria-describedby={describedBy}

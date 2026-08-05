@@ -32,6 +32,7 @@ Authon UI는 베뉴 현장에서 반복적으로 사용하는 운영 도구다. 
 | `text-body` | `#D4D7D9` | 본문 |
 | `text-muted` | `#AAB0B5` | 보조 정보 |
 | `action-primary` | `#E7EAEC` | primary action과 선택 |
+| `action-confirm` | `#D4D7D9` | 목록에서 반복되는 확인 action |
 | `action-primary-text` | `#111315` | primary action 텍스트 |
 | `status-checked` | `#86A98D` | check-in 완료와 성공 |
 | `status-waiting` | `#C2A56C` | 대기 상태 |
@@ -43,11 +44,13 @@ Authon UI는 베뉴 현장에서 반복적으로 사용하는 운영 도구다. 
 - panel, input, button, badge는 예외 없이 `0px` radius를 사용한다.
 - panel은 shadow 없이 `1px` 구획선으로만 계층을 구분한다.
 - spinner와 작은 상태 점처럼 원형 자체가 의미인 요소만 원형을 허용한다.
-- desktop content 폭은 최대 `1440px`다. 홈은 선택 밀도를 낮추기 위해 `1040px`를 유지한다.
+- desktop content 폭은 최대 `1440px`다. 홈을 포함한 모든 작업 화면은 header의 브랜드와 우측 action 사이 콘텐츠 축을 공유한다.
 - multi-column 화면은 `768px` 미만에서 단일 column으로 축소한다.
 - interactive control은 최소 `44px × 44px` touch target을 제공한다.
 - form field와 선택 control은 `border-strong`을 사용해 인접 surface와 3:1 이상의 비텍스트 대비를 확보하고, panel 구획선은 `border-default` 또는 `border-subtle`을 사용한다.
 - Guest와 Door는 모바일에서 dashboard와 list를 한 열로 쌓고, `768px` 이상에서는 좌측 운영 dashboard와 우측 guest list의 master-detail 구조를 사용한다.
+- 인증 화면은 공통 workspace shell을 사용한다. 상단 header는 기존의 brand·현재 맥락·계정 action만 유지하고, Admin에서는 desktop 좌측 업무 navigation을 제공한다. 모바일에서는 safe area를 반영한 하단 전역 navigation을 고정하고 footer보다 높은 전용 layer와 본문 하단 여백을 함께 예약한다.
+- Admin 업무 navigation은 desktop에서 항상 보이는 grouped sidebar를 사용한다. 모바일에서는 전체 업무를 3열 바로가기 목록으로 압축해 선택형 control 없이 항상 노출한다.
 - 날짜 입력은 viewport가 아니라 component container 폭을 기준으로 배치한다. 좁은 container에서는 날짜와 quick control을 두 줄로 표시한다.
 - 고정 또는 sticky 영역은 목록의 첫 행을 가리지 않아야 하며, 페이지 안에 불필요한 중첩 scroll container를 만들지 않는다.
 
@@ -79,7 +82,8 @@ Authon UI는 베뉴 현장에서 반복적으로 사용하는 운영 도구다. 
 - 화면 단위 loading은 최초 진입, route 변경, 접근 권한 확인, 베뉴 준비와 목적지의 최초 운영 데이터 조회를 하나의 수명주기로 묶고 현재 언어의 공통 문구를 사용한다. 로그인 후에는 현재 header와 footer를 유지한 채 콘텐츠 영역에 spinner 하나만 표시한다.
 - 연속된 준비 작업 사이에는 loader를 닫지 않으며, 모든 준비 작업이 끝난 뒤 한 번만 종료한다.
 - 화면 loading이 진행 중일 때는 새 메뉴 이동을 겹쳐 시작하지 않으며, 이전 화면의 진행 중인 목록 응답과 실패 상태는 화면을 갱신하지 않는다.
-- 화면이 열린 뒤 날짜·베뉴·목록 범위를 다시 조회할 때는 전체 화면 loading을 시작하지 않는다. `PanelHeader`의 새로고침 표시, 현재 조회 범위의 통계 `—`, 목록 skeleton 또는 유효한 같은 범위의 캐시로 해당 section 안에서만 진행 상태를 전달한다.
+- 화면이 열린 뒤 날짜·베뉴·목록 범위를 다시 조회할 때는 전체 화면 loading을 시작하지 않는다. `PanelHeader`의 새로고침 표시, 현재 조회 범위의 통계 `-`, 목록 skeleton 또는 유효한 같은 범위의 캐시로 해당 section 안에서만 진행 상태를 전달한다. 추가 게스트 요청처럼 날짜에 종속된 보조 작업은 새 범위를 읽는 동안 숨기지 않고 비활성 loading summary를 유지하며, 다른 날짜의 상태는 재사용하지 않는다.
+- 목록의 최초 조회처럼 아직 count가 확정되지 않은 상태에서는 `0`을 실제 결과처럼 표시하지 않고 `-`로 준비 상태를 전달한다.
 - button loading은 label 위치를 유지하는 작은 progress indicator를 사용한다.
 - empty state는 원인과 다음 행동을 함께 제시할 수 있어야 한다.
 - error는 영향받는 section 가까이에 표시하고 재시도가 가능한 경우 action을 제공한다.
@@ -87,55 +91,66 @@ Authon UI는 베뉴 현장에서 반복적으로 사용하는 운영 도구다. 
 - destructive action은 red semantic tone과 확인 단계를 함께 사용한다.
 - 상태는 색상만으로 전달하지 않는다. 목록 행은 2px 상태선을 기본 신호로 사용하고, 상태별로 가능한 행동이나 아이콘·텍스트를 함께 제공한다.
 - 입장 행동은 `CHECK IN`, 완료 상태는 `CHECKED IN`으로 구분한다. 모든 대기 행은 왼쪽 상태선과 현재 가능한 행동으로 표현하고 행 안에 `WAITING` label을 반복하지 않는다.
+- 통계는 바깥 panel이 구획을 한 번만 담당하고, 개별 수치는 선 없는 quiet tile과 간격으로 묶는다. 목록 안에서는 `embedded` variant의 하단 구획선 하나만 추가한다.
 
 ## 모션
 
 - 일반 UI 전환은 `140-200ms` 범위로 제한한다.
 - route loading overlay는 header 아래 콘텐츠 영역에서 최소 `160ms` 동안 상태를 명확히 전달하고, 실제 준비 작업이 모두 끝나면 별도의 고정 유예 없이 `140ms` ease-out으로 종료한다.
 - enter와 직접 피드백은 강한 ease-out 곡선을 사용한다.
-- 버튼 press는 위치나 크기를 움직이지 않고 substrate 밝기만 바꾼다.
+- 버튼과 직접 선택 가능한 navigation은 누르는 동안 `0.985` scale과 substrate 변화로 짧은 물리적 피드백을 제공한다.
+- disclosure는 chevron 회전과 짧은 내용 진입, 확인 dialog는 진입과 취소 종료를 모두 제공하며 종료 중에는 추가 action을 받지 않는다.
+- skeleton은 레이아웃을 유지한 채 낮은 진폭의 opacity 변화만 사용한다.
 - keyboard shortcut, tab 전환, 반복 check-in에는 장식 animation을 사용하지 않는다.
 - hover feedback은 fine pointer 환경에서만 제공한다.
-- `prefers-reduced-motion`에서는 transform motion을 제거한다.
+- `prefers-reduced-motion`에서는 press·hover·dialog의 transform motion을 제거하고 transition과 animation을 즉시 완료한다.
 
 ## 주요 component
 
-- `Button`: primary, secondary, outline, danger, ghost variant와 loading state를 제공한다.
-- `ConfirmDialog`: 확인이 필요한 작업의 제목·설명·action, focus trap, Escape 닫기와 trigger focus 복귀를 통일한다. native confirm dialog는 사용하지 않는다.
-- `OperationalSectionNav`: Admin 하위 작업의 좌측 section selector와 선택 상태를 통일한다.
-- `PanelHeader`: count, sort, refresh, 추가 action의 위치를 통일한다.
-- `StatGrid`: 통계 수치와 label을 카드 중앙에 정렬하고 현재 조회 범위의 loading 상태를 함께 표현한다.
+- `Button`: primary, confirm, secondary, outline, danger, ghost variant와 loading state를 제공한다. 실행 action에 사용하며 기본 `type`은 `button`이다. 반복 check-in의 confirm variant는 CSS semantic token으로 배경·경계·텍스트를 함께 적용해 색상 일부만 누락되지 않게 한다.
+- `ButtonLink`: route 이동에 사용하는 링크를 `Button`과 같은 variant·크기·icon 규칙으로 표현한다. 화면 이동을 `button` click handler로 흉내 내지 않는다.
+- `ConfirmDialog`: 확인이 필요한 작업의 제목·설명·action, focus trap, Escape 닫기, 취소 종료 motion과 trigger focus 복귀를 통일한다. 종료 중에는 action을 잠그며 native confirm dialog는 사용하지 않는다.
+- `WorkspaceShell`: 인증 화면의 header, 본문 폭, mobile bottom navigation, safe area와 공통 scroll 여백을 통일한다.
+- `AdminTaskSwitcher`: 권한에 맞는 Admin 업무를 direct link로 제공하고 desktop grouped sidebar와 mobile 바로가기 grid의 선택 상태를 통일한다.
+- `OperationalSectionNav`: 독립적으로 표시되는 관리 component의 내부 section 선택 상태를 통일한다. 상위 Admin task navigation과 함께 사용할 때는 중복 표시하지 않는다.
+- `PanelHeader`: count, sort, 화면별 context action, refresh의 위치를 통일하며 refresh는 작업 묶음의 가장 오른쪽에 둔다. 최초 조회에서 count가 아직 확정되지 않았으면 `0` 대신 `-`를 표시한다.
+- `StatGrid`: 통계 수치와 label을 선 없는 quiet tile 중앙에 정렬하고, 독립 영역과 목록 안의 `embedded` 배치를 구분하며 현재 조회 범위의 loading 상태를 함께 표현한다.
 - `GuestListCard`: waiting, checked, removed 상태와 registration/operations 작업 모드별 action을 표현한다. 공용 계정 게스트는 계정명과 실제 입력자를 함께 표시하고, checked 상태의 되돌리기는 해당 행 안에서 제공한다.
 - `GuestBulkEntry`: 선택형 disclosure 안에서 줄바꿈 입력, 요약, 최대 25행 미리보기, 행별 중복 확인, 정원 보류와 제출 결과를 한 흐름으로 제공한다. 정상 행은 이름만 표시하고 수정·확인이 필요한 예외 행에만 보조 문구와 control을 둔다.
+- `DisclosureSection`: 대량 입력과 추가 게스트 요청처럼 패널 안의 보조 작업을 같은 summary·meta·chevron·상단 구획선으로 단계적으로 노출한다. 날짜별 상태를 다시 읽는 동안에는 같은 summary 높이를 유지하고, 최신 한도 상태를 확인하기 전까지 제출만 잠근다.
+- `GuestCapacityIndicator`: 별도 카드 surface를 만들지 않고 게스트 추가 panel header 안에서 남은 인원과 전체 한도를 한 축으로 묶는다. header 하단 구획선 일부를 정원 사용률 상태선으로 공유하며, 잔여 비율이 25% 이하면 대기색, 정원 도달은 위험색을 사용한다. 숫자와 선 길이도 함께 바꿔 색상에만 의존하지 않는다.
 - `StatusLabel`: 상태별 아이콘, 텍스트, 색상 규칙을 통일한다.
 - `Alert`: error와 success를 live region으로 전달한다.
 - `Skeleton`: list loading 중 레이아웃 공간을 예약한다.
 - `EmptyState`: icon, message, description, action을 조합한다.
 - `DatePicker`, `VenueSelector`, `GuestSearchInput`: 공통 field와 focus token을 사용한다.
 - 운영 날짜는 Guest, Door, Admin에서 같은 `DatePicker`와 날짜 이동 control을 사용한다. container가 좁으면 날짜 입력과 quick control을 두 줄로 배치한다.
-- Guest, Door와 Admin 하위 작업은 태블릿 이상에서 공통 `OperationsLayout`을 사용한다. 좌측 열에는 날짜·범위·section·요약을, 우측 열에는 생성 form 또는 작업 목록을 둔다.
+- Guest와 Door는 태블릿 이상에서 공통 `OperationsLayout`의 split variant를 사용한다. Admin 하위 작업은 상위 CRM navigation 옆에서 stacked variant를 사용해 중첩 sidebar를 만들지 않는다.
 - 추가 게스트 요청처럼 게스트 한도에 속하는 운영 승인은 사용자 계정 관리가 아니라 Admin의 게스트 하위 작업으로 제공한다. 미처리 요청이 있는 Venue Admin 홈에는 단축키와 혼동되지 않는 상태 문구, 건수와 요청함 직접 이동 action을 함께 표시한다.
 - Links 관리는 기본 상태와 예외 상태를 한 번씩만 표시한다. 목록 범위는 날짜별 보기와 최근 생성 5개·10개 보기로 구분한다.
 - Links의 긴 URL은 기본 목록에 상시 노출하지 않는다. `VIEW` disclosure 안에서 읽기 전용 URL 선택과 새 탭 열기를 제공해 clipboard 실패 시에도 접근할 수 있게 한다.
 - Links의 `템플릿으로 사용`은 업무 설정만 생성 form에 채우고 credential은 복사하지 않는다. 공유 action은 Web Share 지원 여부에 따라 공유 또는 URL 복사 중 하나만 표시해 행의 action 밀도를 유지한다.
-- 반복되는 guest row는 교차 neutral surface를 사용한다. waiting과 checked-in 상태는 각 행의 왼쪽 2px indicator를 공유하되, 모든 waiting 행은 중복 status label을 표시하지 않는다.
+- 반복되는 guest row는 안정적인 단일 neutral surface를 사용한다. waiting과 checked-in 상태는 각 행의 왼쪽 2px indicator를 공유하되, 모든 waiting 행은 중복 status label을 표시하지 않는다.
 - 되돌리기처럼 특정 guest 상태에 종속된 control은 전역 banner가 아니라 해당 guest 행 안에 표시한다.
-- guest row의 상태는 왼쪽 indicator와 metadata가 전달하고, 우측에는 현재 수행 가능한 action만 둔다. `CHECK IN`과 `UNDO`는 동일한 위치와 최소 폭을 사용한다.
+- guest row의 상태는 왼쪽 indicator와 metadata가 전달하고, 우측에는 현재 수행 가능한 action만 둔다. mobile에서도 action은 행 우측의 내용 폭 button으로 유지하며, `CHECK IN`과 `UNDO`는 동일한 위치와 최소 폭을 사용한다.
 - 등록자처럼 선택적인 metadata는 값이 없을 때 공간을 예약하지 않는다. 행 본문과 우측 action은 전체 행 높이를 기준으로 수직 중앙 정렬한다.
 - 추가 게스트 요청은 요청 수량을 주요 control로 두고 선택 사유임을 label과 helper text에서 명확히 표시한다. 승인 목록은 요청값, 승인값과 처리 상태를 함께 보여준다.
+- Door 목록의 `입장 대기 우선`은 기본 활성화하며 사용자가 끄면 입장 확인 뒤에도 등록 순서를 유지한다. 선택은 같은 브라우저에 보존한다.
 - 데이터가 적은 list panel에는 고정 최소 높이를 강제하지 않고 실제 행 수에 맞춰 높이를 결정한다.
 - 등록 시각은 감사 정보가 필요한 Admin guest 목록에서만 표시한다. 입장 시각은 checked 상태의 metadata로 표시한다.
 - panel과 tab group의 외곽선은 가장 바깥 container가 한 번만 그리며, 자식은 내부 구획선만 담당한다.
 - 검색 초기화는 공통 clear button 하나만 제공하고 브라우저 native search cancel control은 숨긴다.
 - 권한에 따라 개수가 달라지는 보조 panel은 빈 grid column을 예약하지 않고 실제 항목 수에 맞춰 폭을 자동 분배한다.
-- 홈 작업 메뉴는 업무 분류·순번, 아이콘·설명, 진입 action·숫자 단축키를 구획선으로 분리한 운영 카드로 표시한다. 다른 작업 화면처럼 header 아래 상단부터 시작하며, 권한에 따라 카드가 1~2개만 보이면 전체 폭을 채우지 않고 항목 수에 맞는 최대 폭을 사용한다.
+- 홈 작업 메뉴는 Guest, Door, Admin의 고정 순서와 `1`, `2`, `3` 단축키를 일치시킨다. 각 카드는 업무 분류, 구체적인 메뉴명, 한 줄 설명과 진입 action을 한 번씩 제공하고 아이콘은 메뉴명의 식별 보조로 사용한다. 메뉴 3개는 `768px`부터 한 줄 3열로 배치하고 메뉴가 1~2개면 동일한 카드 폭 감각을 유지하도록 grid 최대 폭을 줄인다. 권한이 없는 항목만 제거한다.
 
 ## 접근성 기준
 
 - 모든 form control은 visible label 또는 동등한 accessible name을 가져야 한다.
+- form control은 안정적인 `name`을 사용하고 이메일·이름·현재 비밀번호·새 비밀번호에는 목적에 맞는 `autocomplete` 값을 제공한다. 운영 필드처럼 자동 완성이 도움이 되지 않는 입력은 명시적으로 끈다.
 - focus ring은 밝은 무채색 `focus` token으로 통일하고 배경과 3:1 이상 대비를 유지한다.
 - icon-only button은 `aria-label`과 충분한 hit area를 제공한다.
 - tab은 arrow, Home, End key 이동과 올바른 ARIA 연결을 유지한다.
-- dialog는 열릴 때 내부 control로 focus를 이동하고, 닫힐 때 trigger로 focus를 복귀하며, 열린 동안 focus가 dialog 밖으로 이동하지 않게 한다.
+- dialog는 document body portal에 표시하고 열릴 때 내부 control로 focus를 이동한다. 열린 동안 본문을 inert 처리하고 focus를 가두며, 닫힐 때 trigger로 focus를 복귀한다.
 - loading, success, error 상태는 적절한 live region을 사용한다.
+- 여러 단계 흐름은 순서가 있는 목록과 현재 단계로 구조를 전달한다. 필드 오류는 영향받은 입력에만 `aria-invalid`와 오류 설명을 연결하고 client 검증에서 발견한 첫 오류 입력으로 focus를 이동한다.
 - 대량 등록 완료 후 입력란으로 focus를 복귀하고, 링크 생성 검증 실패는 관련 field에 오류 설명과 focus를 연결한다. 링크 생성 성공은 새 결과 region으로 focus를 이동한다. 공개 링크의 재조회 실패는 재시도 heading으로, 재시도 성공은 작업 panel heading으로 focus를 이동한다.

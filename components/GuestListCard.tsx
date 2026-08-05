@@ -54,7 +54,6 @@ const GuestListCard: React.FC<GuestListCardProps> = ({
 }) => {
   const t = useTranslations("Common");
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
-  const rowTone = index % 2 === 0 ? "bg-surface" : "bg-surface-raised";
   const indicatorTone =
     guest.status === "checked"
       ? "before:bg-status-checked"
@@ -70,9 +69,7 @@ const GuestListCard: React.FC<GuestListCardProps> = ({
   return (
     <>
     <article
-      className={`guest-list-row relative overflow-hidden px-4 py-3 before:absolute before:inset-y-0 before:left-0 before:w-0.5 sm:px-5 ${rowTone} ${indicatorTone} ${
-        guest.status === "deleted" ? "opacity-60" : ""
-      }`}
+      className={`guest-list-row relative overflow-hidden bg-surface px-4 py-3 transition-colors before:absolute before:inset-y-0 before:left-0 before:w-0.5 sm:px-5 ${indicatorTone}`}
     >
       <div className="flex items-center justify-between gap-3">
         <div className="flex min-w-0 flex-1 items-start gap-3 sm:gap-4">
@@ -91,10 +88,14 @@ const GuestListCard: React.FC<GuestListCardProps> = ({
                   </span>
                 )}
                 {djName ? (
-                  <span>{t("byName", { name: djName })}</span>
+                  <span className="min-w-0 break-words">
+                    {t("byName", { name: djName })}
+                  </span>
                 ) : null}
                 {registeredByName && (
-                  <span>{t("registeredByName", { name: registeredByName })}</span>
+                  <span className="min-w-0 break-words">
+                    {t("registeredByName", { name: registeredByName })}
+                  </span>
                 )}
               </div>
             )}
@@ -128,7 +129,7 @@ const GuestListCard: React.FC<GuestListCardProps> = ({
           </div>
         </div>
 
-        <div className="flex flex-shrink-0 flex-wrap items-center justify-end gap-2">
+        <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
           {guest.status === "pending" && (
             <>
               <span className="sr-only">{t("waitingStatus")}</span>
@@ -138,7 +139,7 @@ const GuestListCard: React.FC<GuestListCardProps> = ({
                   isLoading={isCheckLoading}
                   variant="confirm"
                   size="md"
-                  className="w-32 px-2 sm:w-36 sm:px-4"
+                  className="w-28 px-3 sm:w-36 sm:px-4"
                 >
                   {t("checkIn")}
                 </Button>
@@ -150,7 +151,7 @@ const GuestListCard: React.FC<GuestListCardProps> = ({
                   isLoading={isDeleteLoading}
                   disabled={isDeleteDisabled}
                   variant="danger"
-                  className="px-3 sm:px-4"
+                  className="min-w-20 px-3 sm:px-4"
                 >
                   {t("delete")}
                 </Button>
@@ -181,7 +182,7 @@ const GuestListCard: React.FC<GuestListCardProps> = ({
                   variant="outline"
                   size="md"
                   leftIcon={<Icon name="undo" size={16} />}
-                  className="w-32 px-2 sm:w-36 sm:px-4"
+                  className="w-28 px-3 sm:w-36 sm:px-4"
                   aria-label={t("undoCheckIn", { name: guest.name })}
                 >
                   {t("undo")}

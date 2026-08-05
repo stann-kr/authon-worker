@@ -1,6 +1,5 @@
-import Link from "next/link";
-import Button from "@/components/Button";
 import Icon from "@/components/Icon";
+import ButtonLink from "@/components/ButtonLink";
 import { getRequestTenantContext } from "@/lib/tenant/server";
 import { getTranslations } from "next-intl/server";
 
@@ -10,7 +9,7 @@ export default async function NotFound() {
     getTranslations("Common"),
   ]);
   return (
-    <div className="flex min-h-[100dvh] items-center justify-center bg-canvas px-4 text-center">
+    <main id="main-content" tabIndex={-1} className="flex min-h-[100dvh] items-center justify-center bg-canvas px-4 text-center">
       <div className="app-panel w-full max-w-md p-8 sm:p-10">
         <div className="mx-auto mb-5 grid h-12 w-12 place-items-center rounded-panel border border-border-default bg-surface-raised text-text-muted">
           <Icon name="warning" size={22} />
@@ -23,11 +22,15 @@ export default async function NotFound() {
           {t("notFoundDescription", { brand: brand.name })}
         </p>
         <div className="mx-auto mt-8 w-full max-w-xs">
-          <Link href="/">
-            <Button fullWidth size="lg">{t("goHome")}</Button>
-          </Link>
+          <ButtonLink
+            href="/"
+            fullWidth
+            size="lg"
+          >
+            {t("goHome")}
+          </ButtonLink>
         </div>
       </div>
-    </div>
+    </main>
   );
 }

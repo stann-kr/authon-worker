@@ -8,6 +8,7 @@ import Spinner from "@/components/Spinner";
 import Alert from "@/components/Alert";
 import PasswordInput from "@/components/PasswordInput";
 import Button from "@/components/Button";
+import ButtonLink from "@/components/ButtonLink";
 import Icon from "@/components/Icon";
 import LanguageSwitcher from "@/components/LanguageSwitcher";
 import { getPasswordPolicyErrorCode } from "@/lib/auth/password-policy";
@@ -23,15 +24,19 @@ function StepIndicator({
   progressLabel: string;
 }) {
   return (
-    <div className="mb-8" aria-label={progressLabel}>
-      <div className="grid grid-cols-4 gap-2">
+    <div className="mb-8">
+      <p className="sr-only" aria-live="polite">
+        {progressLabel}
+      </p>
+      <ol className="grid grid-cols-4 gap-2" aria-label={progressLabel}>
         {labels.map((label, index) => {
           const active = index === currentStep;
           const complete = index < currentStep;
           return (
-            <div key={label} className="space-y-2" aria-current={active ? "step" : undefined}>
-              <div
-                className={`h-1 ${
+            <li key={label} className="space-y-2" aria-current={active ? "step" : undefined}>
+              <span
+                aria-hidden="true"
+                className={`block h-1 ${
                   complete || active ? "bg-action-primary" : "bg-border-subtle"
                 }`}
               />
@@ -42,12 +47,24 @@ function StepIndicator({
               >
                 {label}
               </p>
-            </div>
+            </li>
           );
         })}
-      </div>
+      </ol>
     </div>
   );
+}
+
+type ResetMessageTarget =
+  | "form"
+  | "email"
+  | "newPassword"
+  | "confirmPassword";
+
+interface ResetMessage {
+  type: "success" | "error";
+  text: string;
+  target: ResetMessageTarget;
 }
 
 function ResetPasswordContent() {
@@ -62,7 +79,7 @@ function ResetPasswordContent() {
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [loading, setLoading] = useState(false);
-  const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const [message, setMessage] = useState<ResetMessage | null>(null);
   const [step, setStep] = useState<"request" | "reset" | "requestSent" | "resetComplete">("request");
 
   useEffect(() => {
@@ -98,12 +115,17 @@ function ResetPasswordContent() {
         );
       }
 
-      setMessage({ type: "success", text: t("requestSuccess") });
+      setMessage({
+        type: "success",
+        text: t("requestSuccess"),
+        target: "form",
+      });
       setStep("requestSent");
     } catch (err: unknown) {
       setMessage({
         type: "error",
         text: err instanceof Error ? err.message : t("unexpectedError"),
+        target: "form",
       });
     } finally {
       setLoading(false);
@@ -122,12 +144,19 @@ function ResetPasswordContent() {
             ? "passwordTooShort"
             : "passwordRequiresLettersAndNumbers",
         ),
+        target: "newPassword",
       });
+      document.getElementById("new-password")?.focus();
       return;
     }
 
     if (newPassword !== confirmPassword) {
-      setMessage({ type: "error", text: authT("passwordsDoNotMatch") });
+      setMessage({
+        type: "error",
+        text: authT("passwordsDoNotMatch"),
+        target: "confirmPassword",
+      });
+      document.getElementById("confirm-password")?.focus();
       return;
     }
 
@@ -150,6 +179,7 @@ function ResetPasswordContent() {
       setMessage({
         type: "success",
         text: t("resetSuccess"),
+        target: "form",
       });
       setStep("resetComplete");
       setTimeout(() => router.push("/auth/login"), 4500);
@@ -157,6 +187,7 @@ function ResetPasswordContent() {
       setMessage({
         type: "error",
         text: err instanceof Error ? err.message : t("unexpectedError"),
+        target: "form",
       });
     } finally {
       setLoading(false);
@@ -164,7 +195,7 @@ function ResetPasswordContent() {
   };
 
   return (
-    <div className="flex min-h-[100dvh] items-center justify-center bg-canvas px-4 py-10 sm:px-6 lg:px-8">
+    <main id="main-content" tabIndex={-1} className="flex min-h-[100dvh] items-center justify-center bg-canvas px-4 py-10 sm:px-6 lg:px-8">
       <div className="w-full max-w-sm sm:max-w-md">
         <div className="app-panel p-6 sm:p-8 lg:p-10">
           <div className="mb-5 flex justify-end">
@@ -210,7 +241,7 @@ function ResetPasswordContent() {
           </div>
 
           {message && (
-            <div className="mb-6">
+            <div id="reset-message" className="mb-6">
               <Alert type={message.type} message={message.text} />
             </div>
           )}
@@ -223,15 +254,24 @@ function ResetPasswordContent() {
                 </label>
                 <input
                   id="email"
+                  name="email"
                   type="email"
                   required
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   disabled={loading}
+                  autoComplete="email"
+                  spellCheck={false}
                   className="app-field"
                   placeholder="name@example.com"
-                  aria-describedby="email-helper request-helper"
-                  aria-invalid={message?.type === "error" ? "true" : "false"}
+                  aria-describedby={`email-helper request-helper${
+                    message?.type === "error" && message.target === "email"
+                      ? " reset-message"
+                      : ""
+                  }`}
+                  aria-invalid={
+                    message?.type === "error" && message.target === "email"
+                  }
                 />
                 <p id="email-helper" className="app-helper">
                   {t("emailHelp")}
@@ -256,6 +296,7 @@ function ResetPasswordContent() {
                 </label>
                 <PasswordInput
                   id="new-password"
+                  name="new-password"
                   required
                   autoComplete="new-password"
                   value={newPassword}
@@ -263,8 +304,16 @@ function ResetPasswordContent() {
                   disabled={loading}
                   inputClassName="app-field pr-12"
                   placeholder={t("newPasswordPlaceholder")}
-                  aria-describedby="password-policy"
-                  aria-invalid={message?.type === "error" ? "true" : "false"}
+                  aria-describedby={`password-policy${
+                    message?.type === "error" &&
+                    message.target === "newPassword"
+                      ? " reset-message"
+                      : ""
+                  }`}
+                  aria-invalid={
+                    message?.type === "error" &&
+                    message.target === "newPassword"
+                  }
                 />
                 <p id="password-policy" className="app-helper">
                   {authT("passwordPolicyHint")}
@@ -277,6 +326,7 @@ function ResetPasswordContent() {
                 </label>
                 <PasswordInput
                   id="confirm-password"
+                  name="confirm-password"
                   required
                   autoComplete="new-password"
                   value={confirmPassword}
@@ -284,8 +334,16 @@ function ResetPasswordContent() {
                   disabled={loading}
                   inputClassName="app-field pr-12"
                   placeholder={t("confirmPasswordPlaceholder")}
-                  aria-describedby="confirm-helper"
-                  aria-invalid={message?.type === "error" ? "true" : "false"}
+                  aria-describedby={`confirm-helper${
+                    message?.type === "error" &&
+                    message.target === "confirmPassword"
+                      ? " reset-message"
+                      : ""
+                  }`}
+                  aria-invalid={
+                    message?.type === "error" &&
+                    message.target === "confirmPassword"
+                  }
                 />
                 <p id="confirm-helper" className="app-helper">
                   {t("confirmHelp")}
@@ -313,9 +371,9 @@ function ResetPasswordContent() {
                 </p>
               </div>
 
-              <Button onClick={() => router.push("/auth/login")} fullWidth size="lg">
+              <ButtonLink href="/auth/login" fullWidth size="lg">
                 {t("returnToLogin")}
-              </Button>
+              </ButtonLink>
             </div>
           )}
 
@@ -334,25 +392,28 @@ function ResetPasswordContent() {
                 </p>
               </div>
 
-              <Button onClick={() => router.push("/auth/login")} fullWidth size="lg">
+              <ButtonLink href="/auth/login" fullWidth size="lg">
                 {t("returnToLogin")}
-              </Button>
+              </ButtonLink>
             </div>
           )}
 
-          <div className="mt-8 text-center">
-            <button
-              onClick={() => router.push("/auth/login")}
-              className="pressable rounded-control px-3 py-2 text-sm font-medium text-text-muted hover:bg-surface-hover hover:text-text-heading"
-            >
-              {t("backToLogin")}
-            </button>
-          </div>
+          {(step === "request" || step === "reset") && (
+            <div className="mt-8 text-center">
+              <ButtonLink
+                href="/auth/login"
+                variant="ghost"
+                size="sm"
+              >
+                {t("backToLogin")}
+              </ButtonLink>
+            </div>
+          )}
 
           <Footer compact />
         </div>
       </div>
-    </div>
+    </main>
   );
 }
 
@@ -361,9 +422,9 @@ export default function ResetPasswordPage() {
   return (
     <Suspense
       fallback={
-        <div className="flex min-h-[100dvh] items-center justify-center bg-canvas">
+        <main id="main-content" tabIndex={-1} className="flex min-h-[100dvh] items-center justify-center bg-canvas">
           <Spinner mode="inline" text={t("loading")} />
-        </div>
+        </main>
       }
     >
       <ResetPasswordContent />

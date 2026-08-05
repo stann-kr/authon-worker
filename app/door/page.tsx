@@ -6,9 +6,7 @@ import {
   useGuestPolling,
   useLatestRequestGuard,
 } from "../../lib/hooks";
-import AdminHeader from "../admin/components/AdminHeader";
 import AuthGuard from "../../components/AuthGuard";
-import Footer from "../../components/Footer";
 import GuestListCard from "../../components/GuestListCard";
 import GuestSearchInput from "../../components/GuestSearchInput";
 import VenueSelector, {
@@ -17,6 +15,8 @@ import VenueSelector, {
 import DatePicker from "../../components/DatePicker";
 import StatGrid from "../../components/StatGrid";
 import PanelHeader from "../../components/PanelHeader";
+import WorkspaceShell from "../../components/WorkspaceShell";
+import VenueLoadNotice from "../../components/VenueLoadNotice";
 import EmptyState from "../../components/EmptyState";
 import Alert from "../../components/Alert";
 import Icon from "../../components/Icon";
@@ -24,6 +24,7 @@ import Skeleton from "../../components/Skeleton";
 import OperationsLayout from "../../components/OperationsLayout";
 import { useSectionLoadingTask } from "../../components/RouteTransitionProvider";
 import { getBusinessDate } from "../../lib/date";
+import { orderGuestDisplayList } from "../../lib/guests/display-order";
 import {
   fetchGuestsByDate,
   updateGuestStatus,
@@ -53,9 +54,19 @@ export default function DoorPage() {
 
 function DoorPageContent() {
   const t = useTranslations("Door");
+  const commonT = useTranslations("Common");
   const locale = useLocale() as "en" | "ko";
-  const { venueId, venues, selectedVenueId, setSelectedVenueId, isSuperAdmin, currentVenue } =
-    useVenueSelector();
+  const {
+    venueId,
+    venues,
+    selectedVenueId,
+    setSelectedVenueId,
+    isSuperAdmin,
+    currentVenue,
+    isLoadingVenues,
+    venueLoadError,
+    refreshVenues,
+  } = useVenueSelector();
   const businessDate = getBusinessDate(currentVenue ?? {});
   const [selectedDate, setSelectedDate] = useLocalStorage(
     "door:selectedDate",
@@ -76,6 +87,10 @@ function DoorPageContent() {
   const [sortMode, setSortMode] = useLocalStorage<"default" | "alpha">(
     "door:sortMode",
     "default",
+  );
+  const [prioritizeWaiting, setPrioritizeWaiting] = useLocalStorage(
+    "door:prioritizeWaiting",
+    true,
   );
 
   // 로딩 중 이전 데이터를 유지하여 화면 깜빡임 방지
@@ -241,25 +256,11 @@ function DoorPageContent() {
   const checkedGuests = filteredGuests.filter(
     (guest) => guest.status === "checked",
   );
-  const sortedGuests =
-    sortMode === "alpha"
-      ? [...filteredGuests].sort((a, b) =>
-          a.status === b.status
-            ? (a.name || "").localeCompare(b.name || "", locale === "ko" ? "ko-KR" : "en-US", {
-                sensitivity: "base",
-              })
-            : a.status === "pending"
-              ? -1
-              : 1,
-        )
-      : [...filteredGuests].sort((a, b) => {
-          if (a.status !== b.status) {
-            return a.status === "pending" ? -1 : 1;
-          }
-          const timeA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
-          const timeB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
-          return timeA - timeB;
-        });
+  const sortedGuests = orderGuestDisplayList(filteredGuests, {
+    sortMode,
+    locale: locale === "ko" ? "ko-KR" : "en-US",
+    prioritizeWaiting,
+  });
   const displayGuests = searchQuery
     ? sortedGuests.filter((g) =>
         (g.name || "").toLowerCase().includes(searchQuery.toLowerCase()),
@@ -281,14 +282,17 @@ function DoorPageContent() {
   );
 
   return (
-    <div className="flex min-h-[100dvh] flex-col bg-canvas">
-      <AdminHeader />
-      <div className="flex flex-1 flex-col overflow-x-hidden pt-20 sm:pt-24">
-        <div className="page-container">
-          <OperationsLayout
-            title={t("title")}
-            dashboard={
-              <>
+    <WorkspaceShell contentClassName="gap-4 pb-8 lg:gap-6">
+      {venueLoadError && (
+        <VenueLoadNotice
+          onRetry={refreshVenues}
+          isLoading={isLoadingVenues}
+        />
+      )}
+      <OperationsLayout
+        title={commonT("door")}
+        dashboard={
+          <>
                 <div className="context-bar">
                   <DatePicker
                     value={selectedDate}
@@ -340,49 +344,9 @@ function DoorPageContent() {
 
                 {feedback && <Alert type="error" message={feedback} />}
 
-                <section className="app-panel" aria-labelledby="door-dashboard-title">
-                  <PanelHeader
-                    title={t("title")}
-                    headingLevel={2}
-                    headingId="door-dashboard-title"
-                    count={displayGuests.length}
-                    sortMode={sortMode}
-                    onSortToggle={() =>
-                      setSortMode((prev) =>
-                        prev === "default" ? "alpha" : "default",
-                      )
-                    }
-                    onRefresh={loadData}
-                    isLoading={isCurrentScopeFetching}
-                  />
-                  <GuestSearchInput
-                    value={searchQuery}
-                    onChange={setSearchQuery}
-                  />
-                  <StatGrid
-                    isLoading={!hasCurrentScopeData}
-                    items={[
-                      {
-                        label: t("waiting"),
-                        value: pendingGuests.length,
-                        color: "waiting",
-                      },
-                      {
-                        label: t("checkedIn"),
-                        value: checkedGuests.length,
-                        color: "checked",
-                      },
-                      {
-                        label: t("total"),
-                        value: pendingGuests.length + checkedGuests.length,
-                        color: "default",
-                      },
-                    ]}
-                  />
-                </section>
-              </>
-            }
-          >
+          </>
+        }
+      >
             <section
               className="main-content-panel"
               aria-labelledby="door-guest-list-title"
@@ -393,6 +357,54 @@ function DoorPageContent() {
                 headingLevel={2}
                 headingId="door-guest-list-title"
                 count={displayGuests.length}
+                sortMode={sortMode}
+                onSortToggle={() =>
+                  setSortMode((prev) =>
+                    prev === "default" ? "alpha" : "default",
+                  )
+                }
+                onRefresh={loadData}
+                isLoading={isCurrentScopeFetching}
+                actions={
+                  <button
+                    type="button"
+                    aria-pressed={prioritizeWaiting}
+                    title={t("prioritizeWaitingHelp")}
+                    onClick={() => setPrioritizeWaiting((current) => !current)}
+                    className={`pressable min-h-11 whitespace-nowrap border px-3 py-2 text-xs font-medium ${
+                      prioritizeWaiting
+                        ? "border-action-primary bg-surface-active text-text-heading"
+                        : "border-border-default bg-surface-raised text-text-muted hover:border-border-strong hover:text-text-heading"
+                    }`}
+                  >
+                    {t("prioritizeWaiting")}
+                  </button>
+                }
+              />
+              <GuestSearchInput
+                value={searchQuery}
+                onChange={setSearchQuery}
+              />
+              <StatGrid
+                variant="embedded"
+                isLoading={!hasCurrentScopeData}
+                items={[
+                  {
+                    label: t("waiting"),
+                    value: pendingGuests.length,
+                    color: "waiting",
+                  },
+                  {
+                    label: t("checkedIn"),
+                    value: checkedGuests.length,
+                    color: "checked",
+                  },
+                  {
+                    label: t("total"),
+                    value: pendingGuests.length + checkedGuests.length,
+                    color: "default",
+                  },
+                ]}
               />
 
               {isCurrentScopeFetching && displayData.guests.length === 0 ? (
@@ -408,8 +420,8 @@ function DoorPageContent() {
                 />
               ) : (
                 <div
-                  className={`divide-y divide-border-subtle transition-opacity duration-200 ${
-                    isCurrentScopeFetching ? "pointer-events-none opacity-50" : ""
+                  className={`divide-y divide-border-subtle ${
+                    isCurrentScopeFetching ? "pointer-events-none" : ""
                   }`}
                 >
                   {displayGuests.map((guest, index) => {
@@ -441,10 +453,7 @@ function DoorPageContent() {
                 </div>
               )}
             </section>
-          </OperationsLayout>
-        </div>
-        <Footer />
-      </div>
-    </div>
+      </OperationsLayout>
+    </WorkspaceShell>
   );
 }

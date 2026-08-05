@@ -47,6 +47,8 @@ export function RouteTransitionProvider({ children }: { children: ReactNode }) {
   const completionTimerRef = useRef<number | null>(null);
   const exitTimerRef = useRef<number | null>(null);
   const safetyTimerRef = useRef<number | null>(null);
+  const overlayRef = useRef<HTMLDivElement>(null);
+  const shouldRestoreFocusRef = useRef(false);
   const [phase, setPhase] = useState<TransitionPhase>("idle");
   const [loadingTracker] = useState(createRouteLoadingTracker);
 
@@ -184,6 +186,29 @@ export function RouteTransitionProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => clearTimers, [clearTimers]);
 
+  useEffect(() => {
+    if (phase === "visible") {
+      shouldRestoreFocusRef.current = true;
+      overlayRef.current?.focus();
+      return;
+    }
+
+    if (phase === "idle" && shouldRestoreFocusRef.current) {
+      shouldRestoreFocusRef.current = false;
+      window.requestAnimationFrame(() => {
+        const mainContent = document.getElementById("main-content");
+        if (!mainContent) return;
+        mainContent.dataset.routeFocus = "true";
+        mainContent.addEventListener(
+          "blur",
+          () => delete mainContent.dataset.routeFocus,
+          { once: true },
+        );
+        mainContent.focus({ preventScroll: true });
+      });
+    }
+  }, [phase]);
+
   return (
     <RouteTransitionContext.Provider
       value={{
@@ -192,12 +217,22 @@ export function RouteTransitionProvider({ children }: { children: ReactNode }) {
         startRouteTransition,
       }}
     >
-      {children}
+      <div
+        className="contents"
+        inert={phase !== "idle" ? true : undefined}
+        aria-hidden={phase !== "idle" || undefined}
+      >
+        {children}
+      </div>
       {phase !== "idle" && (
         <div
+          ref={overlayRef}
           className="route-transition-overlay"
           data-state={phase}
+          role="status"
+          tabIndex={-1}
           aria-busy={phase === "visible"}
+          aria-live="polite"
         >
           <Spinner mode="content" text={t("loading")} />
         </div>
