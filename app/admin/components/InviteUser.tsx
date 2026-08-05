@@ -9,6 +9,7 @@ import { getPasswordPolicyErrorCode } from "../../../lib/auth/password-policy";
 import RoleLabel from "../../../components/RoleLabel";
 import { useTranslations } from "next-intl";
 import { useVenueSelector } from "../../../components/VenueSelector";
+import Button from "../../../components/Button";
 
 export default function InviteUser() {
   const t = useTranslations("UserAdmin");
@@ -199,11 +200,13 @@ export default function InviteUser() {
               <div className="relative">
                 <select
                   id="invite-venue"
+                  name="venue-id"
                   value={formData.venue_id}
+                  autoComplete="off"
                   onChange={(e) =>
                     setFormData({ ...formData, venue_id: e.target.value })
                   }
-                  className="w-full appearance-none bg-canvas border border-border-strong px-4 py-3 pr-10 text-text-heading text-sm focus:outline-none focus:border-border-focus"
+                  className="app-field appearance-none pr-10"
                   required
                 >
                   <option value="">{t("selectVenue")}</option>
@@ -224,13 +227,16 @@ export default function InviteUser() {
             </label>
             <input
               id="invite-email"
+              name="email"
               type="email"
               value={formData.email}
               onChange={(e) =>
                 setFormData({ ...formData, email: e.target.value })
               }
-              className="w-full bg-canvas border border-border-strong px-4 py-3 text-text-heading text-sm focus:outline-none focus:border-border-focus"
+              className="app-field"
               placeholder="user@example.com"
+              autoComplete="email"
+              spellCheck={false}
               required
             />
           </div>
@@ -241,13 +247,15 @@ export default function InviteUser() {
             </label>
             <input
               id="invite-name"
+              name="name"
               type="text"
               value={formData.name}
               onChange={(e) =>
                 setFormData({ ...formData, name: e.target.value })
               }
-              className="w-full bg-canvas border border-border-strong px-4 py-3 text-text-heading text-sm focus:outline-none focus:border-border-focus"
+              className="app-field"
               placeholder={t("namePlaceholder")}
+              autoComplete="name"
               required
             />
           </div>
@@ -324,12 +332,14 @@ export default function InviteUser() {
           {formData.account_kind === "shared" && (
             <label className="flex items-start gap-3 border border-border-default bg-canvas p-3">
               <input
+                name="door-access-enabled"
                 type="checkbox"
                 checked={formData.door_access_enabled}
                 onChange={(event) =>
                   setFormData({ ...formData, door_access_enabled: event.target.checked })
                 }
                 className="mt-0.5 h-4 w-4"
+                autoComplete="off"
               />
               <span>
                 <span className="block text-sm font-medium text-text-heading">
@@ -349,6 +359,7 @@ export default function InviteUser() {
               </label>
               <input
                 id="invite-guest-limit"
+                name="guest-limit"
                 type="text"
                 inputMode="numeric"
                 pattern="[0-9]*"
@@ -357,8 +368,9 @@ export default function InviteUser() {
                   const val = e.target.value.replace(/[^0-9]/g, "");
                   setFormData({ ...formData, guest_limit: val });
                 }}
-                className="w-full bg-canvas border border-border-strong px-4 py-3 text-text-heading text-sm focus:outline-none focus:border-border-focus"
+                className="app-field"
                 placeholder={t("guestLimitPlaceholder")}
+                autoComplete="off"
               />
             </div>
           )}
@@ -369,7 +381,9 @@ export default function InviteUser() {
             </label>
             <select
               id="invite-preferred-locale"
+              name="preferred-locale"
               value={formData.preferred_locale}
+              autoComplete="off"
               onChange={(event) =>
                 setFormData({
                   ...formData,
@@ -392,17 +406,18 @@ export default function InviteUser() {
               </label>
               <PasswordInput
                 id="invite-password"
+                name="temporary-password"
                 value={formData.password}
                 onChange={(e) =>
                   setFormData({ ...formData, password: e.target.value })
                 }
-                inputClassName="w-full bg-canvas border border-border-default px-4 py-3 pr-12 text-text-heading text-sm focus:outline-none focus:border-border-focus"
+                inputClassName="app-field pr-12"
                 placeholder={t("passwordPlaceholder")}
                 autoComplete="new-password"
                 aria-describedby="invite-password-help"
                 required
               />
-              <p id="invite-password-help" className="text-text-dim font-mono text-xs mt-1 tracking-wider">
+              <p id="invite-password-help" className="app-helper">
                 {authT("passwordPolicyHint")} {t("passwordShareHelp")}
               </p>
             </div>
@@ -447,24 +462,20 @@ export default function InviteUser() {
             </div>
           )}
 
-          <button
+          <Button
             type="submit"
-            disabled={isLoading}
-            className="w-full bg-action-primary py-3 text-sm font-semibold text-action-text transition-colors hover:bg-action-hover disabled:opacity-50"
+            isLoading={isLoading}
+            fullWidth
+            size="lg"
           >
-            {isLoading ? (
-              <div className="flex items-center justify-center gap-2">
-                <div className="w-4 h-4 border border-canvas border-t-transparent rounded-full animate-spin"></div>
-                <span>
-                  {createMode === "password" ? t("creating") : t("sending")}
-                </span>
-              </div>
-            ) : createMode === "password" ? (
-              t("createAccount")
-            ) : (
-              t("sendInvitation")
-            )}
-          </button>
+            {isLoading
+              ? createMode === "password"
+                ? t("creating")
+                : t("sending")
+              : createMode === "password"
+                ? t("createAccount")
+                : t("sendInvitation")}
+          </Button>
         </form>
       </div>
     </div>

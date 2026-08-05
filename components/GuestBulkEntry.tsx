@@ -301,6 +301,7 @@ export default function GuestBulkEntry({
         </label>
         <textarea
           id={fieldId}
+          name="guest-bulk-entry"
           ref={textareaRef}
           value={rawInput}
           onChange={(event) => handleRawInputChange(event.target.value)}
@@ -407,10 +408,12 @@ export default function GuestBulkEntry({
                       ) : isDuplicate ? (
                         <label className="mt-1 flex min-h-11 cursor-pointer items-center gap-2 text-xs text-status-waiting">
                           <input
+                            name={`guest-bulk-duplicate-${line.lineNumber}`}
                             type="checkbox"
                             checked={isConfirmed}
                             onChange={() => toggleDuplicateOverride(line.lineNumber)}
                             disabled={disabled || isSubmitting}
+                            autoComplete="off"
                             className="h-4 w-4 accent-action-primary"
                           />
                           <span>

@@ -313,6 +313,7 @@ export default function GuestList({
             </label>
             <div className="space-y-2">
               <button
+                type="button"
                 onClick={() => setSelectedDJ("all")}
                 className={`w-full p-3 text-sm font-medium transition-colors ${
                   selectedDJ === "all"
@@ -325,9 +326,11 @@ export default function GuestList({
               <div className="relative">
                 <select
                   id="admin-guest-user-filter"
+                  name="admin-guest-user-filter"
                   value={selectedDJ === "all" ? "" : selectedDJ}
+                  autoComplete="off"
                   onChange={(e) => setSelectedDJ(e.target.value || "all")}
-                  className="w-full appearance-none bg-surface-raised border border-border-strong px-4 py-4 pr-10 text-text-heading text-sm font-medium focus:outline-none focus:border-border-focus min-h-[52px]"
+                  className="app-field min-h-[52px] appearance-none py-4 pr-10 font-medium"
                 >
                   <option value="">{t("selectUser")}</option>
                   {filteredUsers.map((u) => (

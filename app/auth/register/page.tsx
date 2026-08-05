@@ -3,8 +3,8 @@
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Footer from '@/components/Footer';
-import Link from 'next/link';
 import Icon from '@/components/Icon';
+import ButtonLink from '@/components/ButtonLink';
 import LanguageSwitcher from '@/components/LanguageSwitcher';
 import { useTranslations } from 'next-intl';
 
@@ -48,12 +48,13 @@ export default function RegisterPage() {
             {t('redirectingInSeconds')}
           </p>
           
-          <Link 
+          <ButtonLink
             href="/auth/login"
-            className="pressable inline-flex min-h-11 w-full items-center justify-center rounded-control bg-action-primary px-4 py-3 text-center text-sm font-semibold text-action-text hover:bg-action-hover"
+            fullWidth
+            size="lg"
           >
             {t('goToLogin')}
-          </Link>
+          </ButtonLink>
         </div>
       </div>
 

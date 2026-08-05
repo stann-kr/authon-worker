@@ -215,12 +215,14 @@ export default function LoginPage() {
               </label>
               <input
                 id="email"
+                name="email"
                 type="email"
                 value={formData.email}
                 onChange={(e) => setFormData({...formData, email: e.target.value})}
                 className="app-field"
                 placeholder="name@example.com"
                 autoComplete="email"
+                spellCheck={false}
                 required
                 disabled={isLoading}
                 readOnly={mode === "setup"}
@@ -245,6 +247,7 @@ export default function LoginPage() {
                 </label>
                 <PasswordInput
                   id="password"
+                  name="password"
                   value={formData.password}
                   onChange={(e) => setFormData({...formData, password: e.target.value})}
                   inputClassName="app-field pr-12"
@@ -275,6 +278,7 @@ export default function LoginPage() {
                   </label>
                   <PasswordInput
                     id="setup-password"
+                    name="new-password"
                     value={setupPassword}
                     onChange={(event) => setSetupPassword(event.target.value)}
                     inputClassName="app-field pr-12"
@@ -295,6 +299,7 @@ export default function LoginPage() {
                   </label>
                   <PasswordInput
                     id="setup-password-confirm"
+                    name="confirm-password"
                     value={confirmPassword}
                     onChange={(event) => setConfirmPassword(event.target.value)}
                     inputClassName="app-field pr-12"

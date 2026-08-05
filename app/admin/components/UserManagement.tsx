@@ -15,6 +15,8 @@ import Skeleton from "../../../components/Skeleton";
 import OperationsLayout from "../../../components/OperationsLayout";
 import OperationalSectionNav from "../../../components/OperationalSectionNav";
 import ConfirmDialog from "../../../components/ConfirmDialog";
+import Button from "../../../components/Button";
+import EmptyState from "../../../components/EmptyState";
 import { useSectionLoadingTask } from "../../../components/RouteTransitionProvider";
 import {
   fetchManagedUsersByVenue,
@@ -509,7 +511,7 @@ export default function UserManagement({
                 <div className="mb-4 border border-status-waiting/70 bg-status-waiting/10 p-4" role="status">
                   <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                     <div className="min-w-0">
-                      <p className="break-words font-mono text-xs font-semibold uppercase tracking-wider text-status-waiting">
+                      <p className="break-words text-sm font-semibold text-status-waiting">
                         {t("setupCodeTitle", { name: setupCredential.userName })}
                       </p>
                       <p className="mt-2 text-xs leading-relaxed text-text-muted">
@@ -546,11 +548,14 @@ export default function UserManagement({
                   </label>
                   <input
                     id="user-search"
+                    name="user-search"
                     type="search"
                     value={searchQuery}
                     onChange={(event) => setSearchQuery(event.target.value)}
                     className="app-field"
                     placeholder={t("searchPlaceholder")}
+                    autoComplete="off"
+                    spellCheck={false}
                   />
                 </div>
                 <div>
@@ -559,7 +564,9 @@ export default function UserManagement({
                   </label>
                   <select
                     id="user-role-filter"
+                    name="user-role-filter"
                     value={roleFilter}
+                    autoComplete="off"
                     onChange={(event) => setRoleFilter(event.target.value as typeof roleFilter)}
                     className="app-field"
                   >
@@ -580,7 +587,9 @@ export default function UserManagement({
                   </label>
                   <select
                     id="user-status-filter"
+                    name="user-status-filter"
                     value={statusFilter}
+                    autoComplete="off"
                     onChange={(event) => setStatusFilter(event.target.value as StatusFilter)}
                     className="app-field"
                   >
@@ -596,11 +605,14 @@ export default function UserManagement({
               {isCurrentScopeLoading && scopedUsers.length === 0 ? (
                 <Skeleton rows={5} />
               ) : filteredUsers.length === 0 ? (
-                <div className="text-center py-8">
-                  <p className="text-text-muted font-mono text-sm">
-                    {scopedUsers.length === 0 ? t("noUsers") : t("noMatchingUsers")}
-                  </p>
-                </div>
+                <EmptyState
+                  icon="users"
+                  message={
+                    scopedUsers.length === 0
+                      ? t("noUsers")
+                      : t("noMatchingUsers")
+                  }
+                />
               ) : (
                 <div
                   aria-busy={isCurrentScopeLoading}
@@ -795,7 +807,7 @@ function UserCard({
     <div className="app-panel p-4 sm:p-5" aria-busy={isBusy}>
       <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
-          <h3 className="type-row-title break-words font-mono tracking-wider">
+          <h3 className="type-row-title break-words">
             {user.name}
           </h3>
           <p className="truncate text-text-muted font-mono text-xs sm:text-sm">
@@ -806,7 +818,6 @@ function UserCard({
           {isSetupPending && (
             <span
               className="border border-status-waiting/70 bg-status-waiting/10 px-2 py-1 font-mono text-xs uppercase tracking-wider text-status-waiting"
-              aria-label={t("firstLoginPending")}
             >
               {t("setupPending")}
             </span>
@@ -868,7 +879,7 @@ function UserCard({
           </div>
           {isSetupPending && (
             <div className="mb-3 border border-status-waiting/60 bg-status-waiting/10 p-3">
-              <p className="font-mono text-xs font-medium uppercase tracking-wider text-status-waiting">
+              <p className="text-xs font-semibold text-status-waiting">
                 {t("firstLoginIncomplete")}
               </p>
               <p className="mt-1 text-xs leading-relaxed text-text-muted">
@@ -884,45 +895,49 @@ function UserCard({
           {canManage && (
             <div className="grid grid-cols-2 gap-2">
               {canEditDetails && (
-                <button
+                <Button
                   type="button"
                   onClick={() => setIsEditing(true)}
                   disabled={isBusy}
-                  className="min-h-11 bg-surface-active py-2 text-xs font-medium text-text-heading transition-colors hover:bg-border-strong disabled:opacity-50 sm:py-3"
+                  variant="secondary"
+                  size="sm"
+                  fullWidth
                 >
                   {t("edit")}
-                </button>
+                </Button>
               )}
-              <button
+              <Button
                 type="button"
                 onClick={() => onResetPassword(user)}
                 disabled={isBusy || !user.active}
                 title={!user.active ? t("inactiveResetUnavailable") : undefined}
-                className="min-h-11 border border-border-default bg-canvas py-2 text-xs font-medium text-text-body transition-colors hover:border-border-strong hover:text-text-heading disabled:cursor-not-allowed disabled:opacity-40 sm:py-3"
+                variant="outline"
+                size="sm"
+                fullWidth
               >
                 {t("resetPassword")}
-              </button>
-              <button
+              </Button>
+              <Button
                 type="button"
                 onClick={() => onToggleActive(user)}
                 disabled={isBusy}
-                className={`min-h-11 py-2 text-xs font-medium transition-colors disabled:opacity-50 sm:py-3 ${
-                  user.active
-                    ? "border border-status-danger/70 bg-status-danger/10 text-status-danger hover:bg-status-danger/20"
-                    : "bg-action-primary text-action-text hover:bg-action-hover"
-                }`}
+                variant={user.active ? "danger" : "primary"}
+                size="sm"
+                fullWidth
               >
                 {user.active ? t("deactivate") : t("activate")}
-              </button>
+              </Button>
               {!user.active && (
-                <button
+                <Button
                   type="button"
                   onClick={() => onDelete(user)}
                   disabled={isBusy}
-                  className="min-h-11 border border-status-danger/70 bg-status-danger/10 py-2 font-mono text-xs uppercase tracking-wider text-status-danger transition-colors hover:bg-status-danger/20 disabled:opacity-50 sm:py-3"
+                  variant="danger"
+                  size="sm"
+                  fullWidth
                 >
                   {t("delete")}
-                </button>
+                </Button>
               )}
             </div>
           )}
@@ -935,12 +950,14 @@ function UserCard({
             </label>
             <input
               id={`user-name-${user.id}`}
+              name={`user-name-${user.id}`}
               type="text"
               value={editData.name}
               onChange={(event) => setEditData({ ...editData, name: event.target.value })}
               className="app-field"
               maxLength={100}
               disabled={isBusy}
+              autoComplete="off"
             />
           </div>
           {canEditRole && (
@@ -1006,6 +1023,7 @@ function UserCard({
           {canEditRole && editData.accountKind === "shared" && (
             <label className="flex items-start gap-3 border border-border-default bg-surface-raised p-3">
               <input
+                name={`user-door-access-${user.id}`}
                 type="checkbox"
                 checked={editData.doorAccessEnabled}
                 onChange={(event) =>
@@ -1013,6 +1031,7 @@ function UserCard({
                 }
                 disabled={isBusy}
                 className="mt-0.5 h-4 w-4"
+                autoComplete="off"
               />
               <span className="text-sm text-text-heading">{t("doorAccess")}</span>
             </label>
@@ -1024,6 +1043,7 @@ function UserCard({
             </label>
             <input
               id={`user-guest-limit-${user.id}`}
+              name={`user-guest-limit-${user.id}`}
               type="number"
               value={editData.guestLimit ?? ""}
               onChange={(e) =>
@@ -1032,23 +1052,25 @@ function UserCard({
                   guestLimit: e.target.value ? parseInt(e.target.value) : null,
                 })
               }
-              className="min-h-11 w-full border border-border-strong bg-surface-raised px-3 py-2 font-mono text-sm text-text-heading focus:border-border-focus focus:outline-none sm:py-3"
+              className="app-field font-mono tabular-nums"
               min="0"
               max="999"
               disabled={isBusy}
+              autoComplete="off"
             />
           </div>
 
           <div className="grid grid-cols-2 gap-2">
-            <button
+            <Button
               type="button"
               onClick={handleSave}
               disabled={isBusy}
-              className="min-h-11 bg-text-heading py-2 text-xs font-medium text-canvas transition-colors hover:bg-text-body disabled:opacity-50 sm:py-3"
+              size="sm"
+              fullWidth
             >
               {t("save")}
-            </button>
-            <button
+            </Button>
+            <Button
               type="button"
               disabled={isBusy}
               onClick={() => {
@@ -1061,10 +1083,12 @@ function UserCard({
                   guestLimit: user.guestLimit,
                 });
               }}
-              className="min-h-11 bg-surface-active py-2 text-xs font-medium text-text-heading transition-colors hover:bg-border-strong disabled:opacity-50 sm:py-3"
+              variant="secondary"
+              size="sm"
+              fullWidth
             >
               {commonT("cancel")}
-            </button>
+            </Button>
           </div>
         </div>
       )}

@@ -1,5 +1,5 @@
-import Link from "next/link";
 import Icon from "@/components/Icon";
+import ButtonLink from "@/components/ButtonLink";
 import { getRequestTenantContext } from "@/lib/tenant/server";
 import { getTranslations } from "next-intl/server";
 
@@ -22,12 +22,13 @@ export default async function NotFound() {
           {t("notFoundDescription", { brand: brand.name })}
         </p>
         <div className="mx-auto mt-8 w-full max-w-xs">
-          <Link
+          <ButtonLink
             href="/"
-            className="pressable inline-flex min-h-11 w-full min-w-11 touch-manipulation items-center justify-center gap-2 whitespace-nowrap rounded-control border border-action-primary bg-action-primary px-5 py-3 text-sm font-semibold text-action-text hover:border-action-hover hover:bg-action-hover"
+            fullWidth
+            size="lg"
           >
             {t("goHome")}
-          </Link>
+          </ButtonLink>
         </div>
       </div>
     </main>

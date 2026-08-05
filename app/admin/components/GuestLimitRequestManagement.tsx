@@ -175,6 +175,7 @@ export default function GuestLimitRequestManagement() {
                     </label>
                     <input
                       id={`approved-extra-${request.id}`}
+                      name={`approved-extra-${request.id}`}
                       type="number"
                       min="1"
                       max={request.requestedExtra}
@@ -186,6 +187,7 @@ export default function GuestLimitRequestManagement() {
                         }))
                       }
                       className="app-field"
+                      autoComplete="off"
                       disabled={busyId === request.id}
                     />
                   </div>

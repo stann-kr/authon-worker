@@ -14,7 +14,10 @@ import { useTranslations } from "next-intl";
 
 interface MenuItem {
   id: string;
+  category: string;
   title: string;
+  description: string;
+  action: string;
   icon: IconName;
   href: string;
   requiredAccess: import("@/lib/users/policy").AccessScope[];
@@ -22,7 +25,6 @@ interface MenuItem {
 
 export default function Home() {
   const t = useTranslations("Home");
-  const commonT = useTranslations("Common");
   const [user, setUser] = useState<User | null>(null);
   const [pendingGuestRequestCount, setPendingGuestRequestCount] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
@@ -33,26 +35,35 @@ export default function Home() {
   const menuItems: MenuItem[] = useMemo(() => [
     {
       id: "guest",
-      title: commonT("guest"),
+      category: t("guestCategory"),
+      title: t("guestTitle"),
+      description: t("guestDescription"),
+      action: t("guestAction"),
       icon: "user-add",
       href: "/guest",
       requiredAccess: ["guest"],
     },
     {
       id: "door",
-      title: commonT("door"),
+      category: t("doorCategory"),
+      title: t("doorTitle"),
+      description: t("doorDescription"),
+      action: t("doorAction"),
       icon: "login",
       href: "/door",
       requiredAccess: ["door"],
     },
     {
       id: "admin",
-      title: commonT("admin"),
+      category: t("adminCategory"),
+      title: t("adminTitle"),
+      description: t("adminDescription"),
+      action: t("adminAction"),
       icon: "settings",
       href: "/admin",
       requiredAccess: ["admin"],
     },
-  ], [commonT]);
+  ], [t]);
 
   useEffect(() => {
     const initializeHome = async () => {
@@ -158,7 +169,7 @@ export default function Home() {
       ? "md:grid-cols-1"
       : accessibleMenus.length === 2
         ? "md:grid-cols-2"
-        : "md:grid-cols-2 lg:grid-cols-3";
+        : "md:grid-cols-3";
 
   return (
     <WorkspaceShell contentClassName="gap-4 pb-8 sm:gap-5">
@@ -203,22 +214,36 @@ function WorkspaceLink({
     <TransitionLink
       href={item.href}
       aria-keyshortcuts={String(index + 1)}
-      className="home-workspace-card pressable group relative flex min-h-[11rem] flex-col justify-between overflow-hidden border border-border-default bg-surface p-5 hover:border-border-strong hover:bg-surface-raised focus-visible:border-border-strong focus-visible:bg-surface-raised sm:min-h-[13rem] sm:p-6 lg:min-h-[15rem]"
+      className="home-workspace-card pressable group relative flex h-full min-h-[12rem] flex-col overflow-hidden border border-border-default bg-surface p-5 hover:border-border-strong hover:bg-surface-raised focus-visible:border-border-strong focus-visible:bg-surface-raised sm:min-h-[13rem] sm:p-6"
     >
-      <div className="flex items-start justify-between gap-4">
-        <span className="grid h-12 w-12 shrink-0 place-items-center border border-border-default bg-canvas text-text-muted transition-colors group-hover:border-border-strong group-hover:text-text-heading">
-          <Icon name={item.icon} size={23} />
-        </span>
+      <div className="flex items-center justify-between gap-4">
+        <p className="text-xs font-medium text-text-muted">
+          {item.category}
+        </p>
         <kbd className="font-mono text-xs font-semibold tabular-nums text-text-dim transition-colors group-hover:text-text-muted">
           [{index + 1}]
         </kbd>
       </div>
 
-      <div className="mt-8 flex min-w-0 items-end justify-between gap-5">
-        <h2 className="min-w-0 text-xl font-semibold tracking-[-0.025em] text-text-heading sm:text-2xl">
-          {item.title}
-        </h2>
-        <span className="grid h-11 w-11 shrink-0 place-items-center text-text-dim transition-[color,transform] duration-150 group-hover:translate-x-1 group-hover:text-text-heading">
+      <div className="mt-6 flex min-w-0 items-start gap-4">
+        <span className="grid h-11 w-11 shrink-0 place-items-center border border-border-default bg-canvas text-text-muted transition-colors group-hover:border-border-strong group-hover:text-text-heading">
+          <Icon name={item.icon} size={22} />
+        </span>
+        <div className="min-w-0">
+          <h2 className="text-xl font-semibold tracking-[-0.025em] text-text-heading sm:text-2xl">
+            {item.title}
+          </h2>
+          <p className="mt-2 text-sm leading-relaxed text-text-muted">
+            {item.description}
+          </p>
+        </div>
+      </div>
+
+      <div className="mt-auto flex items-center justify-between border-t border-border-subtle pt-4 transition-colors group-hover:border-border-default">
+        <span className="text-xs font-semibold text-text-muted transition-colors group-hover:text-text-heading">
+          {item.action}
+        </span>
+        <span className="grid h-8 w-8 shrink-0 place-items-center text-text-dim transition-[color,transform] duration-150 group-hover:translate-x-1 group-hover:text-text-heading">
           <Icon name="arrow-right" size={19} />
         </span>
       </div>

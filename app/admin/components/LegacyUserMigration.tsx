@@ -1,10 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import Spinner from "@/components/Spinner";
 import Alert from "@/components/Alert";
 import Icon from "@/components/Icon";
 import ConfirmDialog from "@/components/ConfirmDialog";
+import Button from "@/components/Button";
 import { useTranslations } from "next-intl";
 
 interface MigrationResult {
@@ -66,8 +66,8 @@ export default function LegacyUserMigration() {
       </div>
 
       <div className="bg-canvas border border-border-default p-4 mb-8">
-        <h3 className="font-mono text-xs text-text-dim uppercase mb-3 tracking-widest">{t("caution")}</h3>
-        <ul className="text-text-muted font-mono text-xs space-y-2 list-inside list-disc tracking-tight">
+        <h3 className="mb-3 text-sm font-semibold text-text-heading">{t("caution")}</h3>
+        <ul className="list-inside list-disc space-y-2 text-xs leading-relaxed text-text-muted">
           <li>{t("itemSource")}</li>
           <li>{t("itemExisting")}</li>
           <li>{t("itemEmail")}</li>
@@ -79,20 +79,22 @@ export default function LegacyUserMigration() {
 
       <div className="flex justify-center">
         {!results && (
-          <button
+          <Button
+            type="button"
             onClick={() => setIsConfirmOpen(true)}
-            disabled={loading}
-            className="flex items-center gap-2 bg-action-primary px-8 py-4 text-sm font-semibold text-action-text transition-colors hover:bg-action-hover disabled:opacity-50"
+            isLoading={loading}
+            size="lg"
+            leftIcon={<Icon name="play" size={17} />}
           >
-            {loading ? <Spinner mode="button" /> : <><Icon name="play" size={17} /> {t("start")}</>}
-          </button>
+            {t("start")}
+          </Button>
         )}
       </div>
 
       {results && (
         <div className="mt-8 space-y-4">
           <div className="flex items-center justify-between border-b border-border-subtle pb-2">
-            <h3 className="type-panel-title font-mono uppercase tracking-wider">{t("results")}</h3>
+            <h3 className="type-panel-title">{t("results")}</h3>
             <span className="font-mono text-xs text-text-dim">{t("processed", { count: results.length })}</span>
           </div>
           
@@ -111,12 +113,14 @@ export default function LegacyUserMigration() {
             ))}
           </div>
 
-          <button
+          <Button
+            type="button"
             onClick={() => setResults(null)}
-            className="min-h-11 w-full border border-border-default py-3 font-mono text-xs uppercase text-text-dim transition-colors hover:border-border-strong hover:text-text-heading"
+            variant="outline"
+            fullWidth
           >
             {t("reset")}
-          </button>
+          </Button>
         </div>
       )}
     </div>

@@ -12,8 +12,8 @@ import { useTranslations } from "next-intl";
  * - button: 버튼 내부 스피너 (submit 버튼 등)
  *
  * 사용 예:
- * <Spinner mode="fullscreen" text="LOADING..." />
- * <Spinner mode="content" text="LOADING..." />
+ * <Spinner mode="fullscreen" text="LOADING…" />
+ * <Spinner mode="content" text="LOADING…" />
  * <Spinner mode="inline" />
  * <Spinner mode="button" color="black" />
  */

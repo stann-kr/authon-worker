@@ -218,12 +218,14 @@ export default function ProfilePage() {
                     </label>
                     <input
                       id="profile-name"
+                      name="name"
                       type="text"
                       value={formData.name}
                       onChange={(e) =>
                         setFormData({ ...formData, name: e.target.value })
                       }
                       disabled={isSaving}
+                      autoComplete="name"
                       className="app-field"
                       required
                       aria-describedby="profile-name-helper"
@@ -278,29 +280,38 @@ function PasswordChangeForm() {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [isUpdating, setIsUpdating] = useState(false);
   const [isRedirecting, setIsRedirecting] = useState(false);
-  const [passwordError, setPasswordError] = useState("");
+  const [passwordError, setPasswordError] = useState<{
+    message: string;
+    target: "form" | "newPassword" | "confirmPassword";
+  } | null>(null);
   const [passwordSuccess, setPasswordSuccess] = useState("");
   const router = useRouter();
 
   const handlePasswordChange = async (e: React.FormEvent) => {
     e.preventDefault();
-    setPasswordError("");
+    setPasswordError(null);
     setPasswordSuccess("");
 
     const policyErrorCode = getPasswordPolicyErrorCode(newPassword);
     if (policyErrorCode) {
-      setPasswordError(
-        authT(
+      setPasswordError({
+        message: authT(
           policyErrorCode === "PASSWORD_TOO_SHORT"
             ? "passwordTooShort"
             : "passwordRequiresLettersAndNumbers",
         ),
-      );
+        target: "newPassword",
+      });
+      document.getElementById("new-password")?.focus();
       return;
     }
 
     if (newPassword !== confirmPassword) {
-      setPasswordError(t("passwordsDoNotMatch"));
+      setPasswordError({
+        message: t("passwordsDoNotMatch"),
+        target: "confirmPassword",
+      });
+      document.getElementById("confirm-password")?.focus();
       return;
     }
 
@@ -331,7 +342,11 @@ function PasswordChangeForm() {
         }, 3000);
       }
     } catch (err: unknown) {
-      setPasswordError(err instanceof Error ? err.message : t("passwordUpdateFailed"));
+      setPasswordError({
+        message:
+          err instanceof Error ? err.message : t("passwordUpdateFailed"),
+        target: "form",
+      });
     } finally {
       setIsUpdating(false);
     }
@@ -339,15 +354,19 @@ function PasswordChangeForm() {
 
   return (
     <form onSubmit={handlePasswordChange} className="p-4 sm:p-6 space-y-5" aria-busy={isUpdating || isRedirecting}>
-      {passwordError && <Alert type="error" message={passwordError} className="mb-4" />}
+      {passwordError && (
+        <div id="profile-password-error" className="mb-4">
+          <Alert type="error" message={passwordError.message} />
+        </div>
+      )}
       {passwordSuccess && <Alert type="success" message={passwordSuccess} className="mb-4" />}
 
       <div className="border border-border-strong bg-surface-raised p-4 space-y-2">
-        <div className="flex items-center gap-2 text-text-muted font-mono text-xs tracking-[0.24em] uppercase">
+        <div className="flex items-center gap-2 text-sm font-semibold text-text-heading">
           <Icon name="warning" size={16} />
           {t("securityWarning")}
         </div>
-        <p id="password-warning-msg" className="text-text-muted font-mono text-xs sm:text-xs tracking-[0.08em] leading-relaxed">
+        <p id="password-warning-msg" className="text-xs leading-relaxed text-text-muted">
           {t("securityWarningText")}
         </p>
       </div>
@@ -358,13 +377,13 @@ function PasswordChangeForm() {
         </label>
         <PasswordInput
           id="current-password"
+          name="current-password"
           value={currentPassword}
           onChange={(e) => setCurrentPassword(e.target.value)}
           autoComplete="current-password"
           disabled={isUpdating || isRedirecting}
           required
           aria-describedby="password-warning-msg"
-          aria-invalid={passwordError ? "true" : "false"}
         />
       </div>
 
@@ -374,14 +393,19 @@ function PasswordChangeForm() {
         </label>
         <PasswordInput
           id="new-password"
+          name="new-password"
           value={newPassword}
           onChange={(e) => setNewPassword(e.target.value)}
           autoComplete="new-password"
           disabled={isUpdating || isRedirecting}
           required
           placeholder={t("newPassword")}
-          aria-describedby="new-password-policy"
-          aria-invalid={passwordError ? "true" : "false"}
+          aria-describedby={`new-password-policy${
+            passwordError?.target === "newPassword"
+              ? " profile-password-error"
+              : ""
+          }`}
+          aria-invalid={passwordError?.target === "newPassword" || undefined}
         />
         <p id="new-password-policy" className="app-helper">
           {authT("passwordPolicyHint")}
@@ -394,14 +418,21 @@ function PasswordChangeForm() {
         </label>
         <PasswordInput
           id="confirm-password"
+          name="confirm-password"
           value={confirmPassword}
           onChange={(e) => setConfirmPassword(e.target.value)}
           autoComplete="new-password"
           disabled={isUpdating || isRedirecting}
           required
           placeholder={t("confirmNewPassword")}
-          aria-describedby="confirm-password-helper"
-          aria-invalid={passwordError ? "true" : "false"}
+          aria-describedby={`confirm-password-helper${
+            passwordError?.target === "confirmPassword"
+              ? " profile-password-error"
+              : ""
+          }`}
+          aria-invalid={
+            passwordError?.target === "confirmPassword" || undefined
+          }
         />
         <p id="confirm-password-helper" className="app-helper">
           {t("confirmPasswordHelp")}

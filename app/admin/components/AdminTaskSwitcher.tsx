@@ -76,7 +76,7 @@ export default function AdminTaskSwitcher({
                 aria-disabled={disabled || undefined}
                 tabIndex={disabled ? -1 : undefined}
                 onClick={(event) => handleTaskClick(event, option.id)}
-                className={`pressable flex min-h-14 min-w-0 flex-col items-center justify-center gap-1 border px-1.5 py-2 text-center text-[0.6875rem] font-medium leading-tight ${
+                className={`pressable flex min-h-14 min-w-0 flex-col items-center justify-center gap-1 border px-1.5 py-2 text-center text-xs font-medium leading-tight ${
                   isActive
                     ? "border-action-primary bg-surface-active text-text-heading"
                     : "border-transparent bg-surface text-text-muted hover:bg-surface-raised hover:text-text-heading"

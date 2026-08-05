@@ -14,6 +14,7 @@ import DatePicker from "../../../components/DatePicker";
 import OperationsLayout from "../../../components/OperationsLayout";
 import OperationalSectionNav from "../../../components/OperationalSectionNav";
 import ConfirmDialog from "../../../components/ConfirmDialog";
+import Button from "../../../components/Button";
 import { useSectionLoadingTask } from "../../../components/RouteTransitionProvider";
 import { useLatestRequestGuard } from "../../../lib/hooks";
 import { formatDateDisplay } from "../../../lib/date";
@@ -586,7 +587,7 @@ export default function LinkManagement({
                         setManageScope(scope);
                         setManageFilter("all");
                       }}
-                      className={`min-h-11 border px-3 py-2 text-xs font-medium uppercase ${
+                      className={`min-h-11 border px-3 py-2 text-xs font-medium ${
                         manageScope === scope
                           ? "border-action-primary bg-action-primary text-action-text"
                           : "border-border-default bg-surface-raised text-text-muted"
@@ -642,7 +643,7 @@ export default function LinkManagement({
         {activeTab === "create" && (
           <div className="space-y-6">
             <div className="app-panel p-4 sm:p-6">
-              <h2 className="type-panel-title mb-6 font-mono uppercase tracking-wider">
+              <h2 className="type-panel-title mb-6">
                 {t("createAccessLink")}
               </h2>
 
@@ -683,8 +684,10 @@ export default function LinkManagement({
                       {/* Hidden Native Input */}
                       <input
                         id="link-date"
+                        name="link-date"
                         ref={linkDateInputRef}
                         type="date"
+                        autoComplete="off"
                         value={formData.date}
                         disabled={isGenerating}
                         aria-invalid={
@@ -721,8 +724,10 @@ export default function LinkManagement({
                     </label>
                     <input
                       id="link-dj-name"
+                      name="dj-name"
                       ref={linkDjInputRef}
                       type="text"
+                      autoComplete="off"
                       value={formData.dj}
                       disabled={isGenerating}
                       aria-invalid={
@@ -741,7 +746,7 @@ export default function LinkManagement({
                           dj: e.target.value.toUpperCase(),
                         });
                       }}
-                      className={`w-full border bg-canvas px-4 py-3 text-sm uppercase text-text-heading focus-visible:border-border-focus disabled:cursor-not-allowed disabled:opacity-60 ${
+                      className={`app-field uppercase ${
                         formValidationError?.field === "dj"
                           ? "border-status-danger"
                           : "border-border-strong"
@@ -767,8 +772,10 @@ export default function LinkManagement({
                   </label>
                   <input
                     id="link-event-name"
+                    name="event-name"
                     ref={linkEventInputRef}
                     type="text"
+                    autoComplete="off"
                     value={formData.event}
                     disabled={isGenerating}
                     aria-invalid={
@@ -787,7 +794,7 @@ export default function LinkManagement({
                         event: e.target.value.toUpperCase(),
                       });
                     }}
-                    className={`w-full border bg-canvas px-4 py-3 text-sm uppercase text-text-heading focus-visible:border-border-focus disabled:cursor-not-allowed disabled:opacity-60 ${
+                    className={`app-field uppercase ${
                       formValidationError?.field === "event"
                         ? "border-status-danger"
                         : "border-border-strong"
@@ -812,8 +819,10 @@ export default function LinkManagement({
                   </label>
                   <input
                     id="link-max-guests"
+                    name="max-guests"
                     ref={linkMaxGuestsInputRef}
                     type="number"
+                    autoComplete="off"
                     min="1"
                     max="999"
                     step="1"
@@ -835,7 +844,7 @@ export default function LinkManagement({
                           e.target.value === "" ? "" : Number(e.target.value),
                       });
                     }}
-                    className={`w-full border bg-canvas px-4 py-3 text-sm text-text-heading focus-visible:border-border-focus disabled:cursor-not-allowed disabled:opacity-60 ${
+                    className={`app-field ${
                       formValidationError?.field === "maxGuests"
                         ? "border-status-danger"
                         : "border-border-strong"
@@ -908,20 +917,14 @@ export default function LinkManagement({
                   )}
                 </fieldset>
 
-                <button
+                <Button
                   type="submit"
-                  disabled={isGenerating}
-                  className="w-full bg-action-primary py-3 text-sm font-semibold text-action-text transition-colors hover:bg-action-hover disabled:bg-border-strong disabled:text-text-muted disabled:opacity-50 sm:py-4"
+                  isLoading={isGenerating}
+                  fullWidth
+                  size="lg"
                 >
-                  {isGenerating ? (
-                    <div className="flex items-center justify-center gap-2">
-                      <div className="w-4 h-4 border-2 border-canvas border-t-transparent rounded-full animate-spin"></div>
-                      {t("generating")}
-                    </div>
-                  ) : (
-                    t("generateLink")
-                  )}
-                </button>
+                  {isGenerating ? t("generating") : t("generateLink")}
+                </Button>
               </form>
             </div>
 
@@ -959,7 +962,7 @@ export default function LinkManagement({
                   </div>
                 </div>
 
-                <button
+                <Button
                   type="button"
                   onClick={() =>
                     shareOrCopyLink(
@@ -970,18 +973,17 @@ export default function LinkManagement({
                       ),
                     )
                   }
-                  disabled={isGeneratedLinkActionPending}
-                  className="min-h-11 w-full bg-action-primary py-3 text-xs font-semibold text-action-text transition-colors hover:bg-action-hover disabled:opacity-50"
+                  isLoading={isGeneratedLinkActionPending}
+                  fullWidth
                 >
-                  {isGeneratedLinkActionPending ? (
-                    <div className="flex items-center justify-center gap-2">
-                      <div className="w-3 h-3 border-2 border-canvas border-t-transparent rounded-full animate-spin"></div>
-                      {nativeShareAvailable ? t("sharing") : t("copying")}
-                    </div>
-                  ) : (
-                    nativeShareAvailable ? t("shareLink") : t("copyLink")
-                  )}
-                </button>
+                  {isGeneratedLinkActionPending
+                    ? nativeShareAvailable
+                      ? t("sharing")
+                      : t("copying")
+                    : nativeShareAvailable
+                      ? t("shareLink")
+                      : t("copyLink")}
+                </Button>
               </div>
             )}
           </div>
@@ -1013,7 +1015,7 @@ export default function LinkManagement({
                         type="button"
                         onClick={() => setManageFilter(filter.key as ManageFilter)}
                         aria-pressed={manageFilter === filter.key}
-                        className={`min-h-11 border px-3 py-2 text-xs font-medium uppercase transition-colors ${
+                        className={`min-h-11 border px-3 py-2 text-xs font-medium transition-colors ${
                           manageFilter === filter.key
                             ? "border-action-primary bg-action-primary text-action-text"
                             : "border-border-default bg-canvas text-text-muted hover:border-border-strong hover:text-text-heading"
@@ -1032,11 +1034,13 @@ export default function LinkManagement({
                       <div className="relative">
                         <select
                           id="link-sort"
+                          name="link-sort"
                           value={manageSort}
+                          autoComplete="off"
                           onChange={(event) =>
                             setManageSort(event.target.value as ManageSort)
                           }
-                          className="app-field min-h-11 appearance-none py-2.5 pl-4 pr-12 text-xs uppercase"
+                          className="app-field min-h-11 appearance-none py-2.5 pl-4 pr-12 text-xs"
                         >
                           <option value="newest">{t("newestCreated")}</option>
                           <option value="expiresSoonest">{t("expiresSoonest")}</option>
@@ -1196,7 +1200,9 @@ export default function LinkManagement({
                             <div className="flex flex-col gap-2 sm:flex-row">
                               <input
                                 id={`link-url-${link.id}`}
+                                name={`link-url-${link.id}`}
                                 type="text"
+                                autoComplete="off"
                                 readOnly
                                 value={guestPageUrl}
                                 onFocus={(event) => event.currentTarget.select()}
@@ -1219,14 +1225,16 @@ export default function LinkManagement({
                         )}
 
                         <div className="mt-3 flex flex-wrap justify-end gap-2 sm:pl-11">
-                          <button
+                          <Button
                             type="button"
                             onClick={() => handleUseAsTemplate(link)}
-                            className="min-h-11 border border-border-default bg-surface px-3 py-2 text-xs font-medium text-text-muted hover:border-border-strong hover:bg-surface-raised hover:text-text-heading"
+                            variant="ghost"
+                            size="sm"
+                            className="border border-border-default bg-surface"
                           >
                             {t("useAsTemplate")}
-                          </button>
-                          <button
+                          </Button>
+                          <Button
                             type="button"
                             onClick={() =>
                               setVisibleLinkId((current) =>
@@ -1235,77 +1243,71 @@ export default function LinkManagement({
                             }
                             aria-expanded={isLinkVisible}
                             aria-controls={`link-url-panel-${link.id}`}
-                            className="inline-flex min-h-11 items-center gap-2 border border-border-default bg-surface px-3 py-2 text-xs font-medium text-text-heading hover:bg-surface-raised"
+                            variant="secondary"
+                            size="sm"
+                            leftIcon={
+                              <Icon
+                                name={isLinkVisible ? "view-off" : "view"}
+                                size={16}
+                              />
+                            }
                           >
-                            <Icon
-                              name={isLinkVisible ? "view-off" : "view"}
-                              size={16}
-                            />
                             {isLinkVisible ? t("hide") : t("view")}
-                          </button>
-                          <button
+                          </Button>
+                          <Button
                             type="button"
                             onClick={() =>
                               shareOrCopyLink(link, guestPageUrl, link.id)
                             }
-                            disabled={loadingStates[`share_${link.id}`]}
-                            className="inline-flex min-h-11 items-center justify-center gap-2 bg-action-primary px-4 py-2 text-xs font-semibold text-action-text transition-colors hover:bg-action-hover disabled:opacity-50"
+                            isLoading={loadingStates[`share_${link.id}`]}
+                            size="sm"
                           >
-                            {loadingStates[`share_${link.id}`] ? (
-                              <>
-                                <span className="h-3 w-3 animate-spin rounded-full border-2 border-canvas border-t-transparent" />
-                                {nativeShareAvailable
-                                  ? t("sharing")
-                                  : t("copying")}
-                              </>
-                            ) : completedLinkAction === "shared" ? (
-                              t("shared")
-                            ) : completedLinkAction === "copied" ? (
-                              t("copied")
-                            ) : (
-                              nativeShareAvailable
-                                ? t("shareLink")
-                                : t("copyLink")
-                            )}
-                          </button>
+                            {loadingStates[`share_${link.id}`]
+                              ? nativeShareAvailable
+                                ? t("sharing")
+                                : t("copying")
+                              : completedLinkAction === "shared"
+                                ? t("shared")
+                                : completedLinkAction === "copied"
+                                  ? t("copied")
+                                  : nativeShareAvailable
+                                    ? t("shareLink")
+                                    : t("copyLink")}
+                          </Button>
                           {status.expired ? (
                             <span className="inline-flex min-h-11 items-center border border-status-danger/70 px-3 text-xs text-status-danger">
                               {t("expired")}
                             </span>
                           ) : link.active ? (
-                            <button
+                            <Button
+                              type="button"
                               onClick={() => setPendingDeactivateLink(link)}
-                              disabled={loadingStates[`deactivate_${link.id}`]}
-                              className="min-h-11 border border-border-default bg-surface px-3 py-2 text-xs font-medium text-text-muted hover:bg-surface-raised disabled:opacity-50"
+                              variant="secondary"
+                              size="sm"
+                              isLoading={loadingStates[`deactivate_${link.id}`]}
                             >
-                              {loadingStates[`deactivate_${link.id}`]
-                                ? "..."
-                                : t("deactivate")}
-                            </button>
+                              {t("deactivate")}
+                            </Button>
                           ) : (
-                            <button
+                            <Button
+                              type="button"
                               onClick={() => handleActivateLink(link.id)}
-                              disabled={loadingStates[`activate_${link.id}`]}
-                              className="min-h-11 border border-border-default bg-surface px-3 py-2 text-xs font-medium text-text-heading hover:bg-surface-raised disabled:opacity-50"
+                              variant="secondary"
+                              size="sm"
+                              isLoading={loadingStates[`activate_${link.id}`]}
                             >
-                              {loadingStates[`activate_${link.id}`]
-                                ? "..."
-                                : t("activate")}
-                            </button>
+                              {t("activate")}
+                            </Button>
                           )}
-                          <button
+                          <Button
+                            type="button"
                             onClick={() => requestDeleteLink(link)}
-                            disabled={loadingStates[`delete_${link.id}`]}
-                            className="min-h-11 border border-status-danger/70 bg-status-danger/10 px-3 py-2 text-xs font-medium text-status-danger hover:bg-status-danger/20 disabled:opacity-50"
+                            variant="danger"
+                            size="sm"
+                            isLoading={loadingStates[`delete_${link.id}`]}
                           >
-                            {loadingStates[`delete_${link.id}`] ? (
-                              <div className="flex items-center justify-center">
-                                <div className="h-3 w-3 animate-spin rounded-full border-2 border-status-danger border-t-transparent"></div>
-                              </div>
-                            ) : (
-                              t("delete")
-                            )}
-                          </button>
+                            {t("delete")}
+                          </Button>
                         </div>
                       </article>
                     )})
@@ -1320,7 +1322,7 @@ export default function LinkManagement({
 
       {linkActionToast && (
         <div className="fixed bottom-[calc(5rem+env(safe-area-inset-bottom))] right-4 z-[var(--app-z-toast)] max-w-[calc(100vw-2rem)] border border-border-strong bg-surface-raised px-4 py-3 text-text-heading md:bottom-5 md:right-5" role="status" aria-live="polite" aria-atomic="true">
-          <p className="text-xs font-medium uppercase tracking-[0.05em]">
+          <p className="text-xs font-medium">
             {linkActionToast}
           </p>
         </div>

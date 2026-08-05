@@ -39,6 +39,7 @@
   --app-duration-enter: 200ms;
   --app-duration-fast: 140ms;
   --app-duration-standard: 200ms;
+  --app-tap-highlight: rgb(244 245 245 / 0.14);
 }
 
 html,
@@ -256,6 +257,8 @@ input[type="date"] {
 
   .pressable {
     --app-press-background: var(--app-surface-active);
+    -webkit-tap-highlight-color: var(--app-tap-highlight);
+    touch-action: manipulation;
     transform: scale(1);
     transition: transform var(--app-duration-release) var(--app-ease-out),
       color var(--app-duration-release) var(--app-ease-out),

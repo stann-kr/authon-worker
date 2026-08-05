@@ -96,6 +96,7 @@ export default function AdminHeader() {
               </TransitionLink>
             )}
             <button
+              type="button"
               onClick={logout}
               className="pressable flex h-11 w-11 items-center justify-center rounded-control border border-border-default bg-surface text-text-muted hover:border-border-strong hover:bg-surface-hover hover:text-text-heading"
               aria-label={t("logout")}
@@ -155,7 +156,7 @@ function MobileWorkspaceLink({
     <TransitionLink
       href={href}
       aria-current={isActive ? "page" : undefined}
-      className={`pressable flex min-h-16 min-w-0 flex-col items-center justify-center gap-1 px-1 py-2 text-[0.6875rem] ${
+      className={`pressable flex min-h-16 min-w-0 flex-col items-center justify-center gap-1 px-1 py-2 text-xs leading-tight ${
         isActive
           ? "bg-surface-raised font-semibold text-text-heading"
           : "text-text-muted"

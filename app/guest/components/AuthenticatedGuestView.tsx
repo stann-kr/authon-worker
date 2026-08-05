@@ -565,19 +565,18 @@ export default function AuthenticatedGuestView({ user }: AuthenticatedGuestViewP
                 {error && <Alert type="error" message={error} />}
 
                 <section className="app-panel" aria-labelledby="add-guest-title">
-                  <div className="px-4 py-4 sm:px-5">
-                    <div className="mb-4 flex items-start justify-between gap-4">
-                      <div className="min-w-0">
-                        <h2 id="add-guest-title" className="type-panel-title">
-                          {t("addGuest")}
-                        </h2>
-                      </div>
-                      <GuestCapacityIndicator
-                        label={t("remaining")}
-                        value={remaining ?? "∞"}
-                      />
-                    </div>
+                  <div className="relative flex items-center justify-between gap-4 border-b border-border-subtle px-4 py-3 sm:px-5">
+                    <h2 id="add-guest-title" className="type-panel-title">
+                      {t("addGuest")}
+                    </h2>
+                    <GuestCapacityIndicator
+                      label={t("remaining")}
+                      remaining={remaining}
+                      limit={effectiveLimit}
+                    />
+                  </div>
 
+                  <div className="px-4 py-4 sm:px-5">
                     {user?.account_kind === "shared" && (
                       <div className="mb-3">
                         <label htmlFor="shared-operator-name" className="app-label">
@@ -585,6 +584,7 @@ export default function AuthenticatedGuestView({ user }: AuthenticatedGuestViewP
                         </label>
                         <input
                           id="shared-operator-name"
+                          name="shared-operator-name"
                           type="text"
                           value={registeredByName}
                           onChange={(event) => handleOperatorChange(event.target.value)}
@@ -690,6 +690,7 @@ export default function AuthenticatedGuestView({ user }: AuthenticatedGuestViewP
                               </label>
                               <input
                                 id="extra-guest-count"
+                                name="extra-guest-count"
                                 type="number"
                                 min="1"
                                 max="10"
@@ -698,6 +699,7 @@ export default function AuthenticatedGuestView({ user }: AuthenticatedGuestViewP
                                   updateRequestDraft({ requestedExtra: event.target.value })
                                 }
                                 disabled={isRequestDisclosureDisabled}
+                                autoComplete="off"
                                 className="app-field"
                               />
                             </div>
@@ -707,6 +709,7 @@ export default function AuthenticatedGuestView({ user }: AuthenticatedGuestViewP
                               </label>
                               <textarea
                                 id="extra-guest-reason"
+                                name="extra-guest-reason"
                                 value={requestDraft.requestReason}
                                 onChange={(event) =>
                                   updateRequestDraft({ requestReason: event.target.value })
@@ -714,6 +717,7 @@ export default function AuthenticatedGuestView({ user }: AuthenticatedGuestViewP
                                 maxLength={200}
                                 rows={2}
                                 disabled={isRequestDisclosureDisabled}
+                                autoComplete="off"
                                 className="app-field"
                               />
                             </div>

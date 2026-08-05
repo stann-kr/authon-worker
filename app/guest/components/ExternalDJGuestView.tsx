@@ -417,31 +417,31 @@ export default function ExternalDJGuestView({ token }: ExternalDJGuestViewProps)
         <main id="main-content" tabIndex={-1} className="page-container">
           <div className="context-bar mb-4 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4 p-4 sm:p-5">
             <div className="flex flex-col">
-              <span className="text-xs font-mono uppercase tracking-wider text-text-dim">
+              <span className="type-context-title mb-0">
                 {t("guestOwner")}
               </span>
-              <span className="mt-1 text-sm font-semibold text-text-heading">
+              <span className="mt-1 break-words text-sm font-semibold text-text-heading">
                 {linkInfo?.djName ?? "-"}
               </span>
             </div>
             <div className="flex flex-col">
-              <span className="text-xs font-mono uppercase tracking-wider text-text-dim">
+              <span className="type-context-title mb-0">
                 {t("event")}
               </span>
-              <span className="mt-1 text-sm font-semibold text-text-heading">
+              <span className="mt-1 break-words text-sm font-semibold text-text-heading">
                 {linkInfo?.event ?? "-"}
               </span>
             </div>
             <div className="flex flex-col">
-              <span className="text-xs font-mono uppercase tracking-wider text-text-dim">
+              <span className="type-context-title mb-0">
                 {t("venue")}
               </span>
-              <span className="mt-1 text-sm font-semibold text-text-heading">
+              <span className="mt-1 break-words text-sm font-semibold text-text-heading">
                 {venueInfo?.name ?? "-"}
               </span>
             </div>
             <div className="flex flex-col">
-              <span className="text-xs font-mono uppercase tracking-wider text-text-dim">
+              <span className="type-context-title mb-0">
                 {t("operationalDate")}
               </span>
               <span className="mt-1 font-mono text-sm font-semibold text-text-heading">
@@ -492,23 +492,22 @@ export default function ExternalDJGuestView({ token }: ExternalDJGuestViewProps)
           )}
 
           <section className="main-content-panel">
-            <div className="border-b border-border-subtle px-4 py-4 sm:px-5">
-              <div className="mb-4 flex items-start justify-between gap-4">
-                <div>
-                  <h1
-                    ref={contentHeadingRef}
-                    tabIndex={-1}
-                    className="type-panel-title outline-none focus-visible:ring-2 focus-visible:ring-focus"
-                  >
-                    {t("addGuest")}
-                  </h1>
-                </div>
-                <GuestCapacityIndicator
-                  label={t("remaining")}
-                  value={remaining}
-                />
-              </div>
+            <div className="relative flex items-center justify-between gap-4 border-b border-border-subtle px-4 py-3 sm:px-5">
+              <h1
+                ref={contentHeadingRef}
+                tabIndex={-1}
+                className="type-panel-title outline-none focus-visible:ring-2 focus-visible:ring-focus"
+              >
+                {t("addGuest")}
+              </h1>
+              <GuestCapacityIndicator
+                label={t("remaining")}
+                remaining={remaining}
+                limit={linkInfo?.maxGuests ?? null}
+              />
+            </div>
 
+            <div className="border-b border-border-subtle px-4 py-4 sm:px-5">
               {!isAtLimit ? (
                 <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
                   <div className="min-w-0 flex-1">
@@ -517,11 +516,13 @@ export default function ExternalDJGuestView({ token }: ExternalDJGuestViewProps)
                     </label>
                     <input
                       id="external-guest-name"
+                      name="external-guest-name"
                       type="text"
                       value={guestName}
                       onChange={(event) => setGuestName(event.target.value)}
                       placeholder={t("enterFullName")}
                       maxLength={100}
+                      autoComplete="off"
                       disabled={
                         requiresReconciliation ||
                         isReconciling ||

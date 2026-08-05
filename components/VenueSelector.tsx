@@ -207,8 +207,10 @@ export default function VenueSelector({
       <div className="relative">
         <select
           id={selectId}
+          name="venue-selector"
           value={selectedVenueId}
           disabled={disabled}
+          autoComplete="off"
           onChange={(e) => onVenueChange(e.target.value)}
           className="app-field appearance-none pr-10 disabled:cursor-not-allowed disabled:opacity-60"
         >
