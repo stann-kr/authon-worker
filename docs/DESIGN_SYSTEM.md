@@ -81,7 +81,7 @@ Authon UI는 베뉴 현장에서 반복적으로 사용하는 운영 도구다. 
 - 화면 단위 loading은 최초 진입, route 변경, 접근 권한 확인, 베뉴 준비와 목적지의 최초 운영 데이터 조회를 하나의 수명주기로 묶고 현재 언어의 공통 문구를 사용한다. 로그인 후에는 현재 header와 footer를 유지한 채 콘텐츠 영역에 spinner 하나만 표시한다.
 - 연속된 준비 작업 사이에는 loader를 닫지 않으며, 모든 준비 작업이 끝난 뒤 한 번만 종료한다.
 - 화면 loading이 진행 중일 때는 새 메뉴 이동을 겹쳐 시작하지 않으며, 이전 화면의 진행 중인 목록 응답과 실패 상태는 화면을 갱신하지 않는다.
-- 화면이 열린 뒤 날짜·베뉴·목록 범위를 다시 조회할 때는 전체 화면 loading을 시작하지 않는다. `PanelHeader`의 새로고침 표시, 현재 조회 범위의 통계 `-`, 목록 skeleton 또는 유효한 같은 범위의 캐시로 해당 section 안에서만 진행 상태를 전달한다.
+- 화면이 열린 뒤 날짜·베뉴·목록 범위를 다시 조회할 때는 전체 화면 loading을 시작하지 않는다. `PanelHeader`의 새로고침 표시, 현재 조회 범위의 통계 `-`, 목록 skeleton 또는 유효한 같은 범위의 캐시로 해당 section 안에서만 진행 상태를 전달한다. 추가 게스트 요청처럼 날짜에 종속된 보조 작업은 새 범위를 읽는 동안 숨기지 않고 비활성 loading summary를 유지하며, 다른 날짜의 상태는 재사용하지 않는다.
 - button loading은 label 위치를 유지하는 작은 progress indicator를 사용한다.
 - empty state는 원인과 다음 행동을 함께 제시할 수 있어야 한다.
 - error는 영향받는 section 가까이에 표시하고 재시도가 가능한 경우 action을 제공한다.
@@ -114,7 +114,7 @@ Authon UI는 베뉴 현장에서 반복적으로 사용하는 운영 도구다. 
 - `StatGrid`: 통계 수치와 label을 선 없는 quiet tile 중앙에 정렬하고, 독립 영역과 목록 안의 `embedded` 배치를 구분하며 현재 조회 범위의 loading 상태를 함께 표현한다.
 - `GuestListCard`: waiting, checked, removed 상태와 registration/operations 작업 모드별 action을 표현한다. 공용 계정 게스트는 계정명과 실제 입력자를 함께 표시하고, checked 상태의 되돌리기는 해당 행 안에서 제공한다.
 - `GuestBulkEntry`: 선택형 disclosure 안에서 줄바꿈 입력, 요약, 최대 25행 미리보기, 행별 중복 확인, 정원 보류와 제출 결과를 한 흐름으로 제공한다. 정상 행은 이름만 표시하고 수정·확인이 필요한 예외 행에만 보조 문구와 control을 둔다.
-- `DisclosureSection`: 대량 입력과 추가 게스트 요청처럼 패널 안의 보조 작업을 같은 summary·meta·chevron·상단 구획선으로 단계적으로 노출한다.
+- `DisclosureSection`: 대량 입력과 추가 게스트 요청처럼 패널 안의 보조 작업을 같은 summary·meta·chevron·상단 구획선으로 단계적으로 노출한다. 날짜별 상태를 다시 읽는 동안에는 같은 summary 높이를 유지하고, 최신 한도 상태를 확인하기 전까지 제출만 잠근다.
 - `GuestCapacityIndicator`: 게스트 추가 제목 옆의 남은 인원 label과 값을 한 기준선에 정렬한다.
 - `StatusLabel`: 상태별 아이콘, 텍스트, 색상 규칙을 통일한다.
 - `Alert`: error와 success를 live region으로 전달한다.

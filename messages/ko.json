@@ -281,7 +281,9 @@
     "submitRequest": "요청 보내기",
     "requestPending": "추가 {count}명 요청이 관리자 승인을 기다리고 있습니다.",
     "requestAlreadyPending": "이 운영일에는 이미 승인 대기 중인 요청이 있습니다.",
-    "requestFailed": "추가 게스트 요청을 보내지 못했습니다."
+    "requestFailed": "추가 게스트 요청을 보내지 못했습니다.",
+    "requestUnavailable": "상태 확인 필요",
+    "requestNotNeeded": "추가 요청 불필요"
   },
   "Door": {
     "title": "도어 체크인",

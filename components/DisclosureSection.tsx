@@ -1,4 +1,10 @@
-import type { ReactNode } from "react";
+import {
+  useCallback,
+  useLayoutEffect,
+  useRef,
+  type ReactNode,
+  type Ref,
+} from "react";
 import Icon from "./Icon";
 
 interface DisclosureSectionProps {
@@ -6,6 +12,9 @@ interface DisclosureSectionProps {
   meta?: ReactNode;
   children: ReactNode;
   className?: string;
+  disabled?: boolean;
+  isLoading?: boolean;
+  summaryElementRef?: Ref<HTMLElement>;
 }
 
 /**
@@ -17,12 +26,75 @@ export default function DisclosureSection({
   meta,
   children,
   className = "",
+  disabled = false,
+  isLoading = false,
+  summaryElementRef,
 }: DisclosureSectionProps) {
+  const detailsRef = useRef<HTMLDetailsElement>(null);
+  const summaryRef = useRef<HTMLElement>(null);
+  const hadFocusWithinRef = useRef(false);
+  const setSummaryElement = useCallback(
+    (element: HTMLElement | null) => {
+      summaryRef.current = element;
+      if (typeof summaryElementRef === "function") {
+        summaryElementRef(element);
+      } else if (summaryElementRef) {
+        summaryElementRef.current = element;
+      }
+    },
+    [summaryElementRef],
+  );
+
+  useLayoutEffect(() => {
+    const details = detailsRef.current;
+    if (!disabled || !details?.open) return;
+
+    const hadFocus =
+      hadFocusWithinRef.current ||
+      (document.activeElement instanceof HTMLElement &&
+        details.contains(document.activeElement));
+    details.open = false;
+    if (hadFocus) summaryRef.current?.focus();
+  }, [disabled]);
+
   return (
     <details
+      ref={detailsRef}
+      aria-busy={isLoading || undefined}
+      aria-disabled={disabled || undefined}
+      onFocusCapture={() => {
+        hadFocusWithinRef.current = true;
+      }}
+      onBlurCapture={(event) => {
+        if (event.relatedTarget instanceof Node) {
+          hadFocusWithinRef.current = event.currentTarget.contains(
+            event.relatedTarget,
+          );
+          return;
+        }
+
+        queueMicrotask(() => {
+          const details = detailsRef.current;
+          hadFocusWithinRef.current = Boolean(
+            details &&
+              document.activeElement instanceof Node &&
+              details.contains(document.activeElement),
+          );
+        });
+      }}
       className={`disclosure-section group mt-4 border-t border-border-subtle pt-2 ${className}`}
     >
-      <summary className="pressable -mx-1 flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 px-1 py-2 text-sm font-medium text-text-muted hover:text-text-heading group-open:text-text-heading [&::-webkit-details-marker]:hidden">
+      <summary
+        ref={setSummaryElement}
+        aria-disabled={disabled || undefined}
+        tabIndex={disabled ? -1 : undefined}
+        onClick={disabled ? (event) => event.preventDefault() : undefined}
+        className={`pressable -mx-1 flex min-h-11 list-none items-center justify-between gap-3 px-1 py-2 text-sm font-medium text-text-muted group-open:text-text-heading [&::-webkit-details-marker]:hidden ${
+          disabled
+            ? "cursor-default opacity-75"
+            : "cursor-pointer hover:text-text-heading"
+        }`}
+      >
         <span className="min-w-0">{title}</span>
         <span className="flex shrink-0 items-center gap-2">
           {meta ? (

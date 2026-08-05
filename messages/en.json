@@ -281,7 +281,9 @@
     "submitRequest": "Send request",
     "requestPending": "A request for {count} additional guests is awaiting approval.",
     "requestAlreadyPending": "A request for this date is already pending.",
-    "requestFailed": "Unable to send the additional guest request."
+    "requestFailed": "Unable to send the additional guest request.",
+    "requestUnavailable": "Status unavailable",
+    "requestNotNeeded": "No request needed"
   },
   "Door": {
     "title": "Door check-in",
