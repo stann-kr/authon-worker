@@ -362,11 +362,7 @@ export default function LinkManagement({
     }
   };
 
-  const shareOrCopyLink = async (
-    link: ExternalDJLink,
-    url: string,
-    id?: string,
-  ) => {
+  const shareOrCopyLink = async (url: string, id?: string) => {
     if (id) {
       setLoadingStates((prev) => ({ ...prev, [`share_${id}`]: true }));
     } else {
@@ -374,14 +370,7 @@ export default function LinkManagement({
     }
     setError(null);
 
-    const shareData = toExternalLinkShareData(
-      url,
-      t("shareTitle", { djName: link.djName }),
-      t("shareText", {
-        event: link.event || t("untitledEvent"),
-        date: link.date ? formatDateDisplay(link.date, locale) : t("noDate"),
-      }),
-    );
+    const shareData = toExternalLinkShareData(url);
     const result = await shareExternalLink(shareData, {
       share:
         typeof navigator.share === "function"
@@ -966,7 +955,6 @@ export default function LinkManagement({
                   type="button"
                   onClick={() =>
                     shareOrCopyLink(
-                      generatedLink,
                       getGuestPageUrl(
                         generatedLink.token,
                         generatedLink.guestUrl,
@@ -1257,7 +1245,7 @@ export default function LinkManagement({
                           <Button
                             type="button"
                             onClick={() =>
-                              shareOrCopyLink(link, guestPageUrl, link.id)
+                              shareOrCopyLink(guestPageUrl, link.id)
                             }
                             isLoading={loadingStates[`share_${link.id}`]}
                             size="sm"

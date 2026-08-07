@@ -47,8 +47,6 @@ export type ExternalLinkCreateInputResult =
   | { draft: null; error: ExternalLinkCreateInputError };
 
 export interface ExternalLinkShareData {
-  title: string;
-  text: string;
   url: string;
 }
 
@@ -197,10 +195,8 @@ export function toExternalLinkTemplateDraft(
 
 export function toExternalLinkShareData(
   url: string,
-  title: string,
-  text: string,
 ): ExternalLinkShareData {
-  return { title, text, url };
+  return { url };
 }
 
 export function isExternalLinkShareCancellation(error: unknown): boolean {
@@ -213,7 +209,9 @@ export function isExternalLinkShareCancellation(error: unknown): boolean {
 }
 
 /**
- * Uses native share when available and falls back to copying only the URL.
+ * Shares only the URL so a native share target's Copy action cannot append
+ * display metadata to the credential-bearing link. Clipboard fallback follows
+ * the same URL-only contract.
  * The injected adapter keeps browser globals out of the domain and makes every
  * outcome deterministic in unit tests.
  */
