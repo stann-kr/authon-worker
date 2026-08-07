@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { drizzle } from "drizzle-orm/d1";
-import { eq } from "drizzle-orm";
+import { and, eq, gte } from "drizzle-orm";
 import { SignJWT } from "jose";
-import { users } from "@/lib/db/schema";
+import { userAuditEvents, users } from "@/lib/db/schema";
 import { verifyPassword, hashPassword, needsRehash } from "@/lib/auth/password";
 import { shouldUseSecureAuthCookies } from "@/lib/auth/cookie-policy";
 import { clearRateLimit, consumeRateLimit, getRequestIp } from "@/lib/auth/rate-limit";
@@ -14,6 +14,10 @@ import {
   LOCALE_COOKIE_NAME,
 } from "@/i18n/config";
 import { isAccountKind, isRole } from "@/lib/users/policy";
+import {
+  canStartFirstLoginSetup,
+  getFirstLoginSetupMethod,
+} from "@/lib/auth/first-login-policy";
 
 export async function POST(request: Request) {
   try {
@@ -73,14 +77,38 @@ export async function POST(request: Request) {
       return invalidCredentialsResponse();
     }
 
-    const isMatch = await verifyPassword(password, user.passwordHash);
+    const administratorReset = user.migratedAt &&
+      user.migrationStatus === "pending_reset" &&
+      !user.passwordSetAt
+      ? await db
+          .select({ id: userAuditEvents.id })
+          .from(userAuditEvents)
+          .where(
+            and(
+              eq(userAuditEvents.targetUserId, user.id),
+              eq(userAuditEvents.action, "password_reset_required"),
+              gte(userAuditEvents.createdAt, user.migratedAt),
+            ),
+          )
+          .limit(1)
+      : [];
+    const firstLoginSetupMethod = getFirstLoginSetupMethod({
+      ...user,
+      hasAdministratorReset: administratorReset.length > 0,
+    });
+    const isMatch = firstLoginSetupMethod === "migration"
+      ? false
+      : await verifyPassword(password, user.passwordHash);
 
-    if (user.migrationStatus === "pending_reset" && !user.passwordSetAt) {
-      if (!isMatch) return invalidCredentialsResponse();
+    if (firstLoginSetupMethod) {
+      if (!canStartFirstLoginSetup(firstLoginSetupMethod, isMatch)) {
+        return invalidCredentialsResponse();
+      }
       return NextResponse.json(
         {
           error: "First-time password setup is required.",
           code: "PASSWORD_SETUP_REQUIRED",
+          setupMethod: firstLoginSetupMethod,
         },
         { status: 409 },
       );
