@@ -87,6 +87,8 @@ export default function UserManagement({
     userName: string;
     setupCode: string;
   } | null>(null);
+  const setupCredentialPanelRef = useRef<HTMLDivElement>(null);
+  const shouldFocusSetupCredentialRef = useRef(false);
 
   const {
     venues,
@@ -124,6 +126,27 @@ export default function UserManagement({
     setSetupCredential(null);
     setFeedback(null);
   }, [effectiveVenueId]);
+
+  useEffect(() => {
+    if (
+      !setupCredential ||
+      pendingUserAction ||
+      !shouldFocusSetupCredentialRef.current
+    ) {
+      return;
+    }
+
+    shouldFocusSetupCredentialRef.current = false;
+
+    const frameId = window.requestAnimationFrame(() => {
+      const panel = setupCredentialPanelRef.current;
+      if (!panel) return;
+      panel.focus({ preventScroll: true });
+      panel.scrollIntoView({ block: "center" });
+    });
+
+    return () => window.cancelAnimationFrame(frameId);
+  }, [pendingUserAction, setupCredential]);
 
   const loadUsers = useCallback(async () => {
     if (currentScopeKeyRef.current !== requestScopeKey) return;
@@ -244,6 +267,7 @@ export default function UserManagement({
         return;
       }
       if (data) {
+        shouldFocusSetupCredentialRef.current = true;
         setSetupCredential({ userName: user.name, setupCode: data.setupCode });
         setFeedback({ type: "success", message: t("resetPasswordReady") });
         await loadUsers();
@@ -510,7 +534,14 @@ export default function UserManagement({
                 <Alert type={feedback.type} message={feedback.message} className="mb-4" />
               )}
               {setupCredential && (
-                <div className="mb-4 border border-status-waiting/70 bg-status-waiting/10 p-4" role="status">
+                <div
+                  ref={setupCredentialPanelRef}
+                  className="mb-4 border border-status-waiting/70 bg-status-waiting/10 p-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-border-focus"
+                  role="status"
+                  aria-live="polite"
+                  aria-atomic="true"
+                  tabIndex={-1}
+                >
                   <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                     <div className="min-w-0">
                       <p className="break-words text-sm font-semibold text-status-waiting">

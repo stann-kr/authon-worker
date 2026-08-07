@@ -11,12 +11,11 @@ import { getTenantContextForRequest } from "@/lib/tenant/server";
 import {
   canStartFirstLoginSetup,
   getFirstLoginSetupMethod,
-  isFirstLoginResetControlAction,
 } from "@/lib/auth/first-login-policy";
 
 /**
- * 이관 계정의 최초 1회 직접 설정 또는 관리자 발급 설정 코드 기반 비밀번호 설정.
- * pending_reset 상태와 관리자 재설정 이력 또는 현재 설정 코드 hash를 확인해 재사용을 막는다.
+ * 관리자 발급 설정 코드 기반 최초 비밀번호 설정.
+ * pending_reset 상태와 현재 설정 코드 hash를 확인해 재사용을 막는다.
  */
 export async function POST(request: Request) {
   try {
@@ -87,20 +86,7 @@ export async function POST(request: Request) {
               venue_id,
               password_hash,
               migration_status,
-              migrated_at,
-              password_set_at,
-              (
-                SELECT user_audit_events.action
-                FROM user_audit_events
-                WHERE user_audit_events.target_user_id = users.id
-                  AND user_audit_events.action IN (
-                    'password_reset_required',
-                    'password_reset_cancelled'
-                  )
-                  AND user_audit_events.created_at >= users.migrated_at
-                ORDER BY user_audit_events.created_at DESC, user_audit_events.id DESC
-                LIMIT 1
-              ) AS latest_reset_control_action
+              password_set_at
        FROM users
        WHERE email = ?
          AND active = 1
@@ -116,19 +102,12 @@ export async function POST(request: Request) {
         venue_id: string | null;
         password_hash: string;
         migration_status: string;
-        migrated_at: string | null;
         password_set_at: string | null;
-        latest_reset_control_action: string | null;
       }>();
 
-    const latestResetControlAction = candidate?.latest_reset_control_action;
     const firstLoginSetupMethod = candidate
       ? getFirstLoginSetupMethod({
-          latestResetControlAction: isFirstLoginResetControlAction(latestResetControlAction)
-            ? latestResetControlAction
-            : null,
           migrationStatus: candidate.migration_status,
-          migratedAt: candidate.migrated_at,
           passwordSetAt: candidate.password_set_at,
         })
       : null;
@@ -193,10 +172,7 @@ export async function POST(request: Request) {
       ).bind(
         crypto.randomUUID(),
         JSON.stringify({
-          method:
-            firstLoginSetupMethod === "migration"
-              ? "migration_first_login"
-              : "manual_setup_code",
+          method: "manual_setup_code",
         }),
         nowIso,
         candidate.id,
