@@ -11,6 +11,10 @@ import {
   isRole,
   type AccessScope,
 } from "@/lib/users/policy";
+import {
+  isFirstLoginSetupMethod,
+  type FirstLoginSetupMethod,
+} from "@/lib/auth/first-login-policy";
 
 export interface User {
   id: string;
@@ -32,7 +36,13 @@ export interface User {
 export const login = async (
   email: string,
   password: string,
-): Promise<{ success: boolean; message?: string; code?: string; requiresSetup?: boolean }> => {
+): Promise<{
+  success: boolean;
+  message?: string;
+  code?: string;
+  requiresSetup?: boolean;
+  setupMethod?: FirstLoginSetupMethod;
+}> => {
   try {
     const res = await fetch("/api/auth/login", {
       method: "POST",
@@ -47,6 +57,9 @@ export const login = async (
         message: errorData.error || "Login failed.",
         code: errorData.code,
         requiresSetup: errorData.code === "PASSWORD_SETUP_REQUIRED",
+        setupMethod: isFirstLoginSetupMethod(errorData.setupMethod)
+          ? errorData.setupMethod
+          : undefined,
       };
     }
 

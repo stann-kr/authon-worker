@@ -8,25 +8,33 @@ import {
   getRequestIp,
 } from "@/lib/auth/rate-limit";
 import { getTenantContextForRequest } from "@/lib/tenant/server";
+import {
+  canStartFirstLoginSetup,
+  getFirstLoginSetupMethod,
+  isFirstLoginResetControlAction,
+} from "@/lib/auth/first-login-policy";
 
 /**
- * 관리자 발급 설정 코드 또는 이관용 설정 코드의 1회성 비밀번호 설정.
- * pending_reset 상태와 현재 설정 코드 hash를 함께 확인해 재사용을 막는다.
+ * 이관 계정의 최초 1회 직접 설정 또는 관리자 발급 설정 코드 기반 비밀번호 설정.
+ * pending_reset 상태와 관리자 재설정 이력 또는 현재 설정 코드 hash를 확인해 재사용을 막는다.
  */
 export async function POST(request: Request) {
   try {
     const { env } = getCloudflareContext();
-    const { email, setupCode, newPassword } = await request.json();
+    const {
+      email,
+      setupCode: rawSetupCode,
+      newPassword,
+    } = await request.json();
+    const setupCode = typeof rawSetupCode === "string" ? rawSetupCode : "";
 
     if (
       typeof email !== "string" ||
       !email.trim() ||
-      typeof setupCode !== "string" ||
-      !setupCode ||
       typeof newPassword !== "string"
     ) {
       return NextResponse.json(
-        { code: "MISSING_SETUP_FIELDS", error: "Email, setup code, and a new password are required." },
+        { code: "MISSING_SETUP_FIELDS", error: "Email and a new password are required." },
         { status: 400 },
       );
     }
@@ -75,7 +83,24 @@ export async function POST(request: Request) {
     }
 
     const candidate = await env.DB.prepare(
-      `SELECT id, venue_id, password_hash
+      `SELECT id,
+              venue_id,
+              password_hash,
+              migration_status,
+              migrated_at,
+              password_set_at,
+              (
+                SELECT user_audit_events.action
+                FROM user_audit_events
+                WHERE user_audit_events.target_user_id = users.id
+                  AND user_audit_events.action IN (
+                    'password_reset_required',
+                    'password_reset_cancelled'
+                  )
+                  AND user_audit_events.created_at >= users.migrated_at
+                ORDER BY user_audit_events.created_at DESC, user_audit_events.id DESC
+                LIMIT 1
+              ) AS latest_reset_control_action
        FROM users
        WHERE email = ?
          AND active = 1
@@ -86,9 +111,36 @@ export async function POST(request: Request) {
        LIMIT 1`,
     )
       .bind(normalizedEmail, expectedVenueId, expectedVenueId)
-      .first<{ id: string; venue_id: string | null; password_hash: string }>();
+      .first<{
+        id: string;
+        venue_id: string | null;
+        password_hash: string;
+        migration_status: string;
+        migrated_at: string | null;
+        password_set_at: string | null;
+        latest_reset_control_action: string | null;
+      }>();
 
-    if (!candidate || !(await verifyPassword(setupCode, candidate.password_hash))) {
+    const latestResetControlAction = candidate?.latest_reset_control_action;
+    const firstLoginSetupMethod = candidate
+      ? getFirstLoginSetupMethod({
+          latestResetControlAction: isFirstLoginResetControlAction(latestResetControlAction)
+            ? latestResetControlAction
+            : null,
+          migrationStatus: candidate.migration_status,
+          migratedAt: candidate.migrated_at,
+          passwordSetAt: candidate.password_set_at,
+        })
+      : null;
+    const setupCodeMatches = candidate && firstLoginSetupMethod === "setup_code"
+      ? await verifyPassword(setupCode, candidate.password_hash)
+      : false;
+
+    if (
+      !candidate ||
+      !firstLoginSetupMethod ||
+      !canStartFirstLoginSetup(firstLoginSetupMethod, setupCodeMatches)
+    ) {
       return NextResponse.json(
         {
           code: "ACCOUNT_NOT_ELIGIBLE",
@@ -140,7 +192,12 @@ export async function POST(request: Request) {
            AND password_set_at = ?`,
       ).bind(
         crypto.randomUUID(),
-        JSON.stringify({ method: "manual_setup_code" }),
+        JSON.stringify({
+          method:
+            firstLoginSetupMethod === "migration"
+              ? "migration_first_login"
+              : "manual_setup_code",
+        }),
         nowIso,
         candidate.id,
         nowIso,
