@@ -352,6 +352,8 @@ export default function UserManagement({
         return t("audit_user_updated");
       case "password_reset_required":
         return t("audit_password_reset_required");
+      case "password_reset_cancelled":
+        return t("audit_password_reset_cancelled");
       case "password_setup_completed":
         return t("audit_password_setup_completed");
       case "password_reset_completed":

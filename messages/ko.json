@@ -587,6 +587,7 @@
     "audit_reactivated": "재활성화 →",
     "audit_user_updated": "정보 변경 →",
     "audit_password_reset_required": "비밀번호 재설정 요청 →",
+    "audit_password_reset_cancelled": "비밀번호 재설정 취소 →",
     "audit_password_setup_completed": "비밀번호 설정 완료 →",
     "audit_password_reset_completed": "비밀번호 재설정 완료 →",
     "audit_deleted": "삭제 처리 →",

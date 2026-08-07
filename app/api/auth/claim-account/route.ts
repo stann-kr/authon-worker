@@ -11,6 +11,7 @@ import { getTenantContextForRequest } from "@/lib/tenant/server";
 import {
   canStartFirstLoginSetup,
   getFirstLoginSetupMethod,
+  isFirstLoginResetControlAction,
 } from "@/lib/auth/first-login-policy";
 
 /**
@@ -88,13 +89,18 @@ export async function POST(request: Request) {
               migration_status,
               migrated_at,
               password_set_at,
-              EXISTS (
-                SELECT 1
+              (
+                SELECT user_audit_events.action
                 FROM user_audit_events
                 WHERE user_audit_events.target_user_id = users.id
-                  AND user_audit_events.action = 'password_reset_required'
+                  AND user_audit_events.action IN (
+                    'password_reset_required',
+                    'password_reset_cancelled'
+                  )
                   AND user_audit_events.created_at >= users.migrated_at
-              ) AS has_administrator_reset
+                ORDER BY user_audit_events.created_at DESC, user_audit_events.id DESC
+                LIMIT 1
+              ) AS latest_reset_control_action
        FROM users
        WHERE email = ?
          AND active = 1
@@ -112,12 +118,15 @@ export async function POST(request: Request) {
         migration_status: string;
         migrated_at: string | null;
         password_set_at: string | null;
-        has_administrator_reset: number;
+        latest_reset_control_action: string | null;
       }>();
 
+    const latestResetControlAction = candidate?.latest_reset_control_action;
     const firstLoginSetupMethod = candidate
       ? getFirstLoginSetupMethod({
-          hasAdministratorReset: candidate.has_administrator_reset === 1,
+          latestResetControlAction: isFirstLoginResetControlAction(latestResetControlAction)
+            ? latestResetControlAction
+            : null,
           migrationStatus: candidate.migration_status,
           migratedAt: candidate.migrated_at,
           passwordSetAt: candidate.password_set_at,

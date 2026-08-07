@@ -587,6 +587,7 @@
     "audit_reactivated": "reactivated →",
     "audit_user_updated": "updated →",
     "audit_password_reset_required": "required password reset →",
+    "audit_password_reset_cancelled": "cancelled password reset →",
     "audit_password_setup_completed": "completed password setup →",
     "audit_password_reset_completed": "completed password reset →",
     "audit_deleted": "deleted →",

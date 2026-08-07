@@ -1,7 +1,10 @@
 export type FirstLoginSetupMethod = "migration" | "setup_code";
+export type FirstLoginResetControlAction =
+  | "password_reset_required"
+  | "password_reset_cancelled";
 
 interface FirstLoginAccountState {
-  hasAdministratorReset: boolean;
+  latestResetControlAction: FirstLoginResetControlAction | null;
   migrationStatus: string;
   migratedAt: string | null;
   passwordSetAt: string | null;
@@ -14,7 +17,8 @@ export function getFirstLoginSetupMethod(
     return null;
   }
 
-  return account.migratedAt && !account.hasAdministratorReset
+  return account.migratedAt &&
+    account.latestResetControlAction !== "password_reset_required"
     ? "migration"
     : "setup_code";
 }
@@ -30,4 +34,10 @@ export function isFirstLoginSetupMethod(
   value: unknown,
 ): value is FirstLoginSetupMethod {
   return value === "migration" || value === "setup_code";
+}
+
+export function isFirstLoginResetControlAction(
+  value: unknown,
+): value is FirstLoginResetControlAction {
+  return value === "password_reset_required" || value === "password_reset_cancelled";
 }
