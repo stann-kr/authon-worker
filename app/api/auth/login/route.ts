@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { drizzle } from "drizzle-orm/d1";
-import { and, desc, eq, gte, inArray } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { SignJWT } from "jose";
-import { userAuditEvents, users } from "@/lib/db/schema";
+import { users } from "@/lib/db/schema";
 import { verifyPassword, hashPassword, needsRehash } from "@/lib/auth/password";
 import { shouldUseSecureAuthCookies } from "@/lib/auth/cookie-policy";
 import { clearRateLimit, consumeRateLimit, getRequestIp } from "@/lib/auth/rate-limit";
@@ -17,7 +17,6 @@ import { isAccountKind, isRole } from "@/lib/users/policy";
 import {
   canStartFirstLoginSetup,
   getFirstLoginSetupMethod,
-  isFirstLoginResetControlAction,
 } from "@/lib/auth/first-login-policy";
 
 export async function POST(request: Request) {
@@ -78,35 +77,8 @@ export async function POST(request: Request) {
       return invalidCredentialsResponse();
     }
 
-    const resetControlEvents = user.migratedAt &&
-      user.migrationStatus === "pending_reset" &&
-      !user.passwordSetAt
-      ? await db
-          .select({ action: userAuditEvents.action })
-          .from(userAuditEvents)
-          .where(
-            and(
-              eq(userAuditEvents.targetUserId, user.id),
-              inArray(userAuditEvents.action, [
-                "password_reset_required",
-                "password_reset_cancelled",
-              ]),
-              gte(userAuditEvents.createdAt, user.migratedAt),
-            ),
-          )
-          .orderBy(desc(userAuditEvents.createdAt), desc(userAuditEvents.id))
-          .limit(1)
-      : [];
-    const latestResetControlAction = resetControlEvents[0]?.action;
-    const firstLoginSetupMethod = getFirstLoginSetupMethod({
-      ...user,
-      latestResetControlAction: isFirstLoginResetControlAction(latestResetControlAction)
-        ? latestResetControlAction
-        : null,
-    });
-    const isMatch = firstLoginSetupMethod === "migration"
-      ? false
-      : await verifyPassword(password, user.passwordHash);
+    const firstLoginSetupMethod = getFirstLoginSetupMethod(user);
+    const isMatch = await verifyPassword(password, user.passwordHash);
 
     if (firstLoginSetupMethod) {
       if (!canStartFirstLoginSetup(firstLoginSetupMethod, isMatch)) {
