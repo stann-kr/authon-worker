@@ -9,6 +9,7 @@ import TransitionLink from "@/components/TransitionLink";
 import { useRouteTransition } from "@/components/RouteTransitionProvider";
 import WorkspaceShell from "@/components/WorkspaceShell";
 import { fetchMyVenuePendingGuestLimitRequestCount } from "@/lib/api/guest-limits";
+import { fetchPendingPasswordResetRequestCount } from "@/lib/api/password-reset-requests";
 import { useLatestRequestGuard } from "@/lib/hooks";
 import { useTranslations } from "next-intl";
 
@@ -27,6 +28,7 @@ export default function Home() {
   const t = useTranslations("Home");
   const [user, setUser] = useState<User | null>(null);
   const [pendingGuestRequestCount, setPendingGuestRequestCount] = useState(0);
+  const [pendingPasswordResetCount, setPendingPasswordResetCount] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const router = useRouter();
   const { isRouteTransitionActive, startRouteTransition } =
@@ -78,15 +80,24 @@ export default function Home() {
       setIsLoading(false);
 
       try {
-        if (currentUser.role === "venue_admin") {
-          const { data, error } =
-            await fetchMyVenuePendingGuestLimitRequestCount();
-          if (!isLatestRequest()) return;
-          if (error) {
-            console.error("Failed to load pending guest request count:", error);
-          } else {
-            setPendingGuestRequestCount(data ?? 0);
-          }
+        const [guestRequestResult, passwordResetResult] = await Promise.all([
+          currentUser.role === "venue_admin"
+            ? fetchMyVenuePendingGuestLimitRequestCount()
+            : Promise.resolve(null),
+          currentUser.role === "venue_admin" || currentUser.role === "super_admin"
+            ? fetchPendingPasswordResetRequestCount()
+            : Promise.resolve(null),
+        ]);
+        if (!isLatestRequest()) return;
+        if (guestRequestResult?.error) {
+          console.error("Failed to load pending guest request count:", guestRequestResult.error);
+        } else if (guestRequestResult) {
+          setPendingGuestRequestCount(guestRequestResult.data ?? 0);
+        }
+        if (passwordResetResult?.error) {
+          console.error("Failed to load pending password reset count:", passwordResetResult.error);
+        } else if (passwordResetResult) {
+          setPendingPasswordResetCount(passwordResetResult.data ?? 0);
         }
       } catch (error: unknown) {
         if (isLatestRequest()) {
@@ -187,6 +198,22 @@ export default function Home() {
           <Icon name="arrow-right" size={18} />
         </TransitionLink>
       )}
+
+      {(user.role === "venue_admin" || user.role === "super_admin") &&
+        pendingPasswordResetCount > 0 && (
+          <TransitionLink
+            href="/admin?tab=users&view=password-requests"
+            className="pressable group flex min-h-14 items-center gap-3 border border-status-waiting/70 bg-status-waiting/10 px-4 py-3 text-status-waiting hover:border-status-waiting sm:px-5"
+          >
+            <Icon name="key" size={20} />
+            <span className="min-w-0 flex-1 text-sm font-semibold text-text-heading">
+              {t("pendingPasswordResetRequests", {
+                count: pendingPasswordResetCount,
+              })}
+            </span>
+            <Icon name="arrow-right" size={18} />
+          </TransitionLink>
+        )}
 
       {accessibleMenus.length > 0 && (
         <nav aria-label={t("availableWorkspaces")} className="w-full">

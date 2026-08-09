@@ -2,7 +2,12 @@
 
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { and, asc, desc, eq, isNull, ne, sql, type SQL } from "drizzle-orm";
-import { users, passwordResetTokens, userAuditEvents } from "../db/schema";
+import {
+  passwordResetRequests,
+  passwordResetTokens,
+  userAuditEvents,
+  users,
+} from "../db/schema";
 import {
   type User,
   type UserAuditEvent,
@@ -154,13 +159,6 @@ async function assertAnotherActiveSuperAdmin(targetId: string): Promise<void> {
     .limit(1);
 
   if (!remaining) throw new UserActionError("LAST_SUPER_ADMIN");
-}
-
-function generateSetupCode(): string {
-  const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-  const bytes = crypto.getRandomValues(new Uint8Array(8));
-  const value = Array.from(bytes, (byte) => alphabet[byte % alphabet.length]).join("");
-  return `AUTH-${value.slice(0, 4)}-${value.slice(4)}`;
 }
 
 export async function fetchUsersByVenue(
@@ -396,18 +394,32 @@ export async function updateUserProfile(
           : {}),
       });
 
-      await db.batch([
-        updateStatement,
-        db.insert(userAuditEvents).values({
-          id: crypto.randomUUID(),
-          venueId: target.venueId,
-          actorUserId: actor.id,
-          targetUserId: target.id,
-          action,
-          details,
-          createdAt: nowIso,
-        }),
-      ]);
+      const auditStatement = db.insert(userAuditEvents).values({
+        id: crypto.randomUUID(),
+        venueId: target.venueId,
+        actorUserId: actor.id,
+        targetUserId: target.id,
+        action,
+        details,
+        createdAt: nowIso,
+      });
+      if (changedFields.includes("active") && updates.active === false) {
+        await db.batch([
+          updateStatement,
+          db
+            .update(passwordResetRequests)
+            .set({ status: "cancelled", updatedAt: nowIso })
+            .where(
+              and(
+                eq(passwordResetRequests.userId, target.id),
+                sql`${passwordResetRequests.status} IN ('pending', 'approved')`,
+              ),
+            ),
+          auditStatement,
+        ]);
+      } else {
+        await db.batch([updateStatement, auditStatement]);
+      }
     } else {
       await updateStatement;
     }
@@ -515,52 +527,6 @@ export async function createUserViaEdge(params: {
   }
 }
 
-export async function requireFirstLoginPasswordSetup(
-  userId: string,
-): Promise<ApiResponse<{ setupCode: string }>> {
-  try {
-    const actor = await requireRole(["super_admin", "venue_admin"]);
-    const target = await getTargetUser(userId);
-    assertManagedTarget(actor, target);
-    if (!target.active) throw new UserActionError("USER_INACTIVE");
-
-    const db = getDb();
-    const setupCode = generateSetupCode();
-    const passwordHash = await hashPassword(setupCode);
-    const nowIso = new Date().toISOString();
-
-    await db.batch([
-      db
-        .update(users)
-        .set({
-          passwordHash,
-          migrationStatus: "pending_reset",
-          passwordSetAt: null,
-          sessionVersion: sql`${users.sessionVersion} + 1`,
-        })
-        .where(eq(users.id, target.id)),
-      db
-        .update(passwordResetTokens)
-        .set({ used: true })
-        .where(eq(passwordResetTokens.userId, target.id)),
-      db.insert(userAuditEvents).values({
-        id: crypto.randomUUID(),
-        venueId: target.venueId,
-        actorUserId: actor.id,
-        targetUserId: target.id,
-        action: "password_reset_required",
-        details: JSON.stringify({ delivery: "manual_setup_code" }),
-        createdAt: nowIso,
-      }),
-    ]);
-
-    return { data: { setupCode }, error: null };
-  } catch (error: unknown) {
-    console.error("Failed to require first-login password setup:", error);
-    return { data: null, error: getUserActionError(error, "UPDATE_FAILED") };
-  }
-}
-
 export async function deleteUserViaEdge(userId: string): Promise<{ error: string | null }> {
   try {
     const actor = await requireRole(["super_admin", "venue_admin"]);
@@ -599,6 +565,15 @@ export async function deleteUserViaEdge(userId: string): Promise<{ error: string
         .update(passwordResetTokens)
         .set({ used: true })
         .where(eq(passwordResetTokens.userId, target.id)),
+      db
+        .update(passwordResetRequests)
+        .set({ status: "cancelled", updatedAt: deletedAt })
+        .where(
+          and(
+            eq(passwordResetRequests.userId, target.id),
+            sql`${passwordResetRequests.status} IN ('pending', 'approved')`,
+          ),
+        ),
       db.insert(userAuditEvents).values({
         id: crypto.randomUUID(),
         venueId: target.venueId,

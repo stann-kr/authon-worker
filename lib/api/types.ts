@@ -1,3 +1,15 @@
+import type {
+  PasswordResetRequestSource,
+  PasswordResetRequestStatus,
+  PasswordResetSetupMethod,
+} from "../auth/password-reset-request-policy";
+
+export type {
+  PasswordResetRequestSource,
+  PasswordResetRequestStatus,
+  PasswordResetSetupMethod,
+} from "../auth/password-reset-request-policy";
+
 export interface ApiResponse<T> {
   data: T | null;
   error: string | null;
@@ -122,6 +134,28 @@ export interface GuestLimitRequest {
 export interface GuestLimitRequestView extends GuestLimitRequest {
   userName: string;
   userRole: User["role"];
+}
+
+export interface PasswordResetRequest {
+  id: string;
+  venueId: string | null;
+  userId: string;
+  source: PasswordResetRequestSource;
+  status: PasswordResetRequestStatus;
+  setupMethod: PasswordResetSetupMethod | null;
+  decidedByUserId: string | null;
+  decidedAt: string | null;
+  expiresAt: string | null;
+  completedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PasswordResetRequestView extends PasswordResetRequest {
+  userName: string;
+  userEmail: string;
+  userRole: User["role"];
+  venueName: string | null;
 }
 
 export interface GuestQuota {

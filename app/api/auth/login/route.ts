@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { drizzle } from "drizzle-orm/d1";
-import { eq } from "drizzle-orm";
+import { and, eq, gt } from "drizzle-orm";
 import { SignJWT } from "jose";
-import { users } from "@/lib/db/schema";
+import { passwordResetRequests, users } from "@/lib/db/schema";
 import { verifyPassword, hashPassword, needsRehash } from "@/lib/auth/password";
 import { shouldUseSecureAuthCookies } from "@/lib/auth/cookie-policy";
 import { clearRateLimit, consumeRateLimit, getRequestIp } from "@/lib/auth/rate-limit";
@@ -77,8 +77,29 @@ export async function POST(request: Request) {
       return invalidCredentialsResponse();
     }
 
-    const firstLoginSetupMethod = getFirstLoginSetupMethod(user);
-    const isMatch = await verifyPassword(password, user.passwordHash);
+    const nowIso = new Date().toISOString();
+    const [adminApprovedReset] =
+      user.migrationStatus === "pending_reset" && !user.passwordSetAt
+        ? await db
+            .select({ id: passwordResetRequests.id })
+            .from(passwordResetRequests)
+            .where(
+              and(
+                eq(passwordResetRequests.userId, user.id),
+                eq(passwordResetRequests.status, "approved"),
+                eq(passwordResetRequests.setupMethod, "admin_approved"),
+                gt(passwordResetRequests.expiresAt, nowIso),
+              ),
+            )
+            .limit(1)
+        : [];
+    const firstLoginSetupMethod = getFirstLoginSetupMethod({
+      ...user,
+      adminApprovedReset: Boolean(adminApprovedReset),
+    });
+    const isMatch = firstLoginSetupMethod === "admin_approved"
+      ? false
+      : await verifyPassword(password, user.passwordHash);
 
     if (firstLoginSetupMethod) {
       if (!canStartFirstLoginSetup(firstLoginSetupMethod, isMatch)) {

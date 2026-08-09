@@ -67,6 +67,8 @@ interface ResetMessage {
   target: ResetMessageTarget;
 }
 
+type ResetKind = "token" | "admin_approved";
+
 function ResetPasswordContent() {
   const t = useTranslations("ResetPassword");
   const authT = useTranslations("Auth");
@@ -80,10 +82,12 @@ function ResetPasswordContent() {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<ResetMessage | null>(null);
+  const [resetKind, setResetKind] = useState<ResetKind>("token");
   const [step, setStep] = useState<"request" | "reset" | "requestSent" | "resetComplete">("request");
 
   useEffect(() => {
     if (token) {
+      setResetKind("token");
       setStep("reset");
     }
   }, [token]);
@@ -103,30 +107,42 @@ function ResetPasswordContent() {
     setMessage(null);
 
     try {
-      const res = await fetch("/api/auth/reset-password", {
+      const res = await fetch("/api/auth/password-reset-requests", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email }),
       });
 
+      const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        throw new Error(
-          t("requestFailed"),
-        );
+        const error = new Error(t("requestFailed")) as Error & { code?: string };
+        error.code = typeof data.code === "string" ? data.code : undefined;
+        throw error;
       }
 
       setMessage({
         type: "success",
-        text: t("requestSuccess"),
+        text: t("adminRequestSuccess"),
         target: "form",
       });
       setStep("requestSent");
     } catch (err: unknown) {
+      const code = err instanceof Error && "code" in err
+        ? (err as Error & { code?: string }).code
+        : undefined;
       setMessage({
         type: "error",
-        text: err instanceof Error ? err.message : t("unexpectedError"),
-        target: "form",
+        text:
+          code === "INVALID_EMAIL"
+            ? t("invalidEmail")
+            : code === "RATE_LIMITED"
+              ? t("requestRateLimited")
+              : err instanceof Error
+                ? err.message
+                : t("unexpectedError"),
+        target: code === "INVALID_EMAIL" ? "email" : "form",
       });
+      if (code === "INVALID_EMAIL") document.getElementById("email")?.focus();
     } finally {
       setLoading(false);
     }
@@ -164,15 +180,26 @@ function ResetPasswordContent() {
     setMessage(null);
 
     try {
-      const res = await fetch("/api/auth/reset-password", {
-        method: "PUT",
+      const res = await fetch(
+        resetKind === "token"
+          ? "/api/auth/reset-password"
+          : "/api/auth/claim-account",
+        {
+        method: resetKind === "token" ? "PUT" : "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ token, newPassword }),
+        body: JSON.stringify(
+          resetKind === "token"
+            ? { token, newPassword }
+            : { email, setupCode: "", newPassword },
+        ),
       });
 
+      const data = await res.json().catch(() => ({}));
       if (!res.ok) {
         throw new Error(
-          t("updateFailed"),
+          data.code === "ACCOUNT_NOT_ELIGIBLE"
+            ? t("approvalNotReady")
+            : t("updateFailed"),
         );
       }
 
@@ -233,10 +260,12 @@ function ResetPasswordContent() {
 
           <div className="mb-6 rounded-control border border-border-default bg-canvas p-4">
             <p className="mb-2 text-sm font-semibold text-text-heading">
-              {t("secureFlow")}
+              {token ? t("secureFlow") : t("adminFlow")}
             </p>
             <p className="text-xs leading-relaxed text-text-muted">
-              {t("secureFlowDescription")}
+              {token
+                ? t("secureFlowDescription")
+                : t("adminFlowDescription")}
             </p>
           </div>
 
@@ -282,14 +311,44 @@ function ResetPasswordContent() {
                 {t("privacyHelp")}
               </p>
 
+              <div className="space-y-2">
+                <Button
+                  type="button"
+                  disabled
+                  aria-describedby="email-reset-disabled-help"
+                  fullWidth
+                  size="lg"
+                  variant="outline"
+                >
+                  {t("sendLinkDisabled")}
+                </Button>
+                <p
+                  id="email-reset-disabled-help"
+                  className="text-xs leading-relaxed text-text-dim"
+                  role="note"
+                >
+                  {t("emailResetDisabledHelp")}
+                </p>
+              </div>
+
               <Button type="submit" isLoading={loading} fullWidth size="lg">
-                {t("sendLink")}
+                {t("requestAdministrator")}
               </Button>
             </form>
           )}
 
           {step === "reset" && (
             <form onSubmit={handleReset} className="space-y-6" aria-busy={loading}>
+              {resetKind === "admin_approved" && (
+                <div className="rounded-control border border-status-waiting/70 bg-status-waiting/10 p-4" role="note">
+                  <p className="text-sm font-semibold text-text-heading">
+                    {t("adminApprovedResetTitle")}
+                  </p>
+                  <p className="mt-2 break-words text-xs leading-relaxed text-text-muted">
+                    {t("adminApprovedResetHelp", { email })}
+                  </p>
+                </div>
+              )}
               <div>
                 <label htmlFor="new-password" className="app-label">
                   {t("newPassword")}
@@ -351,7 +410,9 @@ function ResetPasswordContent() {
               </div>
 
               <Button type="submit" isLoading={loading} fullWidth size="lg">
-                {t("updatePassword")}
+                {resetKind === "admin_approved"
+                  ? t("completeApprovedReset")
+                  : t("updatePassword")}
               </Button>
             </form>
           )}
@@ -359,21 +420,35 @@ function ResetPasswordContent() {
           {step === "requestSent" && (
             <div className="text-center space-y-6">
               <div className="mx-auto grid h-14 w-14 place-items-center rounded-panel border border-border-strong bg-surface-raised text-text-heading">
-                <Icon name="email" size={24} />
+                <Icon name="user-admin" size={24} />
               </div>
 
               <div className="space-y-3">
                 <p className="text-sm leading-relaxed text-text-body">
-                  {t("requestSent")}
+                  {t("adminRequestSent")}
                 </p>
                 <p className="text-xs leading-relaxed text-text-dim">
-                  {t("requestSentHelp")}
+                  {t("adminRequestSentHelp")}
                 </p>
               </div>
 
-              <ButtonLink href="/auth/login" fullWidth size="lg">
-                {t("returnToLogin")}
-              </ButtonLink>
+              <div className="space-y-2">
+                <Button
+                  type="button"
+                  fullWidth
+                  size="lg"
+                  onClick={() => {
+                    setResetKind("admin_approved");
+                    setMessage(null);
+                    setStep("reset");
+                  }}
+                >
+                  {t("continueAfterApproval")}
+                </Button>
+                <ButtonLink href="/auth/login" variant="outline" fullWidth size="lg">
+                  {t("useSetupCodeAtLogin")}
+                </ButtonLink>
+              </div>
             </div>
           )}
 

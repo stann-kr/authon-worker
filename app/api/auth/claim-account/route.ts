@@ -12,10 +12,11 @@ import {
   canStartFirstLoginSetup,
   getFirstLoginSetupMethod,
 } from "@/lib/auth/first-login-policy";
+import { COMPLETE_OPEN_PASSWORD_RESET_REQUEST_AFTER_USER_UPDATE_SQL } from "@/lib/auth/password-reset-request-sql";
 
 /**
- * 관리자 발급 설정 코드 기반 최초 비밀번호 설정.
- * pending_reset 상태와 현재 설정 코드 hash를 확인해 재사용을 막는다.
+ * 관리자 발급 설정 코드 또는 유효한 관리자 승인 기반 비밀번호 설정.
+ * pending_reset 상태와 현재 credential/grant를 조건부 소비해 재사용을 막는다.
  */
 export async function POST(request: Request) {
   try {
@@ -86,7 +87,17 @@ export async function POST(request: Request) {
               venue_id,
               password_hash,
               migration_status,
-              password_set_at
+              password_set_at,
+              (
+                SELECT id
+                FROM password_reset_requests
+                WHERE user_id = users.id
+                  AND status = 'approved'
+                  AND setup_method = 'admin_approved'
+                  AND expires_at > ?
+                ORDER BY decided_at DESC, id DESC
+                LIMIT 1
+              ) AS admin_approved_request_id
        FROM users
        WHERE email = ?
          AND active = 1
@@ -96,19 +107,21 @@ export async function POST(request: Request) {
          AND (? IS NULL OR venue_id = ?)
        LIMIT 1`,
     )
-      .bind(normalizedEmail, expectedVenueId, expectedVenueId)
+      .bind(nowIso, normalizedEmail, expectedVenueId, expectedVenueId)
       .first<{
         id: string;
         venue_id: string | null;
         password_hash: string;
         migration_status: string;
         password_set_at: string | null;
+        admin_approved_request_id: string | null;
       }>();
 
     const firstLoginSetupMethod = candidate
       ? getFirstLoginSetupMethod({
           migrationStatus: candidate.migration_status,
           passwordSetAt: candidate.password_set_at,
+          adminApprovedReset: Boolean(candidate.admin_approved_request_id),
         })
       : null;
     const setupCodeMatches = candidate && firstLoginSetupMethod === "setup_code"
@@ -123,7 +136,7 @@ export async function POST(request: Request) {
       return NextResponse.json(
         {
           code: "ACCOUNT_NOT_ELIGIBLE",
-          error: "The setup code is invalid or this account is not eligible for first-time setup.",
+          error: "The administrator approval or setup code is invalid, expired, or already used.",
         },
         { status: 400 },
       );
@@ -143,6 +156,18 @@ export async function POST(request: Request) {
            AND migration_status = 'pending_reset'
            AND password_set_at IS NULL
            AND (? IS NULL OR venue_id = ?)
+           AND (
+             ? = 'setup_code'
+             OR EXISTS (
+               SELECT 1
+               FROM password_reset_requests
+               WHERE id = ?
+                 AND user_id = users.id
+                 AND status = 'approved'
+                 AND setup_method = 'admin_approved'
+                 AND expires_at > ?
+             )
+           )
          RETURNING id`,
       ).bind(
         passwordHash,
@@ -151,15 +176,26 @@ export async function POST(request: Request) {
         candidate.password_hash,
         expectedVenueId,
         expectedVenueId,
+        firstLoginSetupMethod,
+        candidate.admin_approved_request_id,
+        nowIso,
       ),
+      env.DB.prepare(
+        COMPLETE_OPEN_PASSWORD_RESET_REQUEST_AFTER_USER_UPDATE_SQL,
+      ).bind(nowIso, nowIso, candidate.id),
       env.DB.prepare(
         `UPDATE password_reset_tokens
          SET used = 1
          WHERE user_id = ?
            AND used = 0
-           AND changes() = 1
+           AND EXISTS (
+             SELECT 1 FROM users
+             WHERE id = ?
+               AND migration_status = 'active'
+               AND password_set_at = ?
+           )
          RETURNING user_id`,
-      ).bind(candidate.id),
+      ).bind(candidate.id, candidate.id, nowIso),
       env.DB.prepare(
         `INSERT INTO user_audit_events (
            id, venue_id, actor_user_id, target_user_id, action, details, created_at
@@ -172,7 +208,10 @@ export async function POST(request: Request) {
       ).bind(
         crypto.randomUUID(),
         JSON.stringify({
-          method: "manual_setup_code",
+          method:
+            firstLoginSetupMethod === "admin_approved"
+              ? "admin_approved"
+              : "manual_setup_code",
         }),
         nowIso,
         candidate.id,
