@@ -1,9 +1,8 @@
-export type FirstLoginSetupMethod = "setup_code" | "admin_approved";
+export type FirstLoginSetupMethod = "setup_code";
 
 interface FirstLoginAccountState {
   migrationStatus: string;
   passwordSetAt: string | null;
-  adminApprovedReset?: boolean;
 }
 
 export function getFirstLoginSetupMethod(
@@ -13,18 +12,18 @@ export function getFirstLoginSetupMethod(
     return null;
   }
 
-  return account.adminApprovedReset ? "admin_approved" : "setup_code";
+  return "setup_code";
 }
 
 export function canStartFirstLoginSetup(
   method: FirstLoginSetupMethod,
   setupCodeMatches: boolean,
 ): boolean {
-  return method === "admin_approved" || setupCodeMatches;
+  return method === "setup_code" && setupCodeMatches;
 }
 
 export function isFirstLoginSetupMethod(
   value: unknown,
 ): value is FirstLoginSetupMethod {
-  return value === "setup_code" || value === "admin_approved";
+  return value === "setup_code";
 }

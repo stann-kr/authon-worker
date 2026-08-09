@@ -1,12 +1,65 @@
 import { NextResponse } from "next/server";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { drizzle } from "drizzle-orm/d1";
-import { eq, sql } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { users } from "@/lib/db/schema";
 import { verifyPassword, hashPassword } from "@/lib/auth/password";
 import { requireAuth } from "@/lib/auth/server";
 import { getPasswordPolicyError } from "@/lib/auth/password-policy";
 import { shouldUseSecureAuthCookies } from "@/lib/auth/cookie-policy";
+
+const UPDATE_PROFILE_PASSWORD_CAS_SQL = `
+  UPDATE users
+  SET password_hash = ?,
+      password_set_at = ?,
+      session_version = session_version + 1
+  WHERE id = ?
+    AND password_hash = ?
+    AND session_version = ?
+    AND active = 1
+    AND deleted_at IS NULL
+  RETURNING id
+`;
+
+const INSERT_PROFILE_PASSWORD_AUDIT_SQL = `
+  INSERT INTO user_audit_events (
+    id, venue_id, actor_user_id, target_user_id, action, details, created_at
+  )
+  SELECT ?, venue_id, id, id, 'password_changed', ?, ?
+  FROM users
+  WHERE id = ?
+    AND changes() = 1
+  RETURNING target_user_id
+`;
+
+const INVALIDATE_PROFILE_RESET_TOKENS_SQL = `
+  UPDATE password_reset_tokens
+  SET used = 1
+  WHERE user_id = ?
+    AND used = 0
+    AND EXISTS (
+      SELECT 1
+      FROM user_audit_events
+      WHERE id = ?
+        AND target_user_id = ?
+        AND action = 'password_changed'
+    )
+`;
+
+const CANCEL_PROFILE_RESET_REQUESTS_SQL = `
+  UPDATE password_reset_requests
+  SET status = 'cancelled',
+      updated_at = ?
+  WHERE user_id = ?
+    AND status IN ('pending', 'approved')
+    AND EXISTS (
+      SELECT 1
+      FROM user_audit_events
+      WHERE id = ?
+        AND target_user_id = ?
+        AND action = 'password_changed'
+    )
+`;
 
 function getAuthErrorStatus(error: unknown): number | null {
   if (!(error instanceof Error)) return null;
@@ -44,15 +97,61 @@ export async function PUT(request: Request) {
     }
 
     const hashedPassword = await hashPassword(newPassword);
-    await db.update(users).set({
-      passwordHash: hashedPassword,
-      sessionVersion: sql`${users.sessionVersion} + 1`,
-    }).where(eq(users.id, authUser.id));
+    const nowIso = new Date().toISOString();
+    const auditEventId = crypto.randomUUID();
+    const [passwordResult, auditResult] = await env.DB.batch<{
+      id?: string;
+      target_user_id?: string;
+    }>([
+      env.DB.prepare(UPDATE_PROFILE_PASSWORD_CAS_SQL).bind(
+        hashedPassword,
+        nowIso,
+        user.id,
+        user.passwordHash,
+        user.sessionVersion,
+      ),
+      env.DB.prepare(INSERT_PROFILE_PASSWORD_AUDIT_SQL).bind(
+        auditEventId,
+        JSON.stringify({ method: "authenticated_profile" }),
+        nowIso,
+        user.id,
+      ),
+      env.DB.prepare(INVALIDATE_PROFILE_RESET_TOKENS_SQL).bind(
+        user.id,
+        auditEventId,
+        user.id,
+      ),
+      env.DB.prepare(CANCEL_PROFILE_RESET_REQUESTS_SQL).bind(
+        nowIso,
+        user.id,
+        auditEventId,
+        user.id,
+      ),
+    ]);
+
+    const updatedUserId = (
+      passwordResult.results?.[0] as { id?: string } | undefined
+    )?.id;
+    const auditedUserId = (
+      auditResult.results?.[0] as { target_user_id?: string } | undefined
+    )?.target_user_id;
+    if (updatedUserId !== user.id || auditedUserId !== user.id) {
+      return NextResponse.json(
+        { error: "계정 상태가 변경되었습니다. 다시 로그인한 뒤 시도해주세요." },
+        { status: 409 },
+      );
+    }
 
     const cookieHeader = request.headers.get("cookie") || "";
     const sessionId = cookieHeader.match(/(?:^|;\s*)sessionId=([^;]+)/)?.[1];
     if (sessionId) {
-      await env.SESSIONS.delete(`session:${sessionId}`);
+      try {
+        await env.SESSIONS.delete(`session:${sessionId}`);
+      } catch (error: unknown) {
+        // DB session_version is authoritative, so KV cleanup failure must not
+        // turn an already-committed password change into a client-visible failure.
+        console.error("Failed to delete superseded profile session:", error);
+      }
     }
 
     const response = NextResponse.json({

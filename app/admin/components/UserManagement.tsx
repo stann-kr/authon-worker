@@ -87,8 +87,6 @@ export default function UserManagement({
   const [busyUserId, setBusyUserId] = useState<string | null>(null);
   const [pendingUserAction, setPendingUserAction] =
     useState<PendingUserAction>(null);
-  const [resetSetupMethod, setResetSetupMethod] =
-    useState<PasswordResetSetupMethod>("admin_approved");
   const [setupCredential, setSetupCredential] = useState<{
     userName: string;
     setupMethod: PasswordResetSetupMethod;
@@ -271,7 +269,7 @@ export default function UserManagement({
     try {
       const { data, error } = await startManagedPasswordReset({
         userId: user.id,
-        setupMethod: resetSetupMethod,
+        setupMethod: "setup_code",
       });
       if (error) {
         setFeedback({ type: "error", message: getActionError(error) });
@@ -406,6 +404,8 @@ export default function UserManagement({
         return t("audit_password_reset_completed");
       case "password_reset_request_rejected":
         return t("audit_password_reset_request_rejected");
+      case "password_changed":
+        return t("audit_password_changed");
       case "deleted":
         return t("audit_deleted");
       default:
@@ -701,7 +701,6 @@ export default function UserManagement({
                         setPendingUserAction({ kind: "toggle", user })
                       }
                       onResetPassword={async (user) => {
-                        setResetSetupMethod("admin_approved");
                         setPendingUserAction({ kind: "reset-password", user });
                       }}
                       onDelete={async (user) =>
@@ -767,39 +766,14 @@ export default function UserManagement({
           }
         >
           {pendingUserAction.kind === "reset-password" && (
-            <fieldset>
-              <legend className="app-label">{t("resetSetupMethod")}</legend>
-              <div className="space-y-2">
-                {(["admin_approved", "setup_code"] as const).map((method) => (
-                  <label
-                    key={method}
-                    className="flex cursor-pointer items-start gap-3 border border-border-default bg-surface p-3"
-                  >
-                    <input
-                      type="radio"
-                      name="user-reset-setup-method"
-                      value={method}
-                      checked={resetSetupMethod === method}
-                      onChange={() => setResetSetupMethod(method)}
-                      disabled={busyUserId === pendingUserAction.user.id}
-                      className="mt-1"
-                    />
-                    <span className="min-w-0">
-                      <span className="block text-sm font-semibold text-text-heading">
-                        {method === "admin_approved"
-                          ? t("directResetMethod")
-                          : t("setupCodeMethod")}
-                      </span>
-                      <span className="mt-1 block text-xs leading-relaxed text-text-muted">
-                        {method === "admin_approved"
-                          ? t("directResetMethodHelp")
-                          : t("setupCodeMethodHelp")}
-                      </span>
-                    </span>
-                  </label>
-                ))}
-              </div>
-            </fieldset>
+            <div className="border border-border-default bg-surface p-3">
+              <p className="text-sm font-semibold text-text-heading">
+                {t("setupCodeMethod")}
+              </p>
+              <p className="mt-1 text-xs leading-relaxed text-text-muted">
+                {t("manualResetCodeOnlyHelp")}
+              </p>
+            </div>
           )}
         </ConfirmDialog>
       )}

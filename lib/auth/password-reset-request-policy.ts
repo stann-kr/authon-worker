@@ -9,13 +9,44 @@ export type PasswordResetSetupMethod = "setup_code" | "admin_approved";
 
 export type PasswordResetRequestSource = "self_service" | "admin";
 
+export const PASSWORD_RESET_VERIFICATION_METHODS = [
+  "in_person",
+  "registered_phone",
+  "verified_messenger",
+] as const;
+
+export type PasswordResetVerificationMethod =
+  (typeof PASSWORD_RESET_VERIFICATION_METHODS)[number];
+
 export type PasswordResetTargetErrorCode =
   | "CANNOT_MANAGE_SELF"
   | "FORBIDDEN"
   | "USER_DELETED"
   | "USER_INACTIVE";
 
-export const ADMIN_APPROVED_RESET_TTL_MS = 24 * 60 * 60 * 1000;
+export type AdminApprovedResetPolicyErrorCode =
+  | "CANNOT_MANAGE_SELF"
+  | "FORBIDDEN"
+  | "EXACT_SELF_SERVICE_REQUEST_REQUIRED"
+  | "SIGNED_RECEIPT_REQUIRED"
+  | "VERIFICATION_REQUIRED"
+  | "DIRECT_RESET_NOT_ALLOWED";
+
+export interface AdminApprovedResetPolicyInput {
+  isSelf: boolean;
+  isManageable: boolean;
+  isExactRequest: boolean;
+  hasSignedReceipt: boolean;
+  requestSource: unknown;
+  targetRole: unknown;
+  targetAccountKind: unknown;
+  verificationMethod: unknown;
+}
+
+export const PASSWORD_RESET_APPROVAL_TTL_MS = 15 * 60 * 1000;
+
+// 기존 호출부와의 호환을 유지한다. setup code와 direct 승인은 같은 TTL을 사용한다.
+export const ADMIN_APPROVED_RESET_TTL_MS = PASSWORD_RESET_APPROVAL_TTL_MS;
 
 const REQUEST_STATUSES: readonly PasswordResetRequestStatus[] = [
   "pending",
@@ -23,6 +54,17 @@ const REQUEST_STATUSES: readonly PasswordResetRequestStatus[] = [
   "rejected",
   "completed",
   "cancelled",
+];
+
+const DIRECT_RESET_TARGET_ROLES = ["door_staff", "staff", "dj"] as const;
+
+const SETUP_CODE_ONLY_METHODS: readonly PasswordResetSetupMethod[] = [
+  "setup_code",
+];
+
+const DIRECT_AND_SETUP_CODE_METHODS: readonly PasswordResetSetupMethod[] = [
+  "setup_code",
+  "admin_approved",
 ];
 
 export function isPasswordResetRequestStatus(
@@ -44,14 +86,91 @@ export function isPasswordResetRequestSource(
   return value === "self_service" || value === "admin";
 }
 
+export function isPasswordResetVerificationMethod(
+  value: unknown,
+): value is PasswordResetVerificationMethod {
+  return typeof value === "string" &&
+    PASSWORD_RESET_VERIFICATION_METHODS.includes(
+      value as PasswordResetVerificationMethod,
+    );
+}
+
+export function getPasswordResetApprovalExpiry(
+  setupMethod: PasswordResetSetupMethod,
+  nowMs: number = Date.now(),
+): string {
+  if (!isPasswordResetSetupMethod(setupMethod)) {
+    throw new Error("INVALID_SETUP_METHOD");
+  }
+  return new Date(nowMs + PASSWORD_RESET_APPROVAL_TTL_MS).toISOString();
+}
+
 export function getAdminApprovedResetExpiry(nowMs: number = Date.now()): string {
-  return new Date(nowMs + ADMIN_APPROVED_RESET_TTL_MS).toISOString();
+  return getPasswordResetApprovalExpiry("admin_approved", nowMs);
+}
+
+export function getAdminApprovedResetPolicyError(
+  input: AdminApprovedResetPolicyInput,
+): AdminApprovedResetPolicyErrorCode | null {
+  if (input.isSelf) return "CANNOT_MANAGE_SELF";
+  if (!input.isManageable) return "FORBIDDEN";
+  if (input.requestSource !== "self_service" || !input.isExactRequest) {
+    return "EXACT_SELF_SERVICE_REQUEST_REQUIRED";
+  }
+  if (!input.hasSignedReceipt) return "SIGNED_RECEIPT_REQUIRED";
+  if (!isPasswordResetVerificationMethod(input.verificationMethod)) {
+    return "VERIFICATION_REQUIRED";
+  }
+  if (
+    input.targetAccountKind !== "personal" ||
+    typeof input.targetRole !== "string" ||
+    !DIRECT_RESET_TARGET_ROLES.some((role) => role === input.targetRole)
+  ) {
+    return "DIRECT_RESET_NOT_ALLOWED";
+  }
+  return null;
+}
+
+export function canUseAdminApprovedReset(
+  input: AdminApprovedResetPolicyInput,
+): boolean {
+  return getAdminApprovedResetPolicyError(input) === null;
+}
+
+export function getAllowedPasswordResetSetupMethods(
+  input: AdminApprovedResetPolicyInput,
+): readonly PasswordResetSetupMethod[] {
+  if (input.isSelf || !input.isManageable) return [];
+  return canUseAdminApprovedReset(input)
+    ? DIRECT_AND_SETUP_CODE_METHODS
+    : SETUP_CODE_ONLY_METHODS;
 }
 
 export function isOpenPasswordResetRequestStatus(
   status: PasswordResetRequestStatus,
 ): boolean {
   return status === "pending" || status === "approved";
+}
+
+export function isUsablePasswordResetApproval(
+  approval: {
+    status: string;
+    setupMethod: string | null;
+    expiresAt: string | null;
+  } | null | undefined,
+  nowMs: number = Date.now(),
+): boolean {
+  if (
+    !approval ||
+    approval.status !== "approved" ||
+    !isPasswordResetSetupMethod(approval.setupMethod) ||
+    !approval.expiresAt
+  ) {
+    return false;
+  }
+
+  const expiresAtMs = Date.parse(approval.expiresAt);
+  return Number.isFinite(expiresAtMs) && expiresAtMs > nowMs;
 }
 
 export function isUsableAdminApprovedResetGrant(
@@ -63,16 +182,11 @@ export function isUsableAdminApprovedResetGrant(
   nowMs: number = Date.now(),
 ): boolean {
   if (
-    !grant ||
-    grant.status !== "approved" ||
-    grant.setupMethod !== "admin_approved" ||
-    !grant.expiresAt
+    grant?.setupMethod !== "admin_approved"
   ) {
     return false;
   }
-
-  const expiresAtMs = Date.parse(grant.expiresAt);
-  return Number.isFinite(expiresAtMs) && expiresAtMs > nowMs;
+  return isUsablePasswordResetApproval(grant, nowMs);
 }
 
 export function shouldCreatePasswordResetRequest(params: {

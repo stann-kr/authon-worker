@@ -17,6 +17,7 @@ import {
 import type {
   PasswordResetRequestView,
   PasswordResetSetupMethod,
+  PasswordResetVerificationMethod,
 } from "@/lib/api/types";
 import { useLatestRequestGuard } from "@/lib/hooks";
 import { useLocale, useTranslations } from "next-intl";
@@ -37,6 +38,17 @@ type ResetResult = {
   expiresAt: string | null;
 } | null;
 
+type ActionErrorFocusTarget =
+  | "dialog"
+  | "verification-method"
+  | "verification-challenge"
+  | "verification-attestation";
+
+type ActionError = {
+  message: string;
+  focusTarget: ActionErrorFocusTarget;
+} | null;
+
 export default function PasswordResetRequestManagement({
   onPendingCountChange,
 }: PasswordResetRequestManagementProps) {
@@ -48,12 +60,21 @@ export default function PasswordResetRequestManagement({
   const [busyRequestId, setBusyRequestId] = useState<string | null>(null);
   const [pendingAction, setPendingAction] = useState<PendingAction>(null);
   const [selectedMethod, setSelectedMethod] =
-    useState<PasswordResetSetupMethod>("admin_approved");
+    useState<PasswordResetSetupMethod>("setup_code");
+  const [verificationMethod, setVerificationMethod] =
+    useState<PasswordResetVerificationMethod | null>(null);
+  const [verificationChallenge, setVerificationChallenge] = useState("");
+  const [verificationAttested, setVerificationAttested] = useState(false);
+  const [actionError, setActionError] = useState<ActionError>(null);
   const [feedback, setFeedback] = useState<{
     type: "success" | "error";
     message: string;
   } | null>(null);
   const [resetResult, setResetResult] = useState<ResetResult>(null);
+  const actionErrorRef = useRef<HTMLDivElement>(null);
+  const verificationMethodRef = useRef<HTMLInputElement>(null);
+  const verificationChallengeRef = useRef<HTMLInputElement>(null);
+  const verificationAttestationRef = useRef<HTMLInputElement>(null);
   const resultPanelRef = useRef<HTMLDivElement>(null);
   const shouldFocusResultRef = useRef(false);
   const requestGuard = useLatestRequestGuard();
@@ -117,8 +138,18 @@ export default function PasswordResetRequestManagement({
         return t("cannotManageSelf");
       case "FORBIDDEN":
         return t("forbidden");
+      case "DIRECT_RESET_NOT_ALLOWED":
+      case "EXACT_SELF_SERVICE_REQUEST_REQUIRED":
+      case "SIGNED_RECEIPT_REQUIRED":
+        return t("directNotAllowed");
+      case "VERIFICATION_FAILED":
+        return t("verificationFailed");
+      case "VERIFICATION_REQUIRED":
+        return t("verificationRequired");
       case "REQUEST_ALREADY_DECIDED":
         return t("alreadyDecided");
+      case "REQUEST_EXPIRED":
+        return t("requestExpired");
       case "REQUEST_NOT_FOUND":
       case "USER_NOT_FOUND":
         return t("notFound");
@@ -131,33 +162,73 @@ export default function PasswordResetRequestManagement({
     }
   };
 
+  const showActionError = (
+    message: string,
+    focusTarget: ActionErrorFocusTarget = "dialog",
+  ) => {
+    setActionError({ message, focusTarget });
+    window.requestAnimationFrame(() => {
+      const target =
+        focusTarget === "verification-method"
+          ? verificationMethodRef.current
+          : focusTarget === "verification-challenge"
+            ? verificationChallengeRef.current
+            : focusTarget === "verification-attestation"
+              ? verificationAttestationRef.current
+              : actionErrorRef.current;
+      target?.focus();
+    });
+  };
+
+  const closePendingAction = () => {
+    setActionError(null);
+    setPendingAction(null);
+  };
+
   const handlePendingAction = async () => {
     if (!pendingAction) return;
     const { request, kind } = pendingAction;
     setBusyRequestId(request.id);
+    setActionError(null);
     setFeedback(null);
     try {
       if (kind === "reject") {
         const { error } = await rejectPasswordResetRequest(request.id);
         if (error) {
-          setFeedback({ type: "error", message: getActionError(error) });
+          showActionError(getActionError(error));
           return;
         }
         setFeedback({ type: "success", message: t("rejected") });
         await loadRequests();
+        closePendingAction();
         return;
       }
 
       const { data, error } = await startManagedPasswordReset({
-        userId: request.userId,
         requestId: request.id,
         setupMethod: selectedMethod,
+        verificationMethod:
+          selectedMethod === "admin_approved" ? verificationMethod : null,
+        verificationChallenge:
+          selectedMethod === "admin_approved" ? verificationChallenge : null,
+        verificationAttested:
+          selectedMethod === "admin_approved" && verificationAttested,
       });
       if (error || !data) {
-        setFeedback({
-          type: "error",
-          message: getActionError(error ?? "UPDATE_FAILED"),
-        });
+        const errorCode = error ?? "UPDATE_FAILED";
+        const focusTarget: ActionErrorFocusTarget =
+          selectedMethod !== "admin_approved"
+            ? "dialog"
+            : !verificationMethod
+              ? "verification-method"
+              : errorCode === "VERIFICATION_FAILED"
+                ? "verification-challenge"
+                : !verificationAttested
+                  ? "verification-attestation"
+                  : errorCode === "VERIFICATION_REQUIRED"
+                    ? "verification-challenge"
+                    : "dialog";
+        showActionError(getActionError(errorCode), focusTarget);
         return;
       }
 
@@ -176,12 +247,12 @@ export default function PasswordResetRequestManagement({
             : t("approvedWithCode"),
       });
       await loadRequests();
+      closePendingAction();
     } catch (error: unknown) {
       console.error("Failed to decide password reset request:", error);
-      setFeedback({ type: "error", message: t("decisionFailed") });
+      showActionError(t("decisionFailed"));
     } finally {
       setBusyRequestId(null);
-      setPendingAction(null);
     }
   };
 
@@ -326,7 +397,12 @@ export default function PasswordResetRequestManagement({
                       size="sm"
                       fullWidth
                       onClick={() => {
-                        setSelectedMethod("admin_approved");
+                        setActionError(null);
+                        setFeedback(null);
+                        setSelectedMethod("setup_code");
+                        setVerificationMethod(null);
+                        setVerificationChallenge("");
+                        setVerificationAttested(false);
                         setPendingAction({ kind: "approve", request });
                       }}
                       disabled={busyRequestId === request.id}
@@ -338,7 +414,11 @@ export default function PasswordResetRequestManagement({
                       size="sm"
                       fullWidth
                       variant="outline"
-                      onClick={() => setPendingAction({ kind: "reject", request })}
+                      onClick={() => {
+                        setActionError(null);
+                        setFeedback(null);
+                        setPendingAction({ kind: "reject", request });
+                      }}
                       disabled={busyRequestId === request.id}
                     >
                       {t("reject")}
@@ -392,15 +472,39 @@ export default function PasswordResetRequestManagement({
           }
           cancelLabel={commonT("cancel")}
           onConfirm={handlePendingAction}
-          onCancel={() => setPendingAction(null)}
+          onCancel={closePendingAction}
           isLoading={busyRequestId === pendingAction.request.id}
+          confirmDisabled={
+            pendingAction.kind === "approve" &&
+            selectedMethod === "admin_approved" &&
+            (!verificationMethod ||
+              !verificationAttested ||
+              !/^REQ-[A-HJ-NP-Z2-9]{4}-[A-HJ-NP-Z2-9]{4}$/i.test(
+                verificationChallenge.trim(),
+              ))
+          }
           tone={pendingAction.kind === "approve" ? "primary" : "danger"}
         >
+          {actionError && (
+            <div
+              ref={actionErrorRef}
+              id="password-reset-action-error"
+              className="mb-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-border-focus"
+              tabIndex={-1}
+            >
+              <Alert type="error" message={actionError.message} />
+            </div>
+          )}
           {pendingAction.kind === "approve" && (
             <fieldset>
               <legend className="app-label">{t("setupMethod")}</legend>
               <div className="space-y-2">
-                {(["admin_approved", "setup_code"] as const).map((method) => (
+                {([
+                  "setup_code",
+                  ...(pendingAction.request.codeFreeEligible
+                    ? (["admin_approved"] as const)
+                    : []),
+                ] as const).map((method) => (
                   <label
                     key={method}
                     className="flex cursor-pointer items-start gap-3 border border-border-default bg-surface p-3"
@@ -410,7 +514,10 @@ export default function PasswordResetRequestManagement({
                       name="password-reset-setup-method"
                       value={method}
                       checked={selectedMethod === method}
-                      onChange={() => setSelectedMethod(method)}
+                      onChange={() => {
+                        setSelectedMethod(method);
+                        setActionError(null);
+                      }}
                       disabled={busyRequestId === pendingAction.request.id}
                       className="mt-1"
                     />
@@ -429,6 +536,124 @@ export default function PasswordResetRequestManagement({
                   </label>
                 ))}
               </div>
+              {selectedMethod === "admin_approved" && (
+                <div className="mt-5 space-y-4 border-t border-border-default pt-4">
+                  <fieldset
+                    aria-describedby={
+                      actionError?.focusTarget === "verification-method"
+                        ? "password-reset-action-error"
+                        : undefined
+                    }
+                  >
+                    <legend className="app-label">
+                      {t("verificationMethod")}
+                    </legend>
+                    <div className="space-y-2">
+                      {([
+                        "in_person",
+                        "registered_phone",
+                        "verified_messenger",
+                      ] as const).map((method) => (
+                        <label
+                          key={method}
+                          className="flex cursor-pointer items-start gap-3 border border-border-default bg-canvas p-3"
+                        >
+                          <input
+                            ref={method === "in_person" ? verificationMethodRef : undefined}
+                            type="radio"
+                            name="password-reset-verification-method"
+                            value={method}
+                            checked={verificationMethod === method}
+                            onChange={() => {
+                              setVerificationMethod(method);
+                              setActionError(null);
+                            }}
+                            required
+                            disabled={busyRequestId === pendingAction.request.id}
+                            className="mt-1"
+                          />
+                          <span className="text-sm text-text-body">
+                            {t(`verification_${method}`)}
+                          </span>
+                        </label>
+                      ))}
+                    </div>
+                  </fieldset>
+
+                  <div>
+                    <label htmlFor="password-reset-verification-challenge" className="app-label">
+                      {t("verificationChallenge")}
+                    </label>
+                    <input
+                      ref={verificationChallengeRef}
+                      id="password-reset-verification-challenge"
+                      name="password-reset-verification-challenge"
+                      type="text"
+                      value={verificationChallenge}
+                      onChange={(event) => {
+                        setVerificationChallenge(event.target.value.toUpperCase());
+                        setActionError(null);
+                      }}
+                      disabled={busyRequestId === pendingAction.request.id}
+                      autoComplete="off"
+                      spellCheck={false}
+                      required
+                      placeholder="REQ-XXXX-XXXX"
+                      className="app-field font-mono uppercase"
+                      aria-describedby={`password-reset-verification-help${
+                        actionError?.focusTarget === "verification-challenge"
+                          ? " password-reset-action-error"
+                          : ""
+                      }`}
+                      aria-required="true"
+                      aria-invalid={
+                        (verificationChallenge.length > 0 &&
+                          !/^REQ-[A-HJ-NP-Z2-9]{4}-[A-HJ-NP-Z2-9]{4}$/i.test(
+                            verificationChallenge.trim(),
+                          )) ||
+                        actionError?.focusTarget === "verification-challenge"
+                      }
+                    />
+                    <p
+                      id="password-reset-verification-help"
+                      className="app-helper"
+                    >
+                      {verificationChallenge.length > 0 &&
+                      !/^REQ-[A-HJ-NP-Z2-9]{4}-[A-HJ-NP-Z2-9]{4}$/i.test(
+                        verificationChallenge.trim(),
+                      )
+                        ? t("verificationChallengeInvalid")
+                        : t("verificationChallengeHelp")}
+                    </p>
+                  </div>
+
+                  <label className="flex cursor-pointer items-start gap-3 border border-border-default bg-canvas p-3">
+                    <input
+                      ref={verificationAttestationRef}
+                      type="checkbox"
+                      required
+                      checked={verificationAttested}
+                      onChange={(event) => {
+                        setVerificationAttested(event.target.checked);
+                        setActionError(null);
+                      }}
+                      disabled={busyRequestId === pendingAction.request.id}
+                      className="mt-1"
+                      aria-describedby={
+                        actionError?.focusTarget === "verification-attestation"
+                          ? "password-reset-action-error"
+                          : undefined
+                      }
+                      aria-invalid={
+                        actionError?.focusTarget === "verification-attestation"
+                      }
+                    />
+                    <span className="text-xs leading-relaxed text-text-muted">
+                      {t("verificationAttestation")}
+                    </span>
+                  </label>
+                </div>
+              )}
             </fieldset>
           )}
         </ConfirmDialog>

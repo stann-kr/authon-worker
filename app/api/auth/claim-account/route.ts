@@ -1,37 +1,76 @@
 import { NextResponse } from "next/server";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
-import { hashPassword, verifyPassword } from "@/lib/auth/password";
+import {
+  DUMMY_PASSWORD_HASH,
+  hashPassword,
+  verifyPassword,
+} from "@/lib/auth/password";
 import { getPasswordPolicyErrorCode } from "@/lib/auth/password-policy";
 import {
-  clearRateLimit,
-  consumeRateLimit,
+  consumeRateLimitOrDeny,
   getRequestIp,
 } from "@/lib/auth/rate-limit";
-import { getTenantContextForRequest } from "@/lib/tenant/server";
+import { shouldUseSecureAuthCookies } from "@/lib/auth/cookie-policy";
 import {
-  canStartFirstLoginSetup,
-  getFirstLoginSetupMethod,
-} from "@/lib/auth/first-login-policy";
-import { COMPLETE_OPEN_PASSWORD_RESET_REQUEST_AFTER_USER_UPDATE_SQL } from "@/lib/auth/password-reset-request-sql";
+  getPasswordResetReceiptCookieOptions,
+  getPasswordResetReceiptRequestId,
+  PASSWORD_RESET_RECEIPT_COOKIE_NAME,
+} from "@/lib/auth/password-reset-receipt";
+import {
+  CANCEL_OTHER_PASSWORD_RESET_REQUESTS_SQL,
+  COMPLETE_EXACT_PASSWORD_RESET_REQUEST_SQL,
+  INSERT_PASSWORD_RESET_CLAIM_AUDIT_SQL,
+  INVALIDATE_PASSWORD_RESET_CLAIM_TOKENS_SQL,
+  UPDATE_USER_WITH_APPROVED_RESET_SQL,
+} from "@/lib/auth/password-reset-lifecycle-sql";
+import { getTenantContextForRequest } from "@/lib/tenant/server";
+import { isTrustedMutationOrigin } from "@/lib/auth/request-origin";
+
+interface ClaimCandidate {
+  id: string;
+  venue_id: string | null;
+  password_hash: string;
+  session_version: number;
+  migration_status: string;
+  password_set_at: string | null;
+  request_id: string | null;
+  setup_method: "setup_code" | "admin_approved" | null;
+  has_setup_code_history: number;
+}
 
 /**
- * 관리자 발급 설정 코드 또는 유효한 관리자 승인 기반 비밀번호 설정.
- * pending_reset 상태와 현재 credential/grant를 조건부 소비해 재사용을 막는다.
+ * Browser-bound 관리자 승인 또는 유효한 1회용 설정 코드를 원자적으로 소비한다.
  */
 export async function POST(request: Request) {
   try {
-    const { env } = getCloudflareContext();
-    const {
-      email,
-      setupCode: rawSetupCode,
-      newPassword,
-    } = await request.json();
-    const setupCode = typeof rawSetupCode === "string" ? rawSetupCode : "";
+    if (!isTrustedMutationOrigin(request)) {
+      return NextResponse.json(
+        { code: "FORBIDDEN_ORIGIN", error: "Request origin is not allowed." },
+        { status: 403 },
+      );
+    }
+    const body: unknown = await request.json().catch(() => null);
+    if (!body || typeof body !== "object") {
+      return NextResponse.json(
+        { code: "MISSING_SETUP_FIELDS", error: "A new password is required." },
+        { status: 400 },
+      );
+    }
+
+    const input = body as {
+      email?: unknown;
+      setupCode?: unknown;
+      newPassword?: unknown;
+      recoveryReceipt?: unknown;
+    };
+    const useBrowserReceipt = input.recoveryReceipt === true;
+    const email = typeof input.email === "string" ? input.email.trim().toLowerCase() : "";
+    const setupCode = typeof input.setupCode === "string" ? input.setupCode : "";
+    const newPassword = input.newPassword;
 
     if (
-      typeof email !== "string" ||
-      !email.trim() ||
-      typeof newPassword !== "string"
+      typeof newPassword !== "string" ||
+      (!useBrowserReceipt && !email)
     ) {
       return NextResponse.json(
         { code: "MISSING_SETUP_FIELDS", error: "Email and a new password are required." },
@@ -39,7 +78,6 @@ export async function POST(request: Request) {
       );
     }
 
-    const normalizedEmail = email.trim().toLowerCase();
     const passwordPolicyErrorCode = getPasswordPolicyErrorCode(newPassword);
     if (passwordPolicyErrorCode) {
       return NextResponse.json(
@@ -54,11 +92,26 @@ export async function POST(request: Request) {
       );
     }
 
-    const ip = getRequestIp(request);
-    const identifier = `${ip}:${normalizedEmail}`;
-    const rateLimit = await consumeRateLimit({
+    const { env } = getCloudflareContext();
+    if (useBrowserReceipt && !env.JWT_SECRET) {
+      console.error("JWT_SECRET is not configured");
+      return NextResponse.json(
+        { code: "SERVER_ERROR", error: "Unable to complete account setup right now." },
+        { status: 500 },
+      );
+    }
+
+    const signedReceiptRequestId = env.JWT_SECRET
+      ? await getPasswordResetReceiptRequestId(request.headers, env.JWT_SECRET)
+      : null;
+    const receiptRequestId = useBrowserReceipt ? signedReceiptRequestId : null;
+    const requestIp = getRequestIp(request);
+    const rateLimitIdentifier = useBrowserReceipt
+      ? `${requestIp}:receipt:${receiptRequestId ?? "invalid"}`
+      : `${requestIp}:${email}`;
+    const rateLimit = await consumeRateLimitOrDeny({
       namespace: "claim-account",
-      identifier,
+      identifier: rateLimitIdentifier,
       limit: 5,
       windowSeconds: 60 * 15,
     });
@@ -68,70 +121,142 @@ export async function POST(request: Request) {
         { code: "RATE_LIMITED", error: "Too many setup attempts. Please try again later." },
         {
           status: 429,
-          headers: { "Retry-After": String(rateLimit.retryAfterSeconds) },
+          headers: {
+            "Retry-After": String(rateLimit.retryAfterSeconds),
+          },
         },
       );
     }
 
-    const passwordHash = await hashPassword(newPassword);
     const nowIso = new Date().toISOString();
     const tenant = await getTenantContextForRequest(request);
     const expectedVenueId = tenant.scope === "venue" ? tenant.venueId : null;
-
     if (!tenant.resolved) {
-      return NextResponse.json({ code: "UNKNOWN_VENUE", error: "Unknown venue." }, { status: 404 });
+      return NextResponse.json(
+        { code: "UNKNOWN_VENUE", error: "Unknown venue." },
+        { status: 404 },
+      );
     }
 
-    const candidate = await env.DB.prepare(
-      `SELECT id,
-              venue_id,
-              password_hash,
-              migration_status,
-              password_set_at,
-              (
-                SELECT id
-                FROM password_reset_requests
-                WHERE user_id = users.id
-                  AND status = 'approved'
-                  AND setup_method = 'admin_approved'
-                  AND expires_at > ?
-                ORDER BY decided_at DESC, id DESC
-                LIMIT 1
-              ) AS admin_approved_request_id
-       FROM users
-       WHERE email = ?
-         AND active = 1
-         AND deleted_at IS NULL
-         AND migration_status = 'pending_reset'
-         AND password_set_at IS NULL
-         AND (? IS NULL OR venue_id = ?)
-       LIMIT 1`,
-    )
-      .bind(nowIso, normalizedEmail, expectedVenueId, expectedVenueId)
-      .first<{
-        id: string;
-        venue_id: string | null;
-        password_hash: string;
-        migration_status: string;
-        password_set_at: string | null;
-        admin_approved_request_id: string | null;
-      }>();
+    let candidate: ClaimCandidate | null = null;
+    if (useBrowserReceipt && receiptRequestId) {
+      candidate = await env.DB.prepare(
+        `SELECT u.id,
+                u.venue_id,
+                u.password_hash,
+                u.session_version,
+                u.migration_status,
+                u.password_set_at,
+                pr.id AS request_id,
+                pr.setup_method,
+                1 AS has_setup_code_history
+         FROM password_reset_requests pr
+         JOIN users u ON u.id = pr.user_id
+         WHERE pr.id = ?
+           AND pr.source = 'self_service'
+           AND pr.status = 'approved'
+           AND pr.setup_method = 'admin_approved'
+           AND pr.expires_at > ?
+           AND pr.venue_id IS u.venue_id
+           AND u.active = 1
+           AND u.deleted_at IS NULL
+           AND u.account_kind = 'personal'
+           AND u.role IN ('door_staff', 'staff', 'dj')
+           AND (? IS NULL OR u.venue_id = ? OR u.role = 'super_admin')
+           AND EXISTS (
+             SELECT 1
+             FROM users reset_actor
+             WHERE reset_actor.id = pr.decided_by_user_id
+               AND reset_actor.active = 1
+               AND reset_actor.deleted_at IS NULL
+               AND reset_actor.id <> u.id
+               AND (
+                 reset_actor.role = 'super_admin'
+                 OR (
+                   reset_actor.role = 'venue_admin'
+                   AND reset_actor.venue_id IS NOT NULL
+                   AND reset_actor.venue_id = u.venue_id
+                   AND u.role IN ('door_staff', 'staff', 'dj')
+                 )
+               )
+           )
+         LIMIT 1`,
+      )
+        .bind(receiptRequestId, nowIso, expectedVenueId, expectedVenueId)
+        .first<ClaimCandidate>();
+    } else if (!useBrowserReceipt) {
+      candidate = await env.DB.prepare(
+        `SELECT u.id,
+                u.venue_id,
+                u.password_hash,
+                u.session_version,
+                u.migration_status,
+                u.password_set_at,
+                (
+                  SELECT pr.id
+                  FROM password_reset_requests pr
+                  WHERE pr.user_id = u.id
+                    AND pr.status = 'approved'
+                    AND pr.setup_method = 'setup_code'
+                    AND pr.expires_at > ?
+                    AND pr.venue_id IS u.venue_id
+                    AND EXISTS (
+                      SELECT 1
+                      FROM users reset_actor
+                      WHERE reset_actor.id = pr.decided_by_user_id
+                        AND reset_actor.active = 1
+                        AND reset_actor.deleted_at IS NULL
+                        AND reset_actor.id <> u.id
+                        AND (
+                          reset_actor.role = 'super_admin'
+                          OR (
+                            reset_actor.role = 'venue_admin'
+                            AND reset_actor.venue_id IS NOT NULL
+                            AND reset_actor.venue_id = u.venue_id
+                            AND u.role IN ('door_staff', 'staff', 'dj')
+                          )
+                        )
+                    )
+                  ORDER BY pr.decided_at DESC, pr.id DESC
+                  LIMIT 1
+                ) AS request_id,
+                'setup_code' AS setup_method,
+                EXISTS (
+                  SELECT 1 FROM password_reset_requests history
+                  WHERE history.user_id = u.id
+                    AND history.setup_method = 'setup_code'
+                ) AS has_setup_code_history
+         FROM users u
+         WHERE u.email = ?
+           AND u.active = 1
+           AND u.deleted_at IS NULL
+           AND u.migration_status = 'pending_reset'
+           AND u.password_set_at IS NULL
+           AND (? IS NULL OR u.venue_id = ? OR u.role = 'super_admin')
+         LIMIT 1`,
+      )
+        .bind(nowIso, email, expectedVenueId, expectedVenueId)
+        .first<ClaimCandidate>();
+    }
 
-    const firstLoginSetupMethod = candidate
-      ? getFirstLoginSetupMethod({
-          migrationStatus: candidate.migration_status,
-          passwordSetAt: candidate.password_set_at,
-          adminApprovedReset: Boolean(candidate.admin_approved_request_id),
-        })
-      : null;
-    const setupCodeMatches = candidate && firstLoginSetupMethod === "setup_code"
-      ? await verifyPassword(setupCode, candidate.password_hash)
+    const isLegacySetup =
+      !useBrowserReceipt &&
+      candidate !== null &&
+      !candidate.request_id &&
+      candidate.has_setup_code_history === 0;
+    const setupCodeMatches = !useBrowserReceipt
+      ? await verifyPassword(
+          setupCode,
+          candidate && (Boolean(candidate.request_id) || isLegacySetup)
+            ? candidate.password_hash
+            : DUMMY_PASSWORD_HASH,
+        )
       : false;
 
     if (
       !candidate ||
-      !firstLoginSetupMethod ||
-      !canStartFirstLoginSetup(firstLoginSetupMethod, setupCodeMatches)
+      (useBrowserReceipt && !candidate.request_id) ||
+      (!useBrowserReceipt && !setupCodeMatches)
     ) {
       return NextResponse.json(
         {
@@ -142,111 +267,87 @@ export async function POST(request: Request) {
       );
     }
 
-    const [userResult] = await env.DB.batch<{ id: string } | { user_id: string }>([
+    const passwordHash = await hashPassword(newPassword);
+    const operationId = crypto.randomUUID();
+    const claimMethod = useBrowserReceipt
+      ? "browser_receipt"
+      : isLegacySetup
+        ? "legacy_setup_code"
+        : "manual_setup_code";
+    const exactRequestId = candidate.request_id ?? "";
+
+    const [userResult] = await env.DB.batch<{ id?: string }>([
       env.DB.prepare(
-        `UPDATE users
-         SET password_hash = ?,
-             migration_status = 'active',
-             password_set_at = ?,
-             session_version = session_version + 1
-         WHERE id = ?
-           AND password_hash = ?
-           AND active = 1
-           AND deleted_at IS NULL
-           AND migration_status = 'pending_reset'
-           AND password_set_at IS NULL
-           AND (? IS NULL OR venue_id = ?)
-           AND (
-             ? = 'setup_code'
-             OR EXISTS (
-               SELECT 1
-               FROM password_reset_requests
-               WHERE id = ?
-                 AND user_id = users.id
-                 AND status = 'approved'
-                 AND setup_method = 'admin_approved'
-                 AND expires_at > ?
-             )
-           )
-         RETURNING id`,
+        UPDATE_USER_WITH_APPROVED_RESET_SQL,
       ).bind(
         passwordHash,
         nowIso,
         candidate.id,
         candidate.password_hash,
+        candidate.session_version,
         expectedVenueId,
         expectedVenueId,
-        firstLoginSetupMethod,
-        candidate.admin_approved_request_id,
+        claimMethod,
+        claimMethod,
+        exactRequestId,
+        candidate.setup_method ?? "setup_code",
         nowIso,
       ),
       env.DB.prepare(
-        COMPLETE_OPEN_PASSWORD_RESET_REQUEST_AFTER_USER_UPDATE_SQL,
-      ).bind(nowIso, nowIso, candidate.id),
-      env.DB.prepare(
-        `UPDATE password_reset_tokens
-         SET used = 1
-         WHERE user_id = ?
-           AND used = 0
-           AND EXISTS (
-             SELECT 1 FROM users
-             WHERE id = ?
-               AND migration_status = 'active'
-               AND password_set_at = ?
-           )
-         RETURNING user_id`,
-      ).bind(candidate.id, candidate.id, nowIso),
-      env.DB.prepare(
-        `INSERT INTO user_audit_events (
-           id, venue_id, actor_user_id, target_user_id, action, details, created_at
-         )
-         SELECT ?, venue_id, id, id, 'password_setup_completed', ?, ?
-         FROM users
-         WHERE id = ?
-           AND migration_status = 'active'
-           AND password_set_at = ?`,
+        INSERT_PASSWORD_RESET_CLAIM_AUDIT_SQL,
       ).bind(
-        crypto.randomUUID(),
-        JSON.stringify({
-          method:
-            firstLoginSetupMethod === "admin_approved"
-              ? "admin_approved"
-              : "manual_setup_code",
-        }),
+        operationId,
+        JSON.stringify({ method: claimMethod, requestId: candidate.request_id }),
         nowIso,
         candidate.id,
-        nowIso,
       ),
+      env.DB.prepare(
+        COMPLETE_EXACT_PASSWORD_RESET_REQUEST_SQL,
+      ).bind(nowIso, nowIso, exactRequestId, operationId),
+      env.DB.prepare(
+        INVALIDATE_PASSWORD_RESET_CLAIM_TOKENS_SQL,
+      ).bind(candidate.id, operationId),
+      env.DB.prepare(
+        CANCEL_OTHER_PASSWORD_RESET_REQUESTS_SQL,
+      ).bind(nowIso, candidate.id, exactRequestId, operationId),
     ]);
 
     const claimedUserId = (
       userResult.results?.[0] as { id?: string } | undefined
     )?.id;
-
     if (!claimedUserId) {
       return NextResponse.json(
         {
           code: "ACCOUNT_NOT_ELIGIBLE",
-          error:
-            "This account is not eligible for first-time setup. Sign in normally or contact an administrator.",
+          error: "This account is not eligible for setup. Contact an administrator.",
         },
         { status: 400 },
       );
     }
 
-    await Promise.all([
-      clearRateLimit("claim-account", identifier),
-      clearRateLimit("login", identifier),
-    ]);
-
-    return NextResponse.json({
+    const response = NextResponse.json({
       ok: true,
-      message: "Your password has been set. Signing you in now.",
+      message: "Your password has been set.",
     });
-  } catch (error) {
+    if (
+      useBrowserReceipt ||
+      (signedReceiptRequestId !== null &&
+        signedReceiptRequestId === candidate.request_id)
+    ) {
+      response.cookies.set({
+        name: PASSWORD_RESET_RECEIPT_COOKIE_NAME,
+        value: "",
+        ...getPasswordResetReceiptCookieOptions(
+          shouldUseSecureAuthCookies(request),
+        ),
+        maxAge: 0,
+      });
+    }
+    return response;
+  } catch (error: unknown) {
     console.error("Account claim error:", error);
     return NextResponse.json(
-      { code: "SERVER_ERROR", error: "Unable to complete first-time setup right now." },
+      { code: "SERVER_ERROR", error: "Unable to complete account setup right now." },
       { status: 500 },
     );
   }

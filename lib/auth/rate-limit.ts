@@ -84,6 +84,26 @@ export async function consumeRateLimit(options: RateLimitOptions): Promise<RateL
   };
 }
 
+/**
+ * 인증 경로에서 KV 장애나 동일-key 쓰기 제한을 500으로 노출하지 않는다.
+ * 저장소가 카운터를 기록하지 못하면 해당 시도는 짧게 fail-closed 한다.
+ */
+export async function consumeRateLimitOrDeny(
+  options: RateLimitOptions,
+): Promise<RateLimitResult> {
+  try {
+    return await consumeRateLimit(options);
+  } catch {
+    // identifier에는 이메일/IP가 포함될 수 있으므로 로그에 남기지 않는다.
+    console.warn(`Rate limit storage unavailable: ${options.namespace}`);
+    return {
+      allowed: false,
+      remaining: 0,
+      retryAfterSeconds: 1,
+    };
+  }
+}
+
 export async function clearRateLimit(namespace: string, identifier: string): Promise<void> {
   const { env } = getCloudflareContext();
   await env.SESSIONS.delete(getKey(namespace, identifier));

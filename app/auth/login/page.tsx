@@ -11,7 +11,6 @@ import LanguageSwitcher from "@/components/LanguageSwitcher";
 import { useTranslations } from "next-intl";
 import { claimMigratedAccount, login } from "@/lib/auth";
 import { getPasswordPolicyErrorCode } from "@/lib/auth/password-policy";
-import type { FirstLoginSetupMethod } from "@/lib/auth/first-login-policy";
 import { useVenueBrand } from "@/components/VenueBrandProvider";
 
 type LoginMode = "login" | "setup";
@@ -36,8 +35,6 @@ export default function LoginPage() {
   });
   const [setupPassword, setSetupPassword] = useState("");
   const [setupCode, setSetupCode] = useState("");
-  const [setupMethod, setSetupMethod] =
-    useState<FirstLoginSetupMethod>("setup_code");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [mode, setMode] = useState<LoginMode>("login");
   const [isLoading, setIsLoading] = useState(false);
@@ -82,10 +79,9 @@ export default function LoginPage() {
     document.getElementById(targetId)?.focus();
   }, [mode]);
 
-  const enterSetupMode = (method: FirstLoginSetupMethod) => {
+  const enterSetupMode = () => {
     setMode("setup");
-    setSetupMethod(method);
-    setSetupCode(method === "setup_code" ? formData.password : "");
+    setSetupCode(formData.password);
     setFormData((current) => ({ ...current, password: "" }));
     setSetupPassword("");
     setConfirmPassword("");
@@ -94,7 +90,6 @@ export default function LoginPage() {
 
   const returnToLogin = () => {
     setMode("login");
-    setSetupMethod("setup_code");
     setSetupPassword("");
     setSetupCode("");
     setConfirmPassword("");
@@ -112,7 +107,7 @@ export default function LoginPage() {
       if (result.success) {
         router.push("/");
       } else if (result.requiresSetup) {
-        enterSetupMode(result.setupMethod ?? "setup_code");
+        enterSetupMode();
       } else {
         showError(getLoginError(result.code, result.message));
       }
@@ -206,9 +201,7 @@ export default function LoginPage() {
                   {t("oneTimeSetup")}
                 </p>
                 <p className="text-sm leading-relaxed text-text-muted">
-                  {setupMethod === "admin_approved"
-                    ? t("adminApprovedSetupDescription")
-                    : t("oneTimeSetupDescription")}
+                  {t("oneTimeSetupDescription")}
                 </p>
               </div>
             )}
@@ -240,9 +233,7 @@ export default function LoginPage() {
               <p id="email-helper" className="app-helper">
                 {mode === "login"
                   ? t("emailLoginHelp")
-                  : setupMethod === "admin_approved"
-                    ? t("emailAdminApprovedHelp")
-                    : t("emailSetupHelp")}
+                  : t("emailSetupHelp")}
               </p>
             </div>
 
@@ -355,9 +346,7 @@ export default function LoginPage() {
               <p id="password-support" className="text-xs leading-relaxed text-text-dim">
                 {mode === "login"
                   ? t("migratedHelp")
-                  : setupMethod === "admin_approved"
-                    ? t("adminApprovedSetupHelp")
-                    : t("setupHelp")}
+                  : t("setupHelp")}
               </p>
             </div>
           </form>

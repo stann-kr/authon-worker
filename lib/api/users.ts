@@ -1,7 +1,7 @@
 "use server";
 
 import { getCloudflareContext } from "@opennextjs/cloudflare";
-import { and, asc, desc, eq, isNull, ne, sql, type SQL } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNull, ne, sql, type SQL } from "drizzle-orm";
 import {
   passwordResetRequests,
   passwordResetTokens,
@@ -29,6 +29,7 @@ import {
   isAccountKind,
   isRole,
   isVenueManagedRole,
+  VENUE_MANAGED_ROLES,
   type AccountKind,
 } from "@/lib/users/policy";
 
@@ -225,7 +226,10 @@ export async function fetchManagedUsersByVenue(
       if (effectiveVenueId) query = query.where(eq(users.venueId, effectiveVenueId));
     } else {
       query = query.where(
-        and(eq(users.venueId, effectiveVenueId!), ne(users.role, "super_admin")),
+        and(
+          eq(users.venueId, effectiveVenueId!),
+          inArray(users.role, VENUE_MANAGED_ROLES),
+        ),
       );
     }
 
@@ -403,7 +407,11 @@ export async function updateUserProfile(
         details,
         createdAt: nowIso,
       });
-      if (changedFields.includes("active") && updates.active === false) {
+      const invalidatesResetGrants =
+        changedFields.includes("role") ||
+        changedFields.includes("accountKind") ||
+        (changedFields.includes("active") && updates.active === false);
+      if (invalidatesResetGrants) {
         await db.batch([
           updateStatement,
           db
@@ -415,6 +423,10 @@ export async function updateUserProfile(
                 sql`${passwordResetRequests.status} IN ('pending', 'approved')`,
               ),
             ),
+          db
+            .update(passwordResetTokens)
+            .set({ used: true })
+            .where(eq(passwordResetTokens.userId, target.id)),
           auditStatement,
         ]);
       } else {
@@ -619,7 +631,8 @@ export async function resendInvitationViaEdge(userId: string): Promise<{ error: 
       userId,
       token: tokenHash,
       expiresAt,
-      used: false,
+      // 이메일 전송이 성공하기 전에는 새 링크를 활성화하지 않는다.
+      used: true,
       createdAt: new Date().toISOString(),
     });
 
@@ -654,6 +667,19 @@ export async function resendInvitationViaEdge(userId: string): Promise<{ error: 
         .where(eq(passwordResetTokens.id, resetTokenId));
       throw error;
     }
+
+    // 재발송이 성공하면 이전 링크를 모두 폐기하고 방금 보낸 링크 하나만
+    // 활성화한다. D1 batch 실패 시 두 변경은 함께 rollback된다.
+    await db.batch([
+      db
+        .update(passwordResetTokens)
+        .set({ used: true })
+        .where(eq(passwordResetTokens.userId, userId)),
+      db
+        .update(passwordResetTokens)
+        .set({ used: false })
+        .where(eq(passwordResetTokens.id, resetTokenId)),
+    ]);
 
     return { error: null };
   } catch (error: unknown) {

@@ -1,12 +1,20 @@
 import { NextResponse } from "next/server";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { drizzle } from "drizzle-orm/d1";
-import { and, eq, gt } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { SignJWT } from "jose";
-import { passwordResetRequests, users } from "@/lib/db/schema";
-import { verifyPassword, hashPassword, needsRehash } from "@/lib/auth/password";
+import { users } from "@/lib/db/schema";
+import {
+  DUMMY_PASSWORD_HASH,
+  verifyPassword,
+  hashPassword,
+  needsRehash,
+} from "@/lib/auth/password";
 import { shouldUseSecureAuthCookies } from "@/lib/auth/cookie-policy";
-import { clearRateLimit, consumeRateLimit, getRequestIp } from "@/lib/auth/rate-limit";
+import {
+  consumeRateLimitOrDeny,
+  getRequestIp,
+} from "@/lib/auth/rate-limit";
 import { getTenantContextForRequest } from "@/lib/tenant/server";
 import {
   isLocale,
@@ -14,13 +22,46 @@ import {
   LOCALE_COOKIE_NAME,
 } from "@/i18n/config";
 import { isAccountKind, isRole } from "@/lib/users/policy";
-import {
-  canStartFirstLoginSetup,
-  getFirstLoginSetupMethod,
-} from "@/lib/auth/first-login-policy";
+import { isTrustedMutationOrigin } from "@/lib/auth/request-origin";
+
+const UPDATE_USER_FOR_LOGIN_SQL = `
+  UPDATE users
+  SET last_login_at = ?,
+      password_hash = ?
+  WHERE id = ?
+    AND password_hash = ?
+    AND session_version = ?
+    AND active = 1
+    AND deleted_at IS NULL
+  RETURNING session_version
+`;
+
+const CANCEL_OPEN_PASSWORD_RESET_REQUESTS_AFTER_LOGIN_SQL = `
+  UPDATE password_reset_requests
+  SET status = 'cancelled',
+      updated_at = ?
+  WHERE user_id = ?
+    AND status IN ('pending', 'approved')
+    AND changes() = 1
+`;
+
+const SELECT_LATEST_SETUP_CODE_REQUEST_SQL = `
+  SELECT status, setup_method, expires_at
+  FROM password_reset_requests
+  WHERE user_id = ?
+    AND setup_method = 'setup_code'
+  ORDER BY created_at DESC, id DESC
+  LIMIT 1
+`;
 
 export async function POST(request: Request) {
   try {
+    if (!isTrustedMutationOrigin(request)) {
+      return NextResponse.json(
+        { code: "FORBIDDEN_ORIGIN", error: "Request origin is not allowed." },
+        { status: 403 },
+      );
+    }
     const { env } = getCloudflareContext();
     const { email, password } = await request.json();
 
@@ -38,19 +79,21 @@ export async function POST(request: Request) {
 
     const normalizedEmail = String(email).trim().toLowerCase();
     const ip = getRequestIp(request);
-    const rateLimit = await consumeRateLimit({
+    const credentialRateLimit = await consumeRateLimitOrDeny({
       namespace: "login",
       identifier: `${ip}:${normalizedEmail}`,
       limit: 5,
       windowSeconds: 60 * 15,
     });
 
-    if (!rateLimit.allowed) {
+    if (!credentialRateLimit.allowed) {
       return NextResponse.json(
         { code: "RATE_LIMITED", error: "Too many login attempts. Please try again later." },
         {
           status: 429,
-          headers: { "Retry-After": String(rateLimit.retryAfterSeconds) },
+          headers: {
+            "Retry-After": String(credentialRateLimit.retryAfterSeconds),
+          },
         }
       );
     }
@@ -65,57 +108,62 @@ export async function POST(request: Request) {
       { status: 401 }
     );
 
-    if (
-      !tenant.resolved ||
-      !user ||
-      !user.active ||
-      user.deletedAt ||
-      !isRole(user.role) ||
-      !isAccountKind(user.accountKind) ||
-      (tenant.scope === "venue" && user.role !== "super_admin" && user.venueId !== tenant.venueId)
-    ) {
-      return invalidCredentialsResponse();
-    }
+    const userIsEligible = Boolean(
+      tenant.resolved &&
+      user &&
+      user.active &&
+      !user.deletedAt &&
+      isRole(user.role) &&
+      isAccountKind(user.accountKind) &&
+      !(
+        tenant.scope === "venue" &&
+        user.role !== "super_admin" &&
+        user.venueId !== tenant.venueId
+      ),
+    );
 
     const nowIso = new Date().toISOString();
-    const [adminApprovedReset] =
-      user.migrationStatus === "pending_reset" && !user.passwordSetAt
-        ? await db
-            .select({ id: passwordResetRequests.id })
-            .from(passwordResetRequests)
-            .where(
-              and(
-                eq(passwordResetRequests.userId, user.id),
-                eq(passwordResetRequests.status, "approved"),
-                eq(passwordResetRequests.setupMethod, "admin_approved"),
-                gt(passwordResetRequests.expiresAt, nowIso),
-              ),
-            )
-            .limit(1)
-        : [];
-    const firstLoginSetupMethod = getFirstLoginSetupMethod({
-      ...user,
-      adminApprovedReset: Boolean(adminApprovedReset),
-    });
-    const isMatch = firstLoginSetupMethod === "admin_approved"
-      ? false
-      : await verifyPassword(password, user.passwordHash);
+    const lookupUserId = userIsEligible && user ? user.id : crypto.randomUUID();
+    const [latestSetupCodeRequest, passwordMatches] = await Promise.all([
+      env.DB.prepare(SELECT_LATEST_SETUP_CODE_REQUEST_SQL)
+        .bind(lookupUserId)
+        .first<{
+          status: string;
+          setup_method: string | null;
+          expires_at: string | null;
+        }>(),
+      verifyPassword(
+        password,
+        userIsEligible && user ? user.passwordHash : DUMMY_PASSWORD_HASH,
+      ),
+    ]);
 
-    if (firstLoginSetupMethod) {
-      if (!canStartFirstLoginSetup(firstLoginSetupMethod, isMatch)) {
+    if (!userIsEligible || !user) return invalidCredentialsResponse();
+
+    const isPendingSetup =
+      user.migrationStatus === "pending_reset" && !user.passwordSetAt;
+
+    if (isPendingSetup) {
+      const isLegacySetup = !latestSetupCodeRequest;
+      const hasUsableSetupCodeApproval =
+        latestSetupCodeRequest?.status === "approved" &&
+        latestSetupCodeRequest.setup_method === "setup_code" &&
+        typeof latestSetupCodeRequest.expires_at === "string" &&
+        latestSetupCodeRequest.expires_at > nowIso;
+      if ((!isLegacySetup && !hasUsableSetupCodeApproval) || !passwordMatches) {
         return invalidCredentialsResponse();
       }
       return NextResponse.json(
         {
           error: "First-time password setup is required.",
           code: "PASSWORD_SETUP_REQUIRED",
-          setupMethod: firstLoginSetupMethod,
+          setupMethod: "setup_code",
         },
         { status: 409 },
       );
     }
 
-    if (!isMatch) {
+    if (!passwordMatches) {
       return invalidCredentialsResponse();
     }
 
@@ -125,11 +173,29 @@ export async function POST(request: Request) {
     }
 
     // 성공한 로그인 시각 기록 + bcrypt 해시 → PBKDF2 자동 재해시
-    const loginUpdates: Partial<typeof users.$inferInsert> = {
-      lastLoginAt: new Date().toISOString(),
-    };
-    if (needsRehash(user.passwordHash)) loginUpdates.passwordHash = await hashPassword(password);
-    await db.update(users).set(loginUpdates).where(eq(users.id, user.id));
+    const nextPasswordHash = needsRehash(user.passwordHash)
+      ? await hashPassword(password)
+      : user.passwordHash;
+    const [loginResult] = await env.DB.batch<{ session_version?: number }>([
+      env.DB.prepare(UPDATE_USER_FOR_LOGIN_SQL).bind(
+        nowIso,
+        nextPasswordHash,
+        user.id,
+        user.passwordHash,
+        user.sessionVersion ?? 0,
+      ),
+      env.DB.prepare(CANCEL_OPEN_PASSWORD_RESET_REQUESTS_AFTER_LOGIN_SQL).bind(
+        nowIso,
+        user.id,
+      ),
+    ]);
+    const updatedSessionVersion = (
+      loginResult.results?.[0] as { session_version?: number } | undefined
+    )?.session_version;
+
+    if (typeof updatedSessionVersion !== "number") {
+      return invalidCredentialsResponse();
+    }
 
     const secret = new TextEncoder().encode(env.JWT_SECRET);
     const token = await new SignJWT({
@@ -137,7 +203,7 @@ export async function POST(request: Request) {
       email: user.email,
       role: user.role,
       venueId: user.venueId,
-      sv: user.sessionVersion ?? 0,
+      sv: updatedSessionVersion,
     })
       .setProtectedHeader({ alg: "HS256" })
       .setIssuedAt()
@@ -147,12 +213,10 @@ export async function POST(request: Request) {
     const sessionId = crypto.randomUUID();
     await env.SESSIONS.put(`session:${sessionId}`, JSON.stringify({
       userId: user.id,
-      sessionVersion: user.sessionVersion ?? 0,
+      sessionVersion: updatedSessionVersion,
     }), {
       expirationTtl: 60 * 60 * 24,
     });
-
-    await clearRateLimit("login", `${ip}:${normalizedEmail}`);
 
     const response = NextResponse.json({
       ok: true,

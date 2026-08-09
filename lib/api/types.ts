@@ -8,6 +8,7 @@ export type {
   PasswordResetRequestSource,
   PasswordResetRequestStatus,
   PasswordResetSetupMethod,
+  PasswordResetVerificationMethod,
 } from "../auth/password-reset-request-policy";
 
 export interface ApiResponse<T> {
@@ -155,7 +156,9 @@ export interface PasswordResetRequestView extends PasswordResetRequest {
   userName: string;
   userEmail: string;
   userRole: User["role"];
+  userAccountKind: User["accountKind"];
   venueName: string | null;
+  codeFreeEligible: boolean;
 }
 
 export interface GuestQuota {

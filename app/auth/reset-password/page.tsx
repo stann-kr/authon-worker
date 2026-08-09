@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useState, useEffect } from "react";
+import { Suspense, useCallback, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Footer from "@/components/Footer";
 import { useVenueBrand } from "@/components/VenueBrandProvider";
@@ -82,6 +82,8 @@ function ResetPasswordContent() {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<ResetMessage | null>(null);
+  const [requestChallenge, setRequestChallenge] = useState<string | null>(null);
+  const [checkingApproval, setCheckingApproval] = useState(true);
   const [resetKind, setResetKind] = useState<ResetKind>("token");
   const [step, setStep] = useState<"request" | "reset" | "requestSent" | "resetComplete">("request");
 
@@ -91,6 +93,76 @@ function ResetPasswordContent() {
       setStep("reset");
     }
   }, [token]);
+
+  const checkApprovalStatus = useCallback(async (restore = false) => {
+    setCheckingApproval(true);
+    try {
+      const response = await fetch("/api/auth/password-reset-requests/status", {
+        method: "GET",
+        cache: "no-store",
+      });
+      if (!response.ok) {
+        if (!restore) {
+          setMessage({
+            type: "error",
+            text:
+              response.status === 429
+                ? t("approvalStatusRateLimited")
+                : t("approvalStatusFailed"),
+            target: "form",
+          });
+        }
+        return;
+      }
+      const data: unknown = await response.json().catch(() => null);
+      if (!data || typeof data !== "object") return;
+      const status = data as {
+        state?: unknown;
+        challenge?: unknown;
+        expiresAt?: unknown;
+      };
+      const challenge = typeof status.challenge === "string"
+        ? status.challenge
+        : null;
+      if (challenge) setRequestChallenge(challenge);
+      if (status.state === "approved") {
+        setResetKind("admin_approved");
+        setMessage({
+          type: "success",
+          text: t("approvalReady"),
+          target: "form",
+        });
+        setStep("reset");
+      } else if (restore && challenge) {
+        setStep("requestSent");
+      }
+    } catch {
+      if (!restore) {
+        setMessage({
+          type: "error",
+          text: t("approvalStatusFailed"),
+          target: "form",
+        });
+      }
+    } finally {
+      setCheckingApproval(false);
+    }
+  }, [t]);
+
+  useEffect(() => {
+    if (token) return;
+    void checkApprovalStatus(true);
+  }, [checkApprovalStatus, token]);
+
+  useEffect(() => {
+    if (step !== "requestSent" || token) return;
+    const intervalId = window.setInterval(() => {
+      if (document.visibilityState === "visible") {
+        void checkApprovalStatus();
+      }
+    }, 10000);
+    return () => window.clearInterval(intervalId);
+  }, [checkApprovalStatus, step, token]);
 
   const stepIndex: 0 | 1 | 2 | 3 =
     step === "request"
@@ -125,6 +197,9 @@ function ResetPasswordContent() {
         text: t("adminRequestSuccess"),
         target: "form",
       });
+      setRequestChallenge(
+        typeof data.challenge === "string" ? data.challenge : null,
+      );
       setStep("requestSent");
     } catch (err: unknown) {
       const code = err instanceof Error && "code" in err
@@ -190,17 +265,21 @@ function ResetPasswordContent() {
         body: JSON.stringify(
           resetKind === "token"
             ? { token, newPassword }
-            : { email, setupCode: "", newPassword },
+            : { recoveryReceipt: true, newPassword },
         ),
       });
 
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        throw new Error(
+        const error = new Error(
           data.code === "ACCOUNT_NOT_ELIGIBLE"
             ? t("approvalNotReady")
-            : t("updateFailed"),
-        );
+            : data.code === "RATE_LIMITED"
+              ? t("approvalClaimRateLimited")
+              : t("updateFailed"),
+        ) as Error & { code?: string };
+        error.code = typeof data.code === "string" ? data.code : undefined;
+        throw error;
       }
 
       setMessage({
@@ -211,12 +290,32 @@ function ResetPasswordContent() {
       setStep("resetComplete");
       setTimeout(() => router.push("/auth/login"), 4500);
     } catch (err: unknown) {
+      const code = err instanceof Error && "code" in err
+        ? (err as Error & { code?: string }).code
+        : undefined;
       setMessage({
         type: "error",
         text: err instanceof Error ? err.message : t("unexpectedError"),
         target: "form",
       });
+      if (code === "ACCOUNT_NOT_ELIGIBLE" && resetKind === "admin_approved") {
+        setStep("requestSent");
+      }
     } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleRestartRequest = async () => {
+    setLoading(true);
+    try {
+      await fetch("/api/auth/password-reset-requests", { method: "DELETE" });
+    } finally {
+      setEmail("");
+      setRequestChallenge(null);
+      setMessage(null);
+      setResetKind("token");
+      setStep("request");
       setLoading(false);
     }
   };
@@ -288,7 +387,7 @@ function ResetPasswordContent() {
                   required
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  disabled={loading}
+                  disabled={loading || checkingApproval}
                   autoComplete="email"
                   spellCheck={false}
                   className="app-field"
@@ -331,7 +430,13 @@ function ResetPasswordContent() {
                 </p>
               </div>
 
-              <Button type="submit" isLoading={loading} fullWidth size="lg">
+              <Button
+                type="submit"
+                isLoading={loading || checkingApproval}
+                disabled={checkingApproval}
+                fullWidth
+                size="lg"
+              >
                 {t("requestAdministrator")}
               </Button>
             </form>
@@ -345,7 +450,7 @@ function ResetPasswordContent() {
                     {t("adminApprovedResetTitle")}
                   </p>
                   <p className="mt-2 break-words text-xs leading-relaxed text-text-muted">
-                    {t("adminApprovedResetHelp", { email })}
+                    {t("adminApprovedResetHelp")}
                   </p>
                 </div>
               )}
@@ -432,22 +537,43 @@ function ResetPasswordContent() {
                 </p>
               </div>
 
+              {requestChallenge && (
+                <div className="border border-border-strong bg-canvas p-4 text-left">
+                  <p className="text-xs font-semibold text-text-heading">
+                    {t("requestChallenge")}
+                  </p>
+                  <code className="mt-3 block select-all text-center font-mono text-lg font-semibold tracking-wider text-text-heading">
+                    {requestChallenge}
+                  </code>
+                  <p className="mt-3 text-xs leading-relaxed text-text-muted">
+                    {t("requestChallengeHelp")}
+                  </p>
+                </div>
+              )}
+
               <div className="space-y-2">
                 <Button
                   type="button"
                   fullWidth
                   size="lg"
-                  onClick={() => {
-                    setResetKind("admin_approved");
-                    setMessage(null);
-                    setStep("reset");
-                  }}
+                  isLoading={checkingApproval}
+                  onClick={() => void checkApprovalStatus()}
                 >
-                  {t("continueAfterApproval")}
+                  {t("checkApproval")}
                 </Button>
                 <ButtonLink href="/auth/login" variant="outline" fullWidth size="lg">
                   {t("useSetupCodeAtLogin")}
                 </ButtonLink>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  fullWidth
+                  size="sm"
+                  disabled={loading}
+                  onClick={() => void handleRestartRequest()}
+                >
+                  {t("restartRequest")}
+                </Button>
               </div>
             </div>
           )}
