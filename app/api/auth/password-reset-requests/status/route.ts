@@ -1,9 +1,16 @@
 import { NextResponse } from "next/server";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import {
+  createPasswordResetClaimGrant,
   derivePasswordResetChallenge,
+  getPasswordResetClaimCookieOptions,
+  getPasswordResetClaimGrantRecord,
   getPasswordResetReceiptState,
   getPasswordResetReceiptRequestId,
+  PASSWORD_RESET_CLAIM_COOKIE_NAME,
+  PASSWORD_RESET_CLAIM_MAX_AGE_SECONDS,
+  PASSWORD_RESET_RECEIPT_COOKIE_NAME,
+  getPasswordResetReceiptCookieOptions,
   type PasswordResetReceiptStatusRecord,
 } from "@/lib/auth/password-reset-receipt";
 import {
@@ -12,6 +19,7 @@ import {
 } from "@/lib/auth/rate-limit";
 import { isTrustedMutationOrigin } from "@/lib/auth/request-origin";
 import { getTenantContextForRequest } from "@/lib/tenant/server";
+import { shouldUseSecureAuthCookies } from "@/lib/auth/cookie-policy";
 
 const STATUS_RESPONSE_HEADERS = {
   "Cache-Control": "private, no-store",
@@ -21,6 +29,13 @@ const STATUS_RESPONSE_HEADERS = {
 function waitingResponse(challenge: string | null = null) {
   return NextResponse.json(
     { state: "waiting", challenge, expiresAt: null },
+    { status: 200, headers: STATUS_RESPONSE_HEADERS },
+  );
+}
+
+function expiredResponse() {
+  return NextResponse.json(
+    { state: "expired", challenge: null, expiresAt: null },
     { status: 200, headers: STATUS_RESPONSE_HEADERS },
   );
 }
@@ -46,10 +61,12 @@ export async function GET(request: Request) {
       );
     }
 
-    const requestId = await getPasswordResetReceiptRequestId(
-      request.headers,
-      env.JWT_SECRET,
-    );
+    const nowMs = Date.now();
+    const [claimGrant, receiptRequestId] = await Promise.all([
+      getPasswordResetClaimGrantRecord(request.headers, env.JWT_SECRET),
+      getPasswordResetReceiptRequestId(request.headers, env.JWT_SECRET),
+    ]);
+    const requestId = claimGrant?.requestId ?? receiptRequestId;
     if (!requestId) return waitingResponse();
 
     const requestIp = getRequestIp(request);
@@ -115,12 +132,106 @@ export async function GET(request: Request) {
     )
       .bind(requestId)
       .first<PasswordResetReceiptStatusRecord>();
-    const state = getPasswordResetReceiptState(row, tenant);
+    const state = getPasswordResetReceiptState(row, tenant, nowMs);
 
-    return NextResponse.json(
-      { ...state, challenge },
+    const secureCookies = shouldUseSecureAuthCookies(request);
+    const clearRecoveryCookies = (response: NextResponse) => {
+      response.cookies.set({
+        name: PASSWORD_RESET_CLAIM_COOKIE_NAME,
+        value: "",
+        ...getPasswordResetClaimCookieOptions(secureCookies),
+        maxAge: 0,
+      });
+      response.cookies.set({
+        name: PASSWORD_RESET_RECEIPT_COOKIE_NAME,
+        value: "",
+        ...getPasswordResetReceiptCookieOptions(secureCookies),
+        maxAge: 0,
+      });
+      return response;
+    };
+
+    if (claimGrant && Date.parse(claimGrant.expiresAt) <= nowMs) {
+      await env.DB.prepare(
+        `UPDATE password_reset_requests
+         SET status = 'cancelled',
+             updated_at = ?
+         WHERE id = ?
+           AND source = 'self_service'
+           AND status = 'approved'
+           AND setup_method = 'admin_approved'`,
+      )
+        .bind(new Date(nowMs).toISOString(), requestId)
+        .run();
+      return clearRecoveryCookies(expiredResponse());
+    }
+
+    if (state.state !== "approved") {
+      if (claimGrant) return clearRecoveryCookies(expiredResponse());
+      return NextResponse.json(
+        { ...state, challenge },
+        { status: 200, headers: STATUS_RESPONSE_HEADERS },
+      );
+    }
+
+    if (claimGrant?.requestId === requestId) {
+      const expiresAt = new Date(
+        Math.min(Date.parse(claimGrant.expiresAt), Date.parse(state.expiresAt)),
+      ).toISOString();
+      return NextResponse.json(
+        { state: "approved", challenge, expiresAt },
+        { status: 200, headers: STATUS_RESPONSE_HEADERS },
+      );
+    }
+
+    const databaseExpiryMs = Date.parse(state.expiresAt);
+    const claimExpiresAtMs = Math.min(
+      nowMs + PASSWORD_RESET_CLAIM_MAX_AGE_SECONDS * 1000,
+      databaseExpiryMs,
+    );
+    if (claimExpiresAtMs <= nowMs + 1000) {
+      await env.DB.prepare(
+        `UPDATE password_reset_requests
+         SET status = 'cancelled',
+             updated_at = ?
+         WHERE id = ?
+           AND source = 'self_service'
+           AND status = 'approved'
+           AND setup_method = 'admin_approved'`,
+      )
+        .bind(new Date(nowMs).toISOString(), requestId)
+        .run();
+      return clearRecoveryCookies(expiredResponse());
+    }
+    const claim = await createPasswordResetClaimGrant(
+      requestId,
+      claimExpiresAtMs,
+      env.JWT_SECRET,
+    );
+    const response = NextResponse.json(
+      {
+        state: "approved",
+        challenge,
+        expiresAt: new Date(claimExpiresAtMs).toISOString(),
+      },
       { status: 200, headers: STATUS_RESPONSE_HEADERS },
     );
+    response.cookies.set({
+      name: PASSWORD_RESET_CLAIM_COOKIE_NAME,
+      value: claim,
+      ...getPasswordResetClaimCookieOptions(
+        secureCookies,
+        Math.max(1, Math.ceil((databaseExpiryMs - nowMs) / 1000)),
+      ),
+    });
+    response.cookies.set({
+      name: PASSWORD_RESET_RECEIPT_COOKIE_NAME,
+      value: "",
+      ...getPasswordResetReceiptCookieOptions(secureCookies),
+      maxAge: 0,
+    });
+
+    return response;
   } catch {
     // Receipt와 expected challenge는 로그에 포함하지 않는다.
     console.error("Password reset request status failed");

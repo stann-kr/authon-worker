@@ -211,7 +211,7 @@ const challenge = resetRequest.payload?.challenge;
 const receipt = targetJar.get("authon-password-reset-receipt");
 if (
   typeof challenge !== "string" ||
-  !/^REQ-[A-Z0-9]{4}-[A-Z0-9]{4}$/.test(challenge) ||
+  !/^\d{4}$/.test(challenge) ||
   typeof receipt !== "string"
 ) {
   throw new Error("request challenge 또는 browser receipt가 발급되지 않았습니다.");
@@ -242,6 +242,12 @@ const approvedStatus = await requestJson(
 assertStatus(approvedStatus.response, 200, "approved status");
 if (approvedStatus.payload?.state !== "approved") {
   throw new Error("관리자 승인 상태가 browser receipt에 반영되지 않았습니다.");
+}
+if (
+  targetJar.get("authon-password-reset-receipt") !== null ||
+  typeof targetJar.get("authon-password-reset-claim") !== "string"
+) {
+  throw new Error("browser receipt가 15분 claim grant로 전환되지 않았습니다.");
 }
 console.log("PASS: challenge-bound administrator approval");
 

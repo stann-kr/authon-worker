@@ -83,6 +83,7 @@ function ResetPasswordContent() {
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<ResetMessage | null>(null);
   const [requestChallenge, setRequestChallenge] = useState<string | null>(null);
+  const [requestCodeCopied, setRequestCodeCopied] = useState(false);
   const [checkingApproval, setCheckingApproval] = useState(true);
   const [resetKind, setResetKind] = useState<ResetKind>("token");
   const [step, setStep] = useState<"request" | "reset" | "requestSent" | "resetComplete">("request");
@@ -124,8 +125,21 @@ function ResetPasswordContent() {
       const challenge = typeof status.challenge === "string"
         ? status.challenge
         : null;
-      if (challenge) setRequestChallenge(challenge);
-      if (status.state === "approved") {
+      if (challenge) {
+        setRequestChallenge(challenge);
+      }
+      if (status.state === "expired") {
+        setRequestChallenge(null);
+        setResetKind("token");
+        setStep("request");
+        if (!restore) {
+          setMessage({
+            type: "error",
+            text: t("approvalExpired"),
+            target: "form",
+          });
+        }
+      } else if (status.state === "approved") {
         setResetKind("admin_approved");
         setMessage({
           type: "success",
@@ -200,6 +214,7 @@ function ResetPasswordContent() {
       setRequestChallenge(
         typeof data.challenge === "string" ? data.challenge : null,
       );
+      setRequestCodeCopied(false);
       setStep("requestSent");
     } catch (err: unknown) {
       const code = err instanceof Error && "code" in err
@@ -220,6 +235,21 @@ function ResetPasswordContent() {
       if (code === "INVALID_EMAIL") document.getElementById("email")?.focus();
     } finally {
       setLoading(false);
+    }
+  };
+
+  const copyRequestCode = async () => {
+    if (!requestChallenge) return;
+    try {
+      await navigator.clipboard.writeText(requestChallenge);
+      setRequestCodeCopied(true);
+    } catch {
+      setRequestCodeCopied(false);
+      setMessage({
+        type: "error",
+        text: t("requestCodeCopyFailed"),
+        target: "form",
+      });
     }
   };
 
@@ -313,6 +343,7 @@ function ResetPasswordContent() {
     } finally {
       setEmail("");
       setRequestChallenge(null);
+      setRequestCodeCopied(false);
       setMessage(null);
       setResetKind("token");
       setStep("request");
@@ -409,26 +440,6 @@ function ResetPasswordContent() {
               <p id="request-helper" className="text-xs leading-relaxed text-text-dim">
                 {t("privacyHelp")}
               </p>
-
-              <div className="space-y-2">
-                <Button
-                  type="button"
-                  disabled
-                  aria-describedby="email-reset-disabled-help"
-                  fullWidth
-                  size="lg"
-                  variant="outline"
-                >
-                  {t("sendLinkDisabled")}
-                </Button>
-                <p
-                  id="email-reset-disabled-help"
-                  className="text-xs leading-relaxed text-text-dim"
-                  role="note"
-                >
-                  {t("emailResetDisabledHelp")}
-                </p>
-              </div>
 
               <Button
                 type="submit"
@@ -529,12 +540,23 @@ function ResetPasswordContent() {
               </div>
 
               <div className="space-y-3">
-                <p className="text-sm leading-relaxed text-text-body">
+                <p className="text-base font-semibold text-text-heading">
                   {t("adminRequestSent")}
                 </p>
-                <p className="text-xs leading-relaxed text-text-dim">
-                  {t("adminRequestSentHelp")}
-                </p>
+                <ol className="space-y-2 text-left text-sm leading-relaxed text-text-muted">
+                  <li className="flex gap-3">
+                    <span className="font-mono text-text-heading">1</span>
+                    <span>{t("requestStepContact")}</span>
+                  </li>
+                  <li className="flex gap-3">
+                    <span className="font-mono text-text-heading">2</span>
+                    <span>{t("requestStepShareCode")}</span>
+                  </li>
+                  <li className="flex gap-3">
+                    <span className="font-mono text-text-heading">3</span>
+                    <span>{t("requestStepReturn")}</span>
+                  </li>
+                </ol>
               </div>
 
               {requestChallenge && (
@@ -542,9 +564,21 @@ function ResetPasswordContent() {
                   <p className="text-xs font-semibold text-text-heading">
                     {t("requestChallenge")}
                   </p>
-                  <code className="mt-3 block select-all text-center font-mono text-lg font-semibold tracking-wider text-text-heading">
+                  <code className="mt-3 block select-all text-center font-mono text-3xl font-semibold tracking-[0.3em] text-text-heading">
                     {requestChallenge}
                   </code>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    fullWidth
+                    size="sm"
+                    onClick={() => void copyRequestCode()}
+                    className="mt-4"
+                  >
+                    {requestCodeCopied
+                      ? t("requestCodeCopied")
+                      : t("copyRequestCode")}
+                  </Button>
                   <p className="mt-3 text-xs leading-relaxed text-text-muted">
                     {t("requestChallengeHelp")}
                   </p>
@@ -561,8 +595,8 @@ function ResetPasswordContent() {
                 >
                   {t("checkApproval")}
                 </Button>
-                <ButtonLink href="/auth/login" variant="outline" fullWidth size="lg">
-                  {t("useSetupCodeAtLogin")}
+                <ButtonLink href="/auth/setup-password" variant="outline" fullWidth size="lg">
+                  {t("useSetupCode")}
                 </ButtonLink>
                 <Button
                   type="button"

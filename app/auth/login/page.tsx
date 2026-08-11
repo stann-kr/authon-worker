@@ -348,6 +348,14 @@ export default function LoginPage() {
                   ? t("migratedHelp")
                   : t("setupHelp")}
               </p>
+              {mode === "login" && (
+                <Link
+                  href="/auth/setup-password"
+                  className="mt-2 inline-flex min-h-11 items-center text-sm font-medium text-text-body underline decoration-border-strong underline-offset-4 hover:text-text-heading"
+                >
+                  {t("openSetupCodePage")}
+                </Link>
+              )}
             </div>
           </form>
 

@@ -45,7 +45,8 @@ export interface AdminApprovedResetPolicyInput {
 
 export const PASSWORD_RESET_APPROVAL_TTL_MS = 15 * 60 * 1000;
 
-// 기존 호출부와의 호환을 유지한다. setup code와 direct 승인은 같은 TTL을 사용한다.
+// 기존 호출부 호환용이다. setup code와 활성화된 browser claim이 이 TTL을 사용한다.
+// browser 승인 row 자체는 원래 요청의 최대 24시간 만료를 유지한다.
 export const ADMIN_APPROVED_RESET_TTL_MS = PASSWORD_RESET_APPROVAL_TTL_MS;
 
 const REQUEST_STATUSES: readonly PasswordResetRequestStatus[] = [
@@ -107,6 +108,20 @@ export function getPasswordResetApprovalExpiry(
 
 export function getAdminApprovedResetExpiry(nowMs: number = Date.now()): string {
   return getPasswordResetApprovalExpiry("admin_approved", nowMs);
+}
+
+export function getManagedPasswordResetDecisionExpiry(
+  setupMethod: PasswordResetSetupMethod,
+  requestExpiresAt: string | null | undefined,
+  nowMs: number = Date.now(),
+): string {
+  if (setupMethod === "admin_approved" && requestExpiresAt) {
+    const requestExpiryMs = Date.parse(requestExpiresAt);
+    if (Number.isFinite(requestExpiryMs) && requestExpiryMs > nowMs) {
+      return requestExpiresAt;
+    }
+  }
+  return getPasswordResetApprovalExpiry(setupMethod, nowMs);
 }
 
 export function getAdminApprovedResetPolicyError(

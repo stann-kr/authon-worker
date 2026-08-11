@@ -11,11 +11,14 @@ import { shouldUseSecureAuthCookies } from "@/lib/auth/cookie-policy";
 import {
   createPasswordResetReceipt,
   derivePasswordResetChallenge,
+  getPasswordResetClaimCookieOptions,
+  getPasswordResetClaimGrantRecord,
   getPasswordResetReceiptCookieOptions,
   getPasswordResetReceiptRequestId,
   getPasswordResetReceiptRequestIdForCandidate,
   getPasswordResetRequestExpiry,
   PASSWORD_RESET_RECEIPT_COOKIE_NAME,
+  PASSWORD_RESET_CLAIM_COOKIE_NAME,
 } from "@/lib/auth/password-reset-receipt";
 import { shouldCreatePasswordResetRequest } from "@/lib/auth/password-reset-request-policy";
 import { getTenantContextForRequest } from "@/lib/tenant/server";
@@ -229,12 +232,20 @@ export async function DELETE(request: Request) {
       ...getPasswordResetReceiptCookieOptions(secureCookies),
       maxAge: 0,
     });
+    response.cookies.set({
+      name: PASSWORD_RESET_CLAIM_COOKIE_NAME,
+      value: "",
+      ...getPasswordResetClaimCookieOptions(secureCookies),
+      maxAge: 0,
+    });
 
     if (!env.JWT_SECRET) return response;
-    const [requestId, tenant] = await Promise.all([
+    const [receiptRequestId, claimGrant, tenant] = await Promise.all([
       getPasswordResetReceiptRequestId(request.headers, env.JWT_SECRET),
+      getPasswordResetClaimGrantRecord(request.headers, env.JWT_SECRET),
       getTenantContextForRequest(request),
     ]);
+    const requestId = claimGrant?.requestId ?? receiptRequestId;
     if (!requestId || !tenant.resolved) return response;
 
     await env.DB.prepare(

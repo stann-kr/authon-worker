@@ -32,6 +32,7 @@ import type {
 } from "../../../lib/api/types";
 import { useLocale, useTranslations } from "next-intl";
 import { isVenueManagedRole } from "@/lib/users/policy";
+import { useVenueBrand } from "@/components/VenueBrandProvider";
 
 type StatusFilter = "current" | "ready" | "setup" | "inactive" | "deleted";
 export type UserManagementSection = "create" | "users" | "migrate";
@@ -59,6 +60,8 @@ export default function UserManagement({
   const t = useTranslations("UserAdmin");
   const commonT = useTranslations("Common");
   const locale = useLocale();
+  const { baseUrl } = useVenueBrand();
+  const setupPasswordUrl = `${baseUrl.replace(/\/$/, "")}/auth/setup-password`;
   const [internalActiveSection, setInternalActiveSection] =
     useLocalStorage<UserManagementSection>(
     "usermgmt:activeTab",
@@ -332,7 +335,12 @@ export default function UserManagement({
   const copySetupCode = async () => {
     if (!setupCredential?.setupCode) return;
     try {
-      await navigator.clipboard.writeText(setupCredential.setupCode);
+      await navigator.clipboard.writeText(
+        t("setupCodeShareTemplate", {
+          url: setupPasswordUrl,
+          code: setupCredential.setupCode,
+        }),
+      );
       setFeedback({ type: "success", message: t("setupCodeCopied") });
     } catch {
       setFeedback({ type: "error", message: t("setupCodeCopyFailed") });
@@ -583,9 +591,19 @@ export default function UserManagement({
                           : t("setupCodeHelp")}
                       </p>
                       {setupCredential.setupCode && (
-                        <code className="mt-3 block select-all break-all bg-canvas px-3 py-2 font-mono text-base tracking-wider text-text-heading">
-                          {setupCredential.setupCode}
-                        </code>
+                        <div className="mt-3 space-y-2">
+                          <a
+                            href="/auth/setup-password"
+                            target="_blank"
+                            rel="noreferrer"
+                            className="block break-all text-xs font-medium text-text-body underline decoration-border-strong underline-offset-4 hover:text-text-heading"
+                          >
+                            {setupPasswordUrl}
+                          </a>
+                          <code className="block select-all break-all bg-canvas px-3 py-2 font-mono text-base tracking-wider text-text-heading">
+                            {setupCredential.setupCode}
+                          </code>
+                        </div>
                       )}
                     </div>
                     <div className="flex shrink-0 gap-2">
@@ -595,7 +613,7 @@ export default function UserManagement({
                           onClick={copySetupCode}
                           className="min-h-11 bg-action-primary px-3 py-2 text-xs font-semibold text-action-text hover:bg-action-hover"
                         >
-                          {t("copySetupCode")}
+                          {t("copySetupInstructions")}
                         </button>
                       )}
                       <button

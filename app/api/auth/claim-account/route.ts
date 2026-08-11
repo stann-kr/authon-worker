@@ -12,8 +12,11 @@ import {
 } from "@/lib/auth/rate-limit";
 import { shouldUseSecureAuthCookies } from "@/lib/auth/cookie-policy";
 import {
+  getPasswordResetClaimCookieOptions,
+  getPasswordResetClaimGrant,
   getPasswordResetReceiptCookieOptions,
   getPasswordResetReceiptRequestId,
+  PASSWORD_RESET_CLAIM_COOKIE_NAME,
   PASSWORD_RESET_RECEIPT_COOKIE_NAME,
 } from "@/lib/auth/password-reset-receipt";
 import {
@@ -101,10 +104,13 @@ export async function POST(request: Request) {
       );
     }
 
-    const signedReceiptRequestId = env.JWT_SECRET
-      ? await getPasswordResetReceiptRequestId(request.headers, env.JWT_SECRET)
-      : null;
-    const receiptRequestId = useBrowserReceipt ? signedReceiptRequestId : null;
+    const [signedReceiptRequestId, claimGrant] = env.JWT_SECRET
+      ? await Promise.all([
+          getPasswordResetReceiptRequestId(request.headers, env.JWT_SECRET),
+          getPasswordResetClaimGrant(request.headers, env.JWT_SECRET),
+        ])
+      : [null, null];
+    const receiptRequestId = useBrowserReceipt ? claimGrant?.requestId ?? null : null;
     const requestIp = getRequestIp(request);
     const rateLimitIdentifier = useBrowserReceipt
       ? `${requestIp}:receipt:${receiptRequestId ?? "invalid"}`
@@ -268,6 +274,19 @@ export async function POST(request: Request) {
     }
 
     const passwordHash = await hashPassword(newPassword);
+    const credentialChangedAt = new Date().toISOString();
+    if (
+      useBrowserReceipt &&
+      (!claimGrant || claimGrant.expiresAt <= credentialChangedAt)
+    ) {
+      return NextResponse.json(
+        {
+          code: "ACCOUNT_NOT_ELIGIBLE",
+          error: "The administrator approval has expired.",
+        },
+        { status: 400 },
+      );
+    }
     const operationId = crypto.randomUUID();
     const claimMethod = useBrowserReceipt
       ? "browser_receipt"
@@ -281,7 +300,7 @@ export async function POST(request: Request) {
         UPDATE_USER_WITH_APPROVED_RESET_SQL,
       ).bind(
         passwordHash,
-        nowIso,
+        credentialChangedAt,
         candidate.id,
         candidate.password_hash,
         candidate.session_version,
@@ -291,25 +310,30 @@ export async function POST(request: Request) {
         claimMethod,
         exactRequestId,
         candidate.setup_method ?? "setup_code",
-        nowIso,
+        credentialChangedAt,
       ),
       env.DB.prepare(
         INSERT_PASSWORD_RESET_CLAIM_AUDIT_SQL,
       ).bind(
         operationId,
         JSON.stringify({ method: claimMethod, requestId: candidate.request_id }),
-        nowIso,
+        credentialChangedAt,
         candidate.id,
       ),
       env.DB.prepare(
         COMPLETE_EXACT_PASSWORD_RESET_REQUEST_SQL,
-      ).bind(nowIso, nowIso, exactRequestId, operationId),
+      ).bind(
+        credentialChangedAt,
+        credentialChangedAt,
+        exactRequestId,
+        operationId,
+      ),
       env.DB.prepare(
         INVALIDATE_PASSWORD_RESET_CLAIM_TOKENS_SQL,
       ).bind(candidate.id, operationId),
       env.DB.prepare(
         CANCEL_OTHER_PASSWORD_RESET_REQUESTS_SQL,
-      ).bind(nowIso, candidate.id, exactRequestId, operationId),
+      ).bind(credentialChangedAt, candidate.id, exactRequestId, operationId),
     ]);
 
     const claimedUserId = (
@@ -329,8 +353,21 @@ export async function POST(request: Request) {
       ok: true,
       message: "Your password has been set.",
     });
-    if (
-      useBrowserReceipt ||
+    if (useBrowserReceipt) {
+      const secureCookies = shouldUseSecureAuthCookies(request);
+      response.cookies.set({
+        name: PASSWORD_RESET_CLAIM_COOKIE_NAME,
+        value: "",
+        ...getPasswordResetClaimCookieOptions(secureCookies),
+        maxAge: 0,
+      });
+      response.cookies.set({
+        name: PASSWORD_RESET_RECEIPT_COOKIE_NAME,
+        value: "",
+        ...getPasswordResetReceiptCookieOptions(secureCookies),
+        maxAge: 0,
+      });
+    } else if (
       (signedReceiptRequestId !== null &&
         signedReceiptRequestId === candidate.request_id)
     ) {

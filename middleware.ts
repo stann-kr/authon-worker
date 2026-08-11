@@ -90,6 +90,7 @@ export async function middleware(request: NextRequest) {
     pathname === "/api/locale" ||
     pathname === "/auth/login" ||
     pathname === "/auth/reset-password" ||
+    pathname === "/auth/setup-password" ||
     pathname === "/auth/register"
   ) {
     return continueRequest();

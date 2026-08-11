@@ -1,15 +1,18 @@
 export const PASSWORD_RESET_RECEIPT_COOKIE_NAME =
   "authon-password-reset-receipt";
+export const PASSWORD_RESET_CLAIM_COOKIE_NAME =
+  "authon-password-reset-claim";
 export const PASSWORD_RESET_RECEIPT_MAX_AGE_SECONDS = 24 * 60 * 60;
+export const PASSWORD_RESET_CLAIM_MAX_AGE_SECONDS = 15 * 60;
 export const PASSWORD_RESET_REQUEST_TTL_MS = 24 * 60 * 60 * 1000;
 
 const RECEIPT_SIGNATURE_PURPOSE = "authon:password-reset-receipt:v1";
 const RECEIPT_SIGNATURE_PURPOSE_V2 = "authon:password-reset-receipt:v2";
 const RECEIPT_CANDIDATE_PURPOSE = "authon:password-reset-candidate:v2";
 const RECEIPT_CHALLENGE_PURPOSE = "authon:password-reset-challenge:v1";
+const CLAIM_GRANT_PURPOSE = "authon:password-reset-claim:v1";
 const REQUEST_ID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-const CHALLENGE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 
 export interface PasswordResetReceiptCookieOptions {
   httpOnly: true;
@@ -17,6 +20,11 @@ export interface PasswordResetReceiptCookieOptions {
   sameSite: "strict";
   maxAge: number;
   path: "/";
+}
+
+export interface PasswordResetClaimGrant {
+  requestId: string;
+  expiresAt: string;
 }
 
 export interface PasswordResetReceiptStatusRecord {
@@ -228,11 +236,13 @@ export async function derivePasswordResetChallenge(
     requestId,
     secret,
   );
-  const value = Array.from(
-    digest.slice(0, 8),
-    (byte) => CHALLENGE_ALPHABET[byte & 31],
-  ).join("");
-  return `REQ-${value.slice(0, 4)}-${value.slice(4)}`;
+  const value = (
+    digest[0] * 0x1000000 +
+    digest[1] * 0x10000 +
+    digest[2] * 0x100 +
+    digest[3]
+  ) % 10000;
+  return String(value).padStart(4, "0");
 }
 
 export async function verifyPasswordResetChallenge(
@@ -247,8 +257,8 @@ export async function verifyPasswordResetChallenge(
     return false;
   }
 
-  const normalizedCandidate = candidate.trim().toUpperCase();
-  if (!/^REQ-[A-HJ-NP-Z2-9]{4}-[A-HJ-NP-Z2-9]{4}$/.test(normalizedCandidate)) {
+  const normalizedCandidate = candidate.trim();
+  if (!/^\d{4}$/.test(normalizedCandidate)) {
     return false;
   }
 
@@ -259,6 +269,64 @@ export async function verifyPasswordResetChallenge(
       (normalizedCandidate.charCodeAt(index) || 0) ^ expected.charCodeAt(index);
   }
   return difference === 0;
+}
+
+export async function createPasswordResetClaimGrant(
+  requestId: string,
+  expiresAtMs: number,
+  secret: string,
+): Promise<string> {
+  if (!REQUEST_ID_PATTERN.test(requestId) || !Number.isSafeInteger(expiresAtMs)) {
+    throw new Error("Password reset claim grant is invalid");
+  }
+
+  const expiresAtSeconds = Math.floor(expiresAtMs / 1000);
+  const value = `${requestId}:${expiresAtSeconds}`;
+  const signature = await signPurpose(CLAIM_GRANT_PURPOSE, value, secret);
+  return `${requestId}.${expiresAtSeconds}.${encodeBase64Url(signature)}`;
+}
+
+export async function verifyPasswordResetClaimGrant(
+  grant: string | null | undefined,
+  secret: string,
+  nowMs = Date.now(),
+): Promise<PasswordResetClaimGrant | null> {
+  const verified = await verifyPasswordResetClaimGrantRecord(grant, secret);
+  return verified && Date.parse(verified.expiresAt) > nowMs ? verified : null;
+}
+
+export async function verifyPasswordResetClaimGrantRecord(
+  grant: string | null | undefined,
+  secret: string,
+): Promise<PasswordResetClaimGrant | null> {
+  if (!grant || grant.length > 120) return null;
+  const parts = grant.split(".");
+  if (parts.length !== 3) return null;
+
+  const [requestId, expiresAtValue, encodedSignature] = parts;
+  if (!REQUEST_ID_PATTERN.test(requestId) || !/^\d{10,13}$/.test(expiresAtValue)) {
+    return null;
+  }
+  const expiresAtSeconds = Number(expiresAtValue);
+  const expiresAtMs = expiresAtSeconds * 1000;
+  const signature = decodeBase64Url(encodedSignature);
+  if (
+    !Number.isSafeInteger(expiresAtSeconds) ||
+    !signature ||
+    signature.byteLength !== 32
+  ) {
+    return null;
+  }
+
+  const valid = await verifyPurpose(
+    CLAIM_GRANT_PURPOSE,
+    `${requestId}:${expiresAtSeconds}`,
+    signature,
+    secret,
+  );
+  return valid
+    ? { requestId, expiresAt: new Date(expiresAtMs).toISOString() }
+    : null;
 }
 
 export function getPasswordResetRequestExpiry(nowMs = Date.now()): string {
@@ -277,8 +345,22 @@ export function getPasswordResetReceiptCookieOptions(
   };
 }
 
-export function readPasswordResetReceiptCookie(
+export function getPasswordResetClaimCookieOptions(
+  secure: boolean,
+  maxAge = PASSWORD_RESET_CLAIM_MAX_AGE_SECONDS,
+): PasswordResetReceiptCookieOptions {
+  return {
+    httpOnly: true,
+    secure,
+    sameSite: "strict",
+    maxAge,
+    path: "/",
+  };
+}
+
+function readCookie(
   headers: Pick<Headers, "get">,
+  cookieName: string,
 ): string | null {
   const cookieHeader = headers.get("cookie");
   if (!cookieHeader) return null;
@@ -287,12 +369,24 @@ export function readPasswordResetReceiptCookie(
     const separatorIndex = entry.indexOf("=");
     if (separatorIndex < 0) continue;
     const name = entry.slice(0, separatorIndex).trim();
-    if (name !== PASSWORD_RESET_RECEIPT_COOKIE_NAME) continue;
+    if (name !== cookieName) continue;
     const value = entry.slice(separatorIndex + 1).trim();
     return value || null;
   }
 
   return null;
+}
+
+export function readPasswordResetReceiptCookie(
+  headers: Pick<Headers, "get">,
+): string | null {
+  return readCookie(headers, PASSWORD_RESET_RECEIPT_COOKIE_NAME);
+}
+
+export function readPasswordResetClaimCookie(
+  headers: Pick<Headers, "get">,
+): string | null {
+  return readCookie(headers, PASSWORD_RESET_CLAIM_COOKIE_NAME);
 }
 
 export async function getPasswordResetReceiptRequestId(
@@ -313,6 +407,28 @@ export async function getPasswordResetReceiptRequestIdForCandidate(
   return verifyPasswordResetReceiptForCandidate(
     readPasswordResetReceiptCookie(headers),
     candidate,
+    secret,
+  );
+}
+
+export async function getPasswordResetClaimGrant(
+  headers: Pick<Headers, "get">,
+  secret: string,
+  nowMs = Date.now(),
+): Promise<PasswordResetClaimGrant | null> {
+  return verifyPasswordResetClaimGrant(
+    readPasswordResetClaimCookie(headers),
+    secret,
+    nowMs,
+  );
+}
+
+export async function getPasswordResetClaimGrantRecord(
+  headers: Pick<Headers, "get">,
+  secret: string,
+): Promise<PasswordResetClaimGrant | null> {
+  return verifyPasswordResetClaimGrantRecord(
+    readPasswordResetClaimCookie(headers),
     secret,
   );
 }

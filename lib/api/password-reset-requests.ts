@@ -22,6 +22,7 @@ import { requireRole } from "../auth/server";
 import { getDb } from "../db/client";
 import {
   getAdminApprovedResetPolicyError,
+  getManagedPasswordResetDecisionExpiry,
   getPasswordResetApprovalExpiry,
   getPasswordResetTargetError,
   isPasswordResetRequestSource,
@@ -295,7 +296,7 @@ export async function startManagedPasswordReset(params: {
 
     const { env } = getCloudflareContext();
     const nowIso = new Date().toISOString();
-    const expiresAt = getPasswordResetApprovalExpiry(
+    const shortLivedExpiresAt = getPasswordResetApprovalExpiry(
       params.setupMethod,
       Date.parse(nowIso),
     );
@@ -322,6 +323,11 @@ export async function startManagedPasswordReset(params: {
       if (request.expiresAt && request.expiresAt <= nowIso) {
         throw new PasswordResetActionError("REQUEST_EXPIRED");
       }
+      const expiresAt = getManagedPasswordResetDecisionExpiry(
+        params.setupMethod,
+        request.expiresAt,
+        Date.parse(nowIso),
+      );
 
       const target = await getManagedTarget(actor, request.userId);
       let verificationMethod: PasswordResetVerificationMethod | null = null;
@@ -547,7 +553,7 @@ export async function startManagedPasswordReset(params: {
         manualRequestId,
         actor.id,
         nowIso,
-        expiresAt,
+        shortLivedExpiresAt,
         nowIso,
         nowIso,
         target.id,
@@ -578,7 +584,7 @@ export async function startManagedPasswordReset(params: {
         requestId: manualRequestId,
         setupMethod: "setup_code",
         setupCode,
-        expiresAt,
+        expiresAt: shortLivedExpiresAt,
       },
       error: null,
     };

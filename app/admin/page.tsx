@@ -126,7 +126,7 @@ function AdminPageContent() {
         {
           id: "password-requests",
           group: "users",
-          label: userT("passwordRequests"),
+          label: t("passwordRequests"),
           badgeCount: pendingPasswordResetCount,
         },
         ...(isSuperAdmin
