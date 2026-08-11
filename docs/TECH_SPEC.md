@@ -22,6 +22,13 @@ Client
 - 요청 도메인은 표시 컨텍스트이며 권한 근거로 단독 사용하지 않고 계정·링크의 venue scope와 교차 검증한다.
 - 공개 링크 기반 게스트 등록은 계정 로그인 흐름과 분리한다.
 
+## 배포 환경
+
+- 운영 환경은 custom domain, 운영 D1, 운영 KV를 사용하는 기본 Worker 설정이다.
+- 원격 개발 환경은 `env.dev`로 분리하며 `.workers.dev` 주소, 전용 D1, 전용 KV만 사용하고 custom domain을 연결하지 않는다.
+- 원격 개발 D1에는 운영 데이터를 복제하지 않고 합성 테스트 계정만 seed한다. bootstrap credential은 저장소와 로그에 남기지 않고 로컬 credential store에서 관리한다.
+- `build:worker:dev`, `deploy:dev`, `db:migrate:remote:dev`, `db:seed:remote:dev` 명령은 반드시 dev 환경 바인딩을 명시해 운영 리소스와의 혼동을 방지한다.
+
 ## 언어 결정
 
 - 지원 언어는 영어(`en`)와 한국어(`ko`)이며 전역 fallback은 영어다.
