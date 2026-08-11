@@ -3,6 +3,7 @@ main = ".open-next/worker.js"
 compatibility_date = "2026-07-27"
 compatibility_flags = ["nodejs_compat"]
 workers_dev = true
+preview_urls = false
 
 routes = [
   { pattern = "guest.faustseoul.kr", custom_domain = true }

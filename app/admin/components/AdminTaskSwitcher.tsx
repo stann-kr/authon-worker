@@ -12,6 +12,7 @@ export interface AdminTaskOption {
   id: AdminTask;
   group: AdminTaskGroup;
   label: string;
+  badgeCount?: number;
 }
 
 interface AdminTaskSwitcherProps {
@@ -71,7 +72,9 @@ export default function AdminTaskSwitcher({
               <a
                 key={option.id}
                 href={`/admin${getAdminTaskSearch(option.id)}`}
-                aria-label={`${groupLabels[option.group]} · ${option.label}`}
+                aria-label={`${groupLabels[option.group]} · ${option.label}${
+                  option.badgeCount ? ` (${option.badgeCount})` : ""
+                }`}
                 aria-current={isActive ? "page" : undefined}
                 aria-disabled={disabled || undefined}
                 tabIndex={disabled ? -1 : undefined}
@@ -83,7 +86,14 @@ export default function AdminTaskSwitcher({
                 } ${disabled ? "pointer-events-none opacity-50" : ""}`}
               >
                 <Icon name={groupIcons[option.group]} size={15} />
-                <span className="max-w-full break-keep">{option.label}</span>
+                <span className="max-w-full break-keep">
+                  {option.label}
+                  {!!option.badgeCount && (
+                    <span className="ml-1 font-mono text-status-waiting">
+                      {option.badgeCount}
+                    </span>
+                  )}
+                </span>
               </a>
             );
           })}
@@ -126,7 +136,14 @@ export default function AdminTaskSwitcher({
                             : "border-transparent bg-surface text-text-muted hover:bg-surface-raised hover:text-text-heading"
                         } ${disabled ? "pointer-events-none opacity-50" : ""}`}
                       >
-                        <span>{option.label}</span>
+                        <span className="flex min-w-0 items-center gap-2">
+                          <span>{option.label}</span>
+                          {!!option.badgeCount && (
+                            <span className="min-w-5 border border-status-waiting/70 bg-status-waiting/10 px-1.5 py-0.5 text-center font-mono text-xs text-status-waiting">
+                              {option.badgeCount}
+                            </span>
+                          )}
+                        </span>
                         {isActive && <Icon name="chevron-right" size={16} />}
                       </a>
                     );

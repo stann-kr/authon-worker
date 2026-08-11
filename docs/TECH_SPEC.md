@@ -10,7 +10,6 @@ Client
   -> Next.js App Router / Server Actions
   -> Cloudflare Workers via OpenNext
   -> Cloudflare D1 + KV
-  -> AWS SES for password reset email (후속 연동)
 ```
 
 주요 경계:
@@ -22,6 +21,14 @@ Client
 - 하나의 Worker가 여러 도메인을 받고, D1의 도메인 매핑으로 베뉴 브랜드와 대표 URL을 요청 단위로 결정한다.
 - 요청 도메인은 표시 컨텍스트이며 권한 근거로 단독 사용하지 않고 계정·링크의 venue scope와 교차 검증한다.
 - 공개 링크 기반 게스트 등록은 계정 로그인 흐름과 분리한다.
+
+## 배포 환경
+
+- `authon-worker` 하나가 custom domain, 운영 D1과 운영 KV를 사용한다. Wrangler 환경별 Worker나 별도 개발 데이터베이스는 두지 않는다.
+- `main`은 `deploy` 명령으로 현재 production deployment를 갱신한다.
+- 외부에서 접근하는 Worker 주소는 기본 `workers.dev` 주소와 production custom domain뿐이며 두 주소는 같은 활성 production version을 제공한다.
+- preview URL과 non-main branch 자동 원격 build는 사용하지 않는다. `dev`는 production 배포 전 소스 검증용 branch이며 직접 서비스 주소를 갖지 않는다.
+- 모든 원격 요청은 같은 운영 D1·KV·secret을 사용한다.
 
 ## 언어 결정
 
@@ -57,8 +64,8 @@ Client
 | Guest Limit Request | Staff·DJ의 날짜별 추가 게스트 한도 요청과 관리자 승인 기록 |
 | External Link | 외부 DJ가 계정 없이 게스트를 등록하고 설정을 새 credential로 재사용하는 공개 링크 |
 | Check-in | 도어 운영자의 입장 확인 기록 |
-| Password Reset | 비밀번호 재설정 토큰과 메일 발송 흐름 |
-| Account Setup | `pending_reset` 계정의 관리자 발급 1회용 설정 코드 기반 최초 비밀번호 설정 |
+| Password Reset | 사용자 관리자 요청, 관리자 결정, 기존 재설정 token의 일회성 소비 |
+| Account Setup | `pending_reset` 계정의 1회용 설정 코드 또는 요청 브라우저에 결속된 관리자 승인 기반 비밀번호 설정 |
 | User Audit | 계정 생성, Role·상태·비밀번호 설정과 삭제 작업 기록 |
 
 ## 역할과 접근 범위
@@ -80,8 +87,11 @@ Client
 | 경로 | 공개 여부 | 역할 |
 |---|---|---|
 | `/auth/login` | 공개 | 로그인 |
-| `/auth/reset-password` | 공개 | 비밀번호 재설정 |
-| `/api/auth/claim-account` | 공개 API | 검증된 관리자 발급 1회용 설정 코드로 `pending_reset` 계정의 최초 비밀번호 설정 |
+| `/auth/reset-password` | 공개 | 관리자 재설정 요청, 승인 확인, 기존 token 기반 비밀번호 재설정 |
+| `/auth/setup-password` | 공개 | 관리자에게 받은 1회용 설정 코드로 새 비밀번호 설정 |
+| `/api/auth/password-reset-requests` | 공개 API | 계정 존재 여부를 노출하지 않는 관리자 재설정 요청 등록 |
+| `/api/auth/password-reset-requests/status` | 공개 API | 서명된 브라우저 영수증에 결속된 승인 상태 확인 |
+| `/api/auth/claim-account` | 공개 API | 검증된 1회용 설정 코드 또는 요청 브라우저의 유효한 관리자 승인으로 비밀번호 설정 |
 | `/guest?token=...` | 공개 링크 | 외부 DJ 게스트 등록 |
 | `/` | 인증 필요 | 역할별 대시보드와 Venue Admin의 미처리 추가 게스트 요청 알림 |
 | `/guest` | 인증 필요 | 게스트 등록/관리 |
@@ -97,10 +107,14 @@ Client
 - Role, 계정 유형, 공용 계정 Door capability 변경과 비활성화·재활성화, 삭제 처리도 session version을 변경해 기존 세션의 재사용을 차단한다.
 - 신규 비밀번호 hash는 WebCrypto PBKDF2 계열을 기준으로 관리하고, 기존 hash는 점진 전환한다.
 - reset token 원문은 저장하지 않고 hash만 저장한다.
-- `pending_reset`이면서 비밀번호를 아직 설정하지 않은 계정은 이관 여부와 관계없이 별도로 전달받은 관리자 발급 1회용 설정 코드 hash가 일치할 때만 최초 비밀번호 설정 단계에 진입한다.
-- 이메일과 임의의 새 비밀번호만으로 계정을 설정할 수 없으며, 관리자 재설정 취소 기록도 설정 코드 검증을 우회하지 않는다.
-- 설정 성공 시 계정 상태와 session version을 원자적으로 변경하고 기존 reset token을 모두 사용 처리한다.
-- 설정 요청은 IP와 이메일 조합으로 rate limit하며, 사용 완료된 설정 코드는 재사용할 수 없다.
+- 자가 이메일 재설정 발송은 비활성화하고, 이미 발급된 유효한 reset token의 일회성 소비만 호환 경로로 유지한다.
+- 공개 관리자 요청은 계정 존재 여부, tenant 불일치, 기존 열린 요청 여부에 같은 성공 응답과 동일한 DB 작업 형태를 사용하고 이메일과 IP를 결합한 단위로 rate limit한다.
+- 공개 요청은 24시간짜리 HttpOnly 서명 영수증과 숫자 4자리 요청 확인번호를 발급한다. 관리자는 대면, 등록 전화 또는 기존에 확인된 메신저로 사용자를 먼저 확인한 뒤 사용자가 알려준 번호를 정확한 요청에 입력한다.
+- browser 승인은 개인 `door_staff`, `staff`, `dj`의 self-service 요청에만 허용한다. 사용자가 같은 브라우저로 돌아와 승인 상태를 처음 확인하면 장기 영수증을 폐기하고 정확한 요청·만료 시각에 서명된 15분짜리 claim 권한으로 교체하며, 이를 한 번만 소비할 수 있다.
+- 사용자 목록의 수동 재설정과 관리자·공용 계정은 15분짜리 설정 코드만 사용한다. 사용자는 전용 설정 화면에서 계정 이메일, 설정 코드와 새 비밀번호를 함께 입력한다.
+- `pending_reset`이면서 비밀번호를 아직 설정하지 않은 계정은 현재 password hash와 일치하는 초기 설정 코드로만 설정을 시작한다. 관리자가 새로 발급한 코드는 미사용·미만료 승인 요청에도 결속하며, browser 승인은 별도의 요청 화면에서만 소비한다.
+- 설정 성공 시 계정 상태와 session version, 정확한 요청 상태를 원자적으로 변경하고 기존 reset token과 다른 열린 요청을 모두 닫는다. 정상 로그인과 프로필 비밀번호 변경도 남은 관리자 재설정 grant를 취소한다.
+- 관리자 결정과 최종 claim은 role, 계정 유형, venue scope, 자기 계정, 활성·삭제 상태, 관리자 session version과 현재 관리 권한을 각각 다시 검증한다. 감사 기록은 인증 허용 여부의 근거로 사용하지 않는다.
 - 운영 화면의 사용자 디렉터리는 식별과 표시를 위한 최소 필드만 반환하고, 관리자 목록도 인증 내부 필드를 제외한 전용 DTO를 사용한다.
 - Door·Admin 게스트 명단의 외부 링크 기여자 정보는 내부 ID와 표시 이름만 반환하며, token과 공개 URL 등 링크 credential은 관리자 링크 관리 기능에서만 조회한다.
 - 베뉴 관리자는 사용자 디렉터리와 관리자 목록에서 `super_admin` 계정을 조회할 수 없으며, 계정 관리 감사 기록은 `super_admin`만 조회한다.
@@ -133,6 +147,7 @@ Client
 | `guest_limit_requests` | 사용자·날짜별 추가 한도 요청, 선택 사유, 승인 수량과 결정 기록 |
 | `check_ins` | 체크인 기록 |
 | `password_reset_tokens` | 비밀번호 재설정 token hash와 만료/사용 상태 |
+| `password_reset_requests` | 사용자 관리자 요청, 처리 상태·방식·결정자와 코드 없는 승인 만료 시각 |
 
 ## 변경 시 함께 확인할 영역
 
@@ -145,7 +160,7 @@ Client
 | 베뉴 시간 기준 | IANA timezone 검증, 자정 통과 운영시간, Guest·Door·Admin 기본 영업일 계산 |
 | D1 schema | Drizzle schema, migration files, affected queries |
 | 배포 runtime | OpenNext compatibility, Worker build result |
-| 이메일 | reset-password route, SES sender configuration, public error message |
+| 비밀번호 재설정 | 공개 요청 응답 균일성, Admin 결정 권한, 승인 만료·일회성 소비, 기존 token 호환 |
 | 국제화 | locale resolver, 메시지 키 대응, 계정·도메인·External Link 우선순위 |
 
 외부 링크의 최근 목록은 `created_at` 내림차순으로 조회한다. Supabase snapshot을 D1으로 이전할 때도 원본 `created_at`을 보존하므로 컷오버 전에 생성된 링크가 최근 목록에서 누락되지 않는다.

@@ -1,8 +1,13 @@
 "use server";
 
 import { getCloudflareContext } from "@opennextjs/cloudflare";
-import { and, asc, desc, eq, isNull, ne, sql, type SQL } from "drizzle-orm";
-import { users, passwordResetTokens, userAuditEvents } from "../db/schema";
+import { and, asc, desc, eq, inArray, isNull, ne, sql, type SQL } from "drizzle-orm";
+import {
+  passwordResetRequests,
+  passwordResetTokens,
+  userAuditEvents,
+  users,
+} from "../db/schema";
 import {
   type User,
   type UserAuditEvent,
@@ -24,6 +29,7 @@ import {
   isAccountKind,
   isRole,
   isVenueManagedRole,
+  VENUE_MANAGED_ROLES,
   type AccountKind,
 } from "@/lib/users/policy";
 
@@ -156,13 +162,6 @@ async function assertAnotherActiveSuperAdmin(targetId: string): Promise<void> {
   if (!remaining) throw new UserActionError("LAST_SUPER_ADMIN");
 }
 
-function generateSetupCode(): string {
-  const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-  const bytes = crypto.getRandomValues(new Uint8Array(8));
-  const value = Array.from(bytes, (byte) => alphabet[byte % alphabet.length]).join("");
-  return `AUTH-${value.slice(0, 4)}-${value.slice(4)}`;
-}
-
 export async function fetchUsersByVenue(
   venueId?: string | null,
 ): Promise<ApiResponse<UserDirectoryEntry[]>> {
@@ -227,7 +226,10 @@ export async function fetchManagedUsersByVenue(
       if (effectiveVenueId) query = query.where(eq(users.venueId, effectiveVenueId));
     } else {
       query = query.where(
-        and(eq(users.venueId, effectiveVenueId!), ne(users.role, "super_admin")),
+        and(
+          eq(users.venueId, effectiveVenueId!),
+          inArray(users.role, VENUE_MANAGED_ROLES),
+        ),
       );
     }
 
@@ -396,18 +398,40 @@ export async function updateUserProfile(
           : {}),
       });
 
-      await db.batch([
-        updateStatement,
-        db.insert(userAuditEvents).values({
-          id: crypto.randomUUID(),
-          venueId: target.venueId,
-          actorUserId: actor.id,
-          targetUserId: target.id,
-          action,
-          details,
-          createdAt: nowIso,
-        }),
-      ]);
+      const auditStatement = db.insert(userAuditEvents).values({
+        id: crypto.randomUUID(),
+        venueId: target.venueId,
+        actorUserId: actor.id,
+        targetUserId: target.id,
+        action,
+        details,
+        createdAt: nowIso,
+      });
+      const invalidatesResetGrants =
+        changedFields.includes("role") ||
+        changedFields.includes("accountKind") ||
+        (changedFields.includes("active") && updates.active === false);
+      if (invalidatesResetGrants) {
+        await db.batch([
+          updateStatement,
+          db
+            .update(passwordResetRequests)
+            .set({ status: "cancelled", updatedAt: nowIso })
+            .where(
+              and(
+                eq(passwordResetRequests.userId, target.id),
+                sql`${passwordResetRequests.status} IN ('pending', 'approved')`,
+              ),
+            ),
+          db
+            .update(passwordResetTokens)
+            .set({ used: true })
+            .where(eq(passwordResetTokens.userId, target.id)),
+          auditStatement,
+        ]);
+      } else {
+        await db.batch([updateStatement, auditStatement]);
+      }
     } else {
       await updateStatement;
     }
@@ -515,52 +539,6 @@ export async function createUserViaEdge(params: {
   }
 }
 
-export async function requireFirstLoginPasswordSetup(
-  userId: string,
-): Promise<ApiResponse<{ setupCode: string }>> {
-  try {
-    const actor = await requireRole(["super_admin", "venue_admin"]);
-    const target = await getTargetUser(userId);
-    assertManagedTarget(actor, target);
-    if (!target.active) throw new UserActionError("USER_INACTIVE");
-
-    const db = getDb();
-    const setupCode = generateSetupCode();
-    const passwordHash = await hashPassword(setupCode);
-    const nowIso = new Date().toISOString();
-
-    await db.batch([
-      db
-        .update(users)
-        .set({
-          passwordHash,
-          migrationStatus: "pending_reset",
-          passwordSetAt: null,
-          sessionVersion: sql`${users.sessionVersion} + 1`,
-        })
-        .where(eq(users.id, target.id)),
-      db
-        .update(passwordResetTokens)
-        .set({ used: true })
-        .where(eq(passwordResetTokens.userId, target.id)),
-      db.insert(userAuditEvents).values({
-        id: crypto.randomUUID(),
-        venueId: target.venueId,
-        actorUserId: actor.id,
-        targetUserId: target.id,
-        action: "password_reset_required",
-        details: JSON.stringify({ delivery: "manual_setup_code" }),
-        createdAt: nowIso,
-      }),
-    ]);
-
-    return { data: { setupCode }, error: null };
-  } catch (error: unknown) {
-    console.error("Failed to require first-login password setup:", error);
-    return { data: null, error: getUserActionError(error, "UPDATE_FAILED") };
-  }
-}
-
 export async function deleteUserViaEdge(userId: string): Promise<{ error: string | null }> {
   try {
     const actor = await requireRole(["super_admin", "venue_admin"]);
@@ -599,6 +577,15 @@ export async function deleteUserViaEdge(userId: string): Promise<{ error: string
         .update(passwordResetTokens)
         .set({ used: true })
         .where(eq(passwordResetTokens.userId, target.id)),
+      db
+        .update(passwordResetRequests)
+        .set({ status: "cancelled", updatedAt: deletedAt })
+        .where(
+          and(
+            eq(passwordResetRequests.userId, target.id),
+            sql`${passwordResetRequests.status} IN ('pending', 'approved')`,
+          ),
+        ),
       db.insert(userAuditEvents).values({
         id: crypto.randomUUID(),
         venueId: target.venueId,
@@ -644,7 +631,8 @@ export async function resendInvitationViaEdge(userId: string): Promise<{ error: 
       userId,
       token: tokenHash,
       expiresAt,
-      used: false,
+      // 이메일 전송이 성공하기 전에는 새 링크를 활성화하지 않는다.
+      used: true,
       createdAt: new Date().toISOString(),
     });
 
@@ -679,6 +667,19 @@ export async function resendInvitationViaEdge(userId: string): Promise<{ error: 
         .where(eq(passwordResetTokens.id, resetTokenId));
       throw error;
     }
+
+    // 재발송이 성공하면 이전 링크를 모두 폐기하고 방금 보낸 링크 하나만
+    // 활성화한다. D1 batch 실패 시 두 변경은 함께 rollback된다.
+    await db.batch([
+      db
+        .update(passwordResetTokens)
+        .set({ used: true })
+        .where(eq(passwordResetTokens.userId, userId)),
+      db
+        .update(passwordResetTokens)
+        .set({ used: false })
+        .where(eq(passwordResetTokens.id, resetTokenId)),
+    ]);
 
     return { error: null };
   } catch (error: unknown) {

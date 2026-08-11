@@ -3,6 +3,9 @@ import bcrypt from "bcryptjs";
 const ITERATIONS = 100_000;
 const KEY_LENGTH = 32;
 
+export const DUMMY_PASSWORD_HASH =
+  "pbkdf2$100000$Yud1PnfAdnmks4HLqvBwVQ==$bgkDnZqJEDZaY7gsi+3OYHDi0Px87/E9QAWdGgOgXtI=";
+
 /** PBKDF2-SHA-256 형식: "pbkdf2$<iter>$<saltB64>$<hashB64>" */
 export async function hashPassword(plain: string): Promise<string> {
   const salt = crypto.getRandomValues(new Uint8Array(16)) as Uint8Array<ArrayBuffer>;
