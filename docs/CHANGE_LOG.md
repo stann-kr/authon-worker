@@ -11,11 +11,17 @@
 - `dev` Worker가 운영 custom domain과 분리된 `.workers.dev` 주소, 전용 D1, 전용 KV를 사용하도록 독립 배포 환경을 추가했다.
 - dev Worker build·배포, 원격 dev D1 migration, 합성 테스트 데이터 seed를 명시적인 개발 명령으로 제공한다.
 - 원격 dev D1에서 관리자 최초 설정부터 브라우저 결속 재설정 승인·일회성 소비·새 비밀번호 로그인·재사용 거부까지 검증하는 HTTP smoke 명령을 추가했다.
+- 운영 D1 연결 검증은 synthetic dev와 다른 Worker URL·명시적인 build/deploy 명령을 사용하도록 별도 환경으로 분리했다.
+
+#### Changed
+
+- 운영 D1에 비밀번호 재설정 요청용 additive migration을 적용해 dev-live 검증과 이후 운영 배포가 같은 schema 계약을 사용하도록 준비했다.
 
 #### Security
 
 - 원격 dev D1에는 실제 운영 데이터를 복제하지 않고 합성 계정만 생성하며, bootstrap credential은 코드·환경 파일·로그 대신 로컬 credential store에 보관하도록 했다.
 - dev 환경은 운영 Worker의 route, D1, KV를 상속하지 않아 개발 배포와 테스트 쓰기가 운영 데이터에 도달하지 않도록 분리했다.
+- 운영 D1을 사용하는 dev-live Worker도 운영 custom domain·KV·JWT와 분리하고, URL과 화면 브랜드에서 live data 연결 상태를 구분한다. 이 환경의 쓰기는 운영 데이터에 반영되므로 명시적인 명령으로만 배포한다.
 
 ## 2026-08-09
 

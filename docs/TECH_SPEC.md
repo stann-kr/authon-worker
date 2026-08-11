@@ -29,6 +29,7 @@ Client
 - 원격 개발 D1에는 운영 데이터를 복제하지 않고 합성 테스트 계정만 seed한다. bootstrap credential은 저장소와 로그에 남기지 않고 로컬 credential store에서 관리한다.
 - `build:worker:dev`, `deploy:dev`, `db:migrate:remote:dev`, `db:seed:remote:dev` 명령은 반드시 dev 환경 바인딩을 명시해 운영 리소스와의 혼동을 방지한다.
 - `smoke:remote:dev:password-reset`은 합성 관리자 bootstrap, 공개 요청, challenge 기반 승인, 동일 브라우저 claim, 로그인과 receipt 재사용 거부를 실제 dev Worker와 원격 D1에서 확인한다.
+- 실제 운영 D1 연결이 필요한 통제된 검증은 `env.dev_live`와 `build:worker:dev:live-db`·`deploy:dev:live-db`를 사용한다. 별도 `.workers.dev` URL과 표시 브랜드, dev session KV·JWT를 사용하고 custom domain은 연결하지 않지만 모든 D1 쓰기는 운영 데이터에 반영된다.
 
 ## 언어 결정
 

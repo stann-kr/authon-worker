@@ -61,3 +61,23 @@ preview_id = "59e534b758fe44caaa3b3582a25afdf7"
 
 [env.dev.vars]
 NEXT_PUBLIC_APP_URL = "https://authon-worker-dev.ilsny7.workers.dev"
+
+# 운영 D1을 대상으로 한 통제된 검증 환경. 세션·JWT·URL은 운영과 분리한다.
+[env.dev_live]
+name = "authon-worker-dev-live"
+workers_dev = true
+routes = []
+
+[[env.dev_live.d1_databases]]
+binding = "DB"
+database_name = "authon-db"
+database_id = "b849dd4e-533e-477d-9ef8-cc2e4a00df1f"
+migrations_dir = "migrations"
+
+[[env.dev_live.kv_namespaces]]
+binding = "SESSIONS"
+id = "8275e9d47920470abb2c8e90f106adfe"
+preview_id = "59e534b758fe44caaa3b3582a25afdf7"
+
+[env.dev_live.vars]
+NEXT_PUBLIC_APP_URL = "https://authon-worker-dev-live.ilsny7.workers.dev"
