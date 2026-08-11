@@ -29,7 +29,8 @@
     "migration:generate:d1-import": "node scripts/migration/generate-d1-import-sql.mjs",
     "migration:generate:cutover-overlays": "node scripts/migration/generate-cutover-overlays.mjs",
     "db:seed:local": "node scripts/dev/seed-local-test-data.mjs",
-    "db:seed:remote:dev": "node scripts/dev/seed-remote-dev-data.mjs"
+    "db:seed:remote:dev": "node scripts/dev/seed-remote-dev-data.mjs",
+    "smoke:remote:dev:password-reset": "node scripts/dev/smoke-remote-dev-password-reset.mjs"
   },
   "dependencies": {
     "@carbon/icons-react": "^11.85.0",

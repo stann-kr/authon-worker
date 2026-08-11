@@ -10,6 +10,7 @@
 
 - `dev` Worker가 운영 custom domain과 분리된 `.workers.dev` 주소, 전용 D1, 전용 KV를 사용하도록 독립 배포 환경을 추가했다.
 - dev Worker build·배포, 원격 dev D1 migration, 합성 테스트 데이터 seed를 명시적인 개발 명령으로 제공한다.
+- 원격 dev D1에서 관리자 최초 설정부터 브라우저 결속 재설정 승인·일회성 소비·새 비밀번호 로그인·재사용 거부까지 검증하는 HTTP smoke 명령을 추가했다.
 
 #### Security
 
