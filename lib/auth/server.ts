@@ -25,6 +25,7 @@ export interface SessionUser {
   doorAccessEnabled: boolean;
   venueId: string | null;
   guestLimit: number | null;
+  sessionVersion: number;
   preferredLocale: Locale | null;
 }
 
@@ -114,6 +115,7 @@ export async function requireAuth(): Promise<SessionUser> {
     doorAccessEnabled: user.doorAccessEnabled,
     venueId: user.venueId ?? null,
     guestLimit: user.guestLimit ?? null,
+    sessionVersion: expectedSessionVersion,
     preferredLocale: isLocale(user.preferredLocale) ? user.preferredLocale : null,
   };
 

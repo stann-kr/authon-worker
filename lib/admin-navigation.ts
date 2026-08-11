@@ -5,6 +5,7 @@ export type AdminTask =
   | "link-manage"
   | "user-create"
   | "user-list"
+  | "password-requests"
   | "user-migrate"
   | "venue-list"
   | "venue-create";
@@ -38,6 +39,13 @@ export function parseAdminTask(
     return view === "manage" ? "link-manage" : "link-create";
   }
   if (tab === "users") {
+    if (
+      view === "password-requests" ||
+      view === "password-reset-requests" ||
+      view === "reset-requests"
+    ) {
+      return "password-requests";
+    }
     if (view === "users" || view === "list" || view === "directory") {
       return "user-list";
     }
@@ -59,6 +67,7 @@ export function getAdminTaskSearch(task: AdminTask): string {
     "link-manage": "?tab=links&view=manage",
     "user-create": "?tab=users&view=create",
     "user-list": "?tab=users&view=directory",
+    "password-requests": "?tab=users&view=password-requests",
     "user-migrate": "?tab=users&view=migration",
     "venue-list": "?tab=venues&view=list",
     "venue-create": "?tab=venues&view=create",

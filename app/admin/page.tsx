@@ -14,6 +14,7 @@ import VenueManagement, {
   type VenueManagementSection,
 } from "./components/VenueManagement";
 import GuestLimitRequestManagement from "./components/GuestLimitRequestManagement";
+import PasswordResetRequestManagement from "./components/PasswordResetRequestManagement";
 import AdminTaskSwitcher, {
   type AdminTaskOption,
 } from "./components/AdminTaskSwitcher";
@@ -36,6 +37,7 @@ import {
   type AdminTask,
   type AdminTaskGroup,
 } from "../../lib/admin-navigation";
+import { fetchPendingPasswordResetRequestCount } from "@/lib/api/password-reset-requests";
 
 export default function AdminPage() {
   return (
@@ -67,6 +69,7 @@ function AdminPageContent() {
   const [activeTask, setActiveTask] = useState<AdminTask>("guest-list");
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
   const [isRoleReady, setIsRoleReady] = useState(false);
+  const [pendingPasswordResetCount, setPendingPasswordResetCount] = useState(0);
   useRouteLoadingTask(!isRoleReady);
 
   useEffect(() => {
@@ -93,6 +96,24 @@ function AdminPageContent() {
     setIsRoleReady(true);
   }, []);
 
+  useEffect(() => {
+    if (!isRoleReady) return;
+    let cancelled = false;
+    const loadPendingPasswordResetCount = async () => {
+      const { data, error } = await fetchPendingPasswordResetRequestCount();
+      if (cancelled) return;
+      if (error) {
+        console.error("Failed to load pending password reset count:", error);
+        return;
+      }
+      setPendingPasswordResetCount(data ?? 0);
+    };
+    void loadPendingPasswordResetCount();
+    return () => {
+      cancelled = true;
+    };
+  }, [isRoleReady]);
+
   const taskOptions = useMemo<AdminTaskOption[]>(
     () =>
       [
@@ -102,6 +123,12 @@ function AdminPageContent() {
         { id: "link-manage", group: "links", label: linkT("manageLinks") },
         { id: "user-create", group: "users", label: userT("createUser") },
         { id: "user-list", group: "users", label: userT("users") },
+        {
+          id: "password-requests",
+          group: "users",
+          label: userT("passwordRequests"),
+          badgeCount: pendingPasswordResetCount,
+        },
         ...(isSuperAdmin
           ? [
               {
@@ -122,7 +149,7 @@ function AdminPageContent() {
             ]
           : []),
       ],
-    [isSuperAdmin, linkT, t, userT, venueT],
+    [isSuperAdmin, linkT, pendingPasswordResetCount, t, userT, venueT],
   );
 
   const changeTask = useCallback(
@@ -234,8 +261,8 @@ function AdminPageContent() {
       const task: AdminTask =
         section === "create"
           ? "user-create"
-          : section === "users"
-            ? "user-list"
+            : section === "users"
+              ? "user-list"
             : "user-migrate";
       changeTask(task);
     },
@@ -319,6 +346,11 @@ function AdminPageContent() {
             }
             onActiveSectionChange={handleUserSectionChange}
             showSectionNavigation={false}
+          />
+        )}
+        {activeTask === "password-requests" && (
+          <PasswordResetRequestManagement
+            onPendingCountChange={setPendingPasswordResetCount}
           />
         )}
         {(activeTask === "venue-list" || activeTask === "venue-create") && (

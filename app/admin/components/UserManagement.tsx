@@ -23,9 +23,13 @@ import {
   fetchUserAuditEvents,
   updateUserProfile,
   deleteUserViaEdge,
-  requireFirstLoginPasswordSetup,
 } from "../../../lib/api/users";
-import type { User, UserAuditEvent } from "../../../lib/api/types";
+import { startManagedPasswordReset } from "@/lib/api/password-reset-requests";
+import type {
+  PasswordResetSetupMethod,
+  User,
+  UserAuditEvent,
+} from "../../../lib/api/types";
 import { useLocale, useTranslations } from "next-intl";
 import { isVenueManagedRole } from "@/lib/users/policy";
 
@@ -85,7 +89,9 @@ export default function UserManagement({
     useState<PendingUserAction>(null);
   const [setupCredential, setSetupCredential] = useState<{
     userName: string;
-    setupCode: string;
+    setupMethod: PasswordResetSetupMethod;
+    setupCode: string | null;
+    expiresAt: string | null;
   } | null>(null);
   const setupCredentialPanelRef = useRef<HTMLDivElement>(null);
   const shouldFocusSetupCredentialRef = useRef(false);
@@ -261,15 +267,29 @@ export default function UserManagement({
     setBusyUserId(user.id);
     setFeedback(null);
     try {
-      const { data, error } = await requireFirstLoginPasswordSetup(user.id);
+      const { data, error } = await startManagedPasswordReset({
+        userId: user.id,
+        setupMethod: "setup_code",
+      });
       if (error) {
         setFeedback({ type: "error", message: getActionError(error) });
         return;
       }
       if (data) {
         shouldFocusSetupCredentialRef.current = true;
-        setSetupCredential({ userName: user.name, setupCode: data.setupCode });
-        setFeedback({ type: "success", message: t("resetPasswordReady") });
+        setSetupCredential({
+          userName: user.name,
+          setupMethod: data.setupMethod,
+          setupCode: data.setupCode,
+          expiresAt: data.expiresAt,
+        });
+        setFeedback({
+          type: "success",
+          message:
+            data.setupMethod === "admin_approved"
+              ? t("directResetReady")
+              : t("resetPasswordReady"),
+        });
         await loadUsers();
       }
     } catch (error: unknown) {
@@ -310,7 +330,7 @@ export default function UserManagement({
   };
 
   const copySetupCode = async () => {
-    if (!setupCredential) return;
+    if (!setupCredential?.setupCode) return;
     try {
       await navigator.clipboard.writeText(setupCredential.setupCode);
       setFeedback({ type: "success", message: t("setupCodeCopied") });
@@ -382,6 +402,10 @@ export default function UserManagement({
         return t("audit_password_setup_completed");
       case "password_reset_completed":
         return t("audit_password_reset_completed");
+      case "password_reset_request_rejected":
+        return t("audit_password_reset_request_rejected");
+      case "password_changed":
+        return t("audit_password_changed");
       case "deleted":
         return t("audit_deleted");
       default:
@@ -545,23 +569,35 @@ export default function UserManagement({
                   <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                     <div className="min-w-0">
                       <p className="break-words text-sm font-semibold text-status-waiting">
-                        {t("setupCodeTitle", { name: setupCredential.userName })}
+                        {setupCredential.setupMethod === "admin_approved"
+                          ? t("directResetTitle", { name: setupCredential.userName })
+                          : t("setupCodeTitle", { name: setupCredential.userName })}
                       </p>
                       <p className="mt-2 text-xs leading-relaxed text-text-muted">
-                        {t("setupCodeHelp")}
+                        {setupCredential.setupMethod === "admin_approved"
+                          ? t("directResetHelp", {
+                              expiresAt: formatActivityDate(
+                                setupCredential.expiresAt ?? new Date().toISOString(),
+                              ),
+                            })
+                          : t("setupCodeHelp")}
                       </p>
-                      <code className="mt-3 block select-all break-all bg-canvas px-3 py-2 font-mono text-base tracking-wider text-text-heading">
-                        {setupCredential.setupCode}
-                      </code>
+                      {setupCredential.setupCode && (
+                        <code className="mt-3 block select-all break-all bg-canvas px-3 py-2 font-mono text-base tracking-wider text-text-heading">
+                          {setupCredential.setupCode}
+                        </code>
+                      )}
                     </div>
                     <div className="flex shrink-0 gap-2">
-                      <button
-                        type="button"
-                        onClick={copySetupCode}
-                        className="min-h-11 bg-action-primary px-3 py-2 text-xs font-semibold text-action-text hover:bg-action-hover"
-                      >
-                        {t("copySetupCode")}
-                      </button>
+                      {setupCredential.setupCode && (
+                        <button
+                          type="button"
+                          onClick={copySetupCode}
+                          className="min-h-11 bg-action-primary px-3 py-2 text-xs font-semibold text-action-text hover:bg-action-hover"
+                        >
+                          {t("copySetupCode")}
+                        </button>
+                      )}
                       <button
                         type="button"
                         onClick={() => setSetupCredential(null)}
@@ -664,9 +700,9 @@ export default function UserManagement({
                       onToggleActive={async (user) =>
                         setPendingUserAction({ kind: "toggle", user })
                       }
-                      onResetPassword={async (user) =>
-                        setPendingUserAction({ kind: "reset-password", user })
-                      }
+                      onResetPassword={async (user) => {
+                        setPendingUserAction({ kind: "reset-password", user });
+                      }}
                       onDelete={async (user) =>
                         setPendingUserAction({ kind: "delete", user })
                       }
@@ -723,11 +759,23 @@ export default function UserManagement({
           onCancel={() => setPendingUserAction(null)}
           isLoading={busyUserId === pendingUserAction.user.id}
           tone={
-            pendingUserAction.kind === "toggle" && !pendingUserAction.user.active
+            pendingUserAction.kind === "reset-password" ||
+            (pendingUserAction.kind === "toggle" && !pendingUserAction.user.active)
               ? "primary"
               : "danger"
           }
-        />
+        >
+          {pendingUserAction.kind === "reset-password" && (
+            <div className="border border-border-default bg-surface p-3">
+              <p className="text-sm font-semibold text-text-heading">
+                {t("setupCodeMethod")}
+              </p>
+              <p className="mt-1 text-xs leading-relaxed text-text-muted">
+                {t("manualResetCodeOnlyHelp")}
+              </p>
+            </div>
+          )}
+        </ConfirmDialog>
       )}
     </>
   );
