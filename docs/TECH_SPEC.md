@@ -24,12 +24,11 @@ Client
 
 ## 배포 환경
 
-- 운영 환경은 custom domain, 운영 D1, 운영 KV를 사용하는 기본 Worker 설정이다.
-- 원격 개발 환경은 `env.dev`로 분리하며 `.workers.dev` 주소, 전용 D1, 전용 KV만 사용하고 custom domain을 연결하지 않는다.
-- 원격 개발 D1에는 운영 데이터를 복제하지 않고 합성 테스트 계정만 seed한다. bootstrap credential은 저장소와 로그에 남기지 않고 로컬 credential store에서 관리한다.
-- `build:worker:dev`, `deploy:dev`, `db:migrate:remote:dev`, `db:seed:remote:dev` 명령은 반드시 dev 환경 바인딩을 명시해 운영 리소스와의 혼동을 방지한다.
-- `smoke:remote:dev:password-reset`은 합성 관리자 bootstrap, 공개 요청, challenge 기반 승인, 동일 브라우저 claim, 로그인과 receipt 재사용 거부를 실제 dev Worker와 원격 D1에서 확인한다.
-- 실제 운영 D1 연결이 필요한 통제된 검증은 `env.dev_live`와 `build:worker:dev:live-db`·`deploy:dev:live-db`를 사용한다. 별도 `.workers.dev` URL과 표시 브랜드, dev session KV·JWT를 사용하고 custom domain은 연결하지 않지만 모든 D1 쓰기는 운영 데이터에 반영된다.
+- `authon-worker` 하나가 custom domain, 운영 D1과 운영 KV를 사용한다. Wrangler 환경별 Worker나 별도 개발 데이터베이스는 두지 않는다.
+- `main`은 `deploy` 명령으로 현재 production deployment를 갱신한다.
+- `dev`는 `deploy:dev` 명령으로 같은 Worker에 version을 업로드하고 `dev-<worker>.<subdomain>.workers.dev` preview alias에서 확인한다. preview version은 production traffic을 받지 않는다.
+- production과 preview version은 같은 D1·KV·secret을 사용한다. preview에서 로그인, 관리자 작업, 비밀번호 변경이나 데이터 입력을 실행하면 운영 데이터와 세션에 반영된다.
+- Cloudflare Workers Builds는 `main`을 production branch로, 그 밖의 branch를 preview build로 설정하고 OpenNext의 `deploy`/`upload` 명령을 각각 사용한다.
 
 ## 언어 결정
 

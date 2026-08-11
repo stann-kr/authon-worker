@@ -4,6 +4,18 @@
 
 ## 2026-08-11
 
+### Cloudflare 단일 Worker 배포 구조
+
+#### Changed
+
+- 별도 dev·dev-live Worker와 synthetic D1 구성을 폐기하고 `authon-worker` 하나의 production deployment와 dev preview version을 사용하는 구조로 단순화했다.
+- `main`은 production deployment, `dev`는 고정 preview alias에 업로드되며 두 version 모두 같은 운영 D1·KV·secret을 사용한다.
+- 원격 synthetic seed·migration·자동 비밀번호 재설정 smoke 명령을 제거했다.
+
+#### Security
+
+- preview version의 모든 쓰기가 운영 데이터와 세션에 반영된다는 운영 경계를 기술 명세에 명시했다.
+
 ### 비밀번호 재설정 흐름 단순화
 
 #### Added
