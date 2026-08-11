@@ -8,7 +8,6 @@
     "build": "cross-env NODE_ENV=production next build",
     "build:worker": "opennextjs-cloudflare build",
     "deploy": "opennextjs-cloudflare build && opennextjs-cloudflare deploy",
-    "deploy:dev": "opennextjs-cloudflare build && opennextjs-cloudflare upload --preview-alias dev --tag dev",
     "cf:preview": "opennextjs-cloudflare preview",
     "lint": "eslint .",
     "test:date": "node --experimental-strip-types --test lib/date.test.mjs",

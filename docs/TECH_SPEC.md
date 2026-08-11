@@ -26,9 +26,9 @@ Client
 
 - `authon-worker` 하나가 custom domain, 운영 D1과 운영 KV를 사용한다. Wrangler 환경별 Worker나 별도 개발 데이터베이스는 두지 않는다.
 - `main`은 `deploy` 명령으로 현재 production deployment를 갱신한다.
-- `dev`는 `deploy:dev` 명령으로 같은 Worker에 version을 업로드하고 `dev-<worker>.<subdomain>.workers.dev` preview alias에서 확인한다. preview version은 production traffic을 받지 않는다.
-- production과 preview version은 같은 D1·KV·secret을 사용한다. preview에서 로그인, 관리자 작업, 비밀번호 변경이나 데이터 입력을 실행하면 운영 데이터와 세션에 반영된다.
-- Cloudflare Workers Builds는 `main`을 production branch로, 그 밖의 branch를 preview build로 설정하고 OpenNext의 `deploy`/`upload` 명령을 각각 사용한다.
+- 외부에서 접근하는 Worker 주소는 기본 `workers.dev` 주소와 production custom domain뿐이며 두 주소는 같은 활성 production version을 제공한다.
+- preview URL과 non-main branch 자동 원격 build는 사용하지 않는다. `dev`는 production 배포 전 소스 검증용 branch이며 직접 서비스 주소를 갖지 않는다.
+- 모든 원격 요청은 같은 운영 D1·KV·secret을 사용한다.
 
 ## 언어 결정
 

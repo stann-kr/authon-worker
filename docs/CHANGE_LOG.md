@@ -4,6 +4,13 @@
 
 ## 2026-08-11
 
+### Worker 공개 주소 단일화
+
+#### Changed
+
+- dev preview URL과 non-main branch 자동 원격 build를 제거해 별도 개발 주소 없이 기본 Worker 주소와 production custom domain만 제공하도록 정리했다.
+- `dev` branch는 production 배포 전 소스 검증용으로만 유지하며, 기본 Worker 주소는 현재 활성 production version을 계속 제공한다.
+
 ### Cloudflare 단일 Worker 배포 구조
 
 #### Changed
