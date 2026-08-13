@@ -4,6 +4,17 @@
 
 ## 2026-08-13
 
+### Terminal 게스트 동기화 멱등성
+
+#### Changed
+
+- 내부 terminal 동기화 요청은 `terminalRequestId`를 필수로 보내야 한다.
+- 같은 요청 ID와 같은 payload를 재전송하면 새 게스트를 만들지 않고 최초 guest ID를 반환하며, 같은 ID에 다른 payload를 보내면 `409`로 거부한다.
+
+#### Security
+
+- 베뉴와 요청 ID의 원자적 claim을 별도 테이블에 기록해 동시 재시도 10건에서도 Guest가 하나만 생성되도록 했다.
+
 ### 비활성 베뉴 즉시 운영 중지
 
 #### Changed

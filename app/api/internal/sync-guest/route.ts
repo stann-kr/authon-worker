@@ -1,7 +1,8 @@
 import { getCloudflareContext } from "@opennextjs/cloudflare";
-import { drizzle } from "drizzle-orm/d1";
-import { guests } from "@/lib/db/schema";
 import { requireActiveVenueId } from "@/lib/tenant/active-server";
+import {
+  handleTerminalGuestSyncPayload,
+} from "@/lib/internal-sync/terminal-guest-sync";
 
 async function hashSecret(value: string): Promise<ArrayBuffer> {
   return crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
@@ -17,28 +18,6 @@ async function timingSafeEqual(a: string | null, b: string): Promise<boolean> {
     diff |= (aBytes[i] ?? 0) ^ (bBytes[i] ?? 0);
   }
   return diff === 0;
-}
-
-function isShortText(value: unknown, maxLength: number): value is string {
-  return typeof value === "string" && value.trim().length > 0 && value.length <= maxLength;
-}
-
-function isIsoDate(value: unknown): value is string {
-  if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
-  const parsed = new Date(`${value}T00:00:00.000Z`);
-  return !Number.isNaN(parsed.getTime()) && parsed.toISOString().startsWith(value);
-}
-
-function isIsoTimestamp(value: unknown): value is string {
-  if (
-    typeof value !== "string" ||
-    value.length > 40 ||
-    !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?Z$/.test(value)
-  ) {
-    return false;
-  }
-  const parsed = new Date(value);
-  return !Number.isNaN(parsed.getTime());
 }
 
 /**
@@ -76,56 +55,20 @@ export async function POST(request: Request) {
       return Response.json({ ok: false, error: "Endpoint not available" }, { status: 503 });
     }
 
-    const db = drizzle(env.DB);
-    let data: {
-      name?: unknown;
-      email?: unknown;
-      instagram?: unknown;
-      terminalRequestId?: unknown;
-      date?: unknown;
-      createdAt?: unknown;
-    };
+    let rawData: unknown;
 
     try {
-      data = await request.json();
+      rawData = await request.json();
     } catch {
       return Response.json({ ok: false, error: "Invalid request payload" }, { status: 400 });
     }
 
-    if (
-      !isShortText(data?.name, 100) ||
-      !isIsoDate(data?.date) ||
-      (data.email !== undefined && data.email !== null && !isShortText(data.email, 254)) ||
-      (data.instagram !== undefined && data.instagram !== null && !isShortText(data.instagram, 100)) ||
-      (data.terminalRequestId !== undefined && data.terminalRequestId !== null && !isShortText(data.terminalRequestId, 128)) ||
-      (data.createdAt !== undefined && data.createdAt !== null && !isIsoTimestamp(data.createdAt))
-    ) {
-      return Response.json({ ok: false, error: "Invalid request payload" }, { status: 400 });
-    }
-
-    const now = new Date().toISOString();
-    const name = String(data.name).trim();
-    const email = typeof data.email === "string" ? data.email.trim() : null;
-    const instagram = typeof data.instagram === "string" ? data.instagram.trim() : null;
-    const terminalRequestId = typeof data.terminalRequestId === "string" ? data.terminalRequestId.trim() : null;
-    const date = String(data.date);
-    const createdAt = typeof data.createdAt === "string" ? data.createdAt : now;
-
-    await db.insert(guests).values({
-      id: crypto.randomUUID(),
+    const result = await handleTerminalGuestSyncPayload(env.DB, {
       venueId,
-      name,
-      email,
-      instagram,
-      terminalRequestId,
-      source: "terminal",
-      status: "pending",
-      date,
-      createdAt,
-      updatedAt: createdAt,
+      rawPayload: rawData,
+      receivedAt: new Date().toISOString(),
     });
-
-    return Response.json({ ok: true });
+    return Response.json(result.body, { status: result.status });
   } catch (error) {
     console.error("Sync guest error:", error);
     return Response.json({ ok: false, error: "Failed to sync guest" }, { status: 500 });

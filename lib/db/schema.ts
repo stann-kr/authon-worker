@@ -1,5 +1,5 @@
 import { sql } from 'drizzle-orm';
-import { sqliteTable, text, integer, index, uniqueIndex, type AnySQLiteColumn } from 'drizzle-orm/sqlite-core';
+import { sqliteTable, text, integer, index, primaryKey, uniqueIndex, type AnySQLiteColumn } from 'drizzle-orm/sqlite-core';
 
 export const venues = sqliteTable('venues', {
   id: text('id').primaryKey(),
@@ -118,6 +118,17 @@ export const guests = sqliteTable('guests', {
   index('idx_guests_venue_date').on(t.venueId, t.date),
   index('idx_guests_external_link').on(t.externalLinkId),
   index('idx_guests_created_by').on(t.createdByUserId),
+]);
+
+export const terminalGuestSyncRequests = sqliteTable('terminal_guest_sync_requests', {
+  venueId: text('venue_id').notNull().references(() => venues.id),
+  requestId: text('request_id').notNull(),
+  payloadHash: text('payload_hash').notNull(),
+  guestId: text('guest_id').notNull().unique(),
+  createdAt: text('created_at').notNull(),
+}, (t) => [
+  primaryKey({ columns: [t.venueId, t.requestId] }),
+  index('idx_terminal_guest_sync_requests_created').on(t.createdAt),
 ]);
 
 export const checkIns = sqliteTable('check_ins', {
