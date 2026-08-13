@@ -24,6 +24,11 @@ import {
 import { isAccountKind, isRole } from "@/lib/users/policy";
 import { isTrustedMutationOrigin } from "@/lib/auth/request-origin";
 import { hasActiveVenueAccess } from "@/lib/tenant/active-policy";
+import {
+  getRequestId,
+  reportServerError,
+  writeStructuredLog,
+} from "@/lib/observability/structured-log";
 
 const UPDATE_USER_FOR_LOGIN_SQL = `
   UPDATE users
@@ -64,6 +69,7 @@ const SELECT_LATEST_SETUP_CODE_REQUEST_SQL = `
 `;
 
 export async function POST(request: Request) {
+  const requestId = getRequestId(request);
   try {
     if (!isTrustedMutationOrigin(request)) {
       return NextResponse.json(
@@ -188,7 +194,14 @@ export async function POST(request: Request) {
     }
 
     if (!env.JWT_SECRET) {
-      console.error("JWT_SECRET is not configured");
+      await writeStructuredLog("error", {
+        event: "auth.login",
+        requestId,
+        actorId: user.id,
+        venueId: user.venueId,
+        outcome: "unavailable",
+        errorKind: "MissingConfiguration",
+      });
       return NextResponse.json({ code: "SERVER_ERROR", error: "Unable to sign in right now." }, { status: 500 });
     }
 
@@ -285,9 +298,17 @@ export async function POST(request: Request) {
       });
     }
 
+    await writeStructuredLog("info", {
+      event: "auth.login",
+      requestId,
+      actorId: user.id,
+      venueId: user.venueId,
+      outcome: "success",
+    });
+
     return response;
   } catch (error) {
-    console.error("Login error:", error);
+    await reportServerError("auth.login", error, { requestId });
     return NextResponse.json(
       { code: "SERVER_ERROR", error: "Unable to sign in right now." },
       { status: 500 }

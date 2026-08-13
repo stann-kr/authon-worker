@@ -20,6 +20,11 @@ import {
 import { isTrustedMutationOrigin } from "@/lib/auth/request-origin";
 import { getTenantContextForRequest } from "@/lib/tenant/server";
 import { shouldUseSecureAuthCookies } from "@/lib/auth/cookie-policy";
+import {
+  getRequestId,
+  reportServerError,
+  writeStructuredLog,
+} from "@/lib/observability/structured-log";
 
 const STATUS_RESPONSE_HEADERS = {
   "Cache-Control": "private, no-store",
@@ -45,6 +50,7 @@ function expiredResponse() {
  * receipt 부재, decoy, tenant 불일치, 거절 및 만료는 모두 같은 waiting 응답이다.
  */
 export async function GET(request: Request) {
+  const correlationId = getRequestId(request);
   try {
     if (!isTrustedMutationOrigin(request)) {
       return NextResponse.json(
@@ -54,7 +60,12 @@ export async function GET(request: Request) {
     }
     const { env } = getCloudflareContext();
     if (!env.JWT_SECRET) {
-      console.error("JWT_SECRET is not configured");
+      await writeStructuredLog("error", {
+        event: "auth.password_reset_status",
+        requestId: correlationId,
+        outcome: "unavailable",
+        errorKind: "MissingConfiguration",
+      });
       return NextResponse.json(
         { code: "SERVER_ERROR", error: "Unable to check the request right now." },
         { status: 500, headers: STATUS_RESPONSE_HEADERS },
@@ -237,9 +248,11 @@ export async function GET(request: Request) {
     });
 
     return response;
-  } catch {
+  } catch (error: unknown) {
     // Receipt와 expected challenge는 로그에 포함하지 않는다.
-    console.error("Password reset request status failed");
+    await reportServerError("auth.password_reset_status", error, {
+      requestId: correlationId,
+    });
     return NextResponse.json(
       { code: "SERVER_ERROR", error: "Unable to check the request right now." },
       { status: 500, headers: STATUS_RESPONSE_HEADERS },

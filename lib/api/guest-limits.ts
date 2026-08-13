@@ -1,5 +1,7 @@
 "use server";
 
+import { reportServerError } from "@/lib/observability/structured-log";
+
 import { and, desc, eq, ne, sql } from "drizzle-orm";
 import { guestLimitRequests, guests, users } from "../db/schema";
 import {
@@ -88,7 +90,7 @@ export async function fetchMyGuestQuota(date: string): Promise<ApiResponse<Guest
       error: null,
     };
   } catch (error: unknown) {
-    console.error("Failed to load guest quota:", error);
+    await reportServerError("guest_limit.quota.load", error);
     return { data: null, error: "Unable to load guest quota right now." };
   }
 }
@@ -134,7 +136,7 @@ export async function createGuestLimitRequest(params: {
     if (message.includes("UNIQUE constraint failed")) {
       return { data: null, error: "PENDING_REQUEST_EXISTS" };
     }
-    console.error("Failed to create guest limit request:", error);
+    await reportServerError("guest_limit.request.create", error);
     return { data: null, error: "REQUEST_FAILED" };
   }
 }
@@ -168,7 +170,7 @@ export async function fetchGuestLimitRequests(
       error: null,
     };
   } catch (error: unknown) {
-    console.error("Failed to load guest limit requests:", error);
+    await reportServerError("guest_limit.request.list", error);
     return { data: null, error: "Unable to load guest limit requests right now." };
   }
 }
@@ -190,7 +192,7 @@ export async function fetchMyVenuePendingGuestLimitRequestCount(): Promise<ApiRe
 
     return { data: Number(rows[0]?.count ?? 0), error: null };
   } catch (error: unknown) {
-    console.error("Failed to load pending guest limit request count:", error);
+    await reportServerError("guest_limit.request.pending_count", error);
     return { data: null, error: "Unable to load pending guest limit requests right now." };
   }
 }
@@ -253,7 +255,7 @@ export async function decideGuestLimitRequest(params: {
     if (!updated[0]) return { data: null, error: "REQUEST_ALREADY_DECIDED" };
     return { data: toRequest(updated[0]), error: null };
   } catch (error: unknown) {
-    console.error("Failed to decide guest limit request:", error);
+    await reportServerError("guest_limit.request.decide", error);
     return { data: null, error: "DECISION_FAILED" };
   }
 }

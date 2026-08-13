@@ -1,5 +1,7 @@
 "use server";
 
+import { reportServerError } from "@/lib/observability/structured-log";
+
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { and, asc, desc, eq, inArray, isNull, ne, sql, type SQL } from "drizzle-orm";
 import {
@@ -205,7 +207,7 @@ export async function fetchUsersByVenue(
       error: null,
     };
   } catch (error: unknown) {
-    console.error("Failed to fetch user directory:", error);
+    await reportServerError("user.directory", error);
     return { data: null, error: "Unable to load users right now." };
   }
 }
@@ -237,7 +239,7 @@ export async function fetchManagedUsersByVenue(
     const result = await query.orderBy(asc(users.name));
     return { data: result.map(toUser), error: null };
   } catch (error: unknown) {
-    console.error("Failed to fetch managed users:", error);
+    await reportServerError("user.managed_list", error);
     return { data: null, error: "Unable to load users right now." };
   }
 }
@@ -263,7 +265,7 @@ export async function fetchUserAuditEvents(
       error: null,
     };
   } catch (error: unknown) {
-    console.error("Failed to fetch user audit events:", error);
+    await reportServerError("user.audit_list", error);
     return { data: null, error: "Unable to load user activity right now." };
   }
 }
@@ -440,7 +442,7 @@ export async function updateUserProfile(
 
     return { data: await getTargetUser(userId), error: null };
   } catch (error: unknown) {
-    console.error("Failed to update user:", error);
+    await reportServerError("user.update", error);
     return { data: null, error: getUserActionError(error, "UPDATE_FAILED") };
   }
 }
@@ -537,7 +539,7 @@ export async function createUserViaEdge(params: {
 
     return { data: { id }, error: null };
   } catch (error: unknown) {
-    console.error("Failed to create user:", error);
+    await reportServerError("user.create", error);
     return { data: null, error: getUserActionError(error, "UPDATE_FAILED") };
   }
 }
@@ -603,7 +605,7 @@ export async function deleteUserViaEdge(userId: string): Promise<{ error: string
 
     return { error: null };
   } catch (error: unknown) {
-    console.error("Failed to delete user:", error);
+    await reportServerError("user.delete", error);
     return { error: getUserActionError(error, "UPDATE_FAILED") };
   }
 }
@@ -688,7 +690,7 @@ export async function resendInvitationViaEdge(userId: string): Promise<{ error: 
 
     return { error: null };
   } catch (error: unknown) {
-    console.error("Resend invitation error:", error);
+    await reportServerError("user.invitation_resend", error);
     return { error: "Unable to resend invitation right now." };
   }
 }

@@ -1,5 +1,7 @@
 "use server";
 
+import { reportServerError } from "@/lib/observability/structured-log";
+
 import { and, asc, desc, eq, ne, sql } from "drizzle-orm";
 import { externalDjLinks, guestLimitRequests, guests, users } from "../db/schema";
 import { getDb } from "../db/client";
@@ -27,8 +29,8 @@ function isValidDate(value: string): boolean {
   return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
 }
 
-function logRejectedSection(section: string, result: PromiseRejectedResult): void {
-  console.error(`Failed to load ${section} snapshot section:`, result.reason);
+async function logRejectedSection(section: string, result: PromiseRejectedResult): Promise<void> {
+  await reportServerError(`guest_snapshot.${section.replaceAll(" ", "_")}`, result.reason);
 }
 
 async function loadGuestsByDate(
@@ -190,9 +192,9 @@ export async function fetchGuestOperationsSnapshot(
       loadExternalLinksByDate(db, effectiveVenueId, date),
     ]);
 
-    if (guestResult.status === "rejected") logRejectedSection("guests", guestResult);
-    if (userResult.status === "rejected") logRejectedSection("users", userResult);
-    if (linkResult.status === "rejected") logRejectedSection("external links", linkResult);
+    if (guestResult.status === "rejected") await logRejectedSection("guests", guestResult);
+    if (userResult.status === "rejected") await logRejectedSection("users", userResult);
+    if (linkResult.status === "rejected") await logRejectedSection("external links", linkResult);
     const failedSections: GuestOperationsSnapshot["failedSections"] = [];
     if (guestResult.status === "rejected") failedSections.push("guests");
     if (userResult.status === "rejected") failedSections.push("users");
@@ -210,7 +212,7 @@ export async function fetchGuestOperationsSnapshot(
         : null,
     };
   } catch (error: unknown) {
-    console.error("Failed to fetch guest operations snapshot:", error);
+    await reportServerError("guest_snapshot.operations", error);
     return {
       data: null,
       error: "Unable to load guest operations data right now.",
@@ -234,8 +236,8 @@ export async function fetchGuestWorkspaceSnapshot(
       loadGuestQuota(db, actor, date),
     ]);
 
-    if (guestResult.status === "rejected") logRejectedSection("guests", guestResult);
-    if (quotaResult.status === "rejected") logRejectedSection("guest quota", quotaResult);
+    if (guestResult.status === "rejected") await logRejectedSection("guests", guestResult);
+    if (quotaResult.status === "rejected") await logRejectedSection("guest quota", quotaResult);
     const failedSections: GuestWorkspaceSnapshot["failedSections"] = [];
     if (guestResult.status === "rejected") failedSections.push("guests");
     if (quotaResult.status === "rejected") failedSections.push("quota");
@@ -251,7 +253,7 @@ export async function fetchGuestWorkspaceSnapshot(
         : null,
     };
   } catch (error: unknown) {
-    console.error("Failed to fetch guest workspace snapshot:", error);
+    await reportServerError("guest_snapshot.workspace", error);
     return {
       data: null,
       error: "Unable to load guest workspace data right now.",

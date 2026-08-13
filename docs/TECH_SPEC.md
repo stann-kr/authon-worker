@@ -29,6 +29,10 @@ Client
 - 외부에서 접근하는 Worker 주소는 기본 `workers.dev` 주소와 production custom domain뿐이며 두 주소는 같은 활성 production version을 제공한다.
 - preview URL과 non-main branch 자동 원격 build는 사용하지 않는다. `dev`는 production 배포 전 소스 검증용 branch이며 직접 서비스 주소를 갖지 않는다.
 - 모든 원격 요청은 같은 운영 D1·KV·secret을 사용한다.
+- 표준 개발·CI·Docker runtime은 Node 24 / npm 11이다. `npm run verify:release`가 lint, typecheck, 전체 회귀, EN/KO parity, 민감 asset 검사와 Next/OpenNext Worker build를 재현한다.
+- 기본 Compose `web` 서비스는 production Cloudflare credential을 받지 않는다. production deploy와 remote D1 migration은 별도 `ops` profile, 명시적 `:prod`/`:remote` 명령과 `AUTHON_PRODUCTION_INTENT=1`을 함께 요구한다.
+- 적용된 `migrations/`의 manual D1 SQL이 migration authority다. Drizzle generator는 `.docs/generated-migrations/`의 disposable review output만 만들고, CI는 임시 SQLite에서 manual history와 현재 schema의 table·column·foreign key·index 호환성을 검증한다.
+- Worker/server 오류 로그는 event, request ID, actor 비식별 surrogate, venue ID, outcome, error kind만 허용한다. error message·stack·email·credential·SQL 원문은 출력하지 않는다.
 
 ## 언어 결정
 

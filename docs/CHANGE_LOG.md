@@ -4,6 +4,20 @@
 
 ## 2026-08-13
 
+### 재현 가능한 검증과 production 작업 분리
+
+#### Added
+
+- Node 24와 npm 11을 저장소·CI·Docker의 공통 runtime으로 고정하고, clean `npm ci`부터 source 검증과 Next/Worker build까지 실행하는 CI를 추가했다.
+- lint, typecheck, 전체 회귀, EN/KO key·placeholder parity와 민감 asset 검사를 `verify`로 묶고 `verify:release`에서 production artifact까지 한 번에 검증한다.
+- manual D1 migration history와 Drizzle schema를 disposable SQLite에서 비교하는 authority guard, priority route·폐기 경로·민감 asset을 확인하는 Worker artifact smoke를 추가했다.
+- request correlation과 actor 비식별화를 적용하고 raw error·email·credential·SQL을 버리는 structured logger 계약을 추가했다.
+
+#### Changed
+
+- 기본 Docker Compose 개발 서비스에서 Cloudflare account ID와 API token 주입을 제거했다. 승인된 production 작업은 별도 `ops` profile과 `deploy:prod` 명령, 명시적 intent flag를 요구한다.
+- Wrangler와 취약 transitive dependency를 force/major 변경 없이 최소 patch해 전체·production dependency audit를 0건으로 정리했다.
+
 ### 베뉴·날짜 전환 중 비동기 상태 정합성
 
 #### Fixed

@@ -3,6 +3,11 @@ import { requireActiveVenueId } from "@/lib/tenant/active-server";
 import {
   handleTerminalGuestSyncPayload,
 } from "@/lib/internal-sync/terminal-guest-sync";
+import {
+  getRequestId,
+  reportServerError,
+  writeStructuredLog,
+} from "@/lib/observability/structured-log";
 
 async function hashSecret(value: string): Promise<ArrayBuffer> {
   return crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
@@ -27,6 +32,7 @@ async function timingSafeEqual(a: string | null, b: string): Promise<boolean> {
  * 보안: X-Internal-Secret 헤더로 Shared Secret 검증
  */
 export async function POST(request: Request) {
+  const requestId = getRequestId(request);
   try {
     const { env } = getCloudflareContext();
 
@@ -34,19 +40,35 @@ export async function POST(request: Request) {
     // Service Binding 직접 호출이더라도, 외부 노출 경로이므로 시크릿 검증 필수
     const internalSecret = env.INTERNAL_API_SECRET;
     if (!internalSecret) {
-      console.error("[sync-guest] INTERNAL_API_SECRET is not configured — endpoint disabled");
+      await writeStructuredLog("error", {
+        event: "internal.guest_sync",
+        requestId,
+        outcome: "unavailable",
+        errorKind: "MissingConfiguration",
+      });
       return Response.json({ ok: false, error: "Endpoint not available" }, { status: 503 });
     }
 
     const requestSecret = request.headers.get("X-Internal-Secret");
     if (!(await timingSafeEqual(requestSecret, internalSecret))) {
+      await writeStructuredLog("warn", {
+        event: "internal.guest_sync",
+        requestId,
+        outcome: "denied",
+        errorKind: "AuthenticationError",
+      });
       return Response.json({ ok: false, error: "Unauthorized" }, { status: 401 });
     }
 
     // ─── TERMINAL_VENUE_ID 검증 ───────────────────────────────
     const venueId = env.TERMINAL_VENUE_ID;
     if (!venueId) {
-      console.error("[sync-guest] TERMINAL_VENUE_ID is not configured");
+      await writeStructuredLog("error", {
+        event: "internal.guest_sync",
+        requestId,
+        outcome: "unavailable",
+        errorKind: "MissingConfiguration",
+      });
       return Response.json({ ok: false, error: "Endpoint not available" }, { status: 503 });
     }
     try {
@@ -68,9 +90,15 @@ export async function POST(request: Request) {
       rawPayload: rawData,
       receivedAt: new Date().toISOString(),
     });
+    await writeStructuredLog(result.status < 400 ? "info" : "warn", {
+      event: "internal.guest_sync",
+      requestId,
+      venueId,
+      outcome: result.status < 400 ? "success" : result.status === 409 ? "conflict" : "invalid",
+    });
     return Response.json(result.body, { status: result.status });
   } catch (error) {
-    console.error("Sync guest error:", error);
+    await reportServerError("internal.guest_sync", error, { requestId });
     return Response.json({ ok: false, error: "Failed to sync guest" }, { status: 500 });
   }
 }

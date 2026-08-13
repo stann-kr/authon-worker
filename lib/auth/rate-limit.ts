@@ -3,6 +3,7 @@ import {
   decideRateLimit,
   type RateLimitWindowState,
 } from "./rate-limit-policy";
+import { reportServerError } from "@/lib/observability/structured-log";
 
 interface RateLimitOptions {
   namespace: string;
@@ -93,9 +94,9 @@ export async function consumeRateLimitOrDeny(
 ): Promise<RateLimitResult> {
   try {
     return await consumeRateLimit(options);
-  } catch {
+  } catch (error: unknown) {
     // identifier에는 이메일/IP가 포함될 수 있으므로 로그에 남기지 않는다.
-    console.warn(`Rate limit storage unavailable: ${options.namespace}`);
+    await reportServerError("rate_limit.storage", error);
     return {
       allowed: false,
       remaining: 0,

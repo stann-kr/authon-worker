@@ -1,5 +1,7 @@
 "use server";
 
+import { reportServerError } from "@/lib/observability/structured-log";
+
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { eq, and, ne, desc, inArray } from "drizzle-orm";
 import { guests } from "../db/schema";
@@ -100,7 +102,7 @@ export async function fetchGuestsByDate(date: string, venueId?: string): Promise
 
     return { data: result.map((g) => ({ ...g, status: g.status as Guest["status"] })), error: null };
   } catch (error: unknown) {
-    console.error("Failed to fetch guests by date:", error);
+    await reportServerError("guest.list_by_date", error);
     return { data: null, error: "Unable to load guests right now." };
   }
 }
@@ -117,7 +119,7 @@ export async function fetchAllGuests(venueId?: string): Promise<ApiResponse<Gues
 
     return { data: result.map((g) => ({ ...g, status: g.status as Guest["status"] })), error: null };
   } catch (error: unknown) {
-    console.error("Failed to fetch all guests:", error);
+    await reportServerError("guest.list_all", error);
     return { data: null, error: "Unable to load guests right now." };
   }
 }
@@ -335,7 +337,7 @@ export async function createGuests(params: {
 
     return { data: { items: itemResults }, error: null };
   } catch (error: unknown) {
-    console.error("Failed to create guests:", error);
+    await reportServerError("guest.create", error);
     return { data: null, error: "Unable to create guests right now." };
   }
 }
@@ -367,7 +369,7 @@ export async function updateGuestStatus(
     if (!result[0]) throw new Error("Guest is no longer accessible");
     return { data: result[0] ? { ...result[0], status: result[0].status as Guest["status"] } : null, error: null };
   } catch (error: unknown) {
-    console.error("Failed to update guest status:", error);
+    await reportServerError("guest.status_update", error);
     return { data: null, error: "Unable to update guest status right now." };
   }
 }
@@ -415,7 +417,7 @@ export async function deleteGuest(guestId: string): Promise<ApiResponse<Guest>> 
 
     return { data: updated ? { ...updated, status: updated.status as Guest["status"] } : null, error: null };
   } catch (error: unknown) {
-    console.error("Failed to delete guest:", error);
+    await reportServerError("guest.delete", error);
     return { data: null, error: "Unable to delete guest right now." };
   }
 }
@@ -448,7 +450,7 @@ export async function permanentlyDeleteGuest(guestId: string): Promise<{ error: 
     }
     return { error: null };
   } catch (error: unknown) {
-    console.error("Failed to permanently delete guest:", error);
+    await reportServerError("guest.delete_permanent", error);
     return { error: "Unable to permanently delete guest right now." };
   }
 }
@@ -508,7 +510,7 @@ export async function updateGuest(
     if (!result[0]) throw new Error("Guest is no longer accessible");
     return { data: result[0] ? { ...result[0], status: result[0].status as Guest["status"] } : null, error: null };
   } catch (error: unknown) {
-    console.error("Failed to update guest:", error);
+    await reportServerError("guest.update", error);
     return { data: null, error: "Unable to update guest right now." };
   }
 }

@@ -1,4 +1,4 @@
-import { sql } from 'drizzle-orm';
+import { desc, sql } from 'drizzle-orm';
 import { sqliteTable, text, integer, index, primaryKey, uniqueIndex, type AnySQLiteColumn } from 'drizzle-orm/sqlite-core';
 
 export const venues = sqliteTable('venues', {
@@ -90,7 +90,7 @@ export const externalDjLinks = sqliteTable('external_dj_links', {
   deletedBy: text('deleted_by').references(() => users.id),
 }, (t) => [
   index('idx_external_dj_links_venue').on(t.venueId),
-  index('idx_external_links_venue_created').on(t.venueId, t.createdAt),
+  index('idx_external_links_venue_created').on(t.venueId, desc(t.createdAt)),
   index('idx_external_links_venue_deleted_created').on(
     t.venueId,
     t.deletedAt,

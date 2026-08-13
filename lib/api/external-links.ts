@@ -1,5 +1,7 @@
 "use server";
 
+import { reportServerError } from "@/lib/observability/structured-log";
+
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { headers } from "next/headers";
 import { eq, and, ne, desc, inArray, isNull } from "drizzle-orm";
@@ -137,7 +139,7 @@ export async function fetchExternalLinks(venueId: string): Promise<ApiResponse<E
       .orderBy(desc(externalDjLinks.createdAt), desc(externalDjLinks.date));
     return { data: await addGuestUrls(effectiveVenueId, result), error: null };
   } catch (error: unknown) {
-    console.error("Failed to fetch external links:", error);
+    await reportServerError("external_link.list", error);
     return { data: null, error: "Unable to load external links right now." };
   }
 }
@@ -158,7 +160,7 @@ export async function fetchExternalLinksByDate(venueId: string, date: string): P
       .orderBy(desc(externalDjLinks.createdAt));
     return { data: await addGuestUrls(effectiveVenueId, result), error: null };
   } catch (error: unknown) {
-    console.error("Failed to fetch external links by date:", error);
+    await reportServerError("external_link.list_by_date", error);
     return { data: null, error: "Unable to load external links right now." };
   }
 }
@@ -185,7 +187,7 @@ export async function fetchRecentExternalLinks(
       .limit(normalizedLimit);
     return { data: await addGuestUrls(effectiveVenueId, result), error: null };
   } catch (error: unknown) {
-    console.error("Failed to fetch recent external links:", error);
+    await reportServerError("external_link.list_recent", error);
     return { data: null, error: "Unable to load recent external links right now." };
   }
 }
@@ -232,7 +234,7 @@ export async function createExternalLink(link: {
       : null;
     return { data: withGuestUrl, error: null };
   } catch (error: unknown) {
-    console.error("Failed to create external link:", error);
+    await reportServerError("external_link.create", error);
     return { data: null, error: "Unable to create external link right now." };
   }
 }
@@ -287,7 +289,7 @@ export async function deleteExternalLink(linkId: string): Promise<{ error: strin
 
     return { error: null };
   } catch (error: unknown) {
-    console.error("Failed to delete external link:", error);
+    await reportServerError("external_link.delete", error);
     return { error: "Unable to delete external link right now." };
   }
 }
@@ -300,7 +302,7 @@ export async function deactivateExternalLink(linkId: string): Promise<{ error: s
     await db.update(externalDjLinks).set({ active: false }).where(eq(externalDjLinks.id, linkId));
     return { error: null };
   } catch (error: unknown) {
-    console.error("Failed to deactivate external link:", error);
+    await reportServerError("external_link.deactivate", error);
     return { error: "Unable to update external link right now." };
   }
 }
@@ -320,7 +322,7 @@ export async function activateExternalLink(linkId: string): Promise<{ error: str
     await db.update(externalDjLinks).set({ active: true }).where(eq(externalDjLinks.id, linkId));
     return { error: null };
   } catch (error: unknown) {
-    console.error("Failed to activate external link:", error);
+    await reportServerError("external_link.activate", error);
     return { error: "Unable to update external link right now." };
   }
 }
@@ -367,7 +369,7 @@ export async function validateExternalToken(token: string): Promise<ApiResponse<
       error: null,
     };
   } catch (error: unknown) {
-    console.error("Failed to validate external token:", error);
+    await reportServerError("external_link.validate", error);
     return { data: null, error: EXTERNAL_LINK_UNAVAILABLE_ERROR };
   }
 }
@@ -443,7 +445,7 @@ export async function createGuestsViaExternalLink(params: {
       // KV is an availability-sensitive, best-effort shield. D1's atomic link
       // state and capacity predicates remain authoritative if KV is delayed or
       // rejects a same-key write.
-      console.warn("External guest rate limit unavailable; using D1 guards.");
+      await reportServerError("external_link.rate_limit", new Error("Rate limit unavailable"));
     }
     const existingNames = await db
       .select({ name: guests.name })
@@ -602,7 +604,7 @@ export async function createGuestsViaExternalLink(params: {
 
     return { data: { items: itemResults }, error: null };
   } catch (error: unknown) {
-    console.error("Failed to create guests via external link:", error);
+    await reportServerError("external_link.guest_create", error);
     return {
       data: null,
       error: "Unable to register guests right now. Please try again.",
@@ -719,7 +721,7 @@ export async function deleteGuestViaExternalLink(params: {
 
     return { error: null };
   } catch (error: unknown) {
-    console.error("Failed to delete guest via external link:", error);
+    await reportServerError("external_link.guest_delete", error);
     return { error: "Unable to delete guest right now. Please try again." };
   }
 }
