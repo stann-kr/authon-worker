@@ -14,7 +14,7 @@
     "cf:preview": "opennextjs-cloudflare preview",
     "lint": "eslint .",
     "test:date": "node --experimental-strip-types --test lib/date.test.mjs",
-    "test:request": "node --experimental-strip-types --test lib/latest-request.test.mjs lib/route-loading.test.mjs lib/route-transition-events.test.mjs lib/guest-snapshot-policy.test.mjs lib/admin-navigation.test.mjs lib/guests/display-order.test.mjs lib/guests/request-section-state.test.mjs",
+    "test:request": "node --experimental-strip-types --test lib/latest-request.test.mjs lib/polling-coordinator.test.mjs lib/route-loading.test.mjs lib/route-transition-events.test.mjs lib/guest-snapshot-policy.test.mjs lib/admin-navigation.test.mjs lib/guests/display-order.test.mjs lib/guests/request-section-state.test.mjs",
     "test:user-policy": "node --experimental-strip-types --test lib/users/policy.test.mjs",
     "test:external-link-policy": "node --experimental-strip-types --test lib/external-links/domain.test.mjs",
     "test:guest-bulk": "node --experimental-strip-types --test lib/guests/bulk-entry.test.mjs lib/guests/atomic-sql.test.mjs",

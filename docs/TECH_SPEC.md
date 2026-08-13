@@ -136,6 +136,13 @@ Client
 - 기존 링크를 템플릿으로 사용할 때는 DJ·이벤트·정원·언어만 복사하며, ID·token·URL·사용량·생성자·수명주기는 새로 만든다.
 - terminal 동기화는 베뉴 단위 `terminalRequestId`를 필수 idempotency key로 사용한다. 같은 key와 정규화된 payload의 retry는 최초 guest ID를 반환하고, 다른 payload 재사용은 `409`로 거부한다.
 
+## 클라이언트 비동기 상태 원칙
+
+- 베뉴·날짜에 결속된 mutation은 시작 시 scope와 operation ID를 함께 캡처한다. 완료 시 현재 scope와 operation 소유권이 모두 일치할 때만 credential, feedback과 busy 상태를 갱신한다.
+- setup code와 외부 링크 token 같은 일회성 결과는 저장된 scope가 현재 화면과 다르면 render 단계에서 숨기며, 전환 effect에만 삭제를 의존하지 않는다.
+- Guest roster polling은 한 번에 하나만 실행하고 숨김 탭·offline·mutation 중에는 중단한다. 체크인·취소 성공 뒤에는 기존 poll을 무효화하고 권위 있는 roster를 다시 조회한다.
+- route 전환, scope 변경, reject와 abort는 진행 중 작업의 소유권을 폐기하고 현재 작업이 소유한 busy 상태만 해제한다.
+
 ## 데이터 모델 요약
 
 | 테이블 | 설명 |

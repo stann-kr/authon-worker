@@ -5,6 +5,7 @@ import {
   useLocalStorage,
   useGuestPolling,
   useLatestRequestGuard,
+  useScopedOperationGuard,
 } from "../../../lib/hooks";
 import GuestListCard from "../../../components/GuestListCard";
 import GuestSearchInput from "../../../components/GuestSearchInput";
@@ -90,6 +91,9 @@ export default function GuestList({
   const requestScopeKey = `${venueId}:${selectedDate}`;
   const requestGuard = useLatestRequestGuard();
   const pollingGuard = useLatestRequestGuard();
+  const mutationGuard = useScopedOperationGuard();
+  const currentScopeKeyRef = useRef(requestScopeKey);
+  currentScopeKeyRef.current = requestScopeKey;
 
   useEffect(() => {
     if (!isFetching && loadedScopeKey === requestScopeKey) {
@@ -173,30 +177,56 @@ export default function GuestList({
     }
   }, [loadedScopeKey, pollingGuard, requestScopeKey, selectedDate, venueId]);
 
-  useGuestPolling(pollGuests, 15000, !!venueId);
+  const pollingCoordinator = useGuestPolling(pollGuests, 15000, !!venueId);
+
+  useEffect(() => {
+    mutationGuard.invalidateOperations();
+    pollingGuard.invalidateRequests();
+    pollingCoordinator.clearSuspensions();
+    setLoadingStates({});
+    setFeedback(null);
+  }, [mutationGuard, pollingCoordinator, pollingGuard, requestScopeKey]);
 
   const handleStatusChange = async (
     id: string,
     newStatus: Guest["status"],
     action: string,
   ) => {
+    const operationScopeKey = requestScopeKey;
+    const busyKey = `${id}_${action}`;
+    const operation = mutationGuard.beginOperation(
+      operationScopeKey,
+      busyKey,
+    );
+    const releasePolling = pollingCoordinator.suspend();
     pollingGuard.invalidateRequests();
-    setLoadingStates((prev) => ({ ...prev, [`${id}_${action}`]: true }));
+    setLoadingStates((prev) => ({ ...prev, [busyKey]: true }));
 
-    const { data, error } =
-      newStatus === "deleted"
-        ? await deleteGuest(id)
-        : await updateGuestStatus(id, newStatus);
+    try {
+      const { data, error } =
+        newStatus === "deleted"
+          ? await deleteGuest(id)
+          : await updateGuestStatus(id, newStatus);
 
-    if (!error && data) {
-      setGuests((prev) => prev.map((g) => (g.id === id ? data : g)));
-      setFeedback(null);
-    } else {
+      if (!operation.isCurrent(currentScopeKeyRef.current)) return;
+      if (!error && data) {
+        setGuests((prev) => prev.map((guest) => (guest.id === id ? data : guest)));
+        setFeedback(null);
+        await loadData();
+      } else {
+        console.error("Failed to update guest status:", error);
+        setFeedback(doorT("updateFailed"));
+      }
+    } catch (error) {
+      if (!operation.isCurrent(currentScopeKeyRef.current)) return;
       console.error("Failed to update guest status:", error);
       setFeedback(doorT("updateFailed"));
+    } finally {
+      releasePolling();
+      if (operation.finish(currentScopeKeyRef.current)) {
+        setLoadingStates((prev) => ({ ...prev, [busyKey]: false }));
+      }
     }
-
-    setLoadingStates((prev) => ({ ...prev, [`${id}_${action}`]: false }));
   };
 
   const getContributor = (guest: Guest): {

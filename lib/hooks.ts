@@ -1,8 +1,14 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import {
   createLatestRequestGuard,
+  createScopedOperationGuard,
   type LatestRequestGuard,
+  type ScopedOperationGuard,
 } from "./latest-request";
+import {
+  createPollingCoordinator,
+  type PollingCoordinator,
+} from "./polling-coordinator";
 import { subscribeToRouteTransitionStart } from "./route-transition-events";
 
 /**
@@ -43,18 +49,60 @@ export function useLocalStorage<T>(key: string, initialValue: T) {
 /**
  * 주기적으로 게스트 목록을 갱신하는 폴링 훅
  */
-export function useGuestPolling(fetchFn: () => Promise<void>, intervalMs: number = 15000, active: boolean = true) {
+export function useGuestPolling(
+  fetchFn: () => Promise<void>,
+  intervalMs: number = 15000,
+  active: boolean = true,
+): PollingCoordinator {
+  const [coordinator] = useState(createPollingCoordinator);
+  const fetchRef = useRef(fetchFn);
+
   useEffect(() => {
-    if (!active) return;
-    const interval = setInterval(async () => {
-      try {
-        await fetchFn();
-      } catch {
+    fetchRef.current = fetchFn;
+  }, [fetchFn]);
+
+  useEffect(() => {
+    const isAvailable = () =>
+      active &&
+      document.visibilityState === "visible" &&
+      navigator.onLine !== false;
+    const runPoll = () => {
+      void coordinator.run(async () => fetchRef.current()).catch(() => {
         // Silent fail for polling
-      }
-    }, intervalMs);
-    return () => clearInterval(interval);
-  }, [fetchFn, intervalMs, active]);
+      });
+    };
+    const syncAvailability = (refreshWhenAvailable: boolean) => {
+      const available = isAvailable();
+      coordinator.setEnabled(available);
+      if (available && refreshWhenAvailable) runPoll();
+    };
+
+    syncAvailability(false);
+    const interval = window.setInterval(runPoll, intervalMs);
+    const handleVisibilityChange = () => syncAvailability(true);
+    const handleOnline = () => syncAvailability(true);
+    const handleOffline = () => syncAvailability(false);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    window.addEventListener("online", handleOnline);
+    window.addEventListener("offline", handleOffline);
+
+    return () => {
+      window.clearInterval(interval);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      window.removeEventListener("online", handleOnline);
+      window.removeEventListener("offline", handleOffline);
+      coordinator.setEnabled(false);
+    };
+  }, [active, coordinator, intervalMs]);
+
+  useEffect(
+    () => () => {
+      coordinator.dispose();
+    },
+    [coordinator],
+  );
+
+  return coordinator;
 }
 
 /**
@@ -72,6 +120,26 @@ export function useLatestRequestGuard(): LatestRequestGuard {
     return () => {
       unsubscribe();
       guard.invalidateRequests();
+    };
+  }, [guard]);
+
+  return guard;
+}
+
+/**
+ * mutation 시작 scope와 operation id를 캡처하고 route 전환/unmount 시 폐기합니다.
+ */
+export function useScopedOperationGuard(): ScopedOperationGuard {
+  const [guard] = useState(createScopedOperationGuard);
+
+  useEffect(() => {
+    const unsubscribe = subscribeToRouteTransitionStart(
+      () => guard.invalidateOperations(),
+    );
+
+    return () => {
+      unsubscribe();
+      guard.invalidateOperations();
     };
   }, [guard]);
 

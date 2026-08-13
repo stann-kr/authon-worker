@@ -16,7 +16,10 @@ import OperationalSectionNav from "../../../components/OperationalSectionNav";
 import ConfirmDialog from "../../../components/ConfirmDialog";
 import Button from "../../../components/Button";
 import { useSectionLoadingTask } from "../../../components/RouteTransitionProvider";
-import { useLatestRequestGuard } from "../../../lib/hooks";
+import {
+  useLatestRequestGuard,
+  useScopedOperationGuard,
+} from "../../../lib/hooks";
 import { formatDateDisplay } from "../../../lib/date";
 import {
   fetchExternalLinksByDate,
@@ -67,6 +70,7 @@ interface LinkFormValidationError {
 
 interface LinkActionFeedback {
   id: string;
+  operationId: number;
   result: Extract<ExternalLinkShareResult, "shared" | "copied">;
 }
 
@@ -120,6 +124,7 @@ export default function LinkManagement({
   const [generatedLink, setGeneratedLink] = useState<ExternalDJLink | null>(
     null,
   );
+  const [generatedLinkScopeKey, setGeneratedLinkScopeKey] = useState("");
   const [isGenerating, setIsGenerating] = useState(false);
   const [isGeneratedLinkActionPending, setIsGeneratedLinkActionPending] =
     useState(false);
@@ -134,7 +139,9 @@ export default function LinkManagement({
     [key: string]: boolean;
   }>({});
   const [error, setError] = useState<string | null>(null);
+  const [errorScopeKey, setErrorScopeKey] = useState("");
   const [success, setSuccess] = useState<string | null>(null);
+  const [successScopeKey, setSuccessScopeKey] = useState("");
   const [linkActionToast, setLinkActionToast] = useState<string | null>(null);
   const [templateNotice, setTemplateNotice] = useState<string | null>(null);
   const [formValidationError, setFormValidationError] =
@@ -150,6 +157,8 @@ export default function LinkManagement({
   const generatedLinkPanelRef = useRef<HTMLDivElement>(null);
   const shouldFocusTemplateDateRef = useRef(false);
   const shouldFocusGeneratedLinkRef = useRef(false);
+  const activeCreateOperationIdRef = useRef<number | null>(null);
+  const linkActionToastOwnerRef = useRef<number | null>(null);
 
   // 로딩 중 이전 데이터를 유지하여 화면 깜빡임 방지
   const displayCacheRef = useRef<{ scopeKey: string; links: ExternalDJLink[] }>({
@@ -168,7 +177,52 @@ export default function LinkManagement({
   const requestScopeKey = `${venueId}:${manageScope}:${
     manageScope === "recent" ? recentLimit : selectedDate
   }`;
+  const credentialScopeKey = `${venueId}:create:${formData.date}`;
   const requestGuard = useLatestRequestGuard();
+  const linkMutationGuard = useScopedOperationGuard();
+  const createOperationGuard = useScopedOperationGuard();
+  const shareOperationGuard = useScopedOperationGuard();
+  const currentRequestScopeKeyRef = useRef(requestScopeKey);
+  const currentCredentialScopeKeyRef = useRef(credentialScopeKey);
+  currentRequestScopeKeyRef.current = requestScopeKey;
+  currentCredentialScopeKeyRef.current = credentialScopeKey;
+  const scopedGeneratedLink =
+    generatedLinkScopeKey === credentialScopeKey ? generatedLink : null;
+  const currentMessageScopeKey =
+    activeTab === "create" ? credentialScopeKey : requestScopeKey;
+  const scopedError = errorScopeKey === currentMessageScopeKey ? error : null;
+  const scopedSuccess =
+    successScopeKey === currentMessageScopeKey ? success : null;
+
+  useEffect(() => {
+    requestGuard.invalidateRequests();
+    linkMutationGuard.invalidateOperations();
+    shareOperationGuard.invalidateOperations();
+    setLoadingStates({});
+    setPendingDeleteLink(null);
+    setPendingDeactivateLink(null);
+    setLinkActionFeedback(null);
+    setError(null);
+    setErrorScopeKey("");
+    setSuccess(null);
+    setSuccessScopeKey("");
+  }, [linkMutationGuard, requestGuard, requestScopeKey, shareOperationGuard]);
+
+  useEffect(() => {
+    createOperationGuard.invalidateOperations();
+    shareOperationGuard.invalidateOperations();
+    activeCreateOperationIdRef.current = null;
+    linkActionToastOwnerRef.current = null;
+    shouldFocusGeneratedLinkRef.current = false;
+    setIsGenerating(false);
+    setIsGeneratedLinkActionPending(false);
+    setGeneratedLink(null);
+    setGeneratedLinkScopeKey("");
+    setLinkActionToast(null);
+    setError(null);
+    setErrorScopeKey("");
+    setFormValidationError(null);
+  }, [createOperationGuard, credentialScopeKey, shareOperationGuard]);
 
   useEffect(() => {
     if (!isFetching && loadedScopeKey === requestScopeKey) {
@@ -194,6 +248,7 @@ export default function LinkManagement({
   }, [selectedDate]);
 
   const loadLinks = useCallback(async () => {
+    if (currentRequestScopeKeyRef.current !== requestScopeKey) return;
     const isLatestRequest = requestGuard.beginRequest();
     if (!venueId) {
       setLinks([]);
@@ -208,21 +263,32 @@ export default function LinkManagement({
         manageScope === "recent"
           ? await fetchRecentExternalLinks(venueId, recentLimit)
           : await fetchExternalLinksByDate(venueId, selectedDate);
-      if (!isLatestRequest()) return;
+      if (
+        !isLatestRequest() ||
+        currentRequestScopeKeyRef.current !== requestScopeKey
+      ) return;
       if (error) {
         console.error("Failed to load links:", error);
         setError(error);
+        setErrorScopeKey(requestScopeKey);
       }
       setLinks(data ?? []);
       setLoadedScopeKey(requestScopeKey);
     } catch (err) {
-      if (!isLatestRequest()) return;
+      if (
+        !isLatestRequest() ||
+        currentRequestScopeKeyRef.current !== requestScopeKey
+      ) return;
       console.error("Failed to load links:", err);
       setLinks([]);
       setLoadedScopeKey(requestScopeKey);
       setError(t("loadFailed"));
+      setErrorScopeKey(requestScopeKey);
     } finally {
-      if (isLatestRequest()) setIsFetching(false);
+      if (
+        isLatestRequest() &&
+        currentRequestScopeKeyRef.current === requestScopeKey
+      ) setIsFetching(false);
     }
   }, [manageScope, recentLimit, requestGuard, requestScopeKey, selectedDate, t, venueId]);
 
@@ -251,13 +317,13 @@ export default function LinkManagement({
   }, [activeTab, templateNotice]);
 
   useEffect(() => {
-    if (!generatedLink || !shouldFocusGeneratedLinkRef.current) return;
+    if (!scopedGeneratedLink || !shouldFocusGeneratedLinkRef.current) return;
     shouldFocusGeneratedLinkRef.current = false;
     const frameId = window.requestAnimationFrame(() => {
       generatedLinkPanelRef.current?.focus();
     });
     return () => window.cancelAnimationFrame(frameId);
-  }, [generatedLink]);
+  }, [scopedGeneratedLink]);
 
   const clearFormFieldError = (field: LinkFormField) => {
     setFormValidationError((current) =>
@@ -298,6 +364,7 @@ export default function LinkManagement({
     if (!validationError) return false;
 
     setError(null);
+    setErrorScopeKey("");
     setFormValidationError(validationError);
     focusFormField(validationError.field);
     return true;
@@ -311,7 +378,7 @@ export default function LinkManagement({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!venueId || isGenerating) return;
+    if (!venueId || activeCreateOperationIdRef.current !== null) return;
 
     const prepared = prepareExternalLinkCreateInput({
       date: formData.date,
@@ -323,31 +390,42 @@ export default function LinkManagement({
     if (prepared.error || !prepared.draft) {
       if (!applyFormValidationError(prepared.error ?? "INVALID_INPUT")) {
         setError(t("invalidCreateInput"));
+        setErrorScopeKey(credentialScopeKey);
       }
       return;
     }
 
+    const operationVenueId = venueId;
+    const operationDate = selectedDate;
+    const operation = createOperationGuard.beginOperation(
+      credentialScopeKey,
+      "create-link",
+    );
+    activeCreateOperationIdRef.current = operation.id;
     setIsGenerating(true);
     setError(null);
     setFormValidationError(null);
 
     try {
       const { data, error } = await createExternalLink({
-        venueId,
+        venueId: operationVenueId,
         ...prepared.draft,
       });
 
+      if (!operation.isCurrent(currentCredentialScopeKeyRef.current)) return;
       if (error) {
         console.error("Failed to create link:", error);
         if (!applyFormValidationError(error)) {
           setError(t("createFailed"));
+          setErrorScopeKey(operation.scopeKey);
         }
       } else if (data) {
         shouldFocusGeneratedLinkRef.current = true;
         setGeneratedLink(data);
+        setGeneratedLinkScopeKey(operation.scopeKey);
         setTemplateNotice(null);
         setFormData({
-          date: selectedDate,
+          date: operationDate,
           dj: "",
           event: "",
           maxGuests: 5,
@@ -355,14 +433,29 @@ export default function LinkManagement({
         });
       }
     } catch (createError) {
+      if (!operation.isCurrent(currentCredentialScopeKeyRef.current)) return;
       console.error("Failed to create link:", createError);
       setError(t("createFailed"));
+      setErrorScopeKey(operation.scopeKey);
     } finally {
-      setIsGenerating(false);
+      if (activeCreateOperationIdRef.current === operation.id) {
+        activeCreateOperationIdRef.current = null;
+        if (operation.finish(currentCredentialScopeKeyRef.current)) {
+          setIsGenerating(false);
+        }
+      }
     }
   };
 
   const shareOrCopyLink = async (url: string, id?: string) => {
+    const operationScopeKey = id ? requestScopeKey : credentialScopeKey;
+    const operationScopeRef = id
+      ? currentRequestScopeKeyRef
+      : currentCredentialScopeKeyRef;
+    const operation = shareOperationGuard.beginOperation(
+      operationScopeKey,
+      `share:${id ?? "generated"}`,
+    );
     if (id) {
       setLoadingStates((prev) => ({ ...prev, [`share_${id}`]: true }));
     } else {
@@ -388,15 +481,19 @@ export default function LinkManagement({
       },
     });
 
+    if (!operation.isCurrent(operationScopeRef.current)) return;
     if (result === "shared" || result === "copied") {
       if (id) {
-        setLinkActionFeedback({ id, result });
+        setLinkActionFeedback({ id, operationId: operation.id, result });
         window.setTimeout(() => {
           setLinkActionFeedback((current) =>
-            current?.id === id ? null : current,
+            current?.id === id && current.operationId === operation.id
+              ? null
+              : current,
           );
         }, 2000);
       }
+      linkActionToastOwnerRef.current = operation.id;
       setLinkActionToast(
         result === "shared"
           ? id
@@ -406,15 +503,23 @@ export default function LinkManagement({
             ? t("guestLinkCopied")
             : t("generatedLinkCopied"),
       );
-      window.setTimeout(() => setLinkActionToast(null), 2200);
+      window.setTimeout(() => {
+        if (linkActionToastOwnerRef.current === operation.id) {
+          linkActionToastOwnerRef.current = null;
+          setLinkActionToast(null);
+        }
+      }, 2200);
     } else if (result === "failed") {
       setError(t("shareFailed"));
+      setErrorScopeKey(operation.scopeKey);
     }
 
-    if (id) {
-      setLoadingStates((prev) => ({ ...prev, [`share_${id}`]: false }));
-    } else {
-      setIsGeneratedLinkActionPending(false);
+    if (operation.finish(operationScopeRef.current)) {
+      if (id) {
+        setLoadingStates((prev) => ({ ...prev, [`share_${id}`]: false }));
+      } else {
+        setIsGeneratedLinkActionPending(false);
+      }
     }
   };
 
@@ -428,6 +533,7 @@ export default function LinkManagement({
       localeMode: draft.localeMode,
     });
     setGeneratedLink(null);
+    setGeneratedLinkScopeKey("");
     setError(null);
     setFormValidationError(null);
     setSuccess(null);
@@ -437,23 +543,40 @@ export default function LinkManagement({
   };
 
   const handleDeleteLink = async (id: string) => {
+    const operation = linkMutationGuard.beginOperation(
+      requestScopeKey,
+      `delete:${id}`,
+    );
     requestGuard.invalidateRequests();
     setIsFetching(false);
     setError(null);
     setSuccess(null);
     setLoadingStates((prev) => ({ ...prev, [`delete_${id}`]: true }));
-    const { error } = await deleteExternalLink(id);
-    if (error) {
-      console.error("Failed to delete link:", error);
+    try {
+      const { error } = await deleteExternalLink(id);
+      if (!operation.isCurrent(currentRequestScopeKeyRef.current)) return;
+      if (error) {
+        console.error("Failed to delete link:", error);
+        setError(t("deleteFailed"));
+        setErrorScopeKey(operation.scopeKey);
+      } else {
+        requestGuard.invalidateRequests();
+        setIsFetching(false);
+        setLinks((prev) => prev.filter((link) => link.id !== id));
+        setSuccess(t("deleted"));
+        setSuccessScopeKey(operation.scopeKey);
+      }
+    } catch (deleteError) {
+      if (!operation.isCurrent(currentRequestScopeKeyRef.current)) return;
+      console.error("Failed to delete link:", deleteError);
       setError(t("deleteFailed"));
-    } else {
-      requestGuard.invalidateRequests();
-      setIsFetching(false);
-      setLinks((prev) => prev.filter((link) => link.id !== id));
-      setSuccess(t("deleted"));
+      setErrorScopeKey(operation.scopeKey);
+    } finally {
+      if (operation.finish(currentRequestScopeKeyRef.current)) {
+        setLoadingStates((prev) => ({ ...prev, [`delete_${id}`]: false }));
+        setPendingDeleteLink(null);
+      }
     }
-    setLoadingStates((prev) => ({ ...prev, [`delete_${id}`]: false }));
-    setPendingDeleteLink(null);
   };
 
   const requestDeleteLink = (link: ExternalDJLink) => {
@@ -463,42 +586,88 @@ export default function LinkManagement({
   };
 
   const handleDeactivateLink = async (id: string) => {
+    const operation = linkMutationGuard.beginOperation(
+      requestScopeKey,
+      `deactivate:${id}`,
+    );
+    requestGuard.invalidateRequests();
+    setIsFetching(false);
     setError(null);
     setSuccess(null);
 
     setLoadingStates((prev) => ({ ...prev, [`deactivate_${id}`]: true }));
-    const { error } = await deactivateExternalLink(id);
-    if (error) {
-      console.error("Failed to deactivate link:", error);
+    try {
+      const { error } = await deactivateExternalLink(id);
+      if (!operation.isCurrent(currentRequestScopeKeyRef.current)) return;
+      if (error) {
+        console.error("Failed to deactivate link:", error);
+        setError(t("deactivateFailed"));
+        setErrorScopeKey(operation.scopeKey);
+      } else {
+        setLinks((prev) =>
+          prev.map((link) =>
+            link.id === id ? { ...link, active: false } : link,
+          ),
+        );
+        setSuccess(t("deactivated"));
+        setSuccessScopeKey(operation.scopeKey);
+      }
+    } catch (deactivateError) {
+      if (!operation.isCurrent(currentRequestScopeKeyRef.current)) return;
+      console.error("Failed to deactivate link:", deactivateError);
       setError(t("deactivateFailed"));
-    } else {
-      setLinks((prev) =>
-        prev.map((link) =>
-          link.id === id ? { ...link, active: false } : link,
-        ),
-      );
-      setSuccess(t("deactivated"));
+      setErrorScopeKey(operation.scopeKey);
+    } finally {
+      if (operation.finish(currentRequestScopeKeyRef.current)) {
+        setLoadingStates((prev) => ({
+          ...prev,
+          [`deactivate_${id}`]: false,
+        }));
+        setPendingDeactivateLink(null);
+      }
     }
-    setLoadingStates((prev) => ({ ...prev, [`deactivate_${id}`]: false }));
-    setPendingDeactivateLink(null);
   };
 
   const handleActivateLink = async (id: string) => {
+    const operation = linkMutationGuard.beginOperation(
+      requestScopeKey,
+      `activate:${id}`,
+    );
+    requestGuard.invalidateRequests();
+    setIsFetching(false);
     setError(null);
     setSuccess(null);
 
     setLoadingStates((prev) => ({ ...prev, [`activate_${id}`]: true }));
-    const { error } = await activateExternalLink(id);
-    if (error) {
-      console.error("Failed to activate link:", error);
+    try {
+      const { error } = await activateExternalLink(id);
+      if (!operation.isCurrent(currentRequestScopeKeyRef.current)) return;
+      if (error) {
+        console.error("Failed to activate link:", error);
+        setError(t("reactivateFailed"));
+        setErrorScopeKey(operation.scopeKey);
+      } else {
+        setLinks((prev) =>
+          prev.map((link) =>
+            link.id === id ? { ...link, active: true } : link,
+          ),
+        );
+        setSuccess(t("reactivated"));
+        setSuccessScopeKey(operation.scopeKey);
+      }
+    } catch (activateError) {
+      if (!operation.isCurrent(currentRequestScopeKeyRef.current)) return;
+      console.error("Failed to activate link:", activateError);
       setError(t("reactivateFailed"));
-    } else {
-      setLinks((prev) =>
-        prev.map((link) => (link.id === id ? { ...link, active: true } : link)),
-      );
-      setSuccess(t("reactivated"));
+      setErrorScopeKey(operation.scopeKey);
+    } finally {
+      if (operation.finish(currentRequestScopeKeyRef.current)) {
+        setLoadingStates((prev) => ({
+          ...prev,
+          [`activate_${id}`]: false,
+        }));
+      }
     }
-    setLoadingStates((prev) => ({ ...prev, [`activate_${id}`]: false }));
   };
 
   const dashboardStats = useMemo(
@@ -643,7 +812,7 @@ export default function LinkManagement({
                   className="mb-4"
                 />
               )}
-              {error && <Alert type="error" message={error} className="mb-4" />}
+              {scopedError && <Alert type="error" message={scopedError} className="mb-4" />}
 
               <form
                 onSubmit={handleSubmit}
@@ -917,7 +1086,7 @@ export default function LinkManagement({
               </form>
             </div>
 
-            {generatedLink && (
+            {scopedGeneratedLink && (
               <div
                 ref={generatedLinkPanelRef}
                 className="app-panel p-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-border-focus sm:p-6"
@@ -934,11 +1103,11 @@ export default function LinkManagement({
                     id="generated-link-summary"
                     className="break-words font-mono text-xs text-text-muted"
                   >
-                    {generatedLink.djName} / {generatedLink.event} | {t("max")}:{" "}
-                    {generatedLink.maxGuests}
+                    {scopedGeneratedLink.djName} / {scopedGeneratedLink.event} | {t("max")}:{" "}
+                    {scopedGeneratedLink.maxGuests}
                   </p>
                   <p className="mt-1 font-mono text-xs text-text-dim">
-                    {t("language")}: {generatedLink.localeMode === "auto" ? t("auto") : generatedLink.localeMode.toUpperCase()}
+                    {t("language")}: {scopedGeneratedLink.localeMode === "auto" ? t("auto") : scopedGeneratedLink.localeMode.toUpperCase()}
                   </p>
                 </div>
 
@@ -947,7 +1116,7 @@ export default function LinkManagement({
                     {t("guestUrl")}
                   </div>
                   <div className="font-mono text-sm tracking-wider text-text-heading break-all">
-                    {getGuestPageUrl(generatedLink.token, generatedLink.guestUrl)}
+                    {getGuestPageUrl(scopedGeneratedLink.token, scopedGeneratedLink.guestUrl)}
                   </div>
                 </div>
 
@@ -956,8 +1125,8 @@ export default function LinkManagement({
                   onClick={() =>
                     shareOrCopyLink(
                       getGuestPageUrl(
-                        generatedLink.token,
-                        generatedLink.guestUrl,
+                        scopedGeneratedLink.token,
+                        scopedGeneratedLink.guestUrl,
                       ),
                     )
                   }
@@ -979,8 +1148,8 @@ export default function LinkManagement({
 
         {activeTab === "manage" && (
           <div className="space-y-4">
-            {error && <Alert type="error" message={error} />}
-            {success && <Alert type="success" message={success} />}
+            {scopedError && <Alert type="error" message={scopedError} />}
+            {scopedSuccess && <Alert type="success" message={scopedSuccess} />}
 
             <div className="app-panel">
               <PanelHeader
