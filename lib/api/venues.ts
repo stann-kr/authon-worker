@@ -7,6 +7,7 @@ import { requireRole } from "../auth/server";
 import { getDb } from "../db/client";
 import { isPlatformHostname, normalizeHostname } from "../tenant/host";
 import { DEFAULT_LOCALE, isLocale, type Locale } from "@/i18n/config";
+import { isInactiveVenueRecoveryUpdate } from "@/lib/tenant/active-policy";
 import {
   DEFAULT_CLOSING_TIME,
   DEFAULT_OPENING_TIME,
@@ -275,6 +276,9 @@ export async function updateVenue(
     const db = getDb();
     const currentVenue = await loadVenue(db, id);
     if (!currentVenue) throw new Error("Venue not found");
+    if (!isInactiveVenueRecoveryUpdate(currentVenue.active, updates)) {
+      throw new Error("Inactive venue can only be reactivated");
+    }
     const timeSettings = {
       timezone: updates.timezone?.trim() || currentVenue.timezone,
       openingTime: updates.openingTime || currentVenue.openingTime,

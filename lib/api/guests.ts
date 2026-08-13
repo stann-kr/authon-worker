@@ -12,6 +12,7 @@ import {
 } from "./types";
 import { requireAccess, requireAuth, requireRole, type SessionUser } from "../auth/server";
 import { getDb } from "../db/client";
+import { requireActiveVenueId } from "../tenant/active-server";
 import { hasAccess } from "@/lib/users/policy";
 import {
   MAX_BULK_WRITE_NAMES,
@@ -55,11 +56,15 @@ function parseBulkGuestCreateInput(value: unknown): {
   };
 }
 
-function scopedVenueId(user: SessionUser, requestedVenueId?: string | null): string | undefined {
-  if (user.role === "super_admin") return requestedVenueId ?? undefined;
-  if (!user.venueId) throw new Error("Forbidden");
-  if (requestedVenueId && requestedVenueId !== user.venueId) throw new Error("Forbidden");
-  return user.venueId;
+async function scopedVenueId(
+  user: SessionUser,
+  requestedVenueId?: string | null,
+): Promise<string | undefined> {
+  const venueId = user.role === "super_admin" ? requestedVenueId ?? undefined : user.venueId;
+  if (user.role !== "super_admin" && (!venueId || (requestedVenueId && requestedVenueId !== venueId))) {
+    throw new Error("Forbidden");
+  }
+  return venueId ? requireActiveVenueId(venueId) : undefined;
 }
 
 async function getAccessibleGuest(db: Db, user: SessionUser, guestId: string) {
@@ -77,6 +82,7 @@ async function getAccessibleGuest(db: Db, user: SessionUser, guestId: string) {
   const guest = rows[0];
   if (!guest) throw new Error("Guest not found");
   if (user.role !== "super_admin" && guest.venueId !== user.venueId) throw new Error("Forbidden");
+  await requireActiveVenueId(guest.venueId);
   return guest;
 }
 
@@ -84,7 +90,7 @@ export async function fetchGuestsByDate(date: string, venueId?: string): Promise
   try {
     const user = await requireAccess("door");
     const db = getDb();
-    const effectiveVenueId = scopedVenueId(user, venueId);
+    const effectiveVenueId = await scopedVenueId(user, venueId);
     const conditions = [eq(guests.date, date), ne(guests.status, "deleted")];
     if (effectiveVenueId) conditions.push(eq(guests.venueId, effectiveVenueId));
 
@@ -103,7 +109,7 @@ export async function fetchAllGuests(venueId?: string): Promise<ApiResponse<Gues
   try {
     const user = await requireAccess("admin");
     const db = getDb();
-    const effectiveVenueId = scopedVenueId(user, venueId);
+    const effectiveVenueId = await scopedVenueId(user, venueId);
     const baseQuery = db.select().from(guests);
     const result = await (
       effectiveVenueId ? baseQuery.where(eq(guests.venueId, effectiveVenueId)) : baseQuery
@@ -165,7 +171,7 @@ export async function createGuests(params: {
   try {
     const user = await requireAccess("guest");
     const db = getDb();
-    const effectiveVenueId = scopedVenueId(user, params.venueId);
+    const effectiveVenueId = await scopedVenueId(user, params.venueId);
     if (!effectiveVenueId) throw new Error("Venue is required");
     if (!isValidDate(params.date)) return { data: null, error: "INVALID_DATE" };
     if (!Array.isArray(params.items) || params.items.length > MAX_BULK_WRITE_NAMES) {
@@ -250,6 +256,7 @@ export async function createGuests(params: {
         params.date,
         now,
         now,
+        effectiveVenueId,
         pending.allowDuplicate ? 1 : 0,
         effectiveVenueId,
         user.id,
@@ -481,7 +488,7 @@ export async function updateGuest(
       updateData.date = updates.date;
     }
     if (updates.venueId !== undefined) {
-      const effectiveVenueId = scopedVenueId(user, updates.venueId);
+      const effectiveVenueId = await scopedVenueId(user, updates.venueId);
       if (!effectiveVenueId) throw new Error("Venue is required");
       updateData.venueId = effectiveVenueId;
     }

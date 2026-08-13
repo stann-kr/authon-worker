@@ -1,6 +1,7 @@
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { drizzle } from "drizzle-orm/d1";
 import { guests } from "@/lib/db/schema";
+import { requireActiveVenueId } from "@/lib/tenant/active-server";
 
 async function hashSecret(value: string): Promise<ArrayBuffer> {
   return crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
@@ -67,6 +68,11 @@ export async function POST(request: Request) {
     const venueId = env.TERMINAL_VENUE_ID;
     if (!venueId) {
       console.error("[sync-guest] TERMINAL_VENUE_ID is not configured");
+      return Response.json({ ok: false, error: "Endpoint not available" }, { status: 503 });
+    }
+    try {
+      await requireActiveVenueId(venueId);
+    } catch {
       return Response.json({ ok: false, error: "Endpoint not available" }, { status: 503 });
     }
 

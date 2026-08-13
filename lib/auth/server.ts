@@ -2,9 +2,10 @@ import { cookies } from "next/headers";
 import { jwtVerify } from "jose";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { eq } from "drizzle-orm";
-import { users } from "../db/schema";
+import { users, venues } from "../db/schema";
 import { getDb } from "../db/client";
 import { getRequestTenantContext } from "../tenant/server";
+import { hasActiveVenueAccess } from "../tenant/active-policy";
 import { isLocale, type Locale } from "@/i18n/config";
 import {
   hasAccess,
@@ -86,8 +87,10 @@ export async function requireAuth(): Promise<SessionUser> {
       deletedAt: users.deletedAt,
       sessionVersion: users.sessionVersion,
       preferredLocale: users.preferredLocale,
+      venueActive: venues.active,
     })
     .from(users)
+    .leftJoin(venues, eq(users.venueId, venues.id))
     .where(eq(users.id, payload.sub))
     .limit(1);
   const user = userRows[0];
@@ -97,7 +100,12 @@ export async function requireAuth(): Promise<SessionUser> {
     !user.active ||
     user.deletedAt ||
     !isRole(user.role) ||
-    !isAccountKind(user.accountKind)
+    !isAccountKind(user.accountKind) ||
+    !hasActiveVenueAccess({
+      role: user.role,
+      venueId: user.venueId,
+      venueActive: user.venueActive,
+    })
   ) {
     throw new Error("Unauthorized");
   }

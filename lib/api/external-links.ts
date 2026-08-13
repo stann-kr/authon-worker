@@ -20,6 +20,7 @@ import {
 } from "../auth/rate-limit";
 import { getDb } from "../db/client";
 import { getRequestTenantContext, getVenueDeliveryContext } from "../tenant/server";
+import { requireActiveVenueId } from "../tenant/active-server";
 import {
   MAX_BULK_WRITE_NAMES,
   prepareGuestName,
@@ -77,11 +78,11 @@ function defaultExternalLinkExpiresAt(date?: string | null): string {
   return new Date(Date.now() + DEFAULT_EXTERNAL_LINK_TTL_DAYS * 24 * 60 * 60 * 1000).toISOString();
 }
 
-function scopedVenueId(user: SessionUser, requestedVenueId: string): string {
+async function scopedVenueId(user: SessionUser, requestedVenueId: string): Promise<string> {
   if (!requestedVenueId) throw new Error("Venue is required");
-  if (user.role === "super_admin") return requestedVenueId;
-  if (!user.venueId || requestedVenueId !== user.venueId) throw new Error("Forbidden");
-  return user.venueId;
+  const venueId = user.role === "super_admin" ? requestedVenueId : user.venueId;
+  if (!venueId || requestedVenueId !== venueId) throw new Error("Forbidden");
+  return requireActiveVenueId(venueId);
 }
 
 async function getAccessibleLink(db: Db, user: SessionUser, linkId: string) {
@@ -98,6 +99,7 @@ async function getAccessibleLink(db: Db, user: SessionUser, linkId: string) {
   const link = rows[0];
   if (!link) throw new Error("External link not found");
   if (user.role !== "super_admin" && link.venueId !== user.venueId) throw new Error("Forbidden");
+  await requireActiveVenueId(link.venueId);
   return link;
 }
 
@@ -124,7 +126,7 @@ export async function fetchExternalLinks(venueId: string): Promise<ApiResponse<E
   try {
     const user = await requireRole(["super_admin", "venue_admin"]);
     const db = getDb();
-    const effectiveVenueId = scopedVenueId(user, venueId);
+    const effectiveVenueId = await scopedVenueId(user, venueId);
     const result = await db.select().from(externalDjLinks)
       .where(
         and(
@@ -144,7 +146,7 @@ export async function fetchExternalLinksByDate(venueId: string, date: string): P
   try {
     const user = await requireRole(["super_admin", "venue_admin"]);
     const db = getDb();
-    const effectiveVenueId = scopedVenueId(user, venueId);
+    const effectiveVenueId = await scopedVenueId(user, venueId);
     const result = await db.select().from(externalDjLinks)
       .where(
         and(
@@ -168,7 +170,7 @@ export async function fetchRecentExternalLinks(
   try {
     const user = await requireRole(["super_admin", "venue_admin"]);
     const db = getDb();
-    const effectiveVenueId = scopedVenueId(user, venueId);
+    const effectiveVenueId = await scopedVenueId(user, venueId);
     const normalizedLimit = limit === 10 ? 10 : 5;
     const result = await db
       .select()
@@ -199,7 +201,7 @@ export async function createExternalLink(link: {
   try {
     const user = await requireRole(["super_admin", "venue_admin"]);
     const db = getDb();
-    const effectiveVenueId = scopedVenueId(user, link.venueId);
+    const effectiveVenueId = await scopedVenueId(user, link.venueId);
     const prepared = prepareExternalLinkCreateInput(link);
     if (prepared.error || !prepared.draft) {
       return { data: null, error: prepared.error ?? "INVALID_EXTERNAL_LINK_INPUT" };
@@ -349,7 +351,7 @@ export async function validateExternalToken(token: string): Promise<ApiResponse<
     const venueResult = await db.select().from(venues).where(eq(venues.id, link.venueId));
     const venue = venueResult[0] as Venue;
 
-    if (!venue) {
+    if (!venue?.active) {
       return { data: null, error: INVALID_EXTERNAL_LINK_ERROR };
     }
 
@@ -415,6 +417,11 @@ export async function createGuestsViaExternalLink(params: {
 
     const tenant = await getRequestTenantContext();
     if (!tenant.resolved || (tenant.scope === "venue" && tenant.venueId !== link.venueId)) {
+      return { data: null, error: "Link is invalid, expired, or inactive." };
+    }
+    try {
+      await requireActiveVenueId(link.venueId);
+    } catch {
       return { data: null, error: "Link is invalid, expired, or inactive." };
     }
     if (params.date !== link.date) {
@@ -663,6 +670,11 @@ export async function deleteGuestViaExternalLink(params: {
 
     const tenant = await getRequestTenantContext();
     if (!tenant.resolved || (tenant.scope === "venue" && tenant.venueId !== link.venueId)) {
+      return { error: "Link is invalid, expired, or inactive." };
+    }
+    try {
+      await requireActiveVenueId(link.venueId);
+    } catch {
       return { error: "Link is invalid, expired, or inactive." };
     }
 

@@ -4,6 +4,7 @@ import { and, asc, desc, eq, ne, sql } from "drizzle-orm";
 import { externalDjLinks, guestLimitRequests, guests, users } from "../db/schema";
 import { getDb } from "../db/client";
 import { requireAccess, type SessionUser } from "../auth/server";
+import { requireActiveVenueId } from "../tenant/active-server";
 import { canRequestGuestLimit, isAccountKind, isRole } from "@/lib/users/policy";
 import { resolveSnapshotVenueId } from "@/lib/guest-snapshot-policy";
 import type {
@@ -180,6 +181,7 @@ export async function fetchGuestOperationsSnapshot(
     if (!isValidDate(date)) throw new Error("Invalid date");
     const actor = await requireAccess("door");
     const effectiveVenueId = resolveSnapshotVenueId(actor, venueId);
+    await requireActiveVenueId(effectiveVenueId);
     const db = getDb();
 
     const [guestResult, userResult, linkResult] = await Promise.allSettled([
@@ -224,6 +226,7 @@ export async function fetchGuestWorkspaceSnapshot(
     if (!isValidDate(date)) throw new Error("Invalid date");
     const actor = await requireAccess("guest");
     const effectiveVenueId = resolveSnapshotVenueId(actor, venueId);
+    await requireActiveVenueId(effectiveVenueId);
     const db = getDb();
 
     const [guestResult, quotaResult] = await Promise.allSettled([

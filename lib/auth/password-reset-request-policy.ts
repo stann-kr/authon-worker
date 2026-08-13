@@ -1,3 +1,5 @@
+import { hasActiveVenueAccess } from "../tenant/active-policy.ts";
+
 export type PasswordResetRequestStatus =
   | "pending"
   | "approved"
@@ -211,12 +213,24 @@ export function shouldCreatePasswordResetRequest(params: {
   user?: {
     venueId: string | null;
     role: string;
+    venueActive: boolean | null;
     active: boolean;
     deletedAt: string | null;
   } | null;
 }): boolean {
   const { user } = params;
-  if (!params.tenantResolved || !user?.active || user.deletedAt) return false;
+  if (
+    !params.tenantResolved ||
+    !user?.active ||
+    user.deletedAt ||
+    !hasActiveVenueAccess({
+      role: user.role,
+      venueId: user.venueId,
+      venueActive: user.venueActive,
+    })
+  ) {
+    return false;
+  }
 
   return (
     params.tenantScope === "platform" ||

@@ -3,7 +3,7 @@ import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { drizzle } from "drizzle-orm/d1";
 import { eq } from "drizzle-orm";
 import { SignJWT } from "jose";
-import { users } from "@/lib/db/schema";
+import { users, venues } from "@/lib/db/schema";
 import {
   DUMMY_PASSWORD_HASH,
   verifyPassword,
@@ -23,6 +23,7 @@ import {
 } from "@/i18n/config";
 import { isAccountKind, isRole } from "@/lib/users/policy";
 import { isTrustedMutationOrigin } from "@/lib/auth/request-origin";
+import { hasActiveVenueAccess } from "@/lib/tenant/active-policy";
 
 const UPDATE_USER_FOR_LOGIN_SQL = `
   UPDATE users
@@ -33,6 +34,14 @@ const UPDATE_USER_FOR_LOGIN_SQL = `
     AND session_version = ?
     AND active = 1
     AND deleted_at IS NULL
+    AND (
+      role = 'super_admin'
+      OR EXISTS (
+        SELECT 1 FROM venues login_venue
+        WHERE login_venue.id = users.venue_id
+          AND login_venue.active = 1
+      )
+    )
   RETURNING session_version
 `;
 
@@ -99,8 +108,14 @@ export async function POST(request: Request) {
     }
 
     const db = drizzle(env.DB);
-    const result = await db.select().from(users).where(eq(users.email, normalizedEmail)).limit(1);
-    const user = result[0];
+    const result = await db
+      .select({ user: users, venueActive: venues.active })
+      .from(users)
+      .leftJoin(venues, eq(users.venueId, venues.id))
+      .where(eq(users.email, normalizedEmail))
+      .limit(1);
+    const user = result[0]?.user;
+    const venueActive = result[0]?.venueActive;
     const tenant = await getTenantContextForRequest(request);
 
     const invalidCredentialsResponse = () => NextResponse.json(
@@ -115,6 +130,11 @@ export async function POST(request: Request) {
       !user.deletedAt &&
       isRole(user.role) &&
       isAccountKind(user.accountKind) &&
+      hasActiveVenueAccess({
+        role: user.role,
+        venueId: user.venueId,
+        venueActive,
+      }) &&
       !(
         tenant.scope === "venue" &&
         user.role !== "super_admin" &&

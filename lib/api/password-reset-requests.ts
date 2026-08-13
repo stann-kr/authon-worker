@@ -20,6 +20,7 @@ import {
 import { hashPassword } from "../auth/password";
 import { requireRole } from "../auth/server";
 import { getDb } from "../db/client";
+import { requireActiveVenueId } from "../tenant/active-server";
 import {
   getAdminApprovedResetPolicyError,
   getManagedPasswordResetDecisionExpiry,
@@ -148,6 +149,7 @@ async function getManagedTarget(
     isActive: target.active,
   });
   if (targetError) throw new PasswordResetActionError(targetError);
+  if (target.venueId) await requireActiveVenueId(target.venueId);
   return target;
 }
 

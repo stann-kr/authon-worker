@@ -11,6 +11,7 @@ import {
 } from "./types";
 import { requireAccess, requireAuth, requireRole } from "../auth/server";
 import { getDb } from "../db/client";
+import { requireActiveVenueId } from "../tenant/active-server";
 import { canRequestGuestLimit, isRole } from "@/lib/users/policy";
 
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
@@ -145,6 +146,7 @@ export async function fetchGuestLimitRequests(
     const actor = await requireRole(["super_admin", "venue_admin"]);
     const effectiveVenueId = actor.role === "super_admin" ? venueId : actor.venueId;
     if (!effectiveVenueId) throw new Error("FORBIDDEN");
+    await requireActiveVenueId(effectiveVenueId);
     const db = getDb();
     const rows = await db
       .select({
@@ -214,6 +216,7 @@ export async function decideGuestLimitRequest(params: {
     if (!request || (actor.role !== "super_admin" && request.venueId !== actor.venueId)) {
       return { data: null, error: "FORBIDDEN" };
     }
+    await requireActiveVenueId(request.venueId);
     if (request.status !== "pending") return { data: null, error: "REQUEST_ALREADY_DECIDED" };
 
     const approvedExtra = params.decision === "approve" ? params.approvedExtra : 0;

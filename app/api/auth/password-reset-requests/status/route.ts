@@ -109,6 +109,11 @@ export async function GET(request: Request) {
          AND pr.venue_id IS u.venue_id
          AND u.active = 1
          AND u.deleted_at IS NULL
+         AND EXISTS (
+           SELECT 1 FROM venues request_venue
+           WHERE request_venue.id = u.venue_id
+             AND request_venue.active = 1
+         )
          AND u.account_kind = 'personal'
          AND u.role IN ('door_staff', 'staff', 'dj')
          AND EXISTS (

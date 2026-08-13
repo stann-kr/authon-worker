@@ -19,7 +19,7 @@
     "test:external-link-policy": "node --experimental-strip-types --test lib/external-links/domain.test.mjs",
     "test:guest-bulk": "node --experimental-strip-types --test lib/guests/bulk-entry.test.mjs lib/guests/atomic-sql.test.mjs",
     "test:rate-limit": "node --experimental-strip-types --test lib/auth/rate-limit-policy.test.mjs",
-    "test:auth": "node --experimental-strip-types --test lib/auth/cookie-policy.test.mjs lib/auth/first-login-policy.test.mjs lib/auth/request-origin.test.mjs lib/auth/password-reset-receipt.test.mjs lib/auth/password-reset-request-policy.test.mjs lib/auth/password-reset-request-sql.test.mjs lib/auth/password-reset-lifecycle-sql.test.mjs lib/auth/credential-lifecycle-sql.test.mjs scripts/dev/local-test-password.test.mjs",
+    "test:auth": "node --experimental-strip-types --test lib/auth/cookie-policy.test.mjs lib/auth/first-login-policy.test.mjs lib/auth/request-origin.test.mjs lib/auth/password-reset-receipt.test.mjs lib/auth/password-reset-request-policy.test.mjs lib/auth/password-reset-request-sql.test.mjs lib/auth/password-reset-lifecycle-sql.test.mjs lib/auth/credential-lifecycle-sql.test.mjs lib/tenant/active-policy.test.mjs scripts/dev/local-test-password.test.mjs",
     "check:sensitive-assets": "node scripts/check-sensitive-assets.mjs",
     "test:sensitive-assets": "node --test scripts/check-sensitive-assets.test.mjs",
     "db:generate": "drizzle-kit generate",

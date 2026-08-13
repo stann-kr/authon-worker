@@ -3,7 +3,10 @@ export const INTERNAL_BULK_GUEST_INSERT_SQL = `INSERT INTO guests (
   date, status, created_at, updated_at
 )
 SELECT ?, ?, ?, NULL, ?, ?, ?, 'pending', ?, ?
-WHERE (
+WHERE EXISTS (
+  SELECT 1 FROM venues WHERE id = ? AND active = 1
+)
+AND (
   ? = 1 OR NOT EXISTS (
     SELECT 1 FROM guests
     WHERE venue_id = ?
@@ -43,6 +46,11 @@ export function buildExternalGuestReservationSql(
 SET used_guests = used_guests + ?
 WHERE id = ?
   AND active = 1
+  AND EXISTS (
+    SELECT 1 FROM venues
+    WHERE venues.id = external_dj_links.venue_id
+      AND venues.active = 1
+  )
   AND deleted_at IS NULL
   AND (expires_at IS NULL OR expires_at > ?)
   AND date = ?
@@ -63,6 +71,11 @@ SET status = 'deleted', updated_at = ?
 WHERE id = ?
   AND venue_id = ?
   AND status != 'deleted'
+  AND EXISTS (
+    SELECT 1 FROM venues
+    WHERE venues.id = guests.venue_id
+      AND venues.active = 1
+  )
   AND (? = 1 OR created_by_user_id = ?)
 RETURNING id`;
 
@@ -71,6 +84,11 @@ SET status = ?, check_in_time = ?, updated_at = ?
 WHERE id = ?
   AND venue_id = ?
   AND status != 'deleted'
+  AND EXISTS (
+    SELECT 1 FROM venues
+    WHERE venues.id = guests.venue_id
+      AND venues.active = 1
+  )
   AND ? IN ('pending', 'checked')
 RETURNING id`;
 
@@ -80,6 +98,11 @@ WHERE id = ?
   AND token = ?
   AND venue_id = ?
   AND active = 1
+  AND EXISTS (
+    SELECT 1 FROM venues
+    WHERE venues.id = external_dj_links.venue_id
+      AND venues.active = 1
+  )
   AND deleted_at IS NULL
   AND (expires_at IS NULL OR expires_at > ?)
   AND date = ?
@@ -105,12 +128,23 @@ RETURNING id`;
 
 export const DECREMENT_EXTERNAL_LINK_AFTER_CHANGE_SQL = `UPDATE external_dj_links
 SET used_guests = max(0, used_guests - 1)
-WHERE id = ? AND changes() = 1
+WHERE id = ?
+  AND changes() = 1
+  AND EXISTS (
+    SELECT 1 FROM venues
+    WHERE venues.id = external_dj_links.venue_id
+      AND venues.active = 1
+  )
 RETURNING id`;
 
 export const DECREMENT_EXTERNAL_LINK_FOR_ACTIVE_GUEST_SQL = `UPDATE external_dj_links
 SET used_guests = max(0, used_guests - 1)
 WHERE id = ?
+  AND EXISTS (
+    SELECT 1 FROM venues
+    WHERE venues.id = external_dj_links.venue_id
+      AND venues.active = 1
+  )
   AND EXISTS (
     SELECT 1 FROM guests
     WHERE id = ?
@@ -120,5 +154,12 @@ WHERE id = ?
   )
 RETURNING id`;
 
-export const PERMANENT_DELETE_GUEST_SQL =
-  "DELETE FROM guests WHERE id = ? AND venue_id = ? RETURNING id";
+export const PERMANENT_DELETE_GUEST_SQL = `DELETE FROM guests
+WHERE id = ?
+  AND venue_id = ?
+  AND EXISTS (
+    SELECT 1 FROM venues
+    WHERE venues.id = guests.venue_id
+      AND venues.active = 1
+  )
+RETURNING id`;

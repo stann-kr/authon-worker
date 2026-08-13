@@ -166,6 +166,11 @@ export async function POST(request: Request) {
            AND pr.venue_id IS u.venue_id
            AND u.active = 1
            AND u.deleted_at IS NULL
+           AND EXISTS (
+             SELECT 1 FROM venues candidate_venue
+             WHERE candidate_venue.id = u.venue_id
+               AND candidate_venue.active = 1
+           )
            AND u.account_kind = 'personal'
            AND u.role IN ('door_staff', 'staff', 'dj')
            AND (? IS NULL OR u.venue_id = ? OR u.role = 'super_admin')
@@ -236,6 +241,14 @@ export async function POST(request: Request) {
          WHERE u.email = ?
            AND u.active = 1
            AND u.deleted_at IS NULL
+           AND (
+             u.role = 'super_admin'
+             OR EXISTS (
+               SELECT 1 FROM venues candidate_venue
+               WHERE candidate_venue.id = u.venue_id
+                 AND candidate_venue.active = 1
+             )
+           )
            AND u.migration_status = 'pending_reset'
            AND u.password_set_at IS NULL
            AND (? IS NULL OR u.venue_id = ? OR u.role = 'super_admin')

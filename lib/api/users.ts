@@ -21,6 +21,7 @@ import { escapeHtml, isEmailConfigured, sendEmail } from "./email";
 import { generateResetToken, hashResetToken } from "../auth/token";
 import { getPasswordPolicyError } from "../auth/password-policy";
 import { getVenueDeliveryContext } from "../tenant/server";
+import { requireActiveVenueId } from "../tenant/active-server";
 import { isLocale, type Locale } from "@/i18n/config";
 import { getTranslations } from "next-intl/server";
 import {
@@ -283,6 +284,7 @@ export async function updateUserProfile(
     const isSelfUpdate = actor.id === userId;
     const db = getDb();
     const target = await getTargetUser(userId);
+    if (target.venueId) await requireActiveVenueId(target.venueId);
 
     if (isSelfUpdate) {
       if (
@@ -468,6 +470,7 @@ export async function createUserViaEdge(params: {
     if (!venueId) {
       throw new UserActionError("FORBIDDEN");
     }
+    await requireActiveVenueId(venueId);
 
     if (
       !isRole(params.role) ||
@@ -543,6 +546,7 @@ export async function deleteUserViaEdge(userId: string): Promise<{ error: string
   try {
     const actor = await requireRole(["super_admin", "venue_admin"]);
     const target = await getTargetUser(userId);
+    if (target.venueId) await requireActiveVenueId(target.venueId);
     assertManagedTarget(actor, target);
     if (target.active) throw new UserActionError("USER_MUST_BE_INACTIVE");
     if (target.role === "super_admin") await assertAnotherActiveSuperAdmin(target.id);
@@ -609,6 +613,7 @@ export async function resendInvitationViaEdge(userId: string): Promise<{ error: 
     const { env } = getCloudflareContext();
     const actor = await requireRole(["super_admin", "venue_admin"]);
     const user = await getTargetUser(userId);
+    if (user.venueId) await requireActiveVenueId(user.venueId);
     assertManagedTarget(actor, user);
     if (!user.active) throw new UserActionError("USER_INACTIVE");
 

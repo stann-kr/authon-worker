@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { drizzle } from "drizzle-orm/d1";
 import { eq } from "drizzle-orm";
-import { users } from "@/lib/db/schema";
+import { users, venues } from "@/lib/db/schema";
 import {
   consumeRateLimitOrDeny,
   getRequestIp,
@@ -24,6 +24,7 @@ import { shouldCreatePasswordResetRequest } from "@/lib/auth/password-reset-requ
 import { getTenantContextForRequest } from "@/lib/tenant/server";
 import { isTrustedMutationOrigin } from "@/lib/auth/request-origin";
 import {
+  CANCEL_BROWSER_PASSWORD_RESET_REQUEST_SQL,
   CANCEL_EXPIRED_OPEN_PASSWORD_RESET_REQUESTS_SQL,
   INSERT_SELF_SERVICE_PASSWORD_RESET_REQUEST_WITH_EXPIRY_SQL,
   SELECT_EXISTING_BROWSER_PASSWORD_RESET_REQUEST_SQL,
@@ -105,10 +106,12 @@ export async function POST(request: Request) {
         id: users.id,
         venueId: users.venueId,
         role: users.role,
+        venueActive: venues.active,
         active: users.active,
         deletedAt: users.deletedAt,
       })
       .from(users)
+      .leftJoin(venues, eq(users.venueId, venues.id))
       .where(eq(users.email, normalizedEmail))
       .limit(1);
 
@@ -248,18 +251,7 @@ export async function DELETE(request: Request) {
     const requestId = claimGrant?.requestId ?? receiptRequestId;
     if (!requestId || !tenant.resolved) return response;
 
-    await env.DB.prepare(
-      `UPDATE password_reset_requests
-       SET status = 'cancelled',
-           updated_at = ?
-       WHERE id = ?
-         AND source = 'self_service'
-         AND status IN ('pending', 'approved')
-         AND (
-           ? = 'platform'
-           OR venue_id = ?
-         )`,
-    )
+    await env.DB.prepare(CANCEL_BROWSER_PASSWORD_RESET_REQUEST_SQL)
       .bind(new Date().toISOString(), requestId, tenant.scope, tenant.venueId)
       .run();
   } catch (error: unknown) {

@@ -16,6 +16,14 @@ const SELECT_VALID_RESET_TOKEN_CANDIDATE_SQL = `
     AND prt.expires_at > ?
     AND u.active = 1
     AND u.deleted_at IS NULL
+    AND (
+      u.role = 'super_admin'
+      OR EXISTS (
+        SELECT 1 FROM venues candidate_venue
+        WHERE candidate_venue.id = u.venue_id
+          AND candidate_venue.active = 1
+      )
+    )
     AND (? IS NULL OR u.venue_id = ?)
   LIMIT 1
 `;
@@ -38,6 +46,14 @@ const UPDATE_PASSWORD_WITH_VALID_TOKEN_SQL = `
       AND prt.expires_at > ?
       AND u.active = 1
       AND u.deleted_at IS NULL
+      AND (
+        u.role = 'super_admin'
+        OR EXISTS (
+          SELECT 1 FROM venues candidate_venue
+          WHERE candidate_venue.id = u.venue_id
+            AND candidate_venue.active = 1
+        )
+      )
       AND (? IS NULL OR u.venue_id = ?)
   )
   RETURNING id

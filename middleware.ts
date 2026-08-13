@@ -13,6 +13,7 @@ import {
   REQUEST_LOCALE_HEADER,
 } from "@/i18n/config";
 import { hasAccess, isAccountKind, isRole } from "@/lib/users/policy";
+import { hasActiveVenueAccess } from "@/lib/tenant/active-policy";
 
 function parseStoredSession(raw: string): { userId?: string; sessionVersion?: number } | null {
   try {
@@ -142,8 +143,10 @@ export async function middleware(request: NextRequest) {
         active: users.active,
         deletedAt: users.deletedAt,
         sessionVersion: users.sessionVersion,
+        venueActive: venues.active,
       })
       .from(users)
+      .leftJoin(venues, eq(users.venueId, venues.id))
       .where(eq(users.id, userId))
       .limit(1);
     const user = userRows[0];
@@ -153,7 +156,12 @@ export async function middleware(request: NextRequest) {
       !user?.active ||
       user.deletedAt ||
       !isRole(currentRole) ||
-      !isAccountKind(currentAccountKind)
+      !isAccountKind(currentAccountKind) ||
+      !hasActiveVenueAccess({
+        role: currentRole,
+        venueId: user.venueId,
+        venueActive: user.venueActive,
+      })
     ) {
       return NextResponse.redirect(new URL("/auth/login", request.url));
     }
