@@ -91,18 +91,42 @@ export const CLAIM_TERMINAL_GUEST_SYNC_REQUEST_SQL = `
     SELECT 1 FROM venues
     WHERE id = ? AND active = 1
   )
+  AND EXISTS (
+    SELECT 1 FROM events
+    WHERE compatibility_key = ?
+      AND venue_id = ?
+      AND state IN ('draft', 'open')
+  )
   ON CONFLICT DO NOTHING
   RETURNING guest_id AS guestId
+`;
+
+export const ENSURE_TERMINAL_COMPATIBILITY_EVENT_SQL = `
+  INSERT INTO events (
+    id, venue_id, business_date, name, state, compatibility_key,
+    created_at, updated_at
+  )
+  SELECT ?, ?, ?, ?, 'open', ?, ?, ?
+  WHERE EXISTS (
+    SELECT 1 FROM venues WHERE id = ? AND active = 1
+  )
+  ON CONFLICT DO NOTHING
+  RETURNING id
 `;
 
 export const INSERT_CLAIMED_TERMINAL_GUEST_SQL = `
   INSERT INTO guests (
     id, venue_id, name, email, instagram, terminal_request_id,
-    source, status, date, created_at, updated_at
+    event_id, source, status, date, created_at, updated_at
   )
   SELECT sync.guest_id, sync.venue_id, ?, ?, ?, sync.request_id,
-         'terminal', 'pending', ?, ?, ?
+         event.id, 'terminal', 'pending', ?, ?, ?
   FROM terminal_guest_sync_requests sync
+  JOIN events event
+    ON event.compatibility_key = ?
+   AND event.venue_id = sync.venue_id
+   AND event.business_date = ?
+   AND event.state IN ('draft', 'open')
   WHERE sync.venue_id = ?
     AND sync.request_id = ?
     AND sync.payload_hash = ?
@@ -111,6 +135,23 @@ export const INSERT_CLAIMED_TERMINAL_GUEST_SQL = `
       SELECT 1 FROM guests existing_guest
       WHERE existing_guest.id = sync.guest_id
     )
+  RETURNING id
+`;
+
+export const INSERT_TERMINAL_GUEST_ACTIVITY_SQL = `
+  INSERT INTO guest_activity_ledger (
+    id, venue_id, event_id, guest_id, action,
+    actor_user_id, actor_type, channel,
+    request_id, idempotency_key, payload_hash,
+    outcome, previous_status, next_status, occurred_at
+  )
+  SELECT ?, guest.venue_id, guest.event_id, guest.id, 'add',
+    NULL, 'terminal', 'terminal', ?, ?, NULL,
+    'applied', NULL, 'pending', ?
+  FROM guests guest
+  WHERE changes() = 1
+    AND guest.id = ?
+    AND guest.venue_id = ?
   RETURNING id
 `;
 
@@ -139,15 +180,30 @@ export async function persistTerminalGuestSync(
 ): Promise<TerminalGuestSyncPersistenceResult> {
   const payloadHash = await hashTerminalGuestSyncPayload(params.payload);
   const proposedGuestId = crypto.randomUUID();
+  const proposedEventId = crypto.randomUUID();
+  const activityId = crypto.randomUUID();
   const guestCreatedAt = params.payload.createdAt ?? params.receivedAt;
+  const compatibilityKey = `legacy:${params.venueId}:${params.payload.date}`;
 
-  const [claimResult, guestResult] = await db.batch<TerminalGuestSyncRow>([
+  const [, claimResult, guestResult, activityResult] = await db.batch<TerminalGuestSyncRow>([
+    db.prepare(ENSURE_TERMINAL_COMPATIBILITY_EVENT_SQL).bind(
+      proposedEventId,
+      params.venueId,
+      params.payload.date,
+      params.payload.date,
+      compatibilityKey,
+      params.receivedAt,
+      params.receivedAt,
+      params.venueId,
+    ),
     db.prepare(CLAIM_TERMINAL_GUEST_SYNC_REQUEST_SQL).bind(
       params.venueId,
       params.payload.terminalRequestId,
       payloadHash,
       proposedGuestId,
       params.receivedAt,
+      params.venueId,
+      compatibilityKey,
       params.venueId,
     ),
     db.prepare(INSERT_CLAIMED_TERMINAL_GUEST_SQL).bind(
@@ -157,16 +213,31 @@ export async function persistTerminalGuestSync(
       params.payload.date,
       guestCreatedAt,
       guestCreatedAt,
+      compatibilityKey,
+      params.payload.date,
       params.venueId,
       params.payload.terminalRequestId,
       payloadHash,
       proposedGuestId,
     ),
+    db.prepare(INSERT_TERMINAL_GUEST_ACTIVITY_SQL).bind(
+      activityId,
+      `terminal:${params.payload.terminalRequestId}`,
+      params.payload.terminalRequestId,
+      params.receivedAt,
+      proposedGuestId,
+      params.venueId,
+    ),
   ]);
 
   const claimedGuestId = claimResult.results?.[0]?.guestId;
   const insertedGuestId = guestResult.results?.[0]?.id;
-  if (claimedGuestId === proposedGuestId && insertedGuestId === proposedGuestId) {
+  const insertedActivityId = activityResult.results?.[0]?.id;
+  if (
+    claimedGuestId === proposedGuestId &&
+    insertedGuestId === proposedGuestId &&
+    insertedActivityId === activityId
+  ) {
     return { outcome: "created", guestId: proposedGuestId };
   }
 

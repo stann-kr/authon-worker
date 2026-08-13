@@ -1,8 +1,8 @@
 export const INTERNAL_BULK_GUEST_INSERT_SQL = `INSERT INTO guests (
   id, venue_id, name, external_link_id, created_by_user_id, registered_by_name,
-  date, status, created_at, updated_at
+  event_id, date, status, created_at, updated_at
 )
-SELECT ?, ?, ?, NULL, ?, ?, ?, 'pending', ?, ?
+SELECT ?, ?, ?, NULL, ?, ?, ?, ?, 'pending', ?, ?
 WHERE EXISTS (
   SELECT 1 FROM venues WHERE id = ? AND active = 1
 )
@@ -11,18 +11,22 @@ AND (
     SELECT 1 FROM guests
     WHERE venue_id = ?
       AND created_by_user_id = ?
-      AND date = ?
       AND status != 'deleted'
+      AND (event_id = ? OR (? = 1 AND event_id IS NULL AND date = ?))
       AND name = ?
   )
 )
 AND (
   ? IS NULL OR (
     SELECT count(*) FROM guests
-    WHERE created_by_user_id = ? AND date = ? AND status != 'deleted'
+    WHERE created_by_user_id = ?
+      AND status != 'deleted'
+      AND (event_id = ? OR (? = 1 AND event_id IS NULL AND date = ?))
   ) < ? + coalesce((
     SELECT sum(approved_extra) FROM guest_limit_requests
-    WHERE user_id = ? AND date = ? AND status = 'approved'
+    WHERE user_id = ?
+      AND status = 'approved'
+      AND (event_id = ? OR (? = 1 AND event_id IS NULL AND date = ?))
   ), 0)
 )
 RETURNING id`;
@@ -60,14 +64,14 @@ RETURNING id`;
 }
 
 export const EXTERNAL_GUEST_INSERT_AFTER_RESERVATION_SQL = `INSERT INTO guests (
-  id, venue_id, name, external_link_id, date, status, created_at, updated_at
+  id, venue_id, name, external_link_id, event_id, date, status, created_at, updated_at
 )
-SELECT ?, ?, ?, ?, ?, 'pending', ?, ?
+SELECT ?, ?, ?, ?, ?, ?, 'pending', ?, ?
 WHERE changes() = 1
 RETURNING id`;
 
 export const SOFT_DELETE_GUEST_SQL = `UPDATE guests
-SET status = 'deleted', updated_at = ?
+SET status = 'deleted', updated_at = ?, event_id = coalesce(event_id, ?)
 WHERE id = ?
   AND venue_id = ?
   AND status != 'deleted'
@@ -75,6 +79,14 @@ WHERE id = ?
     SELECT 1 FROM venues
     WHERE venues.id = guests.venue_id
       AND venues.active = 1
+  )
+  AND (event_id = ? OR (? = 1 AND event_id IS NULL AND date = ?))
+  AND EXISTS (
+    SELECT 1 FROM events
+    WHERE events.id = ?
+      AND events.venue_id = guests.venue_id
+      AND events.business_date = guests.date
+      AND events.state IN ('draft', 'open')
   )
   AND (? = 1 OR created_by_user_id = ?)
 RETURNING id`;
@@ -90,6 +102,44 @@ WHERE id = ?
       AND venues.active = 1
   )
   AND ? IN ('pending', 'checked')
+RETURNING id`;
+
+export const UPDATE_GUEST_DETAILS_SQL = `UPDATE guests
+SET venue_id = ?, name = ?, date = ?, event_id = ?, updated_at = ?
+WHERE id = ?
+  AND venue_id = ?
+  AND status != 'deleted'
+  AND EXISTS (
+    SELECT 1 FROM venues WHERE id = ? AND active = 1
+  )
+  AND EXISTS (
+    SELECT 1 FROM events
+    WHERE events.id = ?
+      AND events.venue_id = ?
+      AND events.business_date = ?
+      AND events.state IN ('draft', 'open')
+  )
+  AND (? = 1 OR created_by_user_id = ?)
+RETURNING id`;
+
+export const RESTORE_DELETED_GUEST_SQL = `UPDATE guests
+SET status = 'pending', check_in_time = NULL, updated_at = ?,
+  event_id = coalesce(event_id, ?)
+WHERE id = ?
+  AND venue_id = ?
+  AND status = 'deleted'
+  AND (event_id = ? OR (? = 1 AND event_id IS NULL AND date = ?))
+  AND EXISTS (
+    SELECT 1 FROM venues
+    WHERE venues.id = guests.venue_id AND venues.active = 1
+  )
+  AND EXISTS (
+    SELECT 1 FROM events
+    WHERE events.id = ?
+      AND events.venue_id = guests.venue_id
+      AND events.business_date = guests.date
+      AND events.state IN ('draft', 'open')
+  )
 RETURNING id`;
 
 export const DECREMENT_EXTERNAL_LINK_FOR_PENDING_GUEST_SQL = `UPDATE external_dj_links

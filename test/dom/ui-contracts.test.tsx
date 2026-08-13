@@ -53,6 +53,7 @@ test("task and section controls expose current state and respect busy locks", ()
       label="Admin sections"
       groupLabels={{
         guests: "Guests",
+        events: "Events",
         links: "Links",
         users: "Users",
         venues: "Venues",
@@ -78,6 +79,7 @@ test("task and section controls expose current state and respect busy locks", ()
       label="Admin sections"
       groupLabels={{
         guests: "Guests",
+        events: "Events",
         links: "Links",
         users: "Users",
         venues: "Venues",

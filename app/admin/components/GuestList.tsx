@@ -49,12 +49,14 @@ interface GuestListProps {
   selectedDate: string;
   onDateChange: (date: string) => void;
   businessDate: string;
+  eventId: string | null;
 }
 
 export default function GuestList({
   selectedDate,
   onDateChange,
   businessDate,
+  eventId,
 }: GuestListProps) {
   const t = useTranslations("AdminGuest");
   const doorT = useTranslations("Door");
@@ -95,7 +97,7 @@ export default function GuestList({
   const { venueId, venues, selectedVenueId, setSelectedVenueId, isSuperAdmin } =
     useVenueSelector();
 
-  const requestScopeKey = `${venueId}:${selectedDate}`;
+  const requestScopeKey = `${venueId}:${selectedDate}:${eventId ?? "general"}`;
   const requestGuard = useLatestRequestGuard();
   const pollingGuard = useLatestRequestGuard();
   const mutationGuard = useScopedOperationGuard();
@@ -145,6 +147,7 @@ export default function GuestList({
       const { data, error } = await fetchGuestOperationsSnapshot(
         selectedDate,
         venueId,
+        eventId,
       );
       if (!isLatestRequest()) return;
       if (!data) {
@@ -177,7 +180,7 @@ export default function GuestList({
     } finally {
       if (isLatestRequest()) setIsFetching(false);
     }
-  }, [doorT, pollingGuard, requestGuard, requestScopeKey, selectedDate, venueId]);
+  }, [doorT, eventId, pollingGuard, requestGuard, requestScopeKey, selectedDate, venueId]);
 
   useEffect(() => {
     loadData();
@@ -187,11 +190,11 @@ export default function GuestList({
   const pollGuests = useCallback(async () => {
     if (!venueId || loadedScopeKey !== requestScopeKey) return;
     const isLatestRequest = pollingGuard.beginRequest();
-    const { data } = await fetchGuestsByDate(selectedDate, venueId);
+    const { data } = await fetchGuestsByDate(selectedDate, venueId, eventId);
     if (isLatestRequest() && loadedScopeKey === requestScopeKey && data) {
       setGuests(data);
     }
-  }, [loadedScopeKey, pollingGuard, requestScopeKey, selectedDate, venueId]);
+  }, [eventId, loadedScopeKey, pollingGuard, requestScopeKey, selectedDate, venueId]);
 
   const pollingCoordinator = useGuestPolling(pollGuests, 15000, !!venueId);
 
@@ -222,7 +225,7 @@ export default function GuestList({
       const { data, error } =
         newStatus === "deleted"
           ? await deleteGuest(id)
-          : await updateGuestStatus(id, newStatus);
+          : await updateGuestStatus(id, newStatus, crypto.randomUUID());
 
       if (!operation.isCurrent(currentScopeKeyRef.current)) return;
       if (!error && data) {

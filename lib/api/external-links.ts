@@ -4,7 +4,7 @@ import { reportServerError } from "@/lib/observability/structured-log";
 
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { headers } from "next/headers";
-import { eq, and, ne, desc, inArray, isNull } from "drizzle-orm";
+import { eq, and, ne, desc, inArray, isNull, or } from "drizzle-orm";
 import { externalDjLinks, venues, guests } from "../db/schema";
 import {
   type ApiResponse,
@@ -40,6 +40,13 @@ import {
   prepareExternalLinkCreateInput,
   toExternalDJLink,
 } from "../external-links/domain";
+import {
+  eventIncludesLegacyDateRows,
+  findCompatibilityEvent,
+  loadEventById,
+  resolveEventForRosterWrite,
+} from "@/lib/events/server";
+import { prepareGuestActivityAfterChange } from "@/lib/guests/activity-ledger";
 
 type Db = ReturnType<typeof getDb>;
 
@@ -144,18 +151,47 @@ export async function fetchExternalLinks(venueId: string): Promise<ApiResponse<E
   }
 }
 
-export async function fetchExternalLinksByDate(venueId: string, date: string): Promise<ApiResponse<ExternalDJLink[]>> {
+export async function fetchExternalLinksByDate(
+  venueId: string,
+  date: string,
+  eventId?: string | null,
+): Promise<ApiResponse<ExternalDJLink[]>> {
   try {
     const user = await requireRole(["super_admin", "venue_admin"]);
     const db = getDb();
     const effectiveVenueId = await scopedVenueId(user, venueId);
+    const conditions = [
+      eq(externalDjLinks.venueId, effectiveVenueId),
+      eq(externalDjLinks.date, date),
+      isNull(externalDjLinks.deletedAt),
+    ];
+    if (eventId) {
+      const event = await loadEventById(db, eventId);
+      if (
+        !event ||
+        event.venueId !== effectiveVenueId ||
+        event.businessDate !== date
+      ) {
+        throw new Error("EVENT_NOT_FOUND");
+      }
+      conditions.push(eq(externalDjLinks.eventId, event.id));
+    } else {
+      const compatibilityEvent = await findCompatibilityEvent(
+        effectiveVenueId,
+        date,
+      );
+      conditions.push(
+        compatibilityEvent && eventIncludesLegacyDateRows(compatibilityEvent)
+          ? or(
+              eq(externalDjLinks.eventId, compatibilityEvent.id),
+              isNull(externalDjLinks.eventId),
+            )!
+          : isNull(externalDjLinks.eventId),
+      );
+    }
     const result = await db.select().from(externalDjLinks)
       .where(
-        and(
-          eq(externalDjLinks.venueId, effectiveVenueId),
-          eq(externalDjLinks.date, date),
-          isNull(externalDjLinks.deletedAt),
-        ),
+        and(...conditions),
       )
       .orderBy(desc(externalDjLinks.createdAt));
     return { data: await addGuestUrls(effectiveVenueId, result), error: null };
@@ -168,21 +204,28 @@ export async function fetchExternalLinksByDate(venueId: string, date: string): P
 export async function fetchRecentExternalLinks(
   venueId: string,
   limit: 5 | 10,
+  eventId?: string | null,
 ): Promise<ApiResponse<ExternalDJLink[]>> {
   try {
     const user = await requireRole(["super_admin", "venue_admin"]);
     const db = getDb();
     const effectiveVenueId = await scopedVenueId(user, venueId);
     const normalizedLimit = limit === 10 ? 10 : 5;
+    const conditions = [
+      eq(externalDjLinks.venueId, effectiveVenueId),
+      isNull(externalDjLinks.deletedAt),
+    ];
+    if (eventId) {
+      const event = await loadEventById(db, eventId);
+      if (!event || event.venueId !== effectiveVenueId) {
+        throw new Error("EVENT_NOT_FOUND");
+      }
+      conditions.push(eq(externalDjLinks.eventId, event.id));
+    }
     const result = await db
       .select()
       .from(externalDjLinks)
-      .where(
-        and(
-          eq(externalDjLinks.venueId, effectiveVenueId),
-          isNull(externalDjLinks.deletedAt),
-        ),
-      )
+      .where(and(...conditions))
       .orderBy(desc(externalDjLinks.createdAt), desc(externalDjLinks.date))
       .limit(normalizedLimit);
     return { data: await addGuestUrls(effectiveVenueId, result), error: null };
@@ -198,6 +241,7 @@ export async function createExternalLink(link: {
   event: string;
   date: string;
   maxGuests: number;
+  eventId?: string | null;
   localeMode?: ExternalDJLink["localeMode"];
 }): Promise<ApiResponse<ExternalDJLink>> {
   try {
@@ -209,6 +253,13 @@ export async function createExternalLink(link: {
       return { data: null, error: prepared.error ?? "INVALID_EXTERNAL_LINK_INPUT" };
     }
     const draft = prepared.draft;
+    const event = await resolveEventForRosterWrite({
+      venueId: effectiveVenueId,
+      businessDate: draft.date,
+      eventId: link.eventId,
+      actorUserId: user.id,
+      purpose: "register",
+    });
     const expiresAt = defaultExternalLinkExpiresAt(draft.date);
     const id = crypto.randomUUID();
     const token = crypto.randomUUID();
@@ -220,6 +271,7 @@ export async function createExternalLink(link: {
       djName: draft.djName,
       event: draft.event,
       date: draft.date,
+      eventId: event.id,
       maxGuests: draft.maxGuests,
       localeMode: draft.localeMode,
       usedGuests: 0,
@@ -429,6 +481,12 @@ export async function createGuestsViaExternalLink(params: {
     if (params.date !== link.date) {
       return { data: null, error: "Guest date does not match this link." };
     }
+    const event = await resolveEventForRosterWrite({
+      venueId: link.venueId,
+      businessDate: link.date,
+      eventId: link.eventId,
+      purpose: "register",
+    });
     const requestHeaders = await headers();
     try {
       const rateLimit = await consumeRateLimit({
@@ -516,17 +574,33 @@ export async function createGuestsViaExternalLink(params: {
       pendingGuests.length,
       ...guardedNames.flatMap((name) => [link.id, name]),
     );
-    const inserts = pendingGuests.map((pending) =>
+    const activityIds = pendingGuests.map(() => crypto.randomUUID());
+    const inserts = pendingGuests.flatMap((pending, index) => [
       env.DB.prepare(EXTERNAL_GUEST_INSERT_AFTER_RESERVATION_SQL).bind(
         pending.id,
         link.venueId,
         pending.name,
         link.id,
+        event.id,
         params.date,
         now,
         now,
       ),
-    );
+      prepareGuestActivityAfterChange(env.DB, {
+        activityId: activityIds[index],
+        venueId: link.venueId,
+        eventId: event.id,
+        guestId: pending.id,
+        action: "add",
+        actorUserId: null,
+        actorType: "external_link",
+        channel: "external_link",
+        requestId: crypto.randomUUID(),
+        previousStatus: null,
+        nextStatus: "pending",
+        occurredAt: now,
+      }),
+    ]);
     const writeResults = await env.DB.batch<{ id: string }>([reservation, ...inserts]);
     const reserved = writeResults[0]?.results[0]?.id === link.id;
 
@@ -583,7 +657,9 @@ export async function createGuestsViaExternalLink(params: {
     }
 
     const allInserted = pendingGuests.every(
-      (pending, index) => writeResults[index + 1]?.results[0]?.id === pending.id,
+      (pending, index) =>
+        writeResults[index * 2 + 1]?.results[0]?.id === pending.id &&
+        writeResults[index * 2 + 2]?.results[0]?.id === activityIds[index],
     );
     if (!allInserted) throw new Error("External bulk guest insert was not atomic");
 
@@ -692,6 +768,7 @@ export async function deleteGuestViaExternalLink(params: {
     }
 
     const now = new Date().toISOString();
+    const activityId = crypto.randomUUID();
     const deleteResults = await env.DB.batch<{ id: string }>([
       env.DB.prepare(DECREMENT_EXTERNAL_LINK_FOR_PENDING_GUEST_SQL).bind(
         link.id,
@@ -711,10 +788,25 @@ export async function deleteGuestViaExternalLink(params: {
         link.venueId,
         link.date,
       ),
+      prepareGuestActivityAfterChange(env.DB, {
+        activityId,
+        venueId: link.venueId,
+        eventId: link.eventId,
+        guestId: params.guestId,
+        action: "delete",
+        actorUserId: null,
+        actorType: "external_link",
+        channel: "external_link",
+        requestId: crypto.randomUUID(),
+        previousStatus: guest.status,
+        nextStatus: "deleted",
+        occurredAt: now,
+      }),
     ]);
     if (
       deleteResults[0]?.results[0]?.id !== link.id ||
-      deleteResults[1]?.results[0]?.id !== params.guestId
+      deleteResults[1]?.results[0]?.id !== params.guestId ||
+      deleteResults[2]?.results[0]?.id !== activityId
     ) {
       return { error: "Unable to delete this guest from this link." };
     }

@@ -22,7 +22,13 @@ import {
 
 const EMPTY_REQUESTS: GuestLimitRequestView[] = [];
 
-export default function GuestLimitRequestManagement() {
+export default function GuestLimitRequestManagement({
+  eventId,
+  businessDate,
+}: {
+  eventId: string | null;
+  businessDate: string;
+}) {
   const t = useTranslations("GuestLimitAdmin");
   const {
     venueId,
@@ -71,7 +77,11 @@ export default function GuestLimitRequestManagement() {
     setIsLoading(true);
     setLoadError("");
     try {
-      const { data, error } = await fetchGuestLimitRequests(venueId);
+      const { data, error } = await fetchGuestLimitRequests(
+        venueId,
+        eventId,
+        businessDate,
+      );
       if (!isLatestRequest() || currentVenueIdRef.current !== requestedVenueId) return;
       if (error) {
         setLoadError(t("loadFailed"));
@@ -98,7 +108,7 @@ export default function GuestLimitRequestManagement() {
         setIsLoading(false);
       }
     }
-  }, [requestGuard, t, venueId]);
+  }, [businessDate, eventId, requestGuard, t, venueId]);
 
   useEffect(() => {
     loadRequests();

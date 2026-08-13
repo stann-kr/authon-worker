@@ -350,7 +350,53 @@
     "links": "Links",
     "users": "Users",
     "passwordRequests": "Password requests",
+    "events": "Events",
+    "eventManagement": "Event management",
     "venues": "Venues"
+  },
+  "EventScope": {
+    "label": "Event",
+    "generalRoster": "General date roster",
+    "loadFailed": "Events could not be loaded.",
+    "retry": "Retry",
+    "state": {
+      "draft": "Draft",
+      "open": "Open",
+      "closed": "Closed",
+      "archived": "Archived"
+    }
+  },
+  "EventAdmin": {
+    "createTitle": "Create event",
+    "listTitle": "Events for this date",
+    "name": "Event name",
+    "capacity": "Capacity",
+    "target": "Guest target",
+    "create": "Create draft event",
+    "creating": "Creating…",
+    "created": "Event draft created.",
+    "createFailed": "Check the event name, date, capacity and target.",
+    "loadFailed": "Events could not be loaded.",
+    "transitionFailed": "The event state could not be changed.",
+    "stateChanged": "Event state updated.",
+    "selectVenue": "Select a venue to manage events.",
+    "empty": "No explicit events for this date",
+    "selected": "Selected for operations",
+    "useForOperations": "Use for operations",
+    "useTemplate": "Use as template",
+    "templateSelected": "The selected event supplies this draft's capacity and target. Review the date before creating it.",
+    "copySuffix": "COPY",
+    "state": {
+      "draft": "Draft",
+      "open": "Open",
+      "closed": "Closed",
+      "archived": "Archived"
+    },
+    "transition": {
+      "open": "Open event",
+      "closed": "Close event",
+      "archived": "Archive event"
+    }
   },
   "AdminGuest": {
     "title": "Admin guest management",

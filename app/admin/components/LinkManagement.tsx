@@ -87,6 +87,7 @@ interface LinkManagementProps {
   activeSection?: LinkManagementSection;
   onActiveSectionChange?: (section: LinkManagementSection) => void;
   showSectionNavigation?: boolean;
+  eventId?: string | null;
 }
 
 export default function LinkManagement({
@@ -96,6 +97,7 @@ export default function LinkManagement({
   activeSection,
   onActiveSectionChange,
   showSectionNavigation = true,
+  eventId = null,
 }: LinkManagementProps) {
   const t = useTranslations("LinkAdmin");
   const commonT = useTranslations("Common");
@@ -184,8 +186,8 @@ export default function LinkManagement({
 
   const requestScopeKey = `${venueId}:${manageScope}:${
     manageScope === "recent" ? recentLimit : selectedDate
-  }`;
-  const credentialScopeKey = `${venueId}:create:${formData.date}`;
+  }:${eventId ?? "general"}`;
+  const credentialScopeKey = `${venueId}:create:${formData.date}:${eventId ?? "general"}`;
   const requestGuard = useLatestRequestGuard();
   const linkMutationGuard = useScopedOperationGuard();
   const createOperationGuard = useScopedOperationGuard();
@@ -271,8 +273,8 @@ export default function LinkManagement({
     try {
       const { data, error } =
         manageScope === "recent"
-          ? await fetchRecentExternalLinks(venueId, recentLimit)
-          : await fetchExternalLinksByDate(venueId, selectedDate);
+          ? await fetchRecentExternalLinks(venueId, recentLimit, eventId)
+          : await fetchExternalLinksByDate(venueId, selectedDate, eventId);
       if (
         !isLatestRequest() ||
         currentRequestScopeKeyRef.current !== requestScopeKey
@@ -304,7 +306,7 @@ export default function LinkManagement({
         currentRequestScopeKeyRef.current === requestScopeKey
       ) setIsFetching(false);
     }
-  }, [manageScope, recentLimit, requestGuard, requestScopeKey, selectedDate, t, venueId]);
+  }, [eventId, manageScope, recentLimit, requestGuard, requestScopeKey, selectedDate, t, venueId]);
 
   useEffect(() => {
     if (activeTab === "manage") {
@@ -423,6 +425,7 @@ export default function LinkManagement({
     try {
       const { data, error } = await createExternalLink({
         venueId: operationVenueId,
+        eventId,
         ...prepared.draft,
       });
 
@@ -869,7 +872,7 @@ export default function LinkManagement({
                         type="date"
                         autoComplete="off"
                         value={formData.date}
-                        disabled={isGenerating}
+                        disabled={isGenerating || Boolean(eventId)}
                         aria-invalid={
                           formValidationError?.field === "date" || undefined
                         }

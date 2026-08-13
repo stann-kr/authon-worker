@@ -14,6 +14,8 @@ import VenueManagement, {
 } from "./components/VenueManagement";
 import GuestLimitRequestManagement from "./components/GuestLimitRequestManagement";
 import PasswordResetRequestManagement from "./components/PasswordResetRequestManagement";
+import EventManagement from "./components/EventManagement";
+import EventScopeSelector from "@/components/EventScopeSelector";
 import AdminTaskSwitcher, {
   type AdminTaskOption,
 } from "./components/AdminTaskSwitcher";
@@ -55,6 +57,7 @@ function AdminPageContent() {
   const { isRouteTransitionActive } = useRouteTransition();
   const {
     currentVenue,
+    venueId,
     isLoadingVenues,
     venueLoadError,
     refreshVenues,
@@ -65,6 +68,8 @@ function AdminPageContent() {
     getBusinessDate(),
   );
   const [activeTask, setActiveTask] = useState<AdminTask>("guest-list");
+  const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
+  const [eventRefreshKey, setEventRefreshKey] = useState(0);
   const isSuperAdmin = user?.role === "super_admin";
   const [isRoleReady, setIsRoleReady] = useState(false);
   const [pendingPasswordResetCount, setPendingPasswordResetCount] = useState(0);
@@ -73,6 +78,10 @@ function AdminPageContent() {
   useEffect(() => {
     if (currentVenue) setSelectedDate(businessDate);
   }, [businessDate, currentVenue, setSelectedDate]);
+
+  useEffect(() => {
+    setSelectedEventId(null);
+  }, [selectedDate, venueId]);
 
   useEffect(() => {
     const requestedTask = parseAdminTask(
@@ -114,6 +123,7 @@ function AdminPageContent() {
       [
         { id: "guest-list", group: "guests", label: t("guestList") },
         { id: "guest-requests", group: "guests", label: t("requests") },
+        { id: "event-manage", group: "events", label: t("eventManagement") },
         { id: "link-create", group: "links", label: linkT("createLink") },
         { id: "link-manage", group: "links", label: linkT("manageLinks") },
         { id: "user-create", group: "users", label: userT("createUser") },
@@ -229,6 +239,7 @@ function AdminPageContent() {
 
   const groupLabels: Record<AdminTaskGroup, string> = {
     guests: t("guests"),
+    events: t("events"),
     links: t("links"),
     users: t("users"),
     venues: t("venues"),
@@ -292,14 +303,47 @@ function AdminPageContent() {
         <h2 id="admin-active-task-title" className="sr-only">
           {activeTaskLabel}
         </h2>
+        {[
+          "guest-list",
+          "guest-requests",
+          "event-manage",
+          "link-create",
+          "link-manage",
+        ].includes(activeTask) && (
+          <div className="context-bar mb-4">
+            <EventScopeSelector
+              venueId={venueId}
+              businessDate={selectedDate}
+              value={selectedEventId}
+              onChange={setSelectedEventId}
+              reloadKey={eventRefreshKey}
+            />
+          </div>
+        )}
         {activeTask === "guest-list" && (
           <GuestList
             selectedDate={selectedDate}
             onDateChange={setSelectedDate}
             businessDate={businessDate}
+            eventId={selectedEventId}
           />
         )}
-        {activeTask === "guest-requests" && <GuestLimitRequestManagement />}
+        {activeTask === "guest-requests" && (
+          <GuestLimitRequestManagement
+            eventId={selectedEventId}
+            businessDate={selectedDate}
+          />
+        )}
+        {activeTask === "event-manage" && (
+          <EventManagement
+            selectedDate={selectedDate}
+            onDateChange={setSelectedDate}
+            businessDate={businessDate}
+            selectedEventId={selectedEventId}
+            onSelectedEventChange={setSelectedEventId}
+            onEventsChanged={() => setEventRefreshKey((value) => value + 1)}
+          />
+        )}
         {(activeTask === "link-create" || activeTask === "link-manage") && (
           <LinkManagement
             selectedDate={selectedDate}
@@ -310,6 +354,7 @@ function AdminPageContent() {
             }
             onActiveSectionChange={handleLinkSectionChange}
             showSectionNavigation={false}
+            eventId={selectedEventId}
           />
         )}
         {(activeTask === "user-create" || activeTask === "user-list") && (

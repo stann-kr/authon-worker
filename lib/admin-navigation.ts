@@ -1,6 +1,7 @@
 export type AdminTask =
   | "guest-list"
   | "guest-requests"
+  | "event-manage"
   | "link-create"
   | "link-manage"
   | "user-create"
@@ -9,7 +10,7 @@ export type AdminTask =
   | "venue-list"
   | "venue-create";
 
-export type AdminTaskGroup = "guests" | "links" | "users" | "venues";
+export type AdminTaskGroup = "guests" | "events" | "links" | "users" | "venues";
 
 const SUPER_ADMIN_TASKS = new Set<AdminTask>([
   "venue-list",
@@ -33,6 +34,7 @@ export function parseAdminTask(
   if (tab === "guests") {
     return view === "requests" ? "guest-requests" : "guest-list";
   }
+  if (tab === "events") return "event-manage";
   if (tab === "links") {
     return view === "manage" ? "link-manage" : "link-create";
   }
@@ -60,6 +62,7 @@ export function getAdminTaskSearch(task: AdminTask): string {
   const taskSearch: Record<AdminTask, string> = {
     "guest-list": "?tab=guests&view=list",
     "guest-requests": "?tab=guests&view=requests",
+    "event-manage": "?tab=events&view=manage",
     "link-create": "?tab=links&view=create",
     "link-manage": "?tab=links&view=manage",
     "user-create": "?tab=users&view=create",

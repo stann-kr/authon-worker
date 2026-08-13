@@ -22,6 +22,7 @@ import Skeleton from "@/components/Skeleton";
 import OperationsLayout from "@/components/OperationsLayout";
 import DisclosureSection from "@/components/DisclosureSection";
 import GuestCapacityIndicator from "@/components/GuestCapacityIndicator";
+import EventScopeSelector from "@/components/EventScopeSelector";
 import { useSectionLoadingTask } from "@/components/RouteTransitionProvider";
 import { getBusinessDate } from "@/lib/date";
 import {
@@ -68,6 +69,7 @@ export default function AuthenticatedGuestView({ user }: AuthenticatedGuestViewP
   const commonT = useTranslations("Common");
   const locale = useLocale() as "en" | "ko";
   const [selectedDate, setSelectedDate] = useState<string>(getBusinessDate());
+  const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
   const [guestName, setGuestName] = useState<string>("");
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [isBulkSubmitting, setIsBulkSubmitting] = useState<boolean>(false);
@@ -114,7 +116,7 @@ export default function AuthenticatedGuestView({ user }: AuthenticatedGuestViewP
     ? selectedVenueId
     : (user?.venue_id ?? "");
   const businessDate = getBusinessDate(currentVenue ?? {});
-  const requestScopeKey = `${effectiveVenueId}:${selectedDate}`;
+  const requestScopeKey = `${effectiveVenueId}:${selectedDate}:${selectedEventId ?? "general"}`;
   const requestDraft = getScopedGuestLimitRequestDraft(
     requestDrafts,
     requestScopeKey,
@@ -154,6 +156,10 @@ export default function AuthenticatedGuestView({ user }: AuthenticatedGuestViewP
   }, [businessDate, currentVenue]);
 
   useEffect(() => {
+    setSelectedEventId(null);
+  }, [effectiveVenueId, selectedDate]);
+
+  useEffect(() => {
     if (user?.account_kind !== "shared") return;
     const stored = window.sessionStorage.getItem(`shared-operator:${user.id}`);
     if (stored) setRegisteredByName(stored);
@@ -180,6 +186,7 @@ export default function AuthenticatedGuestView({ user }: AuthenticatedGuestViewP
       const { data, error: fetchError } = await fetchGuestWorkspaceSnapshot(
         selectedDate,
         effectiveVenueId,
+        selectedEventId,
       );
 
       if (!isLatestRequest()) return;
@@ -221,7 +228,7 @@ export default function AuthenticatedGuestView({ user }: AuthenticatedGuestViewP
     } finally {
       if (isLatestRequest()) setIsFetching(false);
     }
-  }, [effectiveVenueId, pollingGuard, requestGuard, requestScopeKey, selectedDate, t]);
+  }, [effectiveVenueId, pollingGuard, requestGuard, requestScopeKey, selectedDate, selectedEventId, t]);
 
   useEffect(() => {
     loadGuests();
@@ -234,6 +241,7 @@ export default function AuthenticatedGuestView({ user }: AuthenticatedGuestViewP
     const { data } = await fetchGuestWorkspaceSnapshot(
       selectedDate,
       effectiveVenueId,
+      selectedEventId,
     );
     if (isLatestRequest() && loadedScopeKey === requestScopeKey) {
       if (data) {
@@ -250,7 +258,7 @@ export default function AuthenticatedGuestView({ user }: AuthenticatedGuestViewP
         setVerifiedQuotaScopeKey("");
       }
     }
-  }, [effectiveVenueId, loadedScopeKey, pollingGuard, requestScopeKey, selectedDate]);
+  }, [effectiveVenueId, loadedScopeKey, pollingGuard, requestScopeKey, selectedDate, selectedEventId]);
 
   useGuestPolling(pollGuests, 15000, !!effectiveVenueId);
 
@@ -281,6 +289,7 @@ export default function AuthenticatedGuestView({ user }: AuthenticatedGuestViewP
         venueId: effectiveVenueId,
         name: guestName.trim().toUpperCase(),
         date: selectedDate,
+        eventId: selectedEventId,
         registeredByName:
           user?.account_kind === "shared" ? registeredByName.trim() : null,
       });
@@ -368,6 +377,7 @@ export default function AuthenticatedGuestView({ user }: AuthenticatedGuestViewP
     const response = await createGuests({
       venueId: effectiveVenueId,
       date: selectedDate,
+      eventId: selectedEventId,
       registeredByName:
         user?.account_kind === "shared" ? registeredByName.trim() : null,
       items: bulkGuests,
@@ -472,6 +482,7 @@ export default function AuthenticatedGuestView({ user }: AuthenticatedGuestViewP
     try {
       const { error: requestError } = await createGuestLimitRequest({
         date: selectedDate,
+        eventId: selectedEventId,
         requestedExtra: extra,
         reason: requestDraft.requestReason,
       });
@@ -567,6 +578,13 @@ export default function AuthenticatedGuestView({ user }: AuthenticatedGuestViewP
                     value={selectedDate}
                     onChange={setSelectedDate}
                     businessDate={businessDate}
+                    disabled={isBulkSubmitting}
+                  />
+                  <EventScopeSelector
+                    venueId={effectiveVenueId}
+                    businessDate={selectedDate}
+                    value={selectedEventId}
+                    onChange={setSelectedEventId}
                     disabled={isBulkSubmitting}
                   />
                   {isSuperAdmin && (

@@ -23,6 +23,7 @@ import Alert from "../../components/Alert";
 import Icon from "../../components/Icon";
 import Skeleton from "../../components/Skeleton";
 import OperationsLayout from "../../components/OperationsLayout";
+import EventScopeSelector from "../../components/EventScopeSelector";
 import { useSectionLoadingTask } from "../../components/RouteTransitionProvider";
 import { getBusinessDate } from "../../lib/date";
 import { orderGuestDisplayList } from "../../lib/guests/display-order";
@@ -78,6 +79,7 @@ function DoorPageContent() {
     getBusinessDate(),
   );
   const [selectedDJ, setSelectedDJ] = useState<string>("all");
+  const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
   const [loadingStates, setLoadingStates] = useState<{
     [key: string]: boolean;
   }>({});
@@ -114,7 +116,7 @@ function DoorPageContent() {
     externalLinks: [],
   });
 
-  const requestScopeKey = `${venueId}:${selectedDate}`;
+  const requestScopeKey = `${venueId}:${selectedDate}:${selectedEventId ?? "general"}`;
   const requestGuard = useLatestRequestGuard();
   const pollingGuard = useLatestRequestGuard();
   const mutationGuard = useScopedOperationGuard();
@@ -146,6 +148,10 @@ function DoorPageContent() {
   }, [businessDate, currentVenue, setSelectedDate]);
 
   useEffect(() => {
+    setSelectedEventId(null);
+  }, [selectedDate, venueId]);
+
+  useEffect(() => {
     setSelectedDJ("all");
     setLoadOutcome("idle");
   }, [requestScopeKey]);
@@ -168,6 +174,7 @@ function DoorPageContent() {
       const { data, error } = await fetchGuestOperationsSnapshot(
         selectedDate,
         venueId,
+        selectedEventId,
       );
       if (!isLatestRequest()) return;
       if (!data) {
@@ -200,7 +207,7 @@ function DoorPageContent() {
     } finally {
       if (isLatestRequest()) setIsFetching(false);
     }
-  }, [pollingGuard, requestGuard, requestScopeKey, selectedDate, t, venueId]);
+  }, [pollingGuard, requestGuard, requestScopeKey, selectedDate, selectedEventId, t, venueId]);
 
   useEffect(() => {
     loadData();
@@ -210,11 +217,11 @@ function DoorPageContent() {
   const pollData = useCallback(async () => {
     if (!venueId || loadedScopeKey !== requestScopeKey) return;
     const isLatestRequest = pollingGuard.beginRequest();
-    const { data } = await fetchGuestsByDate(selectedDate, venueId);
+    const { data } = await fetchGuestsByDate(selectedDate, venueId, selectedEventId);
     if (isLatestRequest() && loadedScopeKey === requestScopeKey && data) {
       setGuests(data);
     }
-  }, [loadedScopeKey, pollingGuard, requestScopeKey, selectedDate, venueId]);
+  }, [loadedScopeKey, pollingGuard, requestScopeKey, selectedDate, selectedEventId, venueId]);
 
   const pollingCoordinator = useGuestPolling(pollData, 15000, !!venueId);
 
@@ -245,7 +252,7 @@ function DoorPageContent() {
       const { data, error } =
         newStatus === "deleted"
           ? await deleteGuest(id)
-          : await updateGuestStatus(id, newStatus);
+          : await updateGuestStatus(id, newStatus, crypto.randomUUID());
 
       if (!operation.isCurrent(currentScopeKeyRef.current)) return;
       if (!error && data) {
@@ -360,6 +367,12 @@ function DoorPageContent() {
                         onVenueChange={setSelectedVenueId}
                       />
                     )}
+                    <EventScopeSelector
+                      venueId={venueId}
+                      businessDate={selectedDate}
+                      value={selectedEventId}
+                      onChange={setSelectedEventId}
+                    />
                     <div className="min-w-0">
                       <label htmlFor="door-user-filter" className="type-context-title">
                         {t("guestOwner")}

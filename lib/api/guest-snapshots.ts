@@ -2,7 +2,7 @@
 
 import { reportServerError } from "@/lib/observability/structured-log";
 
-import { and, asc, desc, eq, ne, sql } from "drizzle-orm";
+import { and, asc, desc, eq, isNull, ne, or, sql } from "drizzle-orm";
 import { externalDjLinks, guestLimitRequests, guests, users } from "../db/schema";
 import { getDb } from "../db/client";
 import { requireAccess, type SessionUser } from "../auth/server";
@@ -17,7 +17,13 @@ import type {
   GuestQuota,
   GuestWorkspaceSnapshot,
   UserDirectoryEntry,
+  Event,
 } from "./types";
+import {
+  eventIncludesLegacyDateRows,
+  findCompatibilityEvent,
+  loadEventById,
+} from "@/lib/events/server";
 
 type Db = ReturnType<typeof getDb>;
 
@@ -38,10 +44,19 @@ async function loadGuestsByDate(
   venueId: string,
   date: string,
   createdByUserId?: string,
+  event?: Event | null,
 ): Promise<Guest[]> {
+  const eventScope = event
+    ? eventIncludesLegacyDateRows(event)
+      ? or(
+          eq(guests.eventId, event.id),
+          and(isNull(guests.eventId), eq(guests.date, date)),
+        )
+      : eq(guests.eventId, event.id)
+    : and(isNull(guests.eventId), eq(guests.date, date));
   const conditions = [
     eq(guests.venueId, venueId),
-    eq(guests.date, date),
+    eventScope,
     ne(guests.status, "deleted"),
   ];
   if (createdByUserId) {
@@ -97,7 +112,16 @@ async function loadExternalLinksByDate(
   db: Db,
   venueId: string,
   date: string,
+  event?: Event | null,
 ): Promise<ExternalLinkDirectoryEntry[]> {
+  const eventScope = event
+    ? eventIncludesLegacyDateRows(event)
+      ? or(
+          eq(externalDjLinks.eventId, event.id),
+          and(isNull(externalDjLinks.eventId), eq(externalDjLinks.date, date)),
+        )
+      : eq(externalDjLinks.eventId, event.id)
+    : and(isNull(externalDjLinks.eventId), eq(externalDjLinks.date, date));
   return db
     .select({
       id: externalDjLinks.id,
@@ -107,7 +131,7 @@ async function loadExternalLinksByDate(
     .where(
       and(
         eq(externalDjLinks.venueId, venueId),
-        eq(externalDjLinks.date, date),
+        eventScope,
       ),
     )
     .orderBy(desc(externalDjLinks.createdAt));
@@ -117,7 +141,30 @@ async function loadGuestQuota(
   db: Db,
   actor: SessionUser,
   date: string,
+  event?: Event | null,
 ): Promise<GuestQuota> {
+  const guestScope = event
+    ? eventIncludesLegacyDateRows(event)
+      ? or(
+          eq(guests.eventId, event.id),
+          and(isNull(guests.eventId), eq(guests.date, date)),
+        )
+      : eq(guests.eventId, event.id)
+    : and(isNull(guests.eventId), eq(guests.date, date));
+  const requestScope = event
+    ? eventIncludesLegacyDateRows(event)
+      ? or(
+          eq(guestLimitRequests.eventId, event.id),
+          and(
+            isNull(guestLimitRequests.eventId),
+            eq(guestLimitRequests.date, date),
+          ),
+        )
+      : eq(guestLimitRequests.eventId, event.id)
+    : and(
+        isNull(guestLimitRequests.eventId),
+        eq(guestLimitRequests.date, date),
+      );
   const [usage, extra, pending] = await Promise.all([
     db
       .select({ used: sql<number>`count(*)` })
@@ -125,7 +172,7 @@ async function loadGuestQuota(
       .where(
         and(
           eq(guests.createdByUserId, actor.id),
-          eq(guests.date, date),
+          guestScope,
           ne(guests.status, "deleted"),
         ),
       ),
@@ -137,7 +184,7 @@ async function loadGuestQuota(
       .where(
         and(
           eq(guestLimitRequests.userId, actor.id),
-          eq(guestLimitRequests.date, date),
+          requestScope,
           eq(guestLimitRequests.status, "approved"),
         ),
       ),
@@ -147,7 +194,7 @@ async function loadGuestQuota(
       .where(
         and(
           eq(guestLimitRequests.userId, actor.id),
-          eq(guestLimitRequests.date, date),
+          requestScope,
           eq(guestLimitRequests.status, "pending"),
         ),
       )
@@ -178,6 +225,7 @@ async function loadGuestQuota(
 export async function fetchGuestOperationsSnapshot(
   date: string,
   venueId: string,
+  eventId?: string | null,
 ): Promise<ApiResponse<GuestOperationsSnapshot>> {
   try {
     if (!isValidDate(date)) throw new Error("Invalid date");
@@ -185,11 +233,22 @@ export async function fetchGuestOperationsSnapshot(
     const effectiveVenueId = resolveSnapshotVenueId(actor, venueId);
     await requireActiveVenueId(effectiveVenueId);
     const db = getDb();
+    const event = eventId
+      ? await loadEventById(db, eventId)
+      : await findCompatibilityEvent(effectiveVenueId, date);
+    if (
+      eventId &&
+      (!event ||
+        event.venueId !== effectiveVenueId ||
+        event.businessDate !== date)
+    ) {
+      throw new Error("EVENT_NOT_FOUND");
+    }
 
     const [guestResult, userResult, linkResult] = await Promise.allSettled([
-      loadGuestsByDate(db, effectiveVenueId, date),
+      loadGuestsByDate(db, effectiveVenueId, date, undefined, event),
       loadUserDirectory(db, actor, effectiveVenueId),
-      loadExternalLinksByDate(db, effectiveVenueId, date),
+      loadExternalLinksByDate(db, effectiveVenueId, date, event),
     ]);
 
     if (guestResult.status === "rejected") await logRejectedSection("guests", guestResult);
@@ -223,6 +282,7 @@ export async function fetchGuestOperationsSnapshot(
 export async function fetchGuestWorkspaceSnapshot(
   date: string,
   venueId: string,
+  eventId?: string | null,
 ): Promise<ApiResponse<GuestWorkspaceSnapshot>> {
   try {
     if (!isValidDate(date)) throw new Error("Invalid date");
@@ -230,10 +290,21 @@ export async function fetchGuestWorkspaceSnapshot(
     const effectiveVenueId = resolveSnapshotVenueId(actor, venueId);
     await requireActiveVenueId(effectiveVenueId);
     const db = getDb();
+    const event = eventId
+      ? await loadEventById(db, eventId)
+      : await findCompatibilityEvent(effectiveVenueId, date);
+    if (
+      eventId &&
+      (!event ||
+        event.venueId !== effectiveVenueId ||
+        event.businessDate !== date)
+    ) {
+      throw new Error("EVENT_NOT_FOUND");
+    }
 
     const [guestResult, quotaResult] = await Promise.allSettled([
-      loadGuestsByDate(db, effectiveVenueId, date, actor.id),
-      loadGuestQuota(db, actor, date),
+      loadGuestsByDate(db, effectiveVenueId, date, actor.id, event),
+      loadGuestQuota(db, actor, date, event),
     ]);
 
     if (guestResult.status === "rejected") await logRejectedSection("guests", guestResult);

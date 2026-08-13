@@ -350,7 +350,53 @@
     "links": "링크",
     "users": "사용자",
     "passwordRequests": "비밀번호 요청",
+    "events": "행사",
+    "eventManagement": "행사 관리",
     "venues": "베뉴"
+  },
+  "EventScope": {
+    "label": "행사",
+    "generalRoster": "일반 날짜 명단",
+    "loadFailed": "행사 목록을 불러오지 못했습니다.",
+    "retry": "다시 시도",
+    "state": {
+      "draft": "초안",
+      "open": "운영 중",
+      "closed": "종료",
+      "archived": "보관"
+    }
+  },
+  "EventAdmin": {
+    "createTitle": "행사 만들기",
+    "listTitle": "선택한 날짜의 행사",
+    "name": "행사 이름",
+    "capacity": "수용 인원",
+    "target": "게스트 목표",
+    "create": "초안 행사 만들기",
+    "creating": "만드는 중…",
+    "created": "행사 초안을 만들었습니다.",
+    "createFailed": "행사 이름, 날짜, 수용 인원과 목표를 확인해주세요.",
+    "loadFailed": "행사 목록을 불러오지 못했습니다.",
+    "transitionFailed": "행사 상태를 변경하지 못했습니다.",
+    "stateChanged": "행사 상태를 변경했습니다.",
+    "selectVenue": "행사를 관리할 베뉴를 선택해주세요.",
+    "empty": "이 날짜에 별도 행사가 없습니다",
+    "selected": "운영 행사로 선택됨",
+    "useForOperations": "운영 행사로 선택",
+    "useTemplate": "템플릿으로 사용",
+    "templateSelected": "선택한 행사의 수용 인원과 목표를 초안에 채웠습니다. 만들기 전에 날짜를 확인해주세요.",
+    "copySuffix": "복사본",
+    "state": {
+      "draft": "초안",
+      "open": "운영 중",
+      "closed": "종료",
+      "archived": "보관"
+    },
+    "transition": {
+      "open": "행사 열기",
+      "closed": "행사 종료",
+      "archived": "행사 보관"
+    }
   },
   "AdminGuest": {
     "title": "관리자 게스트 관리",

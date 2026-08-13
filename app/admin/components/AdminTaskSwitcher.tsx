@@ -24,10 +24,11 @@ interface AdminTaskSwitcherProps {
   disabled?: boolean;
 }
 
-const groupOrder: AdminTaskGroup[] = ["guests", "links", "users", "venues"];
+const groupOrder: AdminTaskGroup[] = ["guests", "events", "links", "users", "venues"];
 
 const groupIcons: Record<AdminTaskGroup, IconName> = {
   guests: "users",
+  events: "calendar",
   links: "link",
   users: "user-admin",
   venues: "store",

@@ -2,7 +2,7 @@
 
 import { reportServerError } from "@/lib/observability/structured-log";
 
-import { and, desc, eq, ne, sql } from "drizzle-orm";
+import { and, desc, eq, isNull, ne, or, sql } from "drizzle-orm";
 import { guestLimitRequests, guests, users } from "../db/schema";
 import {
   type ApiResponse,
@@ -15,6 +15,13 @@ import { requireAccess, requireAuth, requireRole } from "../auth/server";
 import { getDb } from "../db/client";
 import { requireActiveVenueId } from "../tenant/active-server";
 import { canRequestGuestLimit, isRole } from "@/lib/users/policy";
+import {
+  eventIncludesLegacyDateRows,
+  findCompatibilityEvent,
+  loadEventById,
+  resolveEventForRosterWrite,
+} from "@/lib/events/server";
+import type { Event } from "./types";
 
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -32,11 +39,52 @@ function toRequest(row: typeof guestLimitRequests.$inferSelect): GuestLimitReque
   return { ...row, status: row.status as GuestLimitRequestStatus };
 }
 
-export async function fetchMyGuestQuota(date: string): Promise<ApiResponse<GuestQuota>> {
+export async function fetchMyGuestQuota(
+  date: string,
+  eventId?: string | null,
+): Promise<ApiResponse<GuestQuota>> {
   try {
     if (!isValidDate(date)) throw new Error("INVALID_DATE");
     const actor = await requireAccess("guest");
+    if (!actor.venueId) throw new Error("FORBIDDEN");
+    await requireActiveVenueId(actor.venueId);
     const db = getDb();
+    let event: Event | null = null;
+    if (eventId) {
+      event = await loadEventById(db, eventId);
+      if (
+        !event ||
+        event.venueId !== actor.venueId ||
+        event.businessDate !== date
+      ) {
+        throw new Error("EVENT_NOT_FOUND");
+      }
+    } else {
+      event = await findCompatibilityEvent(actor.venueId, date);
+    }
+    const includeLegacyRows = event ? eventIncludesLegacyDateRows(event) : true;
+    const guestScope = event
+      ? includeLegacyRows
+        ? or(
+            eq(guests.eventId, event.id),
+            and(isNull(guests.eventId), eq(guests.date, date)),
+          )
+        : eq(guests.eventId, event.id)
+      : and(isNull(guests.eventId), eq(guests.date, date));
+    const requestScope = event
+      ? includeLegacyRows
+        ? or(
+            eq(guestLimitRequests.eventId, event.id),
+            and(
+              isNull(guestLimitRequests.eventId),
+              eq(guestLimitRequests.date, date),
+            ),
+          )
+        : eq(guestLimitRequests.eventId, event.id)
+      : and(
+          isNull(guestLimitRequests.eventId),
+          eq(guestLimitRequests.date, date),
+        );
 
     const [usage, extra, pending] = await Promise.all([
       db
@@ -45,7 +93,7 @@ export async function fetchMyGuestQuota(date: string): Promise<ApiResponse<Guest
         .where(
           and(
             eq(guests.createdByUserId, actor.id),
-            eq(guests.date, date),
+            guestScope,
             ne(guests.status, "deleted"),
           ),
         ),
@@ -55,7 +103,7 @@ export async function fetchMyGuestQuota(date: string): Promise<ApiResponse<Guest
         .where(
           and(
             eq(guestLimitRequests.userId, actor.id),
-            eq(guestLimitRequests.date, date),
+            requestScope,
             eq(guestLimitRequests.status, "approved"),
           ),
         ),
@@ -65,7 +113,7 @@ export async function fetchMyGuestQuota(date: string): Promise<ApiResponse<Guest
         .where(
           and(
             eq(guestLimitRequests.userId, actor.id),
-            eq(guestLimitRequests.date, date),
+            requestScope,
             eq(guestLimitRequests.status, "pending"),
           ),
         )
@@ -97,6 +145,7 @@ export async function fetchMyGuestQuota(date: string): Promise<ApiResponse<Guest
 
 export async function createGuestLimitRequest(params: {
   date: string;
+  eventId?: string | null;
   requestedExtra: number;
   reason?: string | null;
 }): Promise<ApiResponse<GuestLimitRequest>> {
@@ -114,6 +163,13 @@ export async function createGuestLimitRequest(params: {
     if (reason && reason.length > 200) return { data: null, error: "INVALID_REASON" };
 
     const db = getDb();
+    const event = await resolveEventForRosterWrite({
+      venueId: actor.venueId,
+      businessDate: params.date,
+      eventId: params.eventId,
+      actorUserId: actor.id,
+      purpose: "register",
+    });
     const now = new Date().toISOString();
     const id = crypto.randomUUID();
     await db.insert(guestLimitRequests).values({
@@ -121,6 +177,7 @@ export async function createGuestLimitRequest(params: {
       venueId: actor.venueId,
       userId: actor.id,
       date: params.date,
+      eventId: event.id,
       requestedExtra: params.requestedExtra,
       approvedExtra: 0,
       reason,
@@ -143,6 +200,8 @@ export async function createGuestLimitRequest(params: {
 
 export async function fetchGuestLimitRequests(
   venueId?: string | null,
+  eventId?: string | null,
+  businessDate?: string | null,
 ): Promise<ApiResponse<GuestLimitRequestView[]>> {
   try {
     const actor = await requireRole(["super_admin", "venue_admin"]);
@@ -150,6 +209,34 @@ export async function fetchGuestLimitRequests(
     if (!effectiveVenueId) throw new Error("FORBIDDEN");
     await requireActiveVenueId(effectiveVenueId);
     const db = getDb();
+    const conditions = [eq(guestLimitRequests.venueId, effectiveVenueId)];
+    if (eventId) {
+      const event = await loadEventById(db, eventId);
+      if (!event || event.venueId !== effectiveVenueId) {
+        throw new Error("EVENT_NOT_FOUND");
+      }
+      conditions.push(eq(guestLimitRequests.eventId, event.id));
+    } else if (businessDate) {
+      if (!isValidDate(businessDate)) throw new Error("INVALID_DATE");
+      const compatibilityEvent = await findCompatibilityEvent(
+        effectiveVenueId,
+        businessDate,
+      );
+      conditions.push(
+        compatibilityEvent && eventIncludesLegacyDateRows(compatibilityEvent)
+          ? or(
+              eq(guestLimitRequests.eventId, compatibilityEvent.id),
+              and(
+                isNull(guestLimitRequests.eventId),
+                eq(guestLimitRequests.date, businessDate),
+              ),
+            )!
+          : and(
+              isNull(guestLimitRequests.eventId),
+              eq(guestLimitRequests.date, businessDate),
+            )!,
+      );
+    }
     const rows = await db
       .select({
         request: guestLimitRequests,
@@ -158,7 +245,7 @@ export async function fetchGuestLimitRequests(
       })
       .from(guestLimitRequests)
       .innerJoin(users, eq(guestLimitRequests.userId, users.id))
-      .where(eq(guestLimitRequests.venueId, effectiveVenueId))
+      .where(and(...conditions))
       .orderBy(desc(guestLimitRequests.createdAt))
       .limit(100);
 
