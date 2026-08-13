@@ -3,7 +3,13 @@
 import { reportServerError } from "@/lib/observability/structured-log";
 
 import { and, desc, eq, isNull, ne, or, sql } from "drizzle-orm";
-import { guestLimitRequests, guests, users } from "../db/schema";
+import {
+  eventContributorLimits,
+  events,
+  guestLimitRequests,
+  guests,
+  users,
+} from "../db/schema";
 import {
   type ApiResponse,
   type GuestLimitRequest,
@@ -86,7 +92,7 @@ export async function fetchMyGuestQuota(
           eq(guestLimitRequests.date, date),
         );
 
-    const [usage, extra, pending] = await Promise.all([
+    const [usage, extra, pending, configuredLimit] = await Promise.all([
       db
         .select({ used: sql<number>`count(*)` })
         .from(guests)
@@ -118,21 +124,37 @@ export async function fetchMyGuestQuota(
           ),
         )
         .limit(1),
+      event
+        ? db
+            .select({ guestLimit: eventContributorLimits.guestLimit })
+            .from(eventContributorLimits)
+            .where(
+              and(
+                eq(eventContributorLimits.eventId, event.id),
+                eq(eventContributorLimits.userId, actor.id),
+                eq(eventContributorLimits.venueId, actor.venueId),
+              ),
+            )
+            .limit(1)
+        : Promise.resolve([]),
     ]);
 
     const used = Number(usage[0]?.used ?? 0);
     const approvedExtra = Number(extra[0]?.approvedExtra ?? 0);
-    const effectiveLimit = actor.guestLimit === null ? null : actor.guestLimit + approvedExtra;
+    const baseLimit = configuredLimit[0]
+      ? configuredLimit[0].guestLimit
+      : actor.guestLimit;
+    const effectiveLimit = baseLimit === null ? null : baseLimit + approvedExtra;
 
     return {
       data: {
         date,
-        baseLimit: actor.guestLimit,
+        baseLimit,
         approvedExtra,
         effectiveLimit,
         used,
         remaining: effectiveLimit === null ? null : Math.max(0, effectiveLimit - used),
-        canRequestExtra: canRequestGuestLimit(actor) && actor.guestLimit !== null,
+        canRequestExtra: canRequestGuestLimit(actor) && baseLimit !== null,
         pendingRequest: pending[0] ? toRequest(pending[0]) : null,
       },
       error: null,
@@ -151,7 +173,7 @@ export async function createGuestLimitRequest(params: {
 }): Promise<ApiResponse<GuestLimitRequest>> {
   try {
     const actor = await requireAuth();
-    if (!canRequestGuestLimit(actor) || !actor.venueId || actor.guestLimit === null) {
+    if (!canRequestGuestLimit(actor) || !actor.venueId) {
       return { data: null, error: "REQUEST_NOT_ALLOWED" };
     }
     if (!isValidDate(params.date)) return { data: null, error: "INVALID_DATE" };
@@ -170,6 +192,35 @@ export async function createGuestLimitRequest(params: {
       actorUserId: actor.id,
       purpose: "register",
     });
+    await db
+      .insert(eventContributorLimits)
+      .values({
+        eventId: event.id,
+        venueId: actor.venueId,
+        userId: actor.id,
+        guestLimit: actor.guestLimit,
+        sourceEventId: event.templateSourceEventId,
+        createdByUserId: actor.id,
+        createdAt: new Date().toISOString(),
+      })
+      .onConflictDoNothing();
+    const [configuredLimit] = await db
+      .select({ guestLimit: eventContributorLimits.guestLimit })
+      .from(eventContributorLimits)
+      .where(
+        and(
+          eq(eventContributorLimits.eventId, event.id),
+          eq(eventContributorLimits.userId, actor.id),
+          eq(eventContributorLimits.venueId, actor.venueId),
+        ),
+      )
+      .limit(1);
+    const baseLimit = configuredLimit
+      ? configuredLimit.guestLimit
+      : actor.guestLimit;
+    if (baseLimit === null) {
+      return { data: null, error: "REQUEST_NOT_ALLOWED" };
+    }
     const now = new Date().toISOString();
     const id = crypto.randomUUID();
     await db.insert(guestLimitRequests).values({
@@ -307,6 +358,16 @@ export async function decideGuestLimitRequest(params: {
     }
     await requireActiveVenueId(request.venueId);
     if (request.status !== "pending") return { data: null, error: "REQUEST_ALREADY_DECIDED" };
+    if (request.eventId) {
+      const event = await loadEventById(db, request.eventId);
+      if (
+        !event ||
+        event.venueId !== request.venueId ||
+        (event.state !== "draft" && event.state !== "open")
+      ) {
+        return { data: null, error: "EVENT_NOT_ACTIVE" };
+      }
+    }
 
     const approvedExtra = params.decision === "approve" ? params.approvedExtra : 0;
     if (
@@ -335,6 +396,14 @@ export async function decideGuestLimitRequest(params: {
         and(
           eq(guestLimitRequests.id, request.id),
           eq(guestLimitRequests.status, "pending"),
+          request.eventId
+            ? sql`EXISTS (
+                SELECT 1 FROM ${events}
+                WHERE ${events.id} = ${request.eventId}
+                  AND ${events.venueId} = ${request.venueId}
+                  AND ${events.state} IN ('draft', 'open')
+              )`
+            : sql`1 = 1`,
         ),
       )
       .returning();

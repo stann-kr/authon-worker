@@ -52,7 +52,18 @@ export interface Event {
   updatedByUserId: string | null;
   createdAt: string;
   updatedAt: string;
+  openedAt: string | null;
   closedAt: string | null;
+}
+
+export interface EventTemplateCloneSummary {
+  contributors: number;
+  externalLinks: number;
+}
+
+export interface EventCreationResult {
+  event: Event;
+  templateClone: EventTemplateCloneSummary;
 }
 
 export interface User {

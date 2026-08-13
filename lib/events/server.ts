@@ -109,6 +109,7 @@ export async function resolveEventForRosterWrite(params: {
       updatedByUserId: params.actorUserId ?? null,
       createdAt: now,
       updatedAt: now,
+      openedAt: now,
     })
     .onConflictDoNothing();
 

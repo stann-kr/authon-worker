@@ -5,7 +5,11 @@ import { reportServerError } from "@/lib/observability/structured-log";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { cookies } from "next/headers";
 import { eq, and, ne, desc, inArray, isNull, or } from "drizzle-orm";
-import { guestActivityLedger, guests } from "../db/schema";
+import {
+  eventContributorLimits,
+  guestActivityLedger,
+  guests,
+} from "../db/schema";
 import {
   type ApiResponse,
   type BulkGuestCreateInput,
@@ -242,6 +246,18 @@ export async function createGuests(params: {
       actorUserId: user.id,
       purpose: "register",
     });
+    await db
+      .insert(eventContributorLimits)
+      .values({
+        eventId: event.id,
+        venueId: effectiveVenueId,
+        userId: user.id,
+        guestLimit: user.guestLimit,
+        sourceEventId: event.templateSourceEventId,
+        createdByUserId: user.id,
+        createdAt: new Date().toISOString(),
+      })
+      .onConflictDoNothing();
     const includeLegacyRows = eventIncludesLegacyDateRows(event);
     const eventScope = includeLegacyRows
       ? or(
@@ -249,6 +265,20 @@ export async function createGuests(params: {
           and(isNull(guests.eventId), eq(guests.date, params.date)),
         )
       : eq(guests.eventId, event.id);
+    const [configuredLimit] = await db
+      .select({ guestLimit: eventContributorLimits.guestLimit })
+      .from(eventContributorLimits)
+      .where(
+        and(
+          eq(eventContributorLimits.eventId, event.id),
+          eq(eventContributorLimits.userId, user.id),
+          eq(eventContributorLimits.venueId, effectiveVenueId),
+        ),
+      )
+      .limit(1);
+    const baseGuestLimit = configuredLimit
+      ? configuredLimit.guestLimit
+      : user.guestLimit;
 
     const preparedRegisteredByName = prepareGuestName(params.registeredByName);
     const registeredByName =
@@ -338,12 +368,12 @@ export async function createGuests(params: {
         includeLegacyRows ? 1 : 0,
         params.date,
         pending.name,
-        user.guestLimit,
+        baseGuestLimit,
         user.id,
         event.id,
         includeLegacyRows ? 1 : 0,
         params.date,
-        user.guestLimit ?? 0,
+        baseGuestLimit ?? 0,
         user.id,
         event.id,
         includeLegacyRows ? 1 : 0,

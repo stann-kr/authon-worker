@@ -17,6 +17,7 @@ import {
 import type { Event, EventState } from "@/lib/api/types";
 import { useLatestRequestGuard } from "@/lib/hooks";
 import { deriveAsyncListState, shouldShowEmptyState } from "@/lib/ui/async-list-state";
+import EventCloseout from "./EventCloseout";
 
 interface EventManagementProps {
   selectedDate: string;
@@ -121,8 +122,16 @@ export default function EventManagement({
       setCapacity("");
       setTargetGuests("");
       setTemplateSourceEventId(null);
-      onSelectedEventChange(response.data.id);
-      setFeedback({ type: "success", message: t("created") });
+      onSelectedEventChange(response.data.event.id);
+      setFeedback({
+        type: "success",
+        message: response.data.event.templateSourceEventId
+          ? t("createdFromTemplate", {
+              contributors: response.data.templateClone.contributors,
+              links: response.data.templateClone.externalLinks,
+            })
+          : t("created"),
+      });
       await loadEvents();
       onEventsChanged();
     }
@@ -338,6 +347,8 @@ export default function EventManagement({
           )}
         </div>
       </section>
+
+      {selectedEventId && <EventCloseout eventId={selectedEventId} />}
     </div>
   );
 }

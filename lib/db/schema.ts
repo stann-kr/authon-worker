@@ -90,6 +90,7 @@ export const events = sqliteTable('events', {
   updatedByUserId: text('updated_by_user_id').references(() => users.id),
   createdAt: text('created_at').notNull(),
   updatedAt: text('updated_at').notNull(),
+  openedAt: text('opened_at'),
   closedAt: text('closed_at'),
 }, (t) => [
   index('idx_events_venue_business_date').on(t.venueId, t.businessDate),
@@ -206,6 +207,32 @@ export const guestActivityRequests = sqliteTable('guest_activity_requests', {
 }, (t) => [
   primaryKey({ columns: [t.venueId, t.idempotencyKey] }),
   index('idx_guest_activity_requests_created').on(t.createdAt),
+]);
+
+export const eventContributorLimits = sqliteTable('event_contributor_limits', {
+  eventId: text('event_id').notNull().references(() => events.id),
+  venueId: text('venue_id').notNull().references(() => venues.id),
+  userId: text('user_id').notNull().references(() => users.id),
+  guestLimit: integer('guest_limit'),
+  sourceEventId: text('source_event_id').references(() => events.id),
+  createdByUserId: text('created_by_user_id').references(() => users.id),
+  createdAt: text('created_at').notNull(),
+}, (t) => [
+  primaryKey({ columns: [t.eventId, t.userId] }),
+  index('idx_event_contributor_limits_venue_event').on(t.venueId, t.eventId),
+]);
+
+export const eventCloseouts = sqliteTable('event_closeouts', {
+  eventId: text('event_id').primaryKey().references(() => events.id),
+  venueId: text('venue_id').notNull().references(() => venues.id),
+  confirmedByUserId: text('confirmed_by_user_id').notNull().references(() => users.id),
+  confirmedAt: text('confirmed_at').notNull(),
+  reportHash: text('report_hash').notNull(),
+  registeredCount: integer('registered_count').notNull(),
+  checkedInCount: integer('checked_in_count').notNull(),
+  sourceActivityCount: integer('source_activity_count').notNull(),
+}, (t) => [
+  index('idx_event_closeouts_venue_confirmed').on(t.venueId, t.confirmedAt),
 ]);
 
 export const guestLimitRequests = sqliteTable('guest_limit_requests', {

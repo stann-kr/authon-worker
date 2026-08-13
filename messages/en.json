@@ -264,7 +264,25 @@
     "duplicateChanged": "{count} added. The guest list changed after preview. Review the remaining duplicate warning.",
     "capacityChanged": "{count} added. The available capacity changed. Unregistered names remain in the field.",
     "partialSuccess": "{count} added. {remaining, plural, one {# name remains} other {# names remain}} for review.",
-    "success": "{count, plural, one {# guest added.} other {# guests added.}}"
+    "success": "{count, plural, one {# guest added.} other {# guests added.}}",
+    "csv": {
+      "fileLabel": "Import a CSV file",
+      "helper": "The file stays in this browser. Choose the name column, review validation and duplicates, then load it into the existing preview.",
+      "columnLabel": "Guest name column",
+      "selectColumn": "Select a column",
+      "preview": "{rows} source rows · {ready} valid · {duplicates} duplicate candidates · {invalid} invalid",
+      "multilineBlocked": "{count, plural, one {# selected cell contains a line break} other {# selected cells contain line breaks}}. Fix the file before applying this mapping.",
+      "apply": "Use mapped names",
+      "applied": "Loaded {count} mapped names into the review field.",
+      "error": {
+        "EMPTY": "The CSV file is empty.",
+        "TOO_LARGE": "The CSV file is too large for this 10,000-character preview.",
+        "TOO_MANY_COLUMNS": "The CSV has more than 50 columns.",
+        "TOO_MANY_ROWS": "The CSV has more than 1,000 data rows.",
+        "UNCLOSED_QUOTE": "The CSV contains an unclosed quoted cell.",
+        "READ_FAILED": "The CSV file could not be read."
+      }
+    }
   },
   "Home": {
     "availableWorkspaces": "Available workspaces",
@@ -375,6 +393,7 @@
     "create": "Create draft event",
     "creating": "Creating…",
     "created": "Event draft created.",
+    "createdFromTemplate": "Event draft created with {contributors} contributor limits and {links} inactive link templates.",
     "createFailed": "Check the event name, date, capacity and target.",
     "loadFailed": "Events could not be loaded.",
     "transitionFailed": "The event state could not be changed.",
@@ -384,7 +403,7 @@
     "selected": "Selected for operations",
     "useForOperations": "Use for operations",
     "useTemplate": "Use as template",
-    "templateSelected": "The selected event supplies this draft's capacity and target. Review the date before creating it.",
+    "templateSelected": "The selected event supplies capacity, target, contributor limits and inactive link templates. Review the date before creating it.",
     "copySuffix": "COPY",
     "state": {
       "draft": "Draft",
@@ -397,6 +416,37 @@
       "closed": "Close event",
       "archived": "Archive event"
     }
+  },
+  "EventCloseout": {
+    "title": "Night closeout",
+    "loadFailed": "The closeout report could not be loaded.",
+    "confirmFailed": "The report could not be confirmed. Refresh and review ledger coverage.",
+    "confirmed": "The closeout report was confirmed.",
+    "empty": "No closeout report is available",
+    "downloadCsv": "Download CSV",
+    "confirm": "Confirm report",
+    "confirmedLabel": "Confirmed",
+    "provisional": "This is a provisional report. Close the event before confirming it.",
+    "inconsistent": "The roster and immutable ledger do not match. Confirmation is locked.",
+    "untracked": "{count, plural, one {# guest has no activity-ledger coverage} other {# guests have no activity-ledger coverage}}. Confirmation is locked.",
+    "registered": "Registered",
+    "checkedIn": "Checked in",
+    "noShow": "No-show",
+    "entryRate": "Entry rate",
+    "peak15": "15-minute peak",
+    "peakValue": "{count} at {time}",
+    "operations": "Door changes",
+    "operationValue": "{removals} removal · {cancellations} check-in cancel · {reentries} re-entry · {onsite} on-site add",
+    "preparationTime": "Preparation time",
+    "confirmationTime": "Confirmation time",
+    "contributors": "Contributor performance",
+    "noContributors": "No attributed contributors",
+    "sample": "Sample size {count}",
+    "limitUsage": "Limit {used}/{limit}",
+    "unlimited": "unlimited",
+    "confirmTitle": "Confirm this closeout report?",
+    "confirmDescription": "Confirmation is immutable. It records aggregate totals and a ledger hash, not guest names.",
+    "cancel": "Cancel"
   },
   "AdminGuest": {
     "title": "Admin guest management",

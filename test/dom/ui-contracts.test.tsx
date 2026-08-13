@@ -14,6 +14,7 @@ import AdminTaskSwitcher from "@/app/admin/components/AdminTaskSwitcher";
 import AsyncListContent from "@/components/AsyncListContent";
 import ConfirmDialog from "@/components/ConfirmDialog";
 import OperationalSectionNav from "@/components/OperationalSectionNav";
+import GuestBulkEntry from "@/components/GuestBulkEntry";
 
 afterEach(() => {
   cleanup();
@@ -180,4 +181,36 @@ test("busy dialog reports aria-busy and ignores Escape", () => {
   fireEvent.keyDown(document, { key: "Escape" });
   assert.equal(cancelled, false);
   assert.ok(screen.getByRole("alertdialog"));
+});
+
+test("CSV mapping and line preview controls keep native labels and file boundaries", () => {
+  render(
+    <NextIntlClientProvider
+      locale="en"
+      messages={{
+        BulkGuestEntry: {
+          title: "Paste multiple names",
+          optional: "Optional",
+          fieldLabel: "Names to paste",
+          placeholder: "One name per line",
+          helper: "Review names",
+          csv: {
+            fileLabel: "Import a CSV file",
+            helper: "Choose the name column",
+          },
+        },
+      }}
+    >
+      <GuestBulkEntry
+        existingNames={[]}
+        remaining={10}
+        onSubmitChunk={async () => ({ data: { items: [] }, error: null })}
+      />
+    </NextIntlClientProvider>,
+  );
+
+  const fileInput = screen.getByLabelText("Import a CSV file");
+  assert.equal(fileInput.getAttribute("type"), "file");
+  assert.match(fileInput.getAttribute("accept") ?? "", /text\/csv/);
+  assert.equal(screen.getByLabelText("Names to paste").tagName, "TEXTAREA");
 });
