@@ -2,6 +2,20 @@
 
 공개 가능한 결과 중심 변경 요약이다. 항목은 일자 단위이며 최신 항목을 위에 둔다. 파일 단위 세부 구현 이력은 공개 문서에 포함하지 않는다.
 
+## 2026-08-13
+
+### 레거시 사용자 이관 경로 폐기
+
+#### Changed
+
+- 운영 cutover가 끝난 public JSON 기반 사용자 이관 화면과 API를 제거했다. 기존 사용자 생성, 관리자 승인 재설정과 1회용 설정 코드 흐름은 유지한다.
+- 오래된 migration deep link는 더 이상 mutation 화면을 열지 않고 사용자 생성 화면으로 이동한다.
+
+#### Security
+
+- private 문서·이관 산출물·local user 파일·로컬 환경 파일을 Docker build context에서 제외했다.
+- Worker build 전후와 deploy 직전에 금지된 public source·배포 asset을 검사해 발견 시 배포 경로를 중단한다.
+
 ## 2026-08-11
 
 ### Worker 공개 주소 단일화

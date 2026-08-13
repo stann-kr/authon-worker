@@ -3,11 +3,15 @@ node_modules
 .open-next
 .wrangler
 .git
-.docs/private
+.docs/
+migration/
+public/local-users.json
 *.log
 .env
+.env*.local
 .env.local
 .env.development.local
 .env.production.local
 .dev.vars
+.dev.vars*
 dist

@@ -132,11 +132,6 @@ function AdminPageContent() {
         ...(isSuperAdmin
           ? [
               {
-                id: "user-migrate" as const,
-                group: "users" as const,
-                label: userT("migration"),
-              },
-              {
                 id: "venue-list" as const,
                 group: "venues" as const,
                 label: venueT("venues"),
@@ -257,15 +252,8 @@ function AdminPageContent() {
     [changeTask],
   );
   const handleUserSectionChange = useCallback(
-    (section: UserManagementSection) => {
-      const task: AdminTask =
-        section === "create"
-          ? "user-create"
-            : section === "users"
-              ? "user-list"
-            : "user-migrate";
-      changeTask(task);
-    },
+    (section: UserManagementSection) =>
+      changeTask(section === "create" ? "user-create" : "user-list"),
     [changeTask],
   );
   const handleVenueSectionChange = useCallback(
@@ -333,16 +321,10 @@ function AdminPageContent() {
             showSectionNavigation={false}
           />
         )}
-        {(activeTask === "user-create" ||
-          activeTask === "user-list" ||
-          activeTask === "user-migrate") && (
+        {(activeTask === "user-create" || activeTask === "user-list") && (
           <UserManagement
             activeSection={
-              activeTask === "user-create"
-                ? "create"
-                : activeTask === "user-list"
-                  ? "users"
-                  : "migrate"
+              activeTask === "user-create" ? "create" : "users"
             }
             onActiveSectionChange={handleUserSectionChange}
             showSectionNavigation={false}

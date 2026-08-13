@@ -3,7 +3,6 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useLatestRequestGuard, useLocalStorage } from "../../../lib/hooks";
 import InviteUser from "./InviteUser";
-import LegacyUserMigration from "./LegacyUserMigration";
 import VenueSelector, {
   useVenueSelector,
 } from "../../../components/VenueSelector";
@@ -35,7 +34,7 @@ import { isVenueManagedRole } from "@/lib/users/policy";
 import { useVenueBrand } from "@/components/VenueBrandProvider";
 
 type StatusFilter = "current" | "ready" | "setup" | "inactive" | "deleted";
-export type UserManagementSection = "create" | "users" | "migrate";
+export type UserManagementSection = "create" | "users";
 
 type Feedback = { type: "success" | "error"; message: string } | null;
 type PendingUserAction = {
@@ -125,8 +124,8 @@ export default function UserManagement({
   useSectionLoadingTask(activeTab === "users" && isCurrentScopeLoading);
 
   useEffect(() => {
-    const isKnownTab = ["create", "users", "migrate"].includes(activeTab as string);
-    if (!isKnownTab || (!isSuperAdmin && activeTab === "migrate")) {
+    const isKnownTab = ["create", "users"].includes(activeTab as string);
+    if (!isKnownTab) {
       setActiveTab("create");
     }
   }, [activeTab, isSuperAdmin, setActiveTab]);
@@ -472,9 +471,6 @@ export default function UserManagement({
             items={[
               { id: "create", label: t("create"), icon: "user-add" },
               { id: "users", label: t("users"), icon: "user" },
-              ...(isSuperAdmin
-                ? [{ id: "migrate" as const, label: t("migrate"), icon: "database" as const }]
-                : []),
             ]}
             activeId={activeTab}
             onChange={setActiveTab}
@@ -551,7 +547,6 @@ export default function UserManagement({
 
       <div className="min-w-0">
         {activeTab === "create" && <InviteUser />}
-        {activeTab === "migrate" && <LegacyUserMigration />}
         {activeTab === "users" && (
           <div className="app-panel">
             <PanelHeader

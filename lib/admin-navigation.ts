@@ -6,14 +6,12 @@ export type AdminTask =
   | "user-create"
   | "user-list"
   | "password-requests"
-  | "user-migrate"
   | "venue-list"
   | "venue-create";
 
 export type AdminTaskGroup = "guests" | "links" | "users" | "venues";
 
 const SUPER_ADMIN_TASKS = new Set<AdminTask>([
-  "user-migrate",
   "venue-list",
   "venue-create",
 ]);
@@ -49,7 +47,6 @@ export function parseAdminTask(
     if (view === "users" || view === "list" || view === "directory") {
       return "user-list";
     }
-    if (view === "migrate" || view === "migration") return "user-migrate";
     return "user-create";
   }
   if (tab === "venues") {
@@ -68,7 +65,6 @@ export function getAdminTaskSearch(task: AdminTask): string {
     "user-create": "?tab=users&view=create",
     "user-list": "?tab=users&view=directory",
     "password-requests": "?tab=users&view=password-requests",
-    "user-migrate": "?tab=users&view=migration",
     "venue-list": "?tab=venues&view=list",
     "venue-create": "?tab=venues&view=create",
   };
