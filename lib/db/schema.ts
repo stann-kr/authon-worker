@@ -112,6 +112,7 @@ export const externalDjLinks = sqliteTable('external_dj_links', {
   expiresAt: text('expires_at'),
   createdBy: text('created_by').references(() => users.id),
   localeMode: text('locale_mode').notNull().default('auto'),
+  kind: text('kind').notNull().default('contributor'),
   createdAt: text('created_at'),
   deletedAt: text('deleted_at'),
   deletedBy: text('deleted_by').references(() => users.id),
@@ -148,6 +149,19 @@ export const guests = sqliteTable('guests', {
   index('idx_guests_external_link').on(t.externalLinkId),
   index('idx_guests_created_by').on(t.createdByUserId),
   index('idx_guests_event_status').on(t.eventId, t.status),
+]);
+
+export const externalGuestOwners = sqliteTable('external_guest_owners', {
+  guestId: text('guest_id').primaryKey().references(() => guests.id, { onDelete: 'cascade' }),
+  externalLinkId: text('external_link_id').notNull().references(() => externalDjLinks.id),
+  ownerKeyHash: text('owner_key_hash').notNull(),
+  createdAt: text('created_at').notNull(),
+  releasedAt: text('released_at'),
+}, (t) => [
+  index('idx_external_guest_owners_link').on(t.externalLinkId),
+  uniqueIndex('idx_external_guest_owners_active_key')
+    .on(t.externalLinkId, t.ownerKeyHash)
+    .where(sql`${t.releasedAt} IS NULL`),
 ]);
 
 export const terminalGuestSyncRequests = sqliteTable('terminal_guest_sync_requests', {

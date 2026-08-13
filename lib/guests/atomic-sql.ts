@@ -70,6 +70,40 @@ SELECT ?, ?, ?, ?, ?, ?, 'pending', ?, ?
 WHERE changes() = 1
 RETURNING id`;
 
+export const RESERVE_SELF_RSVP_SLOT_SQL = `UPDATE external_dj_links
+SET used_guests = used_guests + 1
+WHERE id = ?
+  AND token = ?
+  AND venue_id = ?
+  AND kind = 'self_rsvp'
+  AND active = 1
+  AND deleted_at IS NULL
+  AND (expires_at IS NULL OR expires_at > ?)
+  AND date = ?
+  AND used_guests < max_guests
+  AND EXISTS (
+    SELECT 1 FROM venues
+    WHERE venues.id = external_dj_links.venue_id
+      AND venues.active = 1
+  )
+  AND NOT EXISTS (
+    SELECT 1
+    FROM external_guest_owners owner
+    JOIN guests guest ON guest.id = owner.guest_id
+    WHERE owner.external_link_id = external_dj_links.id
+      AND owner.owner_key_hash = ?
+      AND owner.released_at IS NULL
+      AND guest.status != 'deleted'
+  )
+RETURNING id`;
+
+export const INSERT_SELF_RSVP_OWNER_AFTER_GUEST_SQL = `INSERT INTO external_guest_owners (
+  guest_id, external_link_id, owner_key_hash, created_at, released_at
+)
+SELECT ?, ?, ?, ?, NULL
+WHERE changes() = 1
+RETURNING guest_id AS guestId`;
+
 export const SOFT_DELETE_GUEST_SQL = `UPDATE guests
 SET status = 'deleted', updated_at = ?, event_id = coalesce(event_id, ?)
 WHERE id = ?
@@ -174,6 +208,65 @@ WHERE changes() = 1
   AND venue_id = ?
   AND date = ?
   AND status = 'pending'
+RETURNING id`;
+
+export const DECREMENT_SELF_RSVP_FOR_PENDING_GUEST_SQL = `UPDATE external_dj_links
+SET used_guests = max(0, used_guests - 1)
+WHERE id = ?
+  AND token = ?
+  AND venue_id = ?
+  AND kind = 'self_rsvp'
+  AND active = 1
+  AND deleted_at IS NULL
+  AND (expires_at IS NULL OR expires_at > ?)
+  AND date = ?
+  AND EXISTS (
+    SELECT 1 FROM venues
+    WHERE venues.id = external_dj_links.venue_id
+      AND venues.active = 1
+  )
+  AND EXISTS (
+    SELECT 1
+    FROM guests guest
+    JOIN external_guest_owners owner ON owner.guest_id = guest.id
+    WHERE guest.id = ?
+      AND guest.external_link_id = ?
+      AND guest.venue_id = ?
+      AND guest.date = ?
+      AND guest.status = 'pending'
+      AND owner.external_link_id = external_dj_links.id
+      AND owner.owner_key_hash = ?
+      AND owner.released_at IS NULL
+  )
+RETURNING id`;
+
+export const UPDATE_SELF_RSVP_GUEST_SQL = `UPDATE guests
+SET name = ?, updated_at = ?
+WHERE id = ?
+  AND external_link_id = ?
+  AND venue_id = ?
+  AND date = ?
+  AND status = 'pending'
+  AND EXISTS (
+    SELECT 1
+    FROM external_guest_owners owner
+    WHERE owner.guest_id = guests.id
+      AND owner.external_link_id = guests.external_link_id
+      AND owner.owner_key_hash = ?
+      AND owner.released_at IS NULL
+  )
+  AND EXISTS (
+    SELECT 1
+    FROM external_dj_links link
+    JOIN venues venue ON venue.id = link.venue_id
+    WHERE link.id = guests.external_link_id
+      AND link.token = ?
+      AND link.kind = 'self_rsvp'
+      AND link.active = 1
+      AND link.deleted_at IS NULL
+      AND (link.expires_at IS NULL OR link.expires_at > ?)
+      AND venue.active = 1
+  )
 RETURNING id`;
 
 export const DECREMENT_EXTERNAL_LINK_AFTER_CHANGE_SQL = `UPDATE external_dj_links

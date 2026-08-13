@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import {
   useLocalStorage,
   useGuestPolling,
@@ -37,6 +37,31 @@ import {
   deleteGuest,
 } from "../../lib/api/guests";
 import { fetchGuestOperationsSnapshot } from "../../lib/api/guest-snapshots";
+import {
+  fetchOfflineDoorRoster,
+  findDoorGuestByCode,
+  syncOfflineDoorMutations,
+} from "../../lib/api/offline-door";
+import {
+  applyQueuedDoorMutation,
+  createOfflineDoorRosterSnapshot,
+  parseDoorGuestCode,
+  type OfflineDoorMutation,
+  type OfflineDoorScope,
+} from "../../lib/door/offline-domain";
+import {
+  clearResolvedOfflineDoorMutations,
+  enqueueOfflineDoorMutation,
+  listOfflineDoorMutations,
+  loadOfflineDoorRoster,
+  removeOfflineDoorRoster,
+  resolveOfflineDoorMutation,
+  saveOfflineDoorRoster,
+} from "../../lib/door/offline-store";
+import {
+  groupOfflineDoorMutationsByDevice,
+  type OfflineDoorSyncResult,
+} from "../../lib/door/offline-sync";
 import type {
   ExternalLinkDirectoryEntry,
   Guest,
@@ -102,6 +127,18 @@ function DoorPageContent() {
     "door:prioritizeWaiting",
     true,
   );
+  const [isOfflineMode, setIsOfflineMode] = useState(false);
+  const [offlineMutations, setOfflineMutations] = useState<OfflineDoorMutation[]>([]);
+  const [isOfflineSyncing, setIsOfflineSyncing] = useState(false);
+  const [offlineNotice, setOfflineNotice] = useState<
+    "cached" | "queued" | "syncFailed" | null
+  >(null);
+  const [doorCode, setDoorCode] = useState("");
+  const [isDoorCodeLoading, setIsDoorCodeLoading] = useState(false);
+  const [doorCodeFeedback, setDoorCodeFeedback] = useState<
+    "found" | "notFound" | "unavailable" | null
+  >(null);
+  const offlineSyncingRef = useRef(false);
 
   // 로딩 중 이전 데이터를 유지하여 화면 깜빡임 방지
   const displayCacheRef = useRef<{
@@ -117,6 +154,17 @@ function DoorPageContent() {
   });
 
   const requestScopeKey = `${venueId}:${selectedDate}:${selectedEventId ?? "general"}`;
+  const offlineScope = useMemo<OfflineDoorScope | null>(
+    () =>
+      venueId && selectedEventId
+        ? {
+            venueId,
+            eventId: selectedEventId,
+            businessDate: selectedDate,
+          }
+        : null,
+    [selectedDate, selectedEventId, venueId],
+  );
   const requestGuard = useLatestRequestGuard();
   const pollingGuard = useLatestRequestGuard();
   const mutationGuard = useScopedOperationGuard();
@@ -156,6 +204,173 @@ function DoorPageContent() {
     setLoadOutcome("idle");
   }, [requestScopeKey]);
 
+  const refreshOfflineMutations = useCallback(async (
+    scope: OfflineDoorScope | null = offlineScope,
+  ) => {
+    if (!scope) {
+      setOfflineMutations([]);
+      return [];
+    }
+    try {
+      const mutations = await listOfflineDoorMutations(scope);
+      setOfflineMutations(mutations);
+      return mutations;
+    } catch {
+      setOfflineMutations([]);
+      return [];
+    }
+  }, [offlineScope]);
+
+  const loadCachedOfflineRoster = useCallback(async (
+    scope: OfflineDoorScope,
+  ): Promise<boolean> => {
+    try {
+      const [snapshot, mutations] = await Promise.all([
+        loadOfflineDoorRoster(scope),
+        listOfflineDoorMutations(scope),
+      ]);
+      if (!snapshot) return false;
+      const cachedGuests = mutations
+        .filter((mutation) =>
+          mutation.state === "queued" || mutation.state === "confirmed",
+        )
+        .reduce(
+          (current, mutation) => applyQueuedDoorMutation(current, mutation),
+          snapshot.guests,
+        );
+      setGuests(cachedGuests.map((guest) => ({
+        id: guest.id,
+        venueId: scope.venueId,
+        eventId: scope.eventId,
+        name: guest.name,
+        status: guest.status,
+        checkInTime: guest.checkInTime,
+        date: scope.businessDate,
+        createdAt: snapshot.cachedAt,
+        updatedAt: snapshot.cachedAt,
+      })));
+      setUsers([]);
+      setExternalLinks([]);
+      setOfflineMutations(mutations);
+      setIsOfflineMode(true);
+      setOfflineNotice("cached");
+      setLoadOutcome("success");
+      return true;
+    } catch {
+      return false;
+    }
+  }, []);
+
+  const syncOfflineQueue = useCallback(async () => {
+    if (
+      !offlineScope ||
+      offlineSyncingRef.current ||
+      (typeof navigator !== "undefined" && !navigator.onLine)
+    ) return;
+    offlineSyncingRef.current = true;
+    setIsOfflineSyncing(true);
+    try {
+      const mutations = await listOfflineDoorMutations(offlineScope);
+      const queued = mutations.filter((mutation) => mutation.state === "queued");
+      if (queued.length === 0) {
+        setOfflineMutations(mutations);
+        return;
+      }
+      const syncResults: OfflineDoorSyncResult[] = [];
+      let hasSyncFailure = false;
+      for (const group of groupOfflineDoorMutationsByDevice(queued)) {
+        const response = await syncOfflineDoorMutations({
+          ...offlineScope,
+          deviceId: group.deviceId,
+          items: group.mutations.map((mutation) => ({
+            idempotencyKey: mutation.idempotencyKey,
+            sequence: mutation.sequence,
+            guestId: mutation.guestId,
+            action: mutation.action,
+            queuedAt: mutation.queuedAt,
+          })),
+        });
+        if (response.error || !response.data) {
+          hasSyncFailure = true;
+          continue;
+        }
+        syncResults.push(...response.data);
+      }
+      if (syncResults.length === 0 && hasSyncFailure) {
+        setOfflineNotice("syncFailed");
+        return;
+      }
+      for (const result of syncResults) {
+        await resolveOfflineDoorMutation({
+          scope: offlineScope,
+          idempotencyKey: result.idempotencyKey,
+          state: result.state,
+          resolution: result.resolution,
+        });
+      }
+      await loadCachedOfflineRoster(offlineScope);
+      setGuests((current) => {
+        let next = current;
+        for (const result of syncResults) {
+          if (result.status === null) {
+            continue;
+          }
+          next = next.map((guest) =>
+            guest.id === result.guestId
+              ? {
+                  ...guest,
+                  status: result.status ?? guest.status,
+                  checkInTime: result.checkInTime,
+                }
+              : guest,
+          );
+        }
+        return next;
+      });
+      try {
+        const [authoritative, cacheableRoster] = await Promise.all([
+          fetchGuestOperationsSnapshot(
+            offlineScope.businessDate,
+            offlineScope.venueId,
+            offlineScope.eventId,
+          ),
+          fetchOfflineDoorRoster(offlineScope),
+        ]);
+        if (authoritative.data) {
+          setGuests(authoritative.data.guests);
+          setUsers(authoritative.data.users);
+          setExternalLinks(authoritative.data.externalLinks);
+          setIsOfflineMode(false);
+        }
+        if (cacheableRoster.data) {
+          try {
+            await saveOfflineDoorRoster(createOfflineDoorRosterSnapshot({
+              scope: offlineScope,
+              guests: cacheableRoster.data,
+            }));
+          } catch {
+            // The server result remains authoritative if local persistence is unavailable.
+          }
+        } else if (cacheableRoster.error === "OFFLINE_DOOR_EVENT_UNAVAILABLE") {
+          try {
+            await removeOfflineDoorRoster(offlineScope);
+          } catch {
+            // A stale snapshot will still expire locally and cannot sync into a closed Event.
+          }
+        }
+      } catch {
+        // Resolved queue states remain visible until a later authoritative refresh.
+      }
+      setOfflineNotice(hasSyncFailure ? "syncFailed" : null);
+      await refreshOfflineMutations(offlineScope);
+    } catch {
+      setOfflineNotice("syncFailed");
+    } finally {
+      offlineSyncingRef.current = false;
+      setIsOfflineSyncing(false);
+    }
+  }, [loadCachedOfflineRoster, offlineScope, refreshOfflineMutations]);
+
   const loadData = useCallback(async () => {
     pollingGuard.invalidateRequests();
     const isLatestRequest = requestGuard.beginRequest();
@@ -171,18 +386,31 @@ function DoorPageContent() {
     setIsFetching(true);
     setFeedback(null);
     try {
-      const { data, error } = await fetchGuestOperationsSnapshot(
-        selectedDate,
-        venueId,
-        selectedEventId,
-      );
+      const [operationsResponse, offlineRosterResponse] = await Promise.all([
+        fetchGuestOperationsSnapshot(
+          selectedDate,
+          venueId,
+          selectedEventId,
+        ),
+        offlineScope
+          ? fetchOfflineDoorRoster(offlineScope)
+          : Promise.resolve(null),
+      ]);
+      const { data, error } = operationsResponse;
       if (!isLatestRequest()) return;
       if (!data) {
-        setGuests([]);
-        setUsers([]);
-        setExternalLinks([]);
-        setFeedback(t("loadFailed"));
-        setLoadOutcome("error");
+        const usedCache = offlineScope
+          ? await loadCachedOfflineRoster(offlineScope)
+          : false;
+        if (!isLatestRequest()) return;
+        if (!usedCache) {
+          setGuests([]);
+          setUsers([]);
+          setExternalLinks([]);
+          setFeedback(t("loadFailed"));
+          setLoadOutcome("error");
+          setIsOfflineMode(false);
+        }
       } else {
         if (error) {
           setFeedback(t("partialLoadFailed"));
@@ -193,24 +421,82 @@ function DoorPageContent() {
         setGuests(data.guests);
         setUsers(data.users);
         setExternalLinks(data.externalLinks);
+        setIsOfflineMode(false);
+        if (offlineScope && offlineRosterResponse?.data) {
+          try {
+            await saveOfflineDoorRoster(createOfflineDoorRosterSnapshot({
+              scope: offlineScope,
+              guests: offlineRosterResponse.data,
+            }));
+            await refreshOfflineMutations(offlineScope);
+          } catch {
+            setOfflineMutations([]);
+          }
+        } else if (
+          offlineScope &&
+          offlineRosterResponse?.error === "OFFLINE_DOOR_EVENT_UNAVAILABLE"
+        ) {
+          try {
+            await removeOfflineDoorRoster(offlineScope);
+            await refreshOfflineMutations(offlineScope);
+          } catch {
+            setOfflineMutations([]);
+          }
+        }
       }
       setLoadedScopeKey(requestScopeKey);
+      if (data && offlineScope) void syncOfflineQueue();
     } catch (error) {
       if (!isLatestRequest()) return;
       console.error("Failed to load data:", error);
-      setGuests([]);
-      setUsers([]);
-      setExternalLinks([]);
+      const usedCache = offlineScope
+        ? await loadCachedOfflineRoster(offlineScope)
+        : false;
+      if (!isLatestRequest()) return;
       setLoadedScopeKey(requestScopeKey);
-      setFeedback(t("loadFailed"));
-      setLoadOutcome("error");
+      if (!usedCache) {
+        setGuests([]);
+        setUsers([]);
+        setExternalLinks([]);
+        setFeedback(t("loadFailed"));
+        setLoadOutcome("error");
+        setIsOfflineMode(false);
+      }
     } finally {
       if (isLatestRequest()) setIsFetching(false);
     }
-  }, [pollingGuard, requestGuard, requestScopeKey, selectedDate, selectedEventId, t, venueId]);
+  }, [
+    loadCachedOfflineRoster,
+    offlineScope,
+    pollingGuard,
+    refreshOfflineMutations,
+    requestGuard,
+    requestScopeKey,
+    selectedDate,
+    selectedEventId,
+    syncOfflineQueue,
+    t,
+    venueId,
+  ]);
 
   useEffect(() => {
     loadData();
+  }, [loadData]);
+
+  useEffect(() => {
+    setOfflineNotice(null);
+    setIsOfflineMode(false);
+    setDoorCode("");
+    setDoorCodeFeedback(null);
+    void refreshOfflineMutations(offlineScope);
+  }, [offlineScope, refreshOfflineMutations]);
+
+  useEffect(() => {
+    const handleOnline = () => {
+      void loadData();
+    };
+    window.addEventListener("online", handleOnline);
+    return () => window.removeEventListener("online", handleOnline);
   }, [loadData]);
 
   // 주기적으로 데이터 갱신 (15초)
@@ -223,7 +509,11 @@ function DoorPageContent() {
     }
   }, [loadedScopeKey, pollingGuard, requestScopeKey, selectedDate, selectedEventId, venueId]);
 
-  const pollingCoordinator = useGuestPolling(pollData, 15000, !!venueId);
+  const pollingCoordinator = useGuestPolling(
+    pollData,
+    15000,
+    !!venueId && !isOfflineMode,
+  );
 
   useEffect(() => {
     mutationGuard.invalidateOperations();
@@ -232,6 +522,39 @@ function DoorPageContent() {
     setLoadingStates({});
     setFeedback(null);
   }, [mutationGuard, pollingCoordinator, pollingGuard, requestScopeKey]);
+
+  const queueOfflineStatusChange = useCallback(async (
+    guestId: string,
+    status: "pending" | "checked",
+  ): Promise<boolean> => {
+    if (!offlineScope) return false;
+    try {
+      const mutation = await enqueueOfflineDoorMutation({
+        scope: offlineScope,
+        guestId,
+        action: status === "pending" ? "cancel_check_in" : "check_in",
+      });
+      setGuests((current) =>
+        current.map((guest) =>
+          guest.id === guestId
+            ? {
+                ...guest,
+                status,
+                checkInTime: status === "checked" ? mutation.queuedAt : null,
+              }
+            : guest,
+        ),
+      );
+      await refreshOfflineMutations(offlineScope);
+      setIsOfflineMode(true);
+      setOfflineNotice("queued");
+      setFeedback(null);
+      return true;
+    } catch {
+      setFeedback(t("offlineQueueFailed"));
+      return false;
+    }
+  }, [offlineScope, refreshOfflineMutations, t]);
 
   const handleStatusChange = async (
     id: string,
@@ -249,6 +572,15 @@ function DoorPageContent() {
     setLoadingStates((prev) => ({ ...prev, [busyKey]: true }));
 
     try {
+      if (
+        newStatus !== "deleted" &&
+        offlineScope &&
+        (isOfflineMode ||
+          (typeof navigator !== "undefined" && !navigator.onLine))
+      ) {
+        await queueOfflineStatusChange(id, newStatus);
+        return;
+      }
       const { data, error } =
         newStatus === "deleted"
           ? await deleteGuest(id)
@@ -266,12 +598,84 @@ function DoorPageContent() {
     } catch (error) {
       if (!operation.isCurrent(currentScopeKeyRef.current)) return;
       console.error("Failed to update guest status:", error);
-      setFeedback(t("updateFailed"));
+      const queued =
+        newStatus !== "deleted" &&
+        offlineScope
+          ? await queueOfflineStatusChange(id, newStatus)
+          : false;
+      if (!queued) setFeedback(t("updateFailed"));
     } finally {
       releasePolling();
       if (operation.finish(currentScopeKeyRef.current)) {
         setLoadingStates((prev) => ({ ...prev, [busyKey]: false }));
       }
+    }
+  };
+
+  const handleClearResolvedOfflineMutations = async () => {
+    if (!offlineScope) return;
+    try {
+      const [snapshot, mutations] = await Promise.all([
+        loadOfflineDoorRoster(offlineScope),
+        listOfflineDoorMutations(offlineScope),
+      ]);
+      if (snapshot) {
+        const confirmedRoster = mutations
+          .filter((mutation) => mutation.state === "confirmed")
+          .reduce(
+            (current, mutation) => applyQueuedDoorMutation(current, mutation),
+            snapshot.guests,
+          );
+        await saveOfflineDoorRoster(createOfflineDoorRosterSnapshot({
+          scope: offlineScope,
+          guests: confirmedRoster,
+        }));
+      }
+      await clearResolvedOfflineDoorMutations(offlineScope);
+      await refreshOfflineMutations(offlineScope);
+    } catch {
+      setFeedback(t("offlineStorageFailed"));
+    }
+  };
+
+  const handleDoorCodeLookup = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!offlineScope || !doorCode.trim() || isDoorCodeLoading) return;
+    setIsDoorCodeLoading(true);
+    setDoorCodeFeedback(null);
+    try {
+      if (isOfflineMode || !navigator.onLine) {
+        const guestId = parseDoorGuestCode(doorCode);
+        const localGuest = guestId
+          ? guests.find((guest) => guest.id === guestId)
+          : null;
+        if (!localGuest) {
+          setDoorCodeFeedback("notFound");
+          return;
+        }
+        setSearchQuery(localGuest.name);
+        setDoorCodeFeedback("found");
+        return;
+      }
+      const response = await findDoorGuestByCode({
+        ...offlineScope,
+        code: doorCode,
+      });
+      if (response.data) {
+        setSearchQuery(response.data.name);
+        setDoorCodeFeedback("found");
+      } else {
+        setDoorCodeFeedback(
+          response.error === "DOOR_GUEST_CODE_NOT_FOUND" ||
+            response.error === "INVALID_DOOR_GUEST_CODE"
+            ? "notFound"
+            : "unavailable",
+        );
+      }
+    } catch {
+      setDoorCodeFeedback("unavailable");
+    } finally {
+      setIsDoorCodeLoading(false);
     }
   };
 
@@ -302,6 +706,18 @@ function DoorPageContent() {
         : displayData.guests.filter(
             (guest) => guest.createdByUserId === selectedDJ,
           );
+  const offlineQueueCounts = offlineMutations.reduce(
+    (counts, mutation) => ({
+      ...counts,
+      [mutation.state]: counts[mutation.state] + 1,
+    }),
+    { queued: 0, confirmed: 0, conflict: 0, rejected: 0 },
+  );
+  const hasResolvedOfflineMutations =
+    offlineQueueCounts.confirmed +
+      offlineQueueCounts.conflict +
+      offlineQueueCounts.rejected >
+    0;
 
   const pendingGuests = filteredGuests.filter(
     (guest) => guest.status === "pending",
@@ -410,6 +826,69 @@ function DoorPageContent() {
 
                 {feedback && <Alert type="error" message={feedback} />}
 
+                {offlineScope && (
+                  <div
+                    className="app-panel space-y-3 p-4 sm:p-5"
+                    aria-label={t("offlineOperations")}
+                  >
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                      <div>
+                        <h2 className="text-sm font-semibold text-text-heading">
+                          {t("offlineOperations")}
+                        </h2>
+                        <p
+                          className="mt-1 text-xs leading-relaxed text-text-muted"
+                          role="status"
+                          aria-live="polite"
+                        >
+                          {isOfflineMode
+                            ? t("offlineCachedRoster")
+                            : isOfflineSyncing
+                              ? t("offlineSyncing")
+                              : t("offlineReady")}
+                        </p>
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          onClick={() => void syncOfflineQueue()}
+                          disabled={isOfflineSyncing || offlineQueueCounts.queued === 0}
+                          className="pressable min-h-11 border border-border-default bg-surface-raised px-3 py-2 text-xs font-medium text-text-heading disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          {t("retryOfflineSync")}
+                        </button>
+                        {hasResolvedOfflineMutations && (
+                          <button
+                            type="button"
+                            onClick={() => void handleClearResolvedOfflineMutations()}
+                            className="pressable min-h-11 border border-border-default bg-canvas px-3 py-2 text-xs font-medium text-text-muted hover:text-text-heading"
+                          >
+                            {t("clearOfflineResults")}
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                    <dl className="grid grid-cols-2 gap-2 font-mono text-xs sm:grid-cols-4">
+                      <div><dt className="text-text-dim">{t("offlineQueued")}</dt><dd className="mt-1 text-text-heading">{offlineQueueCounts.queued}</dd></div>
+                      <div><dt className="text-text-dim">{t("offlineConfirmed")}</dt><dd className="mt-1 text-status-checked">{offlineQueueCounts.confirmed}</dd></div>
+                      <div><dt className="text-text-dim">{t("offlineConflicts")}</dt><dd className="mt-1 text-status-waiting">{offlineQueueCounts.conflict}</dd></div>
+                      <div><dt className="text-text-dim">{t("offlineRejected")}</dt><dd className="mt-1 text-status-danger">{offlineQueueCounts.rejected}</dd></div>
+                    </dl>
+                    {offlineNotice && (
+                      <p
+                        className={`border-l-2 px-3 py-2 text-xs ${
+                          offlineNotice === "syncFailed"
+                            ? "border-status-danger bg-status-danger/10 text-status-danger"
+                            : "border-status-waiting bg-status-waiting/10 text-text-muted"
+                        }`}
+                        role={offlineNotice === "syncFailed" ? "alert" : "status"}
+                      >
+                        {t(`offlineNotice.${offlineNotice}`)}
+                      </p>
+                    )}
+                  </div>
+                )}
+
           </>
         }
       >
@@ -451,6 +930,52 @@ function DoorPageContent() {
                 value={searchQuery}
                 onChange={setSearchQuery}
               />
+              {offlineScope && (
+                <form
+                  onSubmit={handleDoorCodeLookup}
+                  className="border-b border-border-subtle bg-surface px-4 py-3 sm:px-5"
+                >
+                  <label htmlFor="door-guest-code" className="app-label">
+                    {t("guestCode")}
+                  </label>
+                  <div className="flex flex-col gap-2 sm:flex-row">
+                    <input
+                      id="door-guest-code"
+                      name="door-guest-code"
+                      value={doorCode}
+                      onChange={(event) => {
+                        setDoorCode(event.target.value);
+                        setDoorCodeFeedback(null);
+                      }}
+                      autoComplete="off"
+                      autoCapitalize="characters"
+                      spellCheck={false}
+                      placeholder={t("guestCodePlaceholder")}
+                      className="app-field min-h-11 flex-1 font-mono"
+                    />
+                    <button
+                      type="submit"
+                      disabled={!doorCode.trim() || isDoorCodeLoading}
+                      className="pressable min-h-11 border border-action-primary bg-action-primary px-4 py-2 text-sm font-semibold text-action-text disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {isDoorCodeLoading ? t("guestCodeLookingUp") : t("guestCodeLookup")}
+                    </button>
+                  </div>
+                  <p className="app-helper">{t("guestCodeHelp")}</p>
+                  {doorCodeFeedback && (
+                    <p
+                      className={`mt-2 text-xs ${
+                        doorCodeFeedback === "found"
+                          ? "text-status-checked"
+                          : "text-status-danger"
+                      }`}
+                      role={doorCodeFeedback === "found" ? "status" : "alert"}
+                    >
+                      {t(`guestCodeFeedback.${doorCodeFeedback}`)}
+                    </p>
+                  )}
+                </form>
+              )}
               <StatGrid
                 variant="embedded"
                 isLoading={!hasCurrentScopeData}

@@ -39,6 +39,8 @@ preview_id = "3c3c403d6dbb4aa7b0e8920041b12622"
 # JWT_SECRET, AWS_SES_* 등 시크릿은 .dev.vars에 설정 (절대 여기에 입력 금지)
 [vars]
 NEXT_PUBLIC_APP_URL = "https://guest.faustseoul.kr"
+# 외부 connector는 공식 API 접근 및 서면 허가를 모두 확인한 항목만
+# OFFICIAL_CONNECTORS_JSON으로 별도 설정한다. 기본값은 미설정(fail-closed)이다.
 # 로컬 개발 URL은 .dev.vars의 NEXT_PUBLIC_APP_URL로 오버라이드:
 #   NEXT_PUBLIC_APP_URL = "http://localhost:3000"
 #   TERMINAL_VENUE_ID   = "<실제 베뉴 UUID>"

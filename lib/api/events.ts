@@ -213,8 +213,8 @@ export async function createEvent(params: EventDraftInput & {
           INSERT INTO external_dj_links (
             id, venue_id, token, dj_name, event, date, event_id,
             max_guests, used_guests, active, expires_at, created_by,
-            locale_mode, created_at
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, 0, ?, ?, ?, ?)
+            locale_mode, kind, created_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, 0, ?, ?, ?, ?, ?)
         `).bind(
           link.id,
           link.venueId,
@@ -227,6 +227,7 @@ export async function createEvent(params: EventDraftInput & {
           link.expiresAt,
           link.createdBy,
           link.localeMode,
+          link.kind,
           link.createdAt,
         ),
       ),

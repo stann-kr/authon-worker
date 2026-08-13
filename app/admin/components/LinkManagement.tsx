@@ -63,9 +63,10 @@ interface LinkFormData {
   event: string;
   maxGuests: number | "";
   localeMode: ExternalDJLink["localeMode"];
+  kind: ExternalDJLink["kind"];
 }
 
-type LinkFormField = "date" | "dj" | "event" | "maxGuests" | "localeMode";
+type LinkFormField = "date" | "dj" | "event" | "maxGuests" | "localeMode" | "kind";
 
 interface LinkFormValidationError {
   field: LinkFormField;
@@ -126,6 +127,7 @@ export default function LinkManagement({
     event: "",
     maxGuests: 5,
     localeMode: "auto" as ExternalDJLink["localeMode"],
+    kind: "contributor" as ExternalDJLink["kind"],
   });
   const [generatedLink, setGeneratedLink] = useState<ExternalDJLink | null>(
     null,
@@ -163,6 +165,7 @@ export default function LinkManagement({
   const linkEventInputRef = useRef<HTMLInputElement>(null);
   const linkMaxGuestsInputRef = useRef<HTMLInputElement>(null);
   const linkLocaleInputRef = useRef<HTMLButtonElement>(null);
+  const linkKindInputRef = useRef<HTMLInputElement>(null);
   const generatedLinkPanelRef = useRef<HTMLDivElement>(null);
   const shouldFocusTemplateDateRef = useRef(false);
   const shouldFocusGeneratedLinkRef = useRef(false);
@@ -354,6 +357,7 @@ export default function LinkManagement({
       event: linkEventInputRef,
       maxGuests: linkMaxGuestsInputRef,
       localeMode: linkLocaleInputRef,
+      kind: linkKindInputRef,
     }[field];
     window.requestAnimationFrame(() => target.current?.focus());
   };
@@ -373,6 +377,8 @@ export default function LinkManagement({
           return { field: "maxGuests", message: t("invalidMaxGuests") };
         case "INVALID_LOCALE_MODE":
           return { field: "localeMode", message: t("invalidLocaleMode") };
+        case "INVALID_LINK_KIND":
+          return { field: "kind", message: t("invalidLinkKind") };
         default:
           return null;
       }
@@ -402,6 +408,7 @@ export default function LinkManagement({
       event: formData.event,
       maxGuests: formData.maxGuests,
       localeMode: formData.localeMode,
+      kind: formData.kind,
     });
     if (prepared.error || !prepared.draft) {
       if (!applyFormValidationError(prepared.error ?? "INVALID_INPUT")) {
@@ -447,6 +454,7 @@ export default function LinkManagement({
           event: "",
           maxGuests: 5,
           localeMode: "auto",
+          kind: "contributor",
         });
       }
     } catch (createError) {
@@ -548,6 +556,7 @@ export default function LinkManagement({
       event: draft.event,
       maxGuests: draft.maxGuests,
       localeMode: draft.localeMode,
+      kind: draft.kind,
     });
     setGeneratedLink(null);
     setGeneratedLinkScopeKey("");
@@ -996,6 +1005,70 @@ export default function LinkManagement({
                   )}
                 </div>
 
+                <fieldset
+                  aria-invalid={
+                    formValidationError?.field === "kind" || undefined
+                  }
+                  aria-describedby="link-kind-help"
+                >
+                  <legend className="app-label">{t("accessType")}</legend>
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    {([
+                      {
+                        value: "contributor",
+                        label: t("contributorLink"),
+                        help: t("contributorLinkHelp"),
+                      },
+                      {
+                        value: "self_rsvp",
+                        label: t("selfRsvpLink"),
+                        help: t("selfRsvpLinkHelp"),
+                      },
+                    ] as const).map((option, index) => (
+                      <label
+                        key={option.value}
+                        className={`min-h-20 cursor-pointer border p-3 transition-colors ${
+                          formData.kind === option.value
+                            ? "border-action-primary bg-surface-active"
+                            : "border-border-default bg-canvas hover:border-border-strong"
+                        }`}
+                      >
+                        <span className="flex items-start gap-2">
+                          <input
+                            ref={index === 0 ? linkKindInputRef : undefined}
+                            type="radio"
+                            name="link-kind"
+                            value={option.value}
+                            checked={formData.kind === option.value}
+                            disabled={isGenerating}
+                            onChange={() => {
+                              clearFormFieldError("kind");
+                              setFormData({ ...formData, kind: option.value });
+                            }}
+                            className="mt-0.5 h-4 w-4 accent-[var(--action-primary)]"
+                          />
+                          <span>
+                            <span className="block text-sm font-semibold text-text-heading">
+                              {option.label}
+                            </span>
+                            <span className="mt-1 block text-xs leading-relaxed text-text-muted">
+                              {option.help}
+                            </span>
+                          </span>
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+                  <p id="link-kind-help" className="app-helper">
+                    {t("accessTypeHelp")}
+                  </p>
+                  {formValidationError?.field === "kind" && (
+                    <p className="mt-1 text-xs text-status-danger" role="alert">
+                      {formValidationError.message}
+                    </p>
+                  )}
+                </fieldset>
+
                 <div>
                   <label htmlFor="link-max-guests" className="app-label">
                     {t("maxGuests")}
@@ -1133,6 +1206,9 @@ export default function LinkManagement({
                   </p>
                   <p className="mt-1 font-mono text-xs text-text-dim">
                     {t("language")}: {scopedGeneratedLink.localeMode === "auto" ? t("auto") : scopedGeneratedLink.localeMode.toUpperCase()}
+                  </p>
+                  <p className="mt-1 text-xs text-text-dim">
+                    {t("accessType")}: {scopedGeneratedLink.kind === "self_rsvp" ? t("selfRsvpLink") : t("contributorLink")}
                   </p>
                 </div>
 
@@ -1300,6 +1376,9 @@ export default function LinkManagement({
                               </h3>
                               <p className="mt-0.5 break-words text-xs text-text-muted">
                                 {link.event || t("untitledEvent")}
+                              </p>
+                              <p className="mt-1 text-xs text-text-dim">
+                                {link.kind === "self_rsvp" ? t("selfRsvpLink") : t("contributorLink")}
                               </p>
                             </div>
                           </div>

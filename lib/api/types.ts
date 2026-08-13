@@ -222,6 +222,7 @@ export interface ExternalDJLink {
   createdAt?: string | null;
   guestUrl?: string | null;
   localeMode: "auto" | "en" | "ko";
+  kind: "contributor" | "self_rsvp";
 }
 
 /** Minimal external contributor identity for Door/Admin guest rosters. */

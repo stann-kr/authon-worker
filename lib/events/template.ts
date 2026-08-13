@@ -4,6 +4,7 @@ export interface EventTemplateSourceLink {
   djName: string;
   maxGuests: number;
   localeMode: string;
+  kind: string;
 }
 
 export interface EventTemplateSourceContributor {
@@ -48,6 +49,7 @@ export function buildEventTemplateClonePlan(params: {
       expiresAt: expiresAt.toISOString(),
       createdBy: params.actorUserId,
       localeMode: source.localeMode,
+      kind: source.kind === "self_rsvp" ? "self_rsvp" as const : "contributor" as const,
       createdAt: params.createdAt,
     };
   });

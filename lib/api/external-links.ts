@@ -5,7 +5,12 @@ import { reportServerError } from "@/lib/observability/structured-log";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { headers } from "next/headers";
 import { eq, and, ne, desc, inArray, isNull, or } from "drizzle-orm";
-import { externalDjLinks, venues, guests } from "../db/schema";
+import {
+  externalDjLinks,
+  externalGuestOwners,
+  venues,
+  guests,
+} from "../db/schema";
 import {
   type ApiResponse,
   type BulkGuestCreateInput,
@@ -30,9 +35,13 @@ import {
 } from "@/lib/guests/bulk-entry";
 import {
   buildExternalGuestReservationSql,
+  DECREMENT_SELF_RSVP_FOR_PENDING_GUEST_SQL,
   DECREMENT_EXTERNAL_LINK_FOR_PENDING_GUEST_SQL,
   EXTERNAL_GUEST_INSERT_AFTER_RESERVATION_SQL,
+  INSERT_SELF_RSVP_OWNER_AFTER_GUEST_SQL,
+  RESERVE_SELF_RSVP_SLOT_SQL,
   SOFT_DELETE_EXTERNAL_GUEST_AFTER_DECREMENT_SQL,
+  UPDATE_SELF_RSVP_GUEST_SQL,
 } from "@/lib/guests/atomic-sql";
 import {
   getExternalLinkDeletionDisposition,
@@ -47,6 +56,8 @@ import {
   resolveEventForRosterWrite,
 } from "@/lib/events/server";
 import { prepareGuestActivityAfterChange } from "@/lib/guests/activity-ledger";
+import { hashOpaqueIdentifier } from "@/lib/guests/activity-ledger";
+import { isValidExternalOwnerKey } from "@/lib/external-links/ownership";
 
 type Db = ReturnType<typeof getDb>;
 
@@ -243,6 +254,7 @@ export async function createExternalLink(link: {
   maxGuests: number;
   eventId?: string | null;
   localeMode?: ExternalDJLink["localeMode"];
+  kind?: ExternalDJLink["kind"];
 }): Promise<ApiResponse<ExternalDJLink>> {
   try {
     const user = await requireRole(["super_admin", "venue_admin"]);
@@ -274,6 +286,7 @@ export async function createExternalLink(link: {
       eventId: event.id,
       maxGuests: draft.maxGuests,
       localeMode: draft.localeMode,
+      kind: draft.kind,
       usedGuests: 0,
       active: true,
       expiresAt,
@@ -379,8 +392,11 @@ export async function activateExternalLink(linkId: string): Promise<{ error: str
   }
 }
 
-/** 외부 DJ 토큰 검증 (인증 불필요 — 토큰 기반 공개 접근) */
-export async function validateExternalToken(token: string): Promise<ApiResponse<{ link: ExternalDJLink; venue: Venue; guests: Guest[] }>> {
+/** 외부 링크 검증 (인증 불필요 — 토큰 및 Self-RSVP 소유키 기반 공개 접근). */
+export async function validateExternalToken(
+  token: string,
+  ownerKey?: string | null,
+): Promise<ApiResponse<{ link: ExternalDJLink; venue: Venue; guests: Guest[] }>> {
   try {
     const db = getDb();
     const linkResult = await db.select().from(externalDjLinks).where(eq(externalDjLinks.token, token));
@@ -409,12 +425,41 @@ export async function validateExternalToken(token: string): Promise<ApiResponse<
       return { data: null, error: INVALID_EXTERNAL_LINK_ERROR };
     }
 
-    const guestsResult = await db.select().from(guests)
-      .where(and(eq(guests.externalLinkId, link.id), ne(guests.status, "deleted")));
+    let guestsResult: Array<typeof guests.$inferSelect> = [];
+    if (link.kind === "self_rsvp") {
+      if (isValidExternalOwnerKey(ownerKey)) {
+        const ownerKeyHash = await hashOpaqueIdentifier(ownerKey);
+        const ownedRows = await db
+          .select({ guest: guests })
+          .from(guests)
+          .innerJoin(
+            externalGuestOwners,
+            eq(externalGuestOwners.guestId, guests.id),
+          )
+          .where(
+            and(
+              eq(guests.externalLinkId, link.id),
+              ne(guests.status, "deleted"),
+              eq(externalGuestOwners.externalLinkId, link.id),
+              eq(externalGuestOwners.ownerKeyHash, ownerKeyHash),
+              isNull(externalGuestOwners.releasedAt),
+            ),
+          )
+          .limit(1);
+        guestsResult = ownedRows.map((row) => row.guest);
+      }
+    } else {
+      guestsResult = await db.select().from(guests)
+        .where(and(eq(guests.externalLinkId, link.id), ne(guests.status, "deleted")));
+    }
 
     return {
       data: {
-        link: toExternalDJLink(link),
+        link: {
+          ...toExternalDJLink(link),
+          usedGuests:
+            link.kind === "self_rsvp" ? guestsResult.length : link.usedGuests,
+        },
         venue,
         guests: guestsResult.map((g) => ({ ...g, status: g.status as Guest["status"] })),
       },
@@ -468,7 +513,6 @@ export async function createGuestsViaExternalLink(params: {
     ) {
       return { data: null, error: "Link is invalid, expired, or inactive." };
     }
-
     const tenant = await getRequestTenantContext();
     if (!tenant.resolved || (tenant.scope === "venue" && tenant.venueId !== link.venueId)) {
       return { data: null, error: "Link is invalid, expired, or inactive." };
@@ -480,6 +524,9 @@ export async function createGuestsViaExternalLink(params: {
     }
     if (params.date !== link.date) {
       return { data: null, error: "Guest date does not match this link." };
+    }
+    if (link.kind === "self_rsvp") {
+      return { data: null, error: "SELF_RSVP_BULK_UNSUPPORTED" };
     }
     const event = await resolveEventForRosterWrite({
       venueId: link.venueId,
@@ -688,6 +735,173 @@ export async function createGuestsViaExternalLink(params: {
   }
 }
 
+async function findOwnedExternalGuest(
+  db: Db,
+  linkId: string,
+  ownerKeyHash: string,
+): Promise<Guest | null> {
+  const [row] = await db
+    .select({ guest: guests })
+    .from(guests)
+    .innerJoin(
+      externalGuestOwners,
+      eq(externalGuestOwners.guestId, guests.id),
+    )
+    .where(
+      and(
+        eq(guests.externalLinkId, linkId),
+        ne(guests.status, "deleted"),
+        eq(externalGuestOwners.externalLinkId, linkId),
+        eq(externalGuestOwners.ownerKeyHash, ownerKeyHash),
+        isNull(externalGuestOwners.releasedAt),
+      ),
+    )
+    .limit(1);
+  return row
+    ? { ...row.guest, status: row.guest.status as Guest["status"] }
+    : null;
+}
+
+async function createSelfRsvpGuest(params: {
+  token: string;
+  ownerKey: string;
+  guestName: string;
+  date: string;
+}): Promise<ApiResponse<Guest>> {
+  if (!isValidExternalOwnerKey(params.ownerKey)) {
+    return { data: null, error: "INVALID_SELF_RSVP_OWNER" };
+  }
+  if (!isValidExternalLinkDate(params.date)) {
+    return { data: null, error: "INVALID_DATE" };
+  }
+  const preparedName = prepareGuestName(params.guestName);
+  if (preparedName.error !== null) {
+    return { data: null, error: "INVALID_GUEST_NAME" };
+  }
+
+  const { env } = getCloudflareContext();
+  const db = getDb();
+  const [link] = await db
+    .select()
+    .from(externalDjLinks)
+    .where(eq(externalDjLinks.token, params.token))
+    .limit(1);
+  if (
+    !link ||
+    link.kind !== "self_rsvp" ||
+    link.deletedAt ||
+    !link.active ||
+    isExpired(link.expiresAt) ||
+    !link.date ||
+    !isValidExternalLinkDate(link.date)
+  ) {
+    return { data: null, error: "Link is invalid, expired, or inactive." };
+  }
+  const tenant = await getRequestTenantContext();
+  if (!tenant.resolved || (tenant.scope === "venue" && tenant.venueId !== link.venueId)) {
+    return { data: null, error: "Link is invalid, expired, or inactive." };
+  }
+  try {
+    await requireActiveVenueId(link.venueId);
+  } catch {
+    return { data: null, error: "Link is invalid, expired, or inactive." };
+  }
+  if (params.date !== link.date) {
+    return { data: null, error: "Guest date does not match this link." };
+  }
+
+  const ownerKeyHash = await hashOpaqueIdentifier(params.ownerKey);
+  const existing = await findOwnedExternalGuest(db, link.id, ownerKeyHash);
+  if (existing) return { data: existing, error: null };
+
+  const requestHeaders = await headers();
+  try {
+    const rateLimit = await consumeRateLimit({
+      namespace: "self-rsvp-write",
+      identifier: `${link.id}:${getRequestIpFromHeaders(requestHeaders)}`,
+      limit: EXTERNAL_GUEST_RATE_LIMIT_NAMES,
+      windowSeconds: EXTERNAL_GUEST_RATE_LIMIT_WINDOW_SECONDS,
+      cost: 1,
+    });
+    if (!rateLimit.allowed) return { data: null, error: "RATE_LIMITED" };
+  } catch {
+    await reportServerError("self_rsvp.rate_limit", new Error("Rate limit unavailable"));
+  }
+
+  const event = await resolveEventForRosterWrite({
+    venueId: link.venueId,
+    businessDate: link.date,
+    eventId: link.eventId,
+    purpose: "register",
+  });
+  const id = crypto.randomUUID();
+  const activityId = crypto.randomUUID();
+  const now = new Date().toISOString();
+  const writeResults = await env.DB.batch<{ id?: string; guestId?: string }>([
+    env.DB.prepare(RESERVE_SELF_RSVP_SLOT_SQL).bind(
+      link.id,
+      params.token,
+      link.venueId,
+      now,
+      link.date,
+      ownerKeyHash,
+    ),
+    env.DB.prepare(EXTERNAL_GUEST_INSERT_AFTER_RESERVATION_SQL).bind(
+      id,
+      link.venueId,
+      toStoredGuestName(preparedName.name),
+      link.id,
+      event.id,
+      link.date,
+      now,
+      now,
+    ),
+    env.DB.prepare(INSERT_SELF_RSVP_OWNER_AFTER_GUEST_SQL).bind(
+      id,
+      link.id,
+      ownerKeyHash,
+      now,
+    ),
+    prepareGuestActivityAfterChange(env.DB, {
+      activityId,
+      venueId: link.venueId,
+      eventId: event.id,
+      guestId: id,
+      action: "add",
+      actorUserId: null,
+      actorType: "external_link",
+      channel: "external_link",
+      requestId: crypto.randomUUID(),
+      previousStatus: null,
+      nextStatus: "pending",
+      occurredAt: now,
+    }),
+  ]);
+
+  if (writeResults[0]?.results[0]?.id !== link.id) {
+    const concurrent = await findOwnedExternalGuest(db, link.id, ownerKeyHash);
+    if (concurrent) return { data: concurrent, error: null };
+    return { data: null, error: "Guest limit reached for this link." };
+  }
+  if (
+    writeResults[1]?.results[0]?.id !== id ||
+    writeResults[2]?.results[0]?.guestId !== id ||
+    writeResults[3]?.results[0]?.id !== activityId
+  ) {
+    throw new Error("Self RSVP guest insert was not atomic");
+  }
+  const [created] = await db
+    .select()
+    .from(guests)
+    .where(and(eq(guests.id, id), eq(guests.externalLinkId, link.id)))
+    .limit(1);
+  if (!created) throw new Error("Self RSVP guest could not be read back");
+  return {
+    data: { ...created, status: created.status as Guest["status"] },
+    error: null,
+  };
+}
+
 /**
  * 외부 DJ 토큰으로 게스트 생성 (인증 불필요 — 토큰 기반 공개 접근).
  * usedGuests 증가를 D1 원자 UPDATE로 처리하여 race condition 방지.
@@ -696,36 +910,147 @@ export async function createGuestViaExternalLink(params: {
   token: string;
   guestName: string;
   date: string;
+  ownerKey?: string | null;
 }): Promise<ApiResponse<Guest>> {
-  const response = await createGuestsViaExternalLink({
-    token: params.token,
-    date: params.date,
-    items: [{ name: params.guestName, allowDuplicate: false }],
-  });
-  if (response.error || !response.data) {
-    return { data: null, error: response.error };
-  }
+  try {
+    const db = getDb();
+    const [link] = await db
+      .select({ kind: externalDjLinks.kind })
+      .from(externalDjLinks)
+      .where(eq(externalDjLinks.token, params.token))
+      .limit(1);
+    if (link?.kind === "self_rsvp") {
+      return await createSelfRsvpGuest({
+        token: params.token,
+        ownerKey: params.ownerKey ?? "",
+        guestName: params.guestName,
+        date: params.date,
+      });
+    }
+    const response = await createGuestsViaExternalLink({
+      token: params.token,
+      date: params.date,
+      items: [{ name: params.guestName, allowDuplicate: false }],
+    });
+    if (response.error || !response.data) {
+      return { data: null, error: response.error };
+    }
 
-  const [result] = response.data.items;
-  if (result?.status === "created" && result.guest) {
-    return { data: result.guest, error: null };
+    const [result] = response.data.items;
+    if (result?.status === "created" && result.guest) {
+      return { data: result.guest, error: null };
+    }
+    if (result?.status === "limit_reached") {
+      return { data: null, error: "Guest limit reached for this link." };
+    }
+    if (result?.status === "duplicate_requires_confirmation") {
+      return { data: null, error: "DUPLICATE_REQUIRES_CONFIRMATION" };
+    }
+    return {
+      data: null,
+      error: "Unable to register guest right now. Please try again.",
+    };
+  } catch (error: unknown) {
+    await reportServerError("external_link.guest_create_one", error);
+    return {
+      data: null,
+      error: "Unable to register guest right now. Please try again.",
+    };
   }
-  if (result?.status === "limit_reached") {
-    return { data: null, error: "Guest limit reached for this link." };
+}
+
+/** Self-RSVP 참가자가 자신의 대기 상태 등록명만 수정한다. */
+export async function updateGuestViaExternalLink(params: {
+  token: string;
+  ownerKey: string;
+  guestId: string;
+  guestName: string;
+}): Promise<ApiResponse<Guest>> {
+  try {
+    if (!isValidExternalOwnerKey(params.ownerKey)) {
+      return { data: null, error: "INVALID_SELF_RSVP_OWNER" };
+    }
+    const preparedName = prepareGuestName(params.guestName);
+    if (preparedName.error !== null) {
+      return { data: null, error: "INVALID_GUEST_NAME" };
+    }
+    const { env } = getCloudflareContext();
+    const db = getDb();
+    const [link] = await db
+      .select()
+      .from(externalDjLinks)
+      .where(eq(externalDjLinks.token, params.token))
+      .limit(1);
+    if (
+      !link ||
+      link.kind !== "self_rsvp" ||
+      link.deletedAt ||
+      !link.active ||
+      isExpired(link.expiresAt) ||
+      !link.date ||
+      !isValidExternalLinkDate(link.date)
+    ) {
+      return { data: null, error: "Link is invalid, expired, or inactive." };
+    }
+    const tenant = await getRequestTenantContext();
+    if (!tenant.resolved || (tenant.scope === "venue" && tenant.venueId !== link.venueId)) {
+      return { data: null, error: "Link is invalid, expired, or inactive." };
+    }
+    const ownerKeyHash = await hashOpaqueIdentifier(params.ownerKey);
+    const current = await findOwnedExternalGuest(db, link.id, ownerKeyHash);
+    if (!current || current.id !== params.guestId || current.status !== "pending") {
+      return { data: null, error: "Unable to update this RSVP." };
+    }
+    const now = new Date().toISOString();
+    const activityId = crypto.randomUUID();
+    const results = await env.DB.batch<{ id?: string }>([
+      env.DB.prepare(UPDATE_SELF_RSVP_GUEST_SQL).bind(
+        toStoredGuestName(preparedName.name),
+        now,
+        params.guestId,
+        link.id,
+        link.venueId,
+        link.date,
+        ownerKeyHash,
+        params.token,
+        now,
+      ),
+      prepareGuestActivityAfterChange(env.DB, {
+        activityId,
+        venueId: link.venueId,
+        eventId: current.eventId ?? link.eventId,
+        guestId: current.id,
+        action: "update",
+        actorUserId: null,
+        actorType: "external_link",
+        channel: "external_link",
+        requestId: crypto.randomUUID(),
+        previousStatus: current.status,
+        nextStatus: current.status,
+        occurredAt: now,
+      }),
+    ]);
+    if (
+      results[0]?.results[0]?.id !== current.id ||
+      results[1]?.results[0]?.id !== activityId
+    ) {
+      return { data: null, error: "Unable to update this RSVP." };
+    }
+    const updated = await findOwnedExternalGuest(db, link.id, ownerKeyHash);
+    return updated
+      ? { data: updated, error: null }
+      : { data: null, error: "Unable to update this RSVP." };
+  } catch (error: unknown) {
+    await reportServerError("self_rsvp.guest_update", error);
+    return { data: null, error: "Unable to update this RSVP right now." };
   }
-  if (result?.status === "duplicate_requires_confirmation") {
-    return { data: null, error: "DUPLICATE_REQUIRES_CONFIRMATION" };
-  }
-  return {
-    data: null,
-    error: "Unable to register guest right now. Please try again.",
-  };
 }
 
 /** 외부 DJ 토큰으로 게스트 삭제 (토큰 기반). 소유권 검증 포함. */
 export async function deleteGuestViaExternalLink(params: {
   token: string;
   guestId: string;
+  ownerKey?: string | null;
 }): Promise<{ error: string | null }> {
   try {
     const { env } = getCloudflareContext();
@@ -756,39 +1081,69 @@ export async function deleteGuestViaExternalLink(params: {
       return { error: "Link is invalid, expired, or inactive." };
     }
 
-    // 소유권 검증: guest가 이 link에 속하는지 확인
-    const guestResult = await db.select({ externalLinkId: guests.externalLinkId, status: guests.status })
-      .from(guests)
-      .where(eq(guests.id, params.guestId))
-      .limit(1);
-
-    const guest = guestResult[0];
-    if (!guest || guest.externalLinkId !== link.id) {
+    let ownerKeyHash: string | null = null;
+    let guest: Pick<Guest, "id" | "status" | "externalLinkId"> | null = null;
+    if (link.kind === "self_rsvp") {
+      if (!isValidExternalOwnerKey(params.ownerKey)) {
+        return { error: "Unable to delete this RSVP." };
+      }
+      ownerKeyHash = await hashOpaqueIdentifier(params.ownerKey);
+      const owned = await findOwnedExternalGuest(db, link.id, ownerKeyHash);
+      if (owned?.id === params.guestId) guest = owned;
+    } else {
+      const [candidate] = await db
+        .select({
+          id: guests.id,
+          externalLinkId: guests.externalLinkId,
+          status: guests.status,
+        })
+        .from(guests)
+        .where(eq(guests.id, params.guestId))
+        .limit(1);
+      if (candidate?.externalLinkId === link.id) {
+        guest = { ...candidate, status: candidate.status as Guest["status"] };
+      }
+    }
+    if (!guest || guest.status !== "pending") {
       return { error: "Unable to delete this guest from this link." };
     }
 
     const now = new Date().toISOString();
     const activityId = crypto.randomUUID();
-    const deleteResults = await env.DB.batch<{ id: string }>([
-      env.DB.prepare(DECREMENT_EXTERNAL_LINK_FOR_PENDING_GUEST_SQL).bind(
-        link.id,
-        params.token,
-        link.venueId,
-        now,
-        link.date,
-        params.guestId,
-        link.id,
-        link.venueId,
-        link.date,
-      ),
-      env.DB.prepare(SOFT_DELETE_EXTERNAL_GUEST_AFTER_DECREMENT_SQL).bind(
-        now,
-        params.guestId,
-        link.id,
-        link.venueId,
-        link.date,
-      ),
-      prepareGuestActivityAfterChange(env.DB, {
+    const decrement = link.kind === "self_rsvp"
+      ? env.DB.prepare(DECREMENT_SELF_RSVP_FOR_PENDING_GUEST_SQL).bind(
+          link.id,
+          params.token,
+          link.venueId,
+          now,
+          link.date,
+          params.guestId,
+          link.id,
+          link.venueId,
+          link.date,
+          ownerKeyHash,
+        )
+      : env.DB.prepare(DECREMENT_EXTERNAL_LINK_FOR_PENDING_GUEST_SQL).bind(
+          link.id,
+          params.token,
+          link.venueId,
+          now,
+          link.date,
+          params.guestId,
+          link.id,
+          link.venueId,
+          link.date,
+        );
+    const softDelete = env.DB.prepare(
+      SOFT_DELETE_EXTERNAL_GUEST_AFTER_DECREMENT_SQL,
+    ).bind(
+      now,
+      params.guestId,
+      link.id,
+      link.venueId,
+      link.date,
+    );
+    const activity = prepareGuestActivityAfterChange(env.DB, {
         activityId,
         venueId: link.venueId,
         eventId: link.eventId,
@@ -801,7 +1156,11 @@ export async function deleteGuestViaExternalLink(params: {
         previousStatus: guest.status,
         nextStatus: "deleted",
         occurredAt: now,
-      }),
+      });
+    const deleteResults = await env.DB.batch<{ id?: string }>([
+      decrement,
+      softDelete,
+      activity,
     ]);
     if (
       deleteResults[0]?.results[0]?.id !== link.id ||
