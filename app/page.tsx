@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { getUser, logout, hasAccess, type User } from "../lib/auth";
+import { logout, hasAccess } from "../lib/auth";
 import RouteLoadingFallback from "@/components/RouteLoadingFallback";
 import Icon, { type IconName } from "@/components/Icon";
 import TransitionLink from "@/components/TransitionLink";
@@ -12,6 +12,7 @@ import { fetchMyVenuePendingGuestLimitRequestCount } from "@/lib/api/guest-limit
 import { fetchPendingPasswordResetRequestCount } from "@/lib/api/password-reset-requests";
 import { useLatestRequestGuard } from "@/lib/hooks";
 import { useTranslations } from "next-intl";
+import { useAuthSession } from "@/components/AuthSessionProvider";
 
 interface MenuItem {
   id: string;
@@ -26,10 +27,9 @@ interface MenuItem {
 
 export default function Home() {
   const t = useTranslations("Home");
-  const [user, setUser] = useState<User | null>(null);
+  const { user } = useAuthSession();
   const [pendingGuestRequestCount, setPendingGuestRequestCount] = useState(0);
   const [pendingPasswordResetCount, setPendingPasswordResetCount] = useState(0);
-  const [isLoading, setIsLoading] = useState(true);
   const router = useRouter();
   const { isRouteTransitionActive, startRouteTransition } =
     useRouteTransition();
@@ -70,21 +70,17 @@ export default function Home() {
   useEffect(() => {
     const initializeHome = async () => {
       const isLatestRequest = requestGuard.beginRequest();
-      const currentUser = getUser();
-      if (!currentUser) {
-        logout();
+      if (!user) {
+        void logout();
         return;
       }
 
-      setUser(currentUser);
-      setIsLoading(false);
-
       try {
         const [guestRequestResult, passwordResetResult] = await Promise.all([
-          currentUser.role === "venue_admin"
+          user.role === "venue_admin"
             ? fetchMyVenuePendingGuestLimitRequestCount()
             : Promise.resolve(null),
-          currentUser.role === "venue_admin" || currentUser.role === "super_admin"
+          user.role === "venue_admin" || user.role === "super_admin"
             ? fetchPendingPasswordResetRequestCount()
             : Promise.resolve(null),
         ]);
@@ -107,7 +103,7 @@ export default function Home() {
     };
 
     initializeHome();
-  }, [requestGuard]);
+  }, [requestGuard, user]);
 
   const accessibleMenus = useMemo(
     () =>
@@ -163,11 +159,9 @@ export default function Home() {
     user,
   ]);
 
-  if (isLoading) {
+  if (!user) {
     return <RouteLoadingFallback />;
   }
-
-  if (!user) return null;
 
   const workspaceWidthClass =
     accessibleMenus.length === 1

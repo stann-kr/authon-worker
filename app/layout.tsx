@@ -6,6 +6,9 @@ import VenueBrandProvider from "@/components/VenueBrandProvider";
 import { RouteTransitionProvider } from "@/components/RouteTransitionProvider";
 import { VenueDataProvider } from "@/components/VenueSelector";
 import { getRequestTenantContext } from "@/lib/tenant/server";
+import { getCurrentUser } from "@/lib/auth/server";
+import { toClientUser } from "@/lib/auth/user-profile";
+import { AuthSessionProvider } from "@/components/AuthSessionProvider";
 import { NextIntlClientProvider } from "next-intl";
 import { getLocale, getMessages, getTranslations } from "next-intl/server";
 
@@ -40,11 +43,12 @@ export default async function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  const [tenant, locale, messages, t] = await Promise.all([
+  const [tenant, locale, messages, t, sessionUser] = await Promise.all([
     getRequestTenantContext(),
     getLocale(),
     getMessages(),
     getTranslations("Common"),
+    getCurrentUser(),
   ]);
 
   return (
@@ -54,18 +58,22 @@ export default async function RootLayout({
         style={{ minHeight: "100dvh" }}
       >
         <NextIntlClientProvider messages={messages}>
-          <VenueBrandProvider tenant={tenant}>
-            <DesignSystemProvider>
-              <RouteTransitionProvider>
-                <VenueDataProvider>
-                  <a href="#main-content" className="skip-link">
-                    {t("skipToContent")}
-                  </a>
-                  {children}
-                </VenueDataProvider>
-              </RouteTransitionProvider>
-            </DesignSystemProvider>
-          </VenueBrandProvider>
+          <AuthSessionProvider
+            initialUser={sessionUser ? toClientUser(sessionUser) : null}
+          >
+            <VenueBrandProvider tenant={tenant}>
+              <DesignSystemProvider>
+                <RouteTransitionProvider>
+                  <VenueDataProvider>
+                    <a href="#main-content" className="skip-link">
+                      {t("skipToContent")}
+                    </a>
+                    {children}
+                  </VenueDataProvider>
+                </RouteTransitionProvider>
+              </DesignSystemProvider>
+            </VenueBrandProvider>
+          </AuthSessionProvider>
         </NextIntlClientProvider>
       </body>
     </html>

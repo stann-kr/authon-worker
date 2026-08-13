@@ -27,6 +27,10 @@ import { useSectionLoadingTask } from "../../components/RouteTransitionProvider"
 import { getBusinessDate } from "../../lib/date";
 import { orderGuestDisplayList } from "../../lib/guests/display-order";
 import {
+  deriveAsyncListState,
+  shouldShowEmptyState,
+} from "../../lib/ui/async-list-state";
+import {
   fetchGuestsByDate,
   updateGuestStatus,
   deleteGuest,
@@ -83,6 +87,9 @@ function DoorPageContent() {
   const [guests, setGuests] = useState<Guest[]>([]);
   const [isFetching, setIsFetching] = useState(true);
   const [loadedScopeKey, setLoadedScopeKey] = useState("");
+  const [loadOutcome, setLoadOutcome] = useState<
+    "idle" | "success" | "partial" | "error"
+  >("idle");
   const [feedback, setFeedback] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [sortMode, setSortMode] = useLocalStorage<"default" | "alpha">(
@@ -140,6 +147,7 @@ function DoorPageContent() {
 
   useEffect(() => {
     setSelectedDJ("all");
+    setLoadOutcome("idle");
   }, [requestScopeKey]);
 
   const loadData = useCallback(async () => {
@@ -150,6 +158,7 @@ function DoorPageContent() {
       setUsers([]);
       setExternalLinks([]);
       setLoadedScopeKey(requestScopeKey);
+      setLoadOutcome("success");
       setIsFetching(false);
       return;
     }
@@ -166,8 +175,14 @@ function DoorPageContent() {
         setUsers([]);
         setExternalLinks([]);
         setFeedback(t("loadFailed"));
+        setLoadOutcome("error");
       } else {
-        if (error) setFeedback(t("partialLoadFailed"));
+        if (error) {
+          setFeedback(t("partialLoadFailed"));
+          setLoadOutcome("partial");
+        } else {
+          setLoadOutcome("success");
+        }
         setGuests(data.guests);
         setUsers(data.users);
         setExternalLinks(data.externalLinks);
@@ -181,6 +196,7 @@ function DoorPageContent() {
       setExternalLinks([]);
       setLoadedScopeKey(requestScopeKey);
       setFeedback(t("loadFailed"));
+      setLoadOutcome("error");
     } finally {
       if (isLatestRequest()) setIsFetching(false);
     }
@@ -296,6 +312,13 @@ function DoorPageContent() {
         (g.name || "").toLowerCase().includes(searchQuery.toLowerCase()),
       )
     : sortedGuests;
+  const listState = deriveAsyncListState({
+    hasStarted: isFetching || loadOutcome !== "idle",
+    isLoading: isCurrentScopeFetching,
+    itemCount: displayGuests.length,
+    hasError: loadOutcome === "error",
+    isPartial: loadOutcome === "partial",
+  });
 
   // Only show users/links who registered guests on the selected date
   const activeUserIds = new Set(
@@ -437,9 +460,9 @@ function DoorPageContent() {
                 ]}
               />
 
-              {isCurrentScopeFetching && displayData.guests.length === 0 ? (
+              {listState === "loading" ? (
                 <Skeleton rows={6} />
-              ) : displayGuests.length === 0 ? (
+              ) : shouldShowEmptyState(listState) ? (
                 <EmptyState
                   icon="user"
                   message={

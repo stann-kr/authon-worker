@@ -9,6 +9,13 @@ export interface VenueTimeSettings {
   closingTime?: string | null;
 }
 
+export interface VenueDateTimeFormatOptions {
+  locale?: string;
+  timeZone?: string | null;
+  dateStyle?: Intl.DateTimeFormatOptions["dateStyle"];
+  timeStyle?: Intl.DateTimeFormatOptions["timeStyle"];
+}
+
 interface ZonedDateParts {
   year: number;
   month: number;
@@ -76,6 +83,30 @@ export function isValidTimeZone(value: unknown): value is string {
   } catch {
     return false;
   }
+}
+
+/**
+ * Formats an instant in the venue's timezone instead of the browser timezone.
+ * Invalid timestamps return null so the caller can supply localized fallback
+ * copy without leaking raw values into the UI.
+ */
+export function formatVenueDateTime(
+  value: string | number | Date | null | undefined,
+  options: VenueDateTimeFormatOptions = {},
+): string | null {
+  if (value === null || value === undefined || value === "") return null;
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+
+  const timeZone = isValidTimeZone(options.timeZone)
+    ? options.timeZone
+    : DEFAULT_VENUE_TIMEZONE;
+
+  return new Intl.DateTimeFormat(options.locale || "en-US", {
+    dateStyle: options.dateStyle ?? "medium",
+    timeStyle: options.timeStyle ?? "short",
+    timeZone,
+  }).format(date);
 }
 
 /**

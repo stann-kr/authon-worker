@@ -7,26 +7,24 @@
 
 import {
   hasAccess as hasPolicyAccess,
-  isAccountKind,
-  isRole,
   type AccessScope,
 } from "@/lib/users/policy";
 import {
   isFirstLoginSetupMethod,
   type FirstLoginSetupMethod,
 } from "@/lib/auth/first-login-policy";
+import {
+  normalizeCachedUser,
+  type User,
+} from "@/lib/auth/user-profile";
 
-export interface User {
-  id: string;
-  venue_id?: string | null;
-  email: string;
-  name: string;
-  role: "super_admin" | "venue_admin" | "door_staff" | "staff" | "dj";
-  account_kind: "personal" | "shared";
-  door_access_enabled: boolean;
-  guest_limit: number | null;
-  preferred_locale?: "en" | "ko" | null;
-}
+export type { User } from "@/lib/auth/user-profile";
+
+export const cacheUser = (user: User | null): void => {
+  if (typeof window === "undefined") return;
+  if (user) localStorage.setItem("user", JSON.stringify(user));
+  else localStorage.removeItem("user");
+};
 
 /**
  * 이메일/비밀번호로 로그인 요청
@@ -77,7 +75,7 @@ export const login = async (
       preferred_locale: user.preferredLocale || null,
     };
 
-    localStorage.setItem("user", JSON.stringify(userInfo));
+    cacheUser(userInfo);
 
     return { success: true };
   } catch (error) {
@@ -127,7 +125,7 @@ export const logout = async () => {
     await fetch("/api/auth/logout", { method: "POST" }).catch(() => {});
   } finally {
     if (typeof window !== "undefined") {
-      localStorage.removeItem("user");
+      cacheUser(null);
       for (let index = window.sessionStorage.length - 1; index >= 0; index -= 1) {
         const key = window.sessionStorage.key(index);
         if (key?.startsWith("shared-operator:")) window.sessionStorage.removeItem(key);
@@ -148,26 +146,7 @@ export const getUser = (): User | null => {
   if (!userStr || userStr === "undefined" || userStr === "null") return null;
 
   try {
-    const parsed = JSON.parse(userStr) as Partial<User>;
-    if (
-      typeof parsed.id !== "string" ||
-      typeof parsed.email !== "string" ||
-      typeof parsed.name !== "string" ||
-      !isRole(parsed.role)
-    ) {
-      return null;
-    }
-
-    return {
-      ...parsed,
-      id: parsed.id,
-      email: parsed.email,
-      name: parsed.name,
-      role: parsed.role,
-      account_kind: isAccountKind(parsed.account_kind) ? parsed.account_kind : "personal",
-      door_access_enabled: parsed.door_access_enabled === true,
-      guest_limit: typeof parsed.guest_limit === "number" ? parsed.guest_limit : null,
-    };
+    return normalizeCachedUser(JSON.parse(userStr));
   } catch (e) {
     console.error("Failed to parse user from localStorage", e);
     return null;

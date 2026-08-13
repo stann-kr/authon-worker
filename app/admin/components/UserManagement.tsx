@@ -36,6 +36,11 @@ import type {
 import { useLocale, useTranslations } from "next-intl";
 import { isVenueManagedRole } from "@/lib/users/policy";
 import { useVenueBrand } from "@/components/VenueBrandProvider";
+import { formatVenueDateTime } from "@/lib/date";
+import {
+  deriveAsyncListState,
+  shouldShowEmptyState,
+} from "@/lib/ui/async-list-state";
 
 type StatusFilter = "current" | "ready" | "setup" | "inactive" | "deleted";
 export type UserManagementSection = "create" | "users";
@@ -90,6 +95,9 @@ export default function UserManagement({
   const [isLoading, setIsLoading] = useState(false);
   const [loadedScopeKey, setLoadedScopeKey] = useState("");
   const [loadError, setLoadError] = useState("");
+  const [loadOutcome, setLoadOutcome] = useState<
+    "idle" | "success" | "partial" | "error"
+  >("idle");
   const [feedback, setFeedback] = useState<Feedback>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [roleFilter, setRoleFilter] = useState<"all" | "shared" | User["role"]>("all");
@@ -113,6 +121,7 @@ export default function UserManagement({
     setSelectedVenueId,
     isSuperAdmin,
     user: currentUser,
+    currentVenue,
   } = useVenueSelector();
 
   const effectiveVenueId = isSuperAdmin
@@ -151,6 +160,7 @@ export default function UserManagement({
     setSetupCredential(null);
     shouldFocusSetupCredentialRef.current = false;
     setFeedback(null);
+    setLoadOutcome("idle");
   }, [mutationGuard, requestGuard, requestScopeKey]);
 
   useEffect(() => {
@@ -181,6 +191,7 @@ export default function UserManagement({
       setUsers([]);
       setAuditEvents([]);
       setLoadedScopeKey(requestScopeKey);
+      setLoadOutcome("success");
       setIsLoading(false);
       return;
     }
@@ -199,12 +210,15 @@ export default function UserManagement({
         console.error("Failed to load users:", userResult.error);
         setLoadError(t("loadFailed"));
         setUsers([]);
+        setLoadOutcome("error");
       } else {
         setUsers(userResult.data ?? []);
+        setLoadOutcome(auditResult?.error ? "partial" : "success");
       }
       if (auditResult?.error) {
         console.error("Failed to load user activity:", auditResult.error);
         setAuditEvents([]);
+        if (!userResult.error) setLoadError(t("activityLoadFailed"));
       } else if (isSuperAdmin) {
         setAuditEvents(auditResult?.data ?? []);
       } else if (!isSuperAdmin) {
@@ -218,6 +232,7 @@ export default function UserManagement({
       setAuditEvents([]);
       setLoadedScopeKey(requestScopeKey);
       setLoadError(t("connectionLoadFailed"));
+      setLoadOutcome("error");
     } finally {
       if (isLatestRequest() && currentScopeKeyRef.current === requestScopeKey) {
         setIsLoading(false);
@@ -482,12 +497,24 @@ export default function UserManagement({
       return matchesSearch && matchesRole && matchesStatus;
     });
   }, [roleFilter, scopedUsers, searchQuery, statusFilter]);
+  const listState = deriveAsyncListState({
+    hasStarted: isLoading || loadOutcome !== "idle",
+    isLoading: isCurrentScopeLoading,
+    itemCount: filteredUsers.length,
+    hasError: loadOutcome === "error",
+    isPartial: loadOutcome === "partial",
+  });
 
-  const formatActivityDate = (value: string): string =>
-    new Intl.DateTimeFormat(locale === "ko" ? "ko-KR" : "en-US", {
-      dateStyle: "medium",
-      timeStyle: "short",
-    }).format(new Date(value));
+  const formatActivityDate = (
+    value: string,
+    venueId?: string | null,
+  ): string =>
+    formatVenueDateTime(value, {
+      locale: locale === "ko" ? "ko-KR" : "en-US",
+      timeZone:
+        venues.find((venue) => venue.id === venueId)?.timezone ??
+        currentVenue?.timezone,
+    }) ?? "-";
 
   const resolveAuditUserName = (userId: string | null): string => {
     if (!userId) return t("systemActor");
@@ -559,6 +586,7 @@ export default function UserManagement({
     <OperationsLayout
       variant="stacked"
       title={t("title")}
+      headingLevel={null}
       dashboard={
         <>
         {/* Venue selector for super_admin */}
@@ -790,9 +818,9 @@ export default function UserManagement({
                 </div>
               </div>
 
-              {isCurrentScopeLoading && scopedUsers.length === 0 ? (
+              {listState === "loading" ? (
                 <Skeleton rows={5} />
-              ) : filteredUsers.length === 0 ? (
+              ) : shouldShowEmptyState(listState) ? (
                 <EmptyState
                   icon="users"
                   message={
@@ -814,6 +842,10 @@ export default function UserManagement({
                       user={user}
                       actorRole={currentUser?.role || null}
                       currentUserId={currentUser?.id || null}
+                      timeZone={
+                        venues.find((venue) => venue.id === user.venueId)?.timezone ??
+                        currentVenue?.timezone
+                      }
                       isBusy={busyUserId === user.id}
                       onUpdate={handleUserUpdate}
                       onToggleActive={async (user) =>
@@ -854,7 +886,7 @@ export default function UserManagement({
                           </span>
                         </p>
                         <time className="shrink-0 font-mono text-text-dim" dateTime={event.createdAt}>
-                          {formatActivityDate(event.createdAt)}
+                          {formatActivityDate(event.createdAt, event.venueId)}
                         </time>
                       </div>
                     ))}
@@ -904,6 +936,7 @@ function UserCard({
   user,
   actorRole,
   currentUserId,
+  timeZone,
   isBusy,
   onUpdate,
   onToggleActive,
@@ -913,6 +946,7 @@ function UserCard({
   user: User;
   actorRole: User["role"] | null;
   currentUserId: string | null;
+  timeZone?: string | null;
   isBusy: boolean;
   onUpdate: (
     id: string,
@@ -989,10 +1023,12 @@ function UserCard({
 
   const formatDate = (value: string | null): string => {
     if (!value) return t("never");
-    return new Intl.DateTimeFormat(locale === "ko" ? "ko-KR" : "en-US", {
-      dateStyle: "medium",
-      timeStyle: "short",
-    }).format(new Date(value));
+    return (
+      formatVenueDateTime(value, {
+        locale: locale === "ko" ? "ko-KR" : "en-US",
+        timeZone,
+      }) ?? t("never")
+    );
   };
 
   const statusLabel = isDeleted

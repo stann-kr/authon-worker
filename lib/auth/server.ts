@@ -21,6 +21,7 @@ export type { Role } from "@/lib/users/policy";
 export interface SessionUser {
   id: string;
   email: string;
+  name: string;
   role: Role;
   accountKind: AccountKind;
   doorAccessEnabled: boolean;
@@ -78,6 +79,7 @@ export async function requireAuth(): Promise<SessionUser> {
     .select({
       id: users.id,
       email: users.email,
+      name: users.name,
       role: users.role,
       accountKind: users.accountKind,
       doorAccessEnabled: users.doorAccessEnabled,
@@ -118,6 +120,7 @@ export async function requireAuth(): Promise<SessionUser> {
   const sessionUser: SessionUser = {
     id: user.id,
     email: user.email,
+    name: user.name,
     role: user.role,
     accountKind: user.accountKind,
     doorAccessEnabled: user.doorAccessEnabled,

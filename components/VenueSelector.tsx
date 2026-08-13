@@ -14,8 +14,8 @@ import {
 import { useLocalStorage } from "@/lib/hooks";
 import { fetchVenues } from "@/lib/api/venues";
 import type { Venue } from "@/lib/api/types";
-import { getUser } from "@/lib/auth";
 import Icon from "./Icon";
+import { useAuthSession } from "./AuthSessionProvider";
 import { useTranslations } from "next-intl";
 import { useSectionLoadingTask } from "./RouteTransitionProvider";
 
@@ -38,6 +38,7 @@ const VenueDataContext = createContext<VenueDataContextValue | null>(null);
  * 실제 조회는 useVenueSelector를 사용하는 화면이 처음 열릴 때만 시작합니다.
  */
 export function VenueDataProvider({ children }: { children: ReactNode }) {
+  const { user } = useAuthSession();
   const [venues, setVenues] = useState<Venue[]>([]);
   const [status, setStatus] = useState<VenueDataStatus>("idle");
   const statusRef = useRef<VenueDataStatus>("idle");
@@ -71,7 +72,7 @@ export function VenueDataProvider({ children }: { children: ReactNode }) {
         const nextVenues = data;
         didLoad = true;
         setVenues(nextVenues);
-        if (getUser()?.role === "super_admin") {
+        if (user?.role === "super_admin") {
           setSelectedVenueId((previousVenueId) => {
             if (nextVenues.some((venue) => venue.id === previousVenueId)) {
               return previousVenueId;
@@ -97,7 +98,7 @@ export function VenueDataProvider({ children }: { children: ReactNode }) {
     if (requestPromiseRef.current === requestPromise) {
       requestPromiseRef.current = null;
     }
-  }, [setSelectedVenueId]);
+  }, [setSelectedVenueId, user]);
 
   const ensureVenues = useCallback(() => loadVenues(false), [loadVenues]);
   const refreshVenues = useCallback(() => loadVenues(true), [loadVenues]);
@@ -141,7 +142,7 @@ export function useVenueSelector() {
     throw new Error("useVenueSelector must be used within VenueDataProvider");
   }
 
-  const user = getUser();
+  const { user } = useAuthSession();
   const isSuperAdmin = user?.role === "super_admin";
   const {
     venues,

@@ -81,3 +81,12 @@ export function getAdminGroupDefaultTasks(
     ...(isSuperAdmin ? (["venue-list"] as const) : []),
   ];
 }
+
+/** Escape belongs to the currently focused control/dialog, never navigation. */
+export function getAdminShortcutTask(
+  key: string,
+  isSuperAdmin: boolean,
+): AdminTask | null {
+  if (!/^[1-9]$/.test(key)) return null;
+  return getAdminGroupDefaultTasks(isSuperAdmin)[Number.parseInt(key, 10) - 1] ?? null;
+}

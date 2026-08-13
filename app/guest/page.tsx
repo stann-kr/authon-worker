@@ -3,7 +3,7 @@
 import { Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import AuthGuard from "@/components/AuthGuard";
-import { getUser } from "@/lib/auth";
+import { useAuthSession } from "@/components/AuthSessionProvider";
 import ExternalDJGuestView from "./components/ExternalDJGuestView";
 import AuthenticatedGuestView from "./components/AuthenticatedGuestView";
 import RouteLoadingFallback from "@/components/RouteLoadingFallback";
@@ -22,15 +22,13 @@ export default function GuestPage() {
 
 function GuestPageRouter() {
   const searchParams = useSearchParams();
+  const { user } = useAuthSession();
   const token = searchParams.get("token");
 
   // Case 1: External DJ flow (token-based)
   if (token) {
     return <ExternalDJGuestView key={token} token={token} />;
   }
-
-  // Case 2: Authenticated DJ flow
-  const user = getUser();
 
   return (
     <AuthGuard requiredAccess={["guest"]}>

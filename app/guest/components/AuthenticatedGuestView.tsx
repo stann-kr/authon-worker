@@ -49,6 +49,14 @@ import {
   type GuestWorkspaceDisplay,
 } from "@/lib/guests/request-section-state";
 import { canRequestGuestLimit } from "@/lib/users/policy";
+import {
+  GUEST_CREATE_ERROR_KEYS,
+  selectDomainMessageKey,
+} from "@/lib/api/domain-error";
+import {
+  deriveAsyncListState,
+  shouldShowEmptyState,
+} from "@/lib/ui/async-list-state";
 import { useLocale, useTranslations } from "next-intl";
 
 interface AuthenticatedGuestViewProps {
@@ -64,6 +72,9 @@ export default function AuthenticatedGuestView({ user }: AuthenticatedGuestViewP
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [isBulkSubmitting, setIsBulkSubmitting] = useState<boolean>(false);
   const [isFetching, setIsFetching] = useState<boolean>(true);
+  const [loadOutcome, setLoadOutcome] = useState<
+    "idle" | "success" | "partial" | "error"
+  >("idle");
   const [error, setError] = useState<string | null>(null);
   const [guests, setGuests] = useState<Guest[]>([]);
   const [loadedScopeKey, setLoadedScopeKey] = useState("");
@@ -115,6 +126,7 @@ export default function AuthenticatedGuestView({ user }: AuthenticatedGuestViewP
 
   useEffect(() => {
     currentScopeKeyRef.current = requestScopeKey;
+    setLoadOutcome("idle");
   }, [requestScopeKey]);
 
   useEffect(() => {
@@ -157,6 +169,7 @@ export default function AuthenticatedGuestView({ user }: AuthenticatedGuestViewP
       setQuota(emptyDisplay.quota);
       setVerifiedQuotaScopeKey("");
       setLoadedScopeKey(requestScopeKey);
+      setLoadOutcome("success");
       setIsFetching(false);
       return true;
     }
@@ -175,6 +188,7 @@ export default function AuthenticatedGuestView({ user }: AuthenticatedGuestViewP
         console.error("Failed to fetch guests:", fetchError);
         setError(t("loadFailed"));
       }
+      setLoadOutcome(fetchError ? (data ? "partial" : "error") : "success");
 
       const previousDisplay = displayCacheRef.current.get(requestScopeKey) ?? null;
       const nextDisplay = data
@@ -202,6 +216,7 @@ export default function AuthenticatedGuestView({ user }: AuthenticatedGuestViewP
       setVerifiedQuotaScopeKey("");
       setLoadedScopeKey(requestScopeKey);
       setError(t("loadFailed"));
+      setLoadOutcome(fallbackDisplay.guests.length > 0 ? "partial" : "error");
       return false;
     } finally {
       if (isLatestRequest()) setIsFetching(false);
@@ -274,16 +289,13 @@ export default function AuthenticatedGuestView({ user }: AuthenticatedGuestViewP
 
       if (createError) {
         console.error("Failed to create guest:", createError);
-        actionFeedback =
-          createError === "GUEST_LIMIT_REACHED"
-            ? t("limitReachedServer")
-            : createError === "REGISTERED_BY_REQUIRED"
-              ? t("registeredByRequired")
-              : createError === "DUPLICATE_REQUIRES_CONFIRMATION"
-                ? t("duplicateRequiresConfirmation")
-                : createError === "INVALID_GUEST_NAME"
-                  ? t("registerFailed")
-                  : t("registerResultUnknown");
+        actionFeedback = t(
+          selectDomainMessageKey(
+            createError,
+            GUEST_CREATE_ERROR_KEYS,
+            "registerResultUnknown",
+          ),
+        );
       } else if (data) {
         setGuests((prev) => [...prev, data]);
         setGuestName("");
@@ -530,6 +542,13 @@ export default function AuthenticatedGuestView({ user }: AuthenticatedGuestViewP
         g.name.toLowerCase().includes(searchQuery.toLowerCase()),
       )
     : sortedGuests;
+  const listState = deriveAsyncListState({
+    hasStarted: isFetching || loadOutcome !== "idle",
+    isLoading: isCurrentScopeFetching,
+    itemCount: displayGuests.length,
+    hasError: loadOutcome === "error",
+    isPartial: loadOutcome === "partial",
+  });
 
   return (
     <WorkspaceShell contentClassName="gap-4 pb-8 lg:gap-6">
@@ -806,9 +825,9 @@ export default function AuthenticatedGuestView({ user }: AuthenticatedGuestViewP
                 ]}
               />
 
-              {isCurrentScopeFetching && displayDataGuests.length === 0 ? (
+              {listState === "loading" ? (
                 <Skeleton rows={5} />
-              ) : displayGuests.length === 0 ? (
+              ) : shouldShowEmptyState(listState) ? (
                 <EmptyState
                   icon="user-add"
                   message={

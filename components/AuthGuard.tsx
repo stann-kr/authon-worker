@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { getUser, hasAccess, User } from "../lib/auth";
+import { hasAccess } from "../lib/auth";
 import type { AccessScope } from "@/lib/users/policy";
 import RouteLoadingFallback from "./RouteLoadingFallback";
+import { useAuthSession } from "./AuthSessionProvider";
 
 interface AuthGuardProps {
   children: React.ReactNode;
@@ -15,43 +16,16 @@ export default function AuthGuard({
   children,
   requiredAccess,
 }: AuthGuardProps) {
-  const [user, setUser] = useState<User | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const { user } = useAuthSession();
   const router = useRouter();
+  const isAllowed = Boolean(user && hasAccess(user, requiredAccess));
 
   useEffect(() => {
-    const checkAuth = () => {
-      // 1. Get user from localStorage
-      // Note: Actual route protection is handled by middleware.ts via JWT.
-      // AuthGuard is mainly for UI-level rendering and client-side redirects 
-      // if local state is out of sync.
-      const currentUser = getUser();
+    if (!user) router.replace("/auth/login");
+    else if (!isAllowed) router.replace("/");
+  }, [isAllowed, router, user]);
 
-      if (!currentUser) {
-        router.replace("/auth/login");
-        return;
-      }
-
-      // 2. Check Role Access
-      if (!hasAccess(currentUser, requiredAccess)) {
-        router.replace("/");
-        return;
-      }
-
-      setUser(currentUser);
-      setIsLoading(false);
-    };
-
-    checkAuth();
-  }, [router, requiredAccess]);
-
-  if (isLoading) {
-    return <RouteLoadingFallback />;
-  }
-
-  if (!user) {
-    return null;
-  }
+  if (!isAllowed) return <RouteLoadingFallback />;
 
   return <>{children}</>;
 }

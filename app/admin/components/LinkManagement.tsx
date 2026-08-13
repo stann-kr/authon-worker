@@ -22,6 +22,10 @@ import {
 } from "../../../lib/hooks";
 import { formatDateDisplay } from "../../../lib/date";
 import {
+  deriveAsyncListState,
+  shouldShowEmptyState,
+} from "../../../lib/ui/async-list-state";
+import {
   fetchExternalLinksByDate,
   fetchRecentExternalLinks,
   createExternalLink,
@@ -132,6 +136,9 @@ export default function LinkManagement({
   const [links, setLinks] = useState<ExternalDJLink[]>([]);
   const [isFetching, setIsFetching] = useState(false);
   const [loadedScopeKey, setLoadedScopeKey] = useState("");
+  const [loadOutcome, setLoadOutcome] = useState<
+    "idle" | "success" | "partial" | "error"
+  >("idle");
   const [linkActionFeedback, setLinkActionFeedback] =
     useState<LinkActionFeedback | null>(null);
   const [visibleLinkId, setVisibleLinkId] = useState<string | null>(null);
@@ -172,6 +179,7 @@ export default function LinkManagement({
     selectedVenueId,
     setSelectedVenueId,
     isSuperAdmin,
+    currentVenue,
   } = useVenueSelector();
 
   const requestScopeKey = `${venueId}:${manageScope}:${
@@ -206,6 +214,7 @@ export default function LinkManagement({
     setErrorScopeKey("");
     setSuccess(null);
     setSuccessScopeKey("");
+    setLoadOutcome("idle");
   }, [linkMutationGuard, requestGuard, requestScopeKey, shareOperationGuard]);
 
   useEffect(() => {
@@ -253,6 +262,7 @@ export default function LinkManagement({
     if (!venueId) {
       setLinks([]);
       setLoadedScopeKey(requestScopeKey);
+      setLoadOutcome("success");
       setIsFetching(false);
       return;
     }
@@ -269,8 +279,11 @@ export default function LinkManagement({
       ) return;
       if (error) {
         console.error("Failed to load links:", error);
-        setError(error);
+        setError(t("loadFailed"));
         setErrorScopeKey(requestScopeKey);
+        setLoadOutcome(data ? "partial" : "error");
+      } else {
+        setLoadOutcome("success");
       }
       setLinks(data ?? []);
       setLoadedScopeKey(requestScopeKey);
@@ -284,6 +297,7 @@ export default function LinkManagement({
       setLoadedScopeKey(requestScopeKey);
       setError(t("loadFailed"));
       setErrorScopeKey(requestScopeKey);
+      setLoadOutcome("error");
     } finally {
       if (
         isLatestRequest() &&
@@ -688,12 +702,20 @@ export default function LinkManagement({
     ),
     [filteredLinks, locale, manageScope, manageSort],
   );
+  const listState = deriveAsyncListState({
+    hasStarted: isFetching || loadOutcome !== "idle",
+    isLoading: isCurrentScopeFetching,
+    itemCount: sortedLinks.length,
+    hasError: loadOutcome === "error",
+    isPartial: loadOutcome === "partial",
+  });
 
   return (
     <>
       <OperationsLayout
         variant="stacked"
         title={t("title")}
+        headingLevel={null}
         dashboard={
           <>
         {(activeTab === "create" || manageScope === "date") && (
@@ -801,9 +823,9 @@ export default function LinkManagement({
         {activeTab === "create" && (
           <div className="space-y-6">
             <div className="app-panel p-4 sm:p-6">
-              <h2 className="type-panel-title mb-6">
+              <h3 className="type-panel-title mb-6">
                 {t("createAccessLink")}
-              </h2>
+              </h3>
 
               {templateNotice && (
                 <Alert
@@ -1220,16 +1242,16 @@ export default function LinkManagement({
                 </p>
               </div>
 
-              {isCurrentScopeFetching && sortedLinks.length === 0 ? (
+              {listState === "loading" ? (
                 <Skeleton rows={5} />
-              ) : (
+              ) : listState === "error" ? null : (
                 <div
                   aria-busy={isCurrentScopeFetching}
                   className={`divide-y divide-border-default lg:overflow-y-auto ${
                     isCurrentScopeFetching ? "pointer-events-none" : ""
                   }`}
                 >
-                  {sortedLinks.length === 0 ? (
+                  {shouldShowEmptyState(listState) ? (
                     <EmptyState
                       icon="link"
                       message={t("noLinks")}
@@ -1299,6 +1321,7 @@ export default function LinkManagement({
                                   t("unknownTime"),
                                   t("invalidTime"),
                                   locale === "ko" ? "ko-KR" : "en-US",
+                                  currentVenue?.timezone,
                                 )}
                               </dd>
                             </div>

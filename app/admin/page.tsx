@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
 import { useLocalStorage } from "../../lib/hooks";
 import GuestList from "./components/GuestList";
 import LinkManagement, {
@@ -22,15 +21,15 @@ import AuthGuard from "../../components/AuthGuard";
 import WorkspaceShell from "../../components/WorkspaceShell";
 import VenueLoadNotice from "../../components/VenueLoadNotice";
 import { getBusinessDate } from "../../lib/date";
-import { getUser } from "../../lib/auth";
 import { useTranslations } from "next-intl";
+import { useAuthSession } from "../../components/AuthSessionProvider";
 import { useVenueSelector } from "../../components/VenueSelector";
 import {
   useRouteLoadingTask,
   useRouteTransition,
 } from "../../components/RouteTransitionProvider";
 import {
-  getAdminGroupDefaultTasks,
+  getAdminShortcutTask,
   getAdminTaskSearch,
   isAdminTaskAvailable,
   parseAdminTask,
@@ -52,9 +51,8 @@ function AdminPageContent() {
   const linkT = useTranslations("LinkAdmin");
   const userT = useTranslations("UserAdmin");
   const venueT = useTranslations("VenueAdmin");
-  const router = useRouter();
-  const { isRouteTransitionActive, startRouteTransition } =
-    useRouteTransition();
+  const { user } = useAuthSession();
+  const { isRouteTransitionActive } = useRouteTransition();
   const {
     currentVenue,
     isLoadingVenues,
@@ -67,7 +65,7 @@ function AdminPageContent() {
     getBusinessDate(),
   );
   const [activeTask, setActiveTask] = useState<AdminTask>("guest-list");
-  const [isSuperAdmin, setIsSuperAdmin] = useState(false);
+  const isSuperAdmin = user?.role === "super_admin";
   const [isRoleReady, setIsRoleReady] = useState(false);
   const [pendingPasswordResetCount, setPendingPasswordResetCount] = useState(0);
   useRouteLoadingTask(!isRoleReady);
@@ -77,16 +75,13 @@ function AdminPageContent() {
   }, [businessDate, currentVenue, setSelectedDate]);
 
   useEffect(() => {
-    const user = getUser();
-    const nextIsSuperAdmin = user?.role === "super_admin";
     const requestedTask = parseAdminTask(
       new URLSearchParams(window.location.search),
     );
     const nextTask =
-      requestedTask && isAdminTaskAvailable(requestedTask, nextIsSuperAdmin)
+      requestedTask && isAdminTaskAvailable(requestedTask, isSuperAdmin)
         ? requestedTask
         : "guest-list";
-    setIsSuperAdmin(nextIsSuperAdmin);
     setActiveTask(nextTask);
 
     const nextSearch = getAdminTaskSearch(nextTask);
@@ -94,7 +89,7 @@ function AdminPageContent() {
       window.history.replaceState(null, "", `/admin${nextSearch}`);
     }
     setIsRoleReady(true);
-  }, []);
+  }, [isSuperAdmin]);
 
   useEffect(() => {
     if (!isRoleReady) return;
@@ -218,14 +213,9 @@ function AdminPageContent() {
         return;
       }
 
-      if (e.key === "Escape") {
-        if (startRouteTransition("/")) router.push("/");
-      } else {
-        const shortcutIndex = Number.parseInt(e.key, 10) - 1;
-        const shortcutTasks = getAdminGroupDefaultTasks(isSuperAdmin);
-        if (!Number.isNaN(shortcutIndex) && shortcutTasks[shortcutIndex]) {
-          changeTask(shortcutTasks[shortcutIndex]);
-        }
+      const shortcutTask = getAdminShortcutTask(e.key, isSuperAdmin);
+      if (shortcutTask) {
+        changeTask(shortcutTask);
       }
     };
 
@@ -235,8 +225,6 @@ function AdminPageContent() {
     changeTask,
     isRouteTransitionActive,
     isSuperAdmin,
-    router,
-    startRouteTransition,
   ]);
 
   const groupLabels: Record<AdminTaskGroup, string> = {
@@ -298,9 +286,12 @@ function AdminPageContent() {
 
         <section
           id="admin-workspace"
-          aria-label={activeTaskLabel}
+          aria-labelledby="admin-active-task-title"
           className="min-h-0"
         >
+        <h2 id="admin-active-task-title" className="sr-only">
+          {activeTaskLabel}
+        </h2>
         {activeTask === "guest-list" && (
           <GuestList
             selectedDate={selectedDate}

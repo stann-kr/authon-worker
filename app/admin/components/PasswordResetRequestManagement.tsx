@@ -8,6 +8,7 @@ import EmptyState from "@/components/EmptyState";
 import PanelHeader from "@/components/PanelHeader";
 import RoleLabel from "@/components/RoleLabel";
 import Skeleton from "@/components/Skeleton";
+import AsyncListContent from "@/components/AsyncListContent";
 import { useSectionLoadingTask } from "@/components/RouteTransitionProvider";
 import {
   fetchPasswordResetRequests,
@@ -19,6 +20,11 @@ import type {
   PasswordResetVerificationMethod,
 } from "@/lib/api/types";
 import { useLatestRequestGuard } from "@/lib/hooks";
+import { formatVenueDateTime } from "@/lib/date";
+import { useVenueSelector } from "@/components/VenueSelector";
+import {
+  deriveAsyncListState,
+} from "@/lib/ui/async-list-state";
 import { useLocale, useTranslations } from "next-intl";
 
 interface PasswordResetRequestManagementProps {
@@ -33,6 +39,7 @@ type PendingAction = {
 type ResetResult = {
   userName: string;
   expiresAt: string | null;
+  venueId: string | null;
 } | null;
 
 type ActionErrorFocusTarget =
@@ -52,8 +59,13 @@ export default function PasswordResetRequestManagement({
   const t = useTranslations("PasswordResetAdmin");
   const commonT = useTranslations("Common");
   const locale = useLocale();
+  const { venues, currentVenue } = useVenueSelector();
   const [requests, setRequests] = useState<PasswordResetRequestView[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [loadOutcome, setLoadOutcome] = useState<
+    "idle" | "success" | "error"
+  >("idle");
+  const [loadError, setLoadError] = useState("");
   const [busyRequestId, setBusyRequestId] = useState<string | null>(null);
   const [pendingAction, setPendingAction] = useState<PendingAction>(null);
   const [verificationMethod, setVerificationMethod] =
@@ -87,14 +99,16 @@ export default function PasswordResetRequestManagement({
   const loadRequests = useCallback(async () => {
     const isLatestRequest = requestGuard.beginRequest();
     setIsLoading(true);
+    setLoadError("");
     try {
       const { data, error } = await fetchPasswordResetRequests();
       if (!isLatestRequest()) return;
       if (error) {
         console.error("Failed to load password reset requests:", error);
-        setFeedback({ type: "error", message: t("loadFailed") });
+        setLoadError(t("loadFailed"));
         setRequests([]);
         onPendingCountChange?.(0);
+        setLoadOutcome("error");
         return;
       }
       const nextRequests = data ?? [];
@@ -102,12 +116,14 @@ export default function PasswordResetRequestManagement({
       onPendingCountChange?.(
         nextRequests.filter((request) => request.status === "pending").length,
       );
+      setLoadOutcome("success");
     } catch (error: unknown) {
       if (!isLatestRequest()) return;
       console.error("Failed to load password reset requests:", error);
-      setFeedback({ type: "error", message: t("loadFailed") });
+      setLoadError(t("loadFailed"));
       setRequests([]);
       onPendingCountChange?.(0);
+      setLoadOutcome("error");
     } finally {
       if (isLatestRequest()) setIsLoading(false);
     }
@@ -226,6 +242,7 @@ export default function PasswordResetRequestManagement({
       setResetResult({
         userName: request.userName,
         expiresAt: data.expiresAt,
+        venueId: request.venueId,
       });
       setFeedback({
         type: "success",
@@ -241,12 +258,16 @@ export default function PasswordResetRequestManagement({
     }
   };
 
-  const formatDate = (value: string | null): string => {
+  const formatDate = (value: string | null, venueId?: string | null): string => {
     if (!value) return "-";
-    return new Intl.DateTimeFormat(locale === "ko" ? "ko-KR" : "en-US", {
-      dateStyle: "medium",
-      timeStyle: "short",
-    }).format(new Date(value));
+    return (
+      formatVenueDateTime(value, {
+        locale: locale === "ko" ? "ko-KR" : "en-US",
+        timeZone:
+          venues.find((venue) => venue.id === venueId)?.timezone ??
+          currentVenue?.timezone,
+      }) ?? "-"
+    );
   };
 
   const getStatusLabel = (request: PasswordResetRequestView): string => {
@@ -257,6 +278,12 @@ export default function PasswordResetRequestManagement({
     }
     return t(`status_${request.status}`);
   };
+  const listState = deriveAsyncListState({
+    hasStarted: isLoading || loadOutcome !== "idle",
+    isLoading,
+    itemCount: pendingRequests.length,
+    hasError: loadOutcome === "error",
+  });
 
   return (
     <>
@@ -272,6 +299,7 @@ export default function PasswordResetRequestManagement({
           <p className="text-sm leading-relaxed text-text-muted">
             {t("description")}
           </p>
+          {loadError && <Alert type="error" message={loadError} />}
           {feedback && <Alert type={feedback.type} message={feedback.message} />}
 
           {resetResult && (
@@ -290,7 +318,10 @@ export default function PasswordResetRequestManagement({
                   </p>
                   <p className="mt-2 text-xs leading-relaxed text-text-muted">
                     {t("directResultHelp", {
-                      expiresAt: formatDate(resetResult.expiresAt),
+                      expiresAt: formatDate(
+                        resetResult.expiresAt,
+                        resetResult.venueId,
+                      ),
                     })}
                   </p>
                 </div>
@@ -308,11 +339,11 @@ export default function PasswordResetRequestManagement({
             </div>
           )}
 
-          {isLoading && requests.length === 0 ? (
-            <Skeleton rows={4} />
-          ) : pendingRequests.length === 0 ? (
-            <EmptyState icon="key" message={t("noPending")} />
-          ) : (
+          <AsyncListContent
+            state={listState}
+            loading={<Skeleton rows={4} />}
+            empty={<EmptyState icon="key" message={t("noPending")} />}
+          >
             <div className="grid gap-3 lg:grid-cols-2">
               {pendingRequests.map((request) => (
                 <article
@@ -322,9 +353,9 @@ export default function PasswordResetRequestManagement({
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
-                      <h2 className="type-row-title break-words">
+                      <h3 className="type-row-title break-words">
                         {request.userName}
-                      </h2>
+                      </h3>
                       <p className="mt-1 break-all font-mono text-xs text-text-muted">
                         {request.userEmail}
                       </p>
@@ -342,7 +373,7 @@ export default function PasswordResetRequestManagement({
                       <dt className="text-text-dim">{t("requestedAt")}</dt>
                       <dd className="mt-1 font-mono text-text-body">
                         <time dateTime={request.createdAt}>
-                          {formatDate(request.createdAt)}
+                          {formatDate(request.createdAt, request.venueId)}
                         </time>
                       </dd>
                     </div>
@@ -390,7 +421,7 @@ export default function PasswordResetRequestManagement({
                 </article>
               ))}
             </div>
-          )}
+          </AsyncListContent>
 
           {decidedRequests.length > 0 && (
             <details className="border-t border-border-default pt-4">

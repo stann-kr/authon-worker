@@ -23,6 +23,10 @@ import VenueSelector, {
 } from "../../../components/VenueSelector";
 import { formatDateDisplay } from "../../../lib/date";
 import {
+  deriveAsyncListState,
+  shouldShowEmptyState,
+} from "../../../lib/ui/async-list-state";
+import {
   fetchGuestsByDate,
   updateGuestStatus,
   deleteGuest,
@@ -65,6 +69,9 @@ export default function GuestList({
   const [guests, setGuests] = useState<Guest[]>([]);
   const [isFetching, setIsFetching] = useState(true);
   const [loadedScopeKey, setLoadedScopeKey] = useState("");
+  const [loadOutcome, setLoadOutcome] = useState<
+    "idle" | "success" | "partial" | "error"
+  >("idle");
   const [feedback, setFeedback] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [sortMode, setSortMode] = useLocalStorage<"default" | "alpha">(
@@ -117,6 +124,7 @@ export default function GuestList({
 
   useEffect(() => {
     setSelectedDJ("all");
+    setLoadOutcome("idle");
   }, [requestScopeKey]);
 
   const loadData = useCallback(async () => {
@@ -127,6 +135,7 @@ export default function GuestList({
       setUsers([]);
       setExternalLinks([]);
       setLoadedScopeKey(requestScopeKey);
+      setLoadOutcome("success");
       setIsFetching(false);
       return;
     }
@@ -143,8 +152,14 @@ export default function GuestList({
         setUsers([]);
         setExternalLinks([]);
         setFeedback(doorT("loadFailed"));
+        setLoadOutcome("error");
       } else {
-        if (error) setFeedback(doorT("partialLoadFailed"));
+        if (error) {
+          setFeedback(doorT("partialLoadFailed"));
+          setLoadOutcome("partial");
+        } else {
+          setLoadOutcome("success");
+        }
         setGuests(data.guests);
         setUsers(data.users);
         setExternalLinks(data.externalLinks);
@@ -158,6 +173,7 @@ export default function GuestList({
       setExternalLinks([]);
       setLoadedScopeKey(requestScopeKey);
       setFeedback(doorT("loadFailed"));
+      setLoadOutcome("error");
     } finally {
       if (isLatestRequest()) setIsFetching(false);
     }
@@ -280,6 +296,13 @@ export default function GuestList({
         (g.name || "").toLowerCase().includes(searchQuery.toLowerCase()),
       )
     : sortedGuests;
+  const listState = deriveAsyncListState({
+    hasStarted: isFetching || loadOutcome !== "idle",
+    isLoading: isCurrentScopeFetching,
+    itemCount: displayGuests.length,
+    hasError: loadOutcome === "error",
+    isPartial: loadOutcome === "partial",
+  });
 
   const getSelectedDJInfo = () => {
     if (selectedDJ === "all")
@@ -318,6 +341,7 @@ export default function GuestList({
     <OperationsLayout
       variant="stacked"
       title={t("title")}
+      headingLevel={null}
       dashboard={
         <>
         <div className="context-bar">
@@ -386,9 +410,9 @@ export default function GuestList({
 
         <div className="app-panel p-4 sm:p-5">
           <div className="mb-4">
-            <h2 className="type-panel-title mb-1 break-words">
+            <h3 className="type-panel-title mb-1 break-words">
               {selectedDJInfo.name}
-            </h2>
+            </h3>
             <p className="mb-1 break-words text-sm text-text-muted">
               {selectedDJInfo.event}
             </p>
@@ -441,9 +465,9 @@ export default function GuestList({
             onChange={setSearchQuery}
           />
 
-          {isCurrentScopeFetching && displayData.guests.length === 0 ? (
+          {listState === "loading" ? (
             <Skeleton rows={6} />
-          ) : displayGuests.length === 0 ? (
+          ) : shouldShowEmptyState(listState) ? (
             <EmptyState
               icon="user"
               message={searchQuery ? t("noSearchResults") : t("noGuestsForDate")}

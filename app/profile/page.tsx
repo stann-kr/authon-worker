@@ -11,16 +11,15 @@ import Button from "@/components/Button";
 import LanguageSwitcher from "@/components/LanguageSwitcher";
 import PageHeader from "@/components/PageHeader";
 import WorkspaceShell from "@/components/WorkspaceShell";
+import { useAuthSession } from "@/components/AuthSessionProvider";
 import { useTranslations } from "next-intl";
-import { getUser, User } from "@/lib/auth";
 import { updateUserProfile } from "@/lib/api/users";
 import { getPasswordPolicyErrorCode } from "@/lib/auth/password-policy";
 
 export default function ProfilePage() {
   const t = useTranslations("Profile");
   const commonT = useTranslations("Common");
-  const [user, setUser] = useState<User | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const { user, setUser } = useAuthSession();
   const [isSaving, setIsSaving] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
   const [error, setError] = useState("");
@@ -28,22 +27,17 @@ export default function ProfilePage() {
     "profile",
   );
 
-  const [formData, setFormData] = useState({
-    name: "",
-  });
+  const [formData, setFormData] = useState({ name: user?.name ?? "" });
 
   const router = useRouter();
 
   useEffect(() => {
-    const currentUser = getUser();
-    if (!currentUser) {
+    if (!user) {
       router.replace("/auth/login");
       return;
     }
-    setUser(currentUser);
-    setFormData({ name: currentUser.name });
-    setIsLoading(false);
-  }, [router]);
+    setFormData({ name: user.name });
+  }, [router, user]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -56,7 +50,7 @@ export default function ProfilePage() {
         return;
       }
 
-      let nextUser: User = user;
+      let nextUser = user;
 
       if (formData.name !== user.name) {
         const { data, error: nameError } = await updateUserProfile(user.id, {
@@ -77,12 +71,12 @@ export default function ProfilePage() {
             email: data.email,
             role: data.role,
             venue_id: data.venueId,
-            guest_limit: data.guestLimit ?? 0,
+            guest_limit:
+              typeof data.guestLimit === "number" ? data.guestLimit : null,
           };
         }
       }
 
-      localStorage.setItem("user", JSON.stringify(nextUser));
       setUser(nextUser);
 
       setShowSuccess(true);
@@ -94,11 +88,9 @@ export default function ProfilePage() {
     }
   };
 
-  if (isLoading) {
+  if (!user) {
     return <RouteLoadingFallback />;
   }
-
-  if (!user) return null;
 
   return (
     <WorkspaceShell width="narrow" contentClassName="gap-6">
@@ -142,7 +134,7 @@ export default function ProfilePage() {
             <div className="flex items-center justify-between gap-3">
               <dt className="text-xs text-text-dim">{t("guestLimit")}</dt>
               <dd className="font-mono text-xs text-text-heading">
-                {user.guest_limit}
+                {user.guest_limit === null ? t("unlimited") : user.guest_limit}
               </dd>
             </div>
             <div className="flex items-center justify-between gap-3">
@@ -286,6 +278,7 @@ function PasswordChangeForm() {
   } | null>(null);
   const [passwordSuccess, setPasswordSuccess] = useState("");
   const router = useRouter();
+  const { setUser } = useAuthSession();
 
   const handlePasswordChange = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -336,7 +329,7 @@ function PasswordChangeForm() {
 
       if (data.reauthRequired) {
         setIsRedirecting(true);
-        localStorage.removeItem("user");
+        setUser(null);
         setTimeout(() => {
           router.push("/auth/login");
         }, 3000);

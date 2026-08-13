@@ -10,6 +10,7 @@ import RoleLabel from "../../../components/RoleLabel";
 import { useTranslations } from "next-intl";
 import { useVenueSelector } from "../../../components/VenueSelector";
 import Button from "../../../components/Button";
+import { captureImmutableDraft } from "../../../lib/forms/immutable-draft";
 
 export default function InviteUser() {
   const t = useTranslations("UserAdmin");
@@ -61,18 +62,21 @@ export default function InviteUser() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isLoading) return;
+    const draft = captureImmutableDraft(formData);
+    const mode = createMode;
     setIsLoading(true);
     setError("");
     setSuccess("");
 
-    if (!formData.venue_id) {
+    if (!draft.venue_id) {
       setError(t("venueRequired"));
       setIsLoading(false);
       return;
     }
 
-    if (createMode === "password") {
-      const passwordPolicyErrorCode = getPasswordPolicyErrorCode(formData.password);
+    if (mode === "password") {
+      const passwordPolicyErrorCode = getPasswordPolicyErrorCode(draft.password);
       if (passwordPolicyErrorCode) {
         setError(
           authT(
@@ -87,8 +91,8 @@ export default function InviteUser() {
     }
 
     // guest_limit 유효성 검사
-    if (formData.role !== "venue_admin") {
-      const limitVal = parseInt(String(formData.guest_limit));
+    if (draft.role !== "venue_admin") {
+      const limitVal = parseInt(String(draft.guest_limit));
       if (isNaN(limitVal) || limitVal < 0) {
         setError(t("guestLimitInvalid"));
         setIsLoading(false);
@@ -98,38 +102,38 @@ export default function InviteUser() {
 
     try {
       const { error: createError } = await createUserViaEdge({
-        email: formData.email,
-        name: formData.name,
-        role: formData.role,
-        accountKind: formData.account_kind,
+        email: draft.email,
+        name: draft.name,
+        role: draft.role,
+        accountKind: draft.account_kind,
         doorAccessEnabled:
-          formData.account_kind === "shared" && formData.door_access_enabled,
-        venueId: formData.venue_id,
+          draft.account_kind === "shared" && draft.door_access_enabled,
+        venueId: draft.venue_id,
         guestLimit:
-          formData.role === "venue_admin"
+          draft.role === "venue_admin"
             ? null
-            : parseInt(String(formData.guest_limit)),
-        ...(createMode === "password" && formData.password
-          ? { password: formData.password }
+            : parseInt(String(draft.guest_limit)),
+        ...(mode === "password" && draft.password
+          ? { password: draft.password }
           : {}),
         preferredLocale:
-          formData.preferred_locale === "auto"
+          draft.preferred_locale === "auto"
             ? null
-            : formData.preferred_locale,
+            : draft.preferred_locale,
       });
 
       if (createError) {
         console.error("Failed to create user:", createError);
         setError(t("createFailed"));
       } else {
-        if (createMode === "password" && formData.password) {
-          setTempPassword(formData.password);
+        if (mode === "password" && draft.password) {
+          setTempPassword(draft.password);
           setShowTempPassword(false);
         }
         const msg =
-          createMode === "password"
-            ? t("created", { name: formData.name, email: formData.email })
-            : t("invited", { name: formData.name, email: formData.email });
+          mode === "password"
+            ? t("created", { name: draft.name, email: draft.email })
+            : t("invited", { name: draft.name, email: draft.email });
         setSuccess(msg);
         setFormData((prev) => ({
           ...prev,
@@ -153,9 +157,9 @@ export default function InviteUser() {
   return (
     <div className="space-y-6">
       <div className="app-panel p-4 sm:p-5">
-        <h2 className="type-section-title mb-4">
+        <h3 className="type-section-title mb-4">
           {t("createUser")}
-        </h2>
+        </h3>
 
         <div className="grid grid-cols-2 gap-px bg-surface-active mb-4">
           <button
@@ -174,6 +178,7 @@ export default function InviteUser() {
           </button>
           <button
             type="button"
+            disabled={isLoading}
             onClick={() => setCreateMode("password")}
             aria-pressed={createMode === "password"}
             className={`flex min-h-12 items-center justify-center gap-2 p-3 text-xs font-medium transition-colors ${
@@ -191,7 +196,8 @@ export default function InviteUser() {
           {t("inviteUnavailableHelp")}
         </p>
 
-        <form onSubmit={handleSubmit} className="space-y-4" aria-busy={isLoading}>
+        <form onSubmit={handleSubmit} aria-busy={isLoading}>
+          <fieldset disabled={isLoading} className="space-y-4">
           {isSuperAdmin && venues.length > 0 && (
             <div>
               <label htmlFor="invite-venue" className="app-label">
@@ -476,6 +482,7 @@ export default function InviteUser() {
                 ? t("createAccount")
                 : t("sendInvitation")}
           </Button>
+          </fieldset>
         </form>
       </div>
     </div>
