@@ -1,5 +1,10 @@
 "use server";
 
+import {
+  reportServerError,
+  writeStructuredLog,
+} from "@/lib/observability/structured-log";
+
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import {
   and,
@@ -20,6 +25,7 @@ import {
 import { hashPassword } from "../auth/password";
 import { requireRole } from "../auth/server";
 import { getDb } from "../db/client";
+import { requireActiveVenueId } from "../tenant/active-server";
 import {
   getAdminApprovedResetPolicyError,
   getManagedPasswordResetDecisionExpiry,
@@ -148,6 +154,7 @@ async function getManagedTarget(
     isActive: target.active,
   });
   if (targetError) throw new PasswordResetActionError(targetError);
+  if (target.venueId) await requireActiveVenueId(target.venueId);
   return target;
 }
 
@@ -230,7 +237,7 @@ export async function fetchPasswordResetRequests(
       error: null,
     };
   } catch (error: unknown) {
-    console.error("Failed to load password reset requests:", error);
+    await reportServerError("password_reset.admin_list", error);
     return { data: null, error: getActionError(error, "UPDATE_FAILED") };
   }
 }
@@ -258,7 +265,7 @@ export async function fetchPendingPasswordResetRequestCount(): Promise<
       );
     return { data: Number(result?.count ?? 0), error: null };
   } catch (error: unknown) {
-    console.error("Failed to load pending password reset request count:", error);
+    await reportServerError("password_reset.pending_count", error);
     return { data: null, error: getActionError(error, "UPDATE_FAILED") };
   }
 }
@@ -336,7 +343,13 @@ export async function startManagedPasswordReset(params: {
           throw new PasswordResetActionError("VERIFICATION_REQUIRED");
         }
         if (!env.JWT_SECRET) {
-          console.error("JWT_SECRET is not configured");
+          await writeStructuredLog("error", {
+            event: "password_reset.admin_decide",
+            actorId: actor.id,
+            venueId: actor.venueId,
+            outcome: "unavailable",
+            errorKind: "MissingConfiguration",
+          });
           throw new PasswordResetActionError("UPDATE_FAILED");
         }
         const challengeMatches = await verifyPasswordResetChallenge(
@@ -589,7 +602,7 @@ export async function startManagedPasswordReset(params: {
       error: null,
     };
   } catch (error: unknown) {
-    console.error("Failed to start managed password reset:", error);
+    await reportServerError("password_reset.admin_decide", error);
     return { data: null, error: getActionError(error, "UPDATE_FAILED") };
   }
 }
@@ -671,7 +684,7 @@ export async function rejectPasswordResetRequest(
 
     return { data: toPasswordResetRequest(updated), error: null };
   } catch (error: unknown) {
-    console.error("Failed to reject password reset request:", error);
+    await reportServerError("password_reset.admin_reject", error);
     return { data: null, error: getActionError(error, "UPDATE_FAILED") };
   }
 }

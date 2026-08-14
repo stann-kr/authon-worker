@@ -5,6 +5,8 @@ interface OperationsLayoutProps {
   dashboard: ReactNode;
   children: ReactNode;
   variant?: "split" | "stacked";
+  headingLevel?: 1 | 2 | 3 | null;
+  headingId?: string;
 }
 
 export default function OperationsLayout({
@@ -12,7 +14,11 @@ export default function OperationsLayout({
   dashboard,
   children,
   variant = "split",
+  headingLevel = 1,
+  headingId,
 }: OperationsLayoutProps) {
+  const Heading =
+    headingLevel === 1 ? "h1" : headingLevel === 2 ? "h2" : "h3";
   return (
     <div
       className={`operations-layout ${
@@ -20,7 +26,9 @@ export default function OperationsLayout({
       }`}
     >
       <div className="min-w-0">
-        <h1 className="sr-only">{title}</h1>
+        {headingLevel !== null && (
+          <Heading id={headingId} className="sr-only">{title}</Heading>
+        )}
         <div className="space-y-4">{dashboard}</div>
       </div>
       <div className="min-w-0">{children}</div>

@@ -14,6 +14,7 @@ import GuestCapacityIndicator from "@/components/GuestCapacityIndicator";
 import { useVenueBrand } from "@/components/VenueBrandProvider";
 import GuestListCard from "@/components/GuestListCard";
 import GuestSearchInput from "@/components/GuestSearchInput";
+import GuestQrCode from "@/components/GuestQrCode";
 import Icon from "@/components/Icon";
 import LanguageSwitcher from "@/components/LanguageSwitcher";
 import { useRouteLoadingTask } from "@/components/RouteTransitionProvider";
@@ -21,10 +22,15 @@ import { useLocale, useTranslations } from "next-intl";
 import { formatDateDisplay } from "@/lib/date";
 import { getExternalLinkValidationDisposition } from "@/lib/external-links/domain";
 import {
+  createExternalOwnerKey,
+  externalOwnerStorageKey,
+} from "@/lib/external-links/ownership";
+import {
   validateExternalToken,
   createGuestViaExternalLink,
   createGuestsViaExternalLink,
   deleteGuestViaExternalLink,
+  updateGuestViaExternalLink,
 } from "@/lib/api/external-links";
 import type {
   BulkGuestCreateInput,
@@ -42,6 +48,7 @@ type ExternalGuestFeedbackKey =
   | "registerResultUnknown"
   | "duplicateRequiresConfirmation"
   | "rateLimited"
+  | "rsvpFull"
   | "deleteFailed"
   | "deleteResultUnknown";
 
@@ -51,6 +58,8 @@ export default function ExternalDJGuestView({ token }: ExternalDJGuestViewProps)
   const locale = useLocale() as "en" | "ko";
   const { brand } = useVenueBrand();
   const [linkInfo, setLinkInfo] = useState<ExternalDJLink | null>(null);
+  const [ownerKey, setOwnerKey] = useState<string | null>(null);
+  const [isOwnerKeyReady, setIsOwnerKeyReady] = useState(false);
   const [venueInfo, setVenueInfo] = useState<Venue | null>(null);
   const [isValidating, setIsValidating] = useState(true);
   const [hasValidationError, setHasValidationError] = useState(false);
@@ -71,7 +80,7 @@ export default function ExternalDJGuestView({ token }: ExternalDJGuestViewProps)
   const reconciliationHeadingRef = useRef<HTMLHeadingElement>(null);
   const contentHeadingRef = useRef<HTMLHeadingElement>(null);
   const validationGuard = useLatestRequestGuard();
-  useRouteLoadingTask(isValidating);
+  useRouteLoadingTask(isValidating || !isOwnerKeyReady);
   const showRetryPanel =
     !isValidating &&
     !hasValidationError &&
@@ -81,6 +90,25 @@ export default function ExternalDJGuestView({ token }: ExternalDJGuestViewProps)
     !hasValidationError &&
     requiresReconciliation &&
     Boolean(linkInfo && venueInfo);
+  const isSelfRsvp = linkInfo?.kind === "self_rsvp";
+  const ownedGuest = isSelfRsvp ? guests[0] ?? null : null;
+  const isSelfRsvpLocked = Boolean(
+    ownedGuest && ownedGuest.status !== "pending",
+  );
+
+  useEffect(() => {
+    try {
+      const storageKey = externalOwnerStorageKey(token);
+      const stored = window.localStorage.getItem(storageKey);
+      const key = stored ?? createExternalOwnerKey();
+      if (!stored) window.localStorage.setItem(storageKey, key);
+      setOwnerKey(key);
+    } catch {
+      setOwnerKey(null);
+    } finally {
+      setIsOwnerKeyReady(true);
+    }
+  }, [token]);
 
   const loadExternalData = useCallback(async (showInitialLoading = false) => {
     const isLatestRequest = validationGuard.beginRequest();
@@ -93,7 +121,10 @@ export default function ExternalDJGuestView({ token }: ExternalDJGuestViewProps)
       setGuests([]);
     }
     try {
-      const { data, error: validationError } = await validateExternalToken(token);
+      const { data, error: validationError } = await validateExternalToken(
+        token,
+        ownerKey,
+      );
       if (!isLatestRequest()) return;
       if (validationError) {
         console.error("Invalid external guest link:", validationError);
@@ -114,6 +145,9 @@ export default function ExternalDJGuestView({ token }: ExternalDJGuestViewProps)
         setLinkInfo(data.link);
         setVenueInfo(data.venue);
         setGuests(data.guests ?? []);
+        if (data.link.kind === "self_rsvp") {
+          setGuestName(data.guests?.[0]?.name ?? "");
+        }
         return true;
       }
       setError("refreshFailed");
@@ -127,13 +161,13 @@ export default function ExternalDJGuestView({ token }: ExternalDJGuestViewProps)
     } finally {
       if (showInitialLoading && isLatestRequest()) setIsValidating(false);
     }
-  }, [token, validationGuard]);
+  }, [ownerKey, token, validationGuard]);
 
   useEffect(() => {
-    loadExternalData(true);
+    if (isOwnerKeyReady) void loadExternalData(true);
     // 번역 함수 변경은 이미 검증된 token과 무관하다. locale 전환 때
     // token 검증과 전체 route loading을 다시 시작하지 않는다.
-  }, [loadExternalData]);
+  }, [isOwnerKeyReady, loadExternalData]);
 
   useEffect(() => {
     if (isReconciling || (!showRetryPanel && !showReconciliationBanner)) return;
@@ -173,6 +207,8 @@ export default function ExternalDJGuestView({ token }: ExternalDJGuestViewProps)
     if (
       !guestName.trim() ||
       !linkInfo ||
+      (linkInfo.kind === "self_rsvp" && !ownerKey) ||
+      isSelfRsvpLocked ||
       requiresReconciliation ||
       isLoading ||
       isBulkSubmitting ||
@@ -183,26 +219,41 @@ export default function ExternalDJGuestView({ token }: ExternalDJGuestViewProps)
     let actionFeedback: ExternalGuestFeedbackKey | null = null;
 
     try {
-      const { data, error: createError } = await createGuestViaExternalLink({
-        token,
-        guestName: guestName.trim().toUpperCase(),
-        date: linkInfo.date || "",
-      });
+      const { data, error: createError } = ownedGuest
+        ? await updateGuestViaExternalLink({
+            token,
+            ownerKey: ownerKey ?? "",
+            guestId: ownedGuest.id,
+            guestName: guestName.trim().toUpperCase(),
+          })
+        : await createGuestViaExternalLink({
+            token,
+            ownerKey,
+            guestName: guestName.trim().toUpperCase(),
+            date: linkInfo.date || "",
+          });
 
       if (createError) {
         console.error("Failed to register guest:", createError);
         actionFeedback =
           createError === "RATE_LIMITED"
             ? "rateLimited"
+            : createError === "Guest limit reached for this link."
+              ? "rsvpFull"
             : createError === "DUPLICATE_REQUIRES_CONFIRMATION"
               ? "duplicateRequiresConfirmation"
               : "registerResultUnknown";
       } else if (data) {
-        setGuests((prev) => [...prev, data]);
-        setGuestName("");
-        setLinkInfo((prev) =>
-          prev ? { ...prev, usedGuests: prev.usedGuests + 1 } : prev,
-        );
+        if (isSelfRsvp) {
+          setGuests([data]);
+          setGuestName(data.name);
+        } else {
+          setGuests((prev) => [...prev, data]);
+          setGuestName("");
+          setLinkInfo((prev) =>
+            prev ? { ...prev, usedGuests: prev.usedGuests + 1 } : prev,
+          );
+        }
       } else {
         actionFeedback = "registerResultUnknown";
       }
@@ -236,6 +287,7 @@ export default function ExternalDJGuestView({ token }: ExternalDJGuestViewProps)
       const { error: deleteError } = await deleteGuestViaExternalLink({
         token,
         guestId,
+        ownerKey,
       });
 
       if (deleteError) {
@@ -265,7 +317,9 @@ export default function ExternalDJGuestView({ token }: ExternalDJGuestViewProps)
   };
 
   const handleBulkSave = async (bulkGuests: BulkGuestCreateInput[]) => {
-    if (!linkInfo) return { data: null, error: "INVALID_LINK" };
+    if (!linkInfo || linkInfo.kind === "self_rsvp") {
+      return { data: null, error: "SELF_RSVP_BULK_UNSUPPORTED" };
+    }
     setError(null);
 
     const response = await createGuestsViaExternalLink({
@@ -498,21 +552,41 @@ export default function ExternalDJGuestView({ token }: ExternalDJGuestViewProps)
                 tabIndex={-1}
                 className="type-panel-title outline-none focus-visible:ring-2 focus-visible:ring-focus"
               >
-                {t("addGuest")}
+                {isSelfRsvp ? t("yourRsvp") : t("addGuest")}
               </h1>
-              <GuestCapacityIndicator
-                label={t("remaining")}
-                remaining={remaining}
-                limit={linkInfo?.maxGuests ?? null}
-              />
+              {!isSelfRsvp && (
+                <GuestCapacityIndicator
+                  label={t("remaining")}
+                  remaining={remaining}
+                  limit={linkInfo?.maxGuests ?? null}
+                />
+              )}
             </div>
 
             <div className="border-b border-border-subtle px-4 py-4 sm:px-5">
-              {!isAtLimit ? (
+              {isSelfRsvp && (
+                <>
+                  {!ownerKey && (
+                    <Alert
+                      type="error"
+                      message={t("selfRsvpStorageRequired")}
+                      className="mb-3"
+                    />
+                  )}
+                  <p className="mb-3 text-sm leading-relaxed text-text-muted">
+                    {isSelfRsvpLocked
+                      ? t("selfRsvpCheckedHelp")
+                      : ownedGuest
+                        ? t("selfRsvpEditHelp")
+                        : t("selfRsvpCreateHelp")}
+                  </p>
+                </>
+              )}
+              {!isAtLimit || Boolean(ownedGuest) ? (
                 <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
                   <div className="min-w-0 flex-1">
                     <label htmlFor="external-guest-name" className="app-label">
-                      {t("guestName")}
+                      {isSelfRsvp ? t("yourName") : t("guestName")}
                     </label>
                     <input
                       id="external-guest-name"
@@ -528,7 +602,9 @@ export default function ExternalDJGuestView({ token }: ExternalDJGuestViewProps)
                         isReconciling ||
                         isLoading ||
                         isBulkSubmitting ||
-                        deletingId !== null
+                        deletingId !== null ||
+                        (isSelfRsvp && !ownerKey) ||
+                        isSelfRsvpLocked
                       }
                       className="app-field min-h-11"
                       onKeyDown={(event) => {
@@ -550,13 +626,19 @@ export default function ExternalDJGuestView({ token }: ExternalDJGuestViewProps)
                       isReconciling ||
                       isLoading ||
                       isBulkSubmitting ||
-                      deletingId !== null
+                      deletingId !== null ||
+                      (isSelfRsvp && !ownerKey) ||
+                      isSelfRsvpLocked
                     }
                     isLoading={isLoading}
                     size="lg"
                     className="sm:min-w-32"
                   >
-                    {t("addGuest")}
+                    {isSelfRsvp
+                      ? ownedGuest
+                        ? t("updateRsvp")
+                        : t("registerRsvp")
+                      : t("addGuest")}
                   </Button>
                 </div>
               ) : (
@@ -568,60 +650,75 @@ export default function ExternalDJGuestView({ token }: ExternalDJGuestViewProps)
                 </div>
               )}
 
-              <GuestBulkEntry
-                key={`${token}:${linkInfo?.id ?? "link"}`}
-                existingNames={guests.map((guest) => guest.name)}
-                remaining={remaining}
-                disabled={
-                  requiresReconciliation ||
-                  isReconciling ||
-                  isLoading ||
-                  deletingId !== null
-                }
-                onSubmitChunk={handleBulkSave}
-                onSubmissionComplete={async () => {
-                  const refreshed = await loadExternalData(false);
-                  if (!refreshed) {
-                    setRequiresReconciliation(true);
-                    throw new Error("External guest list refresh failed");
+              {!isSelfRsvp && (
+                <GuestBulkEntry
+                  key={`${token}:${linkInfo?.id ?? "link"}`}
+                  existingNames={guests.map((guest) => guest.name)}
+                  remaining={remaining}
+                  disabled={
+                    requiresReconciliation ||
+                    isReconciling ||
+                    isLoading ||
+                    deletingId !== null
                   }
-                }}
-                onSubmittingChange={setIsBulkSubmitting}
-              />
+                  onSubmitChunk={handleBulkSave}
+                  onSubmissionComplete={async () => {
+                    const refreshed = await loadExternalData(false);
+                    if (!refreshed) {
+                      setRequiresReconciliation(true);
+                      throw new Error("External guest list refresh failed");
+                    }
+                  }}
+                  onSubmittingChange={setIsBulkSubmitting}
+                />
+              )}
             </div>
 
-            <StatGrid
-              variant="embedded"
-              items={[
-                { label: t("registered"), value: guests.length, color: "checked" },
-                {
-                  label: t("remaining"),
-                  value: remaining,
-                  color: remaining > 0 ? "waiting" : "danger",
-                },
-                {
-                  label: t("max"),
-                  value: linkInfo?.maxGuests ?? 0,
-                  color: "default",
-                },
-              ]}
-            />
+            {!isSelfRsvp && (
+              <StatGrid
+                variant="embedded"
+                items={[
+                  { label: t("registered"), value: guests.length, color: "checked" },
+                  {
+                    label: t("remaining"),
+                    value: remaining,
+                    color: remaining > 0 ? "waiting" : "danger",
+                  },
+                  {
+                    label: t("max"),
+                    value: linkInfo?.maxGuests ?? 0,
+                    color: "default",
+                  },
+                ]}
+              />
+            )}
+
+            {isSelfRsvp && ownedGuest && (
+              <GuestQrCode
+                guestId={ownedGuest.id}
+                label={t("doorQrCode")}
+                codeLabel={t("doorQrCodeHelp")}
+                unavailableLabel={t("doorQrCodeUnavailable")}
+              />
+            )}
 
             <PanelHeader
-              title={t("guestList")}
+              title={isSelfRsvp ? t("yourRegistration") : t("guestList")}
               count={displayGuests.length}
-              sortMode={sortMode}
-              onSortToggle={() =>
-                setSortMode((prev) =>
-                  prev === "default" ? "alpha" : "default",
-                )
+              sortMode={isSelfRsvp ? undefined : sortMode}
+              onSortToggle={isSelfRsvp ? undefined : () =>
+                  setSortMode((prev) =>
+                    prev === "default" ? "alpha" : "default",
+                  )
               }
             />
 
-            <GuestSearchInput
-              value={searchQuery}
-              onChange={setSearchQuery}
-            />
+            {!isSelfRsvp && (
+              <GuestSearchInput
+                value={searchQuery}
+                onChange={setSearchQuery}
+              />
+            )}
 
             {displayGuests.length === 0 ? (
               <EmptyState
@@ -629,7 +726,9 @@ export default function ExternalDJGuestView({ token }: ExternalDJGuestViewProps)
                 message={
                   searchQuery
                     ? t("noSearchResults")
-                    : t("noGuests")
+                    : isSelfRsvp
+                      ? t("noOwnRsvp")
+                      : t("noGuests")
                 }
               />
             ) : (

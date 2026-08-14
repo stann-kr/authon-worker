@@ -5,6 +5,7 @@ import {
   useLocalStorage,
   useGuestPolling,
   useLatestRequestGuard,
+  useScopedOperationGuard,
 } from "../../../lib/hooks";
 import GuestListCard from "../../../components/GuestListCard";
 import GuestSearchInput from "../../../components/GuestSearchInput";
@@ -21,6 +22,10 @@ import VenueSelector, {
   useVenueSelector,
 } from "../../../components/VenueSelector";
 import { formatDateDisplay } from "../../../lib/date";
+import {
+  deriveAsyncListState,
+  shouldShowEmptyState,
+} from "../../../lib/ui/async-list-state";
 import {
   fetchGuestsByDate,
   updateGuestStatus,
@@ -44,12 +49,14 @@ interface GuestListProps {
   selectedDate: string;
   onDateChange: (date: string) => void;
   businessDate: string;
+  eventId: string | null;
 }
 
 export default function GuestList({
   selectedDate,
   onDateChange,
   businessDate,
+  eventId,
 }: GuestListProps) {
   const t = useTranslations("AdminGuest");
   const doorT = useTranslations("Door");
@@ -64,6 +71,9 @@ export default function GuestList({
   const [guests, setGuests] = useState<Guest[]>([]);
   const [isFetching, setIsFetching] = useState(true);
   const [loadedScopeKey, setLoadedScopeKey] = useState("");
+  const [loadOutcome, setLoadOutcome] = useState<
+    "idle" | "success" | "partial" | "error"
+  >("idle");
   const [feedback, setFeedback] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [sortMode, setSortMode] = useLocalStorage<"default" | "alpha">(
@@ -87,9 +97,12 @@ export default function GuestList({
   const { venueId, venues, selectedVenueId, setSelectedVenueId, isSuperAdmin } =
     useVenueSelector();
 
-  const requestScopeKey = `${venueId}:${selectedDate}`;
+  const requestScopeKey = `${venueId}:${selectedDate}:${eventId ?? "general"}`;
   const requestGuard = useLatestRequestGuard();
   const pollingGuard = useLatestRequestGuard();
+  const mutationGuard = useScopedOperationGuard();
+  const currentScopeKeyRef = useRef(requestScopeKey);
+  currentScopeKeyRef.current = requestScopeKey;
 
   useEffect(() => {
     if (!isFetching && loadedScopeKey === requestScopeKey) {
@@ -113,6 +126,7 @@ export default function GuestList({
 
   useEffect(() => {
     setSelectedDJ("all");
+    setLoadOutcome("idle");
   }, [requestScopeKey]);
 
   const loadData = useCallback(async () => {
@@ -123,6 +137,7 @@ export default function GuestList({
       setUsers([]);
       setExternalLinks([]);
       setLoadedScopeKey(requestScopeKey);
+      setLoadOutcome("success");
       setIsFetching(false);
       return;
     }
@@ -132,6 +147,7 @@ export default function GuestList({
       const { data, error } = await fetchGuestOperationsSnapshot(
         selectedDate,
         venueId,
+        eventId,
       );
       if (!isLatestRequest()) return;
       if (!data) {
@@ -139,8 +155,14 @@ export default function GuestList({
         setUsers([]);
         setExternalLinks([]);
         setFeedback(doorT("loadFailed"));
+        setLoadOutcome("error");
       } else {
-        if (error) setFeedback(doorT("partialLoadFailed"));
+        if (error) {
+          setFeedback(doorT("partialLoadFailed"));
+          setLoadOutcome("partial");
+        } else {
+          setLoadOutcome("success");
+        }
         setGuests(data.guests);
         setUsers(data.users);
         setExternalLinks(data.externalLinks);
@@ -154,10 +176,11 @@ export default function GuestList({
       setExternalLinks([]);
       setLoadedScopeKey(requestScopeKey);
       setFeedback(doorT("loadFailed"));
+      setLoadOutcome("error");
     } finally {
       if (isLatestRequest()) setIsFetching(false);
     }
-  }, [doorT, pollingGuard, requestGuard, requestScopeKey, selectedDate, venueId]);
+  }, [doorT, eventId, pollingGuard, requestGuard, requestScopeKey, selectedDate, venueId]);
 
   useEffect(() => {
     loadData();
@@ -167,36 +190,62 @@ export default function GuestList({
   const pollGuests = useCallback(async () => {
     if (!venueId || loadedScopeKey !== requestScopeKey) return;
     const isLatestRequest = pollingGuard.beginRequest();
-    const { data } = await fetchGuestsByDate(selectedDate, venueId);
+    const { data } = await fetchGuestsByDate(selectedDate, venueId, eventId);
     if (isLatestRequest() && loadedScopeKey === requestScopeKey && data) {
       setGuests(data);
     }
-  }, [loadedScopeKey, pollingGuard, requestScopeKey, selectedDate, venueId]);
+  }, [eventId, loadedScopeKey, pollingGuard, requestScopeKey, selectedDate, venueId]);
 
-  useGuestPolling(pollGuests, 15000, !!venueId);
+  const pollingCoordinator = useGuestPolling(pollGuests, 15000, !!venueId);
+
+  useEffect(() => {
+    mutationGuard.invalidateOperations();
+    pollingGuard.invalidateRequests();
+    pollingCoordinator.clearSuspensions();
+    setLoadingStates({});
+    setFeedback(null);
+  }, [mutationGuard, pollingCoordinator, pollingGuard, requestScopeKey]);
 
   const handleStatusChange = async (
     id: string,
     newStatus: Guest["status"],
     action: string,
   ) => {
+    const operationScopeKey = requestScopeKey;
+    const busyKey = `${id}_${action}`;
+    const operation = mutationGuard.beginOperation(
+      operationScopeKey,
+      busyKey,
+    );
+    const releasePolling = pollingCoordinator.suspend();
     pollingGuard.invalidateRequests();
-    setLoadingStates((prev) => ({ ...prev, [`${id}_${action}`]: true }));
+    setLoadingStates((prev) => ({ ...prev, [busyKey]: true }));
 
-    const { data, error } =
-      newStatus === "deleted"
-        ? await deleteGuest(id)
-        : await updateGuestStatus(id, newStatus);
+    try {
+      const { data, error } =
+        newStatus === "deleted"
+          ? await deleteGuest(id)
+          : await updateGuestStatus(id, newStatus, crypto.randomUUID());
 
-    if (!error && data) {
-      setGuests((prev) => prev.map((g) => (g.id === id ? data : g)));
-      setFeedback(null);
-    } else {
+      if (!operation.isCurrent(currentScopeKeyRef.current)) return;
+      if (!error && data) {
+        setGuests((prev) => prev.map((guest) => (guest.id === id ? data : guest)));
+        setFeedback(null);
+        await loadData();
+      } else {
+        console.error("Failed to update guest status:", error);
+        setFeedback(doorT("updateFailed"));
+      }
+    } catch (error) {
+      if (!operation.isCurrent(currentScopeKeyRef.current)) return;
       console.error("Failed to update guest status:", error);
       setFeedback(doorT("updateFailed"));
+    } finally {
+      releasePolling();
+      if (operation.finish(currentScopeKeyRef.current)) {
+        setLoadingStates((prev) => ({ ...prev, [busyKey]: false }));
+      }
     }
-
-    setLoadingStates((prev) => ({ ...prev, [`${id}_${action}`]: false }));
   };
 
   const getContributor = (guest: Guest): {
@@ -250,6 +299,13 @@ export default function GuestList({
         (g.name || "").toLowerCase().includes(searchQuery.toLowerCase()),
       )
     : sortedGuests;
+  const listState = deriveAsyncListState({
+    hasStarted: isFetching || loadOutcome !== "idle",
+    isLoading: isCurrentScopeFetching,
+    itemCount: displayGuests.length,
+    hasError: loadOutcome === "error",
+    isPartial: loadOutcome === "partial",
+  });
 
   const getSelectedDJInfo = () => {
     if (selectedDJ === "all")
@@ -288,6 +344,7 @@ export default function GuestList({
     <OperationsLayout
       variant="stacked"
       title={t("title")}
+      headingLevel={null}
       dashboard={
         <>
         <div className="context-bar">
@@ -356,9 +413,9 @@ export default function GuestList({
 
         <div className="app-panel p-4 sm:p-5">
           <div className="mb-4">
-            <h2 className="type-panel-title mb-1 break-words">
+            <h3 className="type-panel-title mb-1 break-words">
               {selectedDJInfo.name}
-            </h2>
+            </h3>
             <p className="mb-1 break-words text-sm text-text-muted">
               {selectedDJInfo.event}
             </p>
@@ -411,9 +468,9 @@ export default function GuestList({
             onChange={setSearchQuery}
           />
 
-          {isCurrentScopeFetching && displayData.guests.length === 0 ? (
+          {listState === "loading" ? (
             <Skeleton rows={6} />
-          ) : displayGuests.length === 0 ? (
+          ) : shouldShowEmptyState(listState) ? (
             <EmptyState
               icon="user"
               message={searchQuery ? t("noSearchResults") : t("noGuestsForDate")}

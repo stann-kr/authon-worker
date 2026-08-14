@@ -1,5 +1,6 @@
 import { AwsClient } from "aws4fetch";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
+import { reportServerError } from "@/lib/observability/structured-log";
 
 /**
  * AWS SES API v2를 사용하여 이메일을 발송하는 유틸리티.
@@ -78,7 +79,7 @@ export async function sendEmail({ to, subject, body }: SendEmailParams): Promise
 
     return await response.json();
   } catch (error) {
-    console.error("[SES] Email sending exception:", error);
+    await reportServerError("email.send", error);
     throw error;
   }
 }

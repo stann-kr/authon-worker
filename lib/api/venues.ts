@@ -1,5 +1,7 @@
 "use server";
 
+import { reportServerError } from "@/lib/observability/structured-log";
+
 import { and, asc, eq, inArray } from "drizzle-orm";
 import { venueDomains, venues } from "../db/schema";
 import { type Venue, type ApiResponse } from "./types";
@@ -7,6 +9,7 @@ import { requireRole } from "../auth/server";
 import { getDb } from "../db/client";
 import { isPlatformHostname, normalizeHostname } from "../tenant/host";
 import { DEFAULT_LOCALE, isLocale, type Locale } from "@/i18n/config";
+import { isInactiveVenueRecoveryUpdate } from "@/lib/tenant/active-policy";
 import {
   DEFAULT_CLOSING_TIME,
   DEFAULT_OPENING_TIME,
@@ -179,7 +182,7 @@ export async function fetchVenues(includeInactive = false): Promise<ApiResponse<
       error: null,
     };
   } catch (error: unknown) {
-    console.error("Failed to fetch venues:", error);
+    await reportServerError("venue.list", error);
     return { data: null, error: "Unable to load venues right now." };
   }
 }
@@ -241,7 +244,7 @@ export async function createVenue(venue: {
     }
     return { data: await loadVenue(db, id), error: null };
   } catch (error: unknown) {
-    console.error("Failed to create venue:", error);
+    await reportServerError("venue.create", error);
     const message = isHostnameError(error)
       ? "Enter a valid, unused venue domain."
       : isVenueTimeError(error)
@@ -275,6 +278,9 @@ export async function updateVenue(
     const db = getDb();
     const currentVenue = await loadVenue(db, id);
     if (!currentVenue) throw new Error("Venue not found");
+    if (!isInactiveVenueRecoveryUpdate(currentVenue.active, updates)) {
+      throw new Error("Inactive venue can only be reactivated");
+    }
     const timeSettings = {
       timezone: updates.timezone?.trim() || currentVenue.timezone,
       openingTime: updates.openingTime || currentVenue.openingTime,
@@ -332,7 +338,7 @@ export async function updateVenue(
     }
     return { data: await loadVenue(db, id), error: null };
   } catch (error: unknown) {
-    console.error("Failed to update venue:", error);
+    await reportServerError("venue.update", error);
     const message = isHostnameError(error)
       ? "Enter a valid, unused venue domain."
       : isVenueTimeError(error)

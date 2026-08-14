@@ -1,9 +1,12 @@
 "use client";
 
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
-import { useLatestRequestGuard, useLocalStorage } from "../../../lib/hooks";
+import {
+  useLatestRequestGuard,
+  useLocalStorage,
+  useScopedOperationGuard,
+} from "../../../lib/hooks";
 import InviteUser from "./InviteUser";
-import LegacyUserMigration from "./LegacyUserMigration";
 import VenueSelector, {
   useVenueSelector,
 } from "../../../components/VenueSelector";
@@ -33,11 +36,20 @@ import type {
 import { useLocale, useTranslations } from "next-intl";
 import { isVenueManagedRole } from "@/lib/users/policy";
 import { useVenueBrand } from "@/components/VenueBrandProvider";
+import { formatVenueDateTime } from "@/lib/date";
+import {
+  deriveAsyncListState,
+  shouldShowEmptyState,
+} from "@/lib/ui/async-list-state";
 
 type StatusFilter = "current" | "ready" | "setup" | "inactive" | "deleted";
-export type UserManagementSection = "create" | "users" | "migrate";
+export type UserManagementSection = "create" | "users";
 
-type Feedback = { type: "success" | "error"; message: string } | null;
+type Feedback = {
+  scopeKey: string;
+  type: "success" | "error";
+  message: string;
+} | null;
 type PendingUserAction = {
   kind: "toggle" | "reset-password" | "delete";
   user: User;
@@ -83,6 +95,9 @@ export default function UserManagement({
   const [isLoading, setIsLoading] = useState(false);
   const [loadedScopeKey, setLoadedScopeKey] = useState("");
   const [loadError, setLoadError] = useState("");
+  const [loadOutcome, setLoadOutcome] = useState<
+    "idle" | "success" | "partial" | "error"
+  >("idle");
   const [feedback, setFeedback] = useState<Feedback>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [roleFilter, setRoleFilter] = useState<"all" | "shared" | User["role"]>("all");
@@ -91,6 +106,7 @@ export default function UserManagement({
   const [pendingUserAction, setPendingUserAction] =
     useState<PendingUserAction>(null);
   const [setupCredential, setSetupCredential] = useState<{
+    scopeKey: string;
     userName: string;
     setupMethod: PasswordResetSetupMethod;
     setupCode: string | null;
@@ -105,6 +121,7 @@ export default function UserManagement({
     setSelectedVenueId,
     isSuperAdmin,
     user: currentUser,
+    currentVenue,
   } = useVenueSelector();
 
   const effectiveVenueId = isSuperAdmin
@@ -112,11 +129,14 @@ export default function UserManagement({
     : currentUser?.venue_id;
   const requestScopeKey = `${isSuperAdmin ? "super" : "venue"}:${effectiveVenueId ?? ""}`;
   const requestGuard = useLatestRequestGuard();
+  const mutationGuard = useScopedOperationGuard();
   const currentScopeKeyRef = useRef(requestScopeKey);
-
-  useEffect(() => {
-    currentScopeKeyRef.current = requestScopeKey;
-  }, [requestScopeKey]);
+  const activeMutationIdRef = useRef<number | null>(null);
+  currentScopeKeyRef.current = requestScopeKey;
+  const scopedSetupCredential =
+    setupCredential?.scopeKey === requestScopeKey ? setupCredential : null;
+  const scopedFeedback =
+    feedback?.scopeKey === requestScopeKey ? feedback : null;
 
   const scopedUsers = loadedScopeKey === requestScopeKey ? users : EMPTY_USERS;
   const scopedAuditEvents =
@@ -125,20 +145,27 @@ export default function UserManagement({
   useSectionLoadingTask(activeTab === "users" && isCurrentScopeLoading);
 
   useEffect(() => {
-    const isKnownTab = ["create", "users", "migrate"].includes(activeTab as string);
-    if (!isKnownTab || (!isSuperAdmin && activeTab === "migrate")) {
+    const isKnownTab = ["create", "users"].includes(activeTab as string);
+    if (!isKnownTab) {
       setActiveTab("create");
     }
   }, [activeTab, isSuperAdmin, setActiveTab]);
 
   useEffect(() => {
+    requestGuard.invalidateRequests();
+    mutationGuard.invalidateOperations();
+    activeMutationIdRef.current = null;
+    setBusyUserId(null);
+    setPendingUserAction(null);
     setSetupCredential(null);
+    shouldFocusSetupCredentialRef.current = false;
     setFeedback(null);
-  }, [effectiveVenueId]);
+    setLoadOutcome("idle");
+  }, [mutationGuard, requestGuard, requestScopeKey]);
 
   useEffect(() => {
     if (
-      !setupCredential ||
+      !scopedSetupCredential ||
       pendingUserAction ||
       !shouldFocusSetupCredentialRef.current
     ) {
@@ -155,7 +182,7 @@ export default function UserManagement({
     });
 
     return () => window.cancelAnimationFrame(frameId);
-  }, [pendingUserAction, setupCredential]);
+  }, [pendingUserAction, scopedSetupCredential]);
 
   const loadUsers = useCallback(async () => {
     if (currentScopeKeyRef.current !== requestScopeKey) return;
@@ -164,6 +191,7 @@ export default function UserManagement({
       setUsers([]);
       setAuditEvents([]);
       setLoadedScopeKey(requestScopeKey);
+      setLoadOutcome("success");
       setIsLoading(false);
       return;
     }
@@ -182,12 +210,15 @@ export default function UserManagement({
         console.error("Failed to load users:", userResult.error);
         setLoadError(t("loadFailed"));
         setUsers([]);
+        setLoadOutcome("error");
       } else {
         setUsers(userResult.data ?? []);
+        setLoadOutcome(auditResult?.error ? "partial" : "success");
       }
       if (auditResult?.error) {
         console.error("Failed to load user activity:", auditResult.error);
         setAuditEvents([]);
+        if (!userResult.error) setLoadError(t("activityLoadFailed"));
       } else if (isSuperAdmin) {
         setAuditEvents(auditResult?.data ?? []);
       } else if (!isSuperAdmin) {
@@ -201,6 +232,7 @@ export default function UserManagement({
       setAuditEvents([]);
       setLoadedScopeKey(requestScopeKey);
       setLoadError(t("connectionLoadFailed"));
+      setLoadOutcome("error");
     } finally {
       if (isLatestRequest() && currentScopeKeyRef.current === requestScopeKey) {
         setIsLoading(false);
@@ -214,6 +246,28 @@ export default function UserManagement({
     }
   }, [activeTab, effectiveVenueId, isSuperAdmin, loadUsers]);
 
+  const beginUserMutation = (userId: string) => {
+    if (activeMutationIdRef.current !== null) return null;
+    const operation = mutationGuard.beginOperation(
+      requestScopeKey,
+      "user-mutation",
+    );
+    activeMutationIdRef.current = operation.id;
+    setBusyUserId(userId);
+    setFeedback(null);
+    return operation;
+  };
+
+  const finishUserMutation = (
+    operation: ReturnType<typeof mutationGuard.beginOperation>,
+  ) => {
+    if (activeMutationIdRef.current !== operation.id) return;
+    activeMutationIdRef.current = null;
+    if (operation.finish(currentScopeKeyRef.current)) {
+      setBusyUserId(null);
+    }
+  };
+
   const handleUserUpdate = async (
     userId: string,
     updates: {
@@ -225,25 +279,40 @@ export default function UserManagement({
       doorAccessEnabled?: boolean;
     },
   ): Promise<boolean> => {
-    setBusyUserId(userId);
-    setFeedback(null);
+    const operation = beginUserMutation(userId);
+    if (!operation) return false;
     try {
       const { error } = await updateUserProfile(userId, updates);
+      if (!operation.isCurrent(currentScopeKeyRef.current)) return false;
       if (error) {
         console.error("Failed to update user:", error);
-        setFeedback({ type: "error", message: getActionError(error) });
+        setFeedback({
+          scopeKey: operation.scopeKey,
+          type: "error",
+          message: getActionError(error),
+        });
         return false;
       } else {
         await loadUsers();
-        setFeedback({ type: "success", message: t("updated") });
+        if (!operation.isCurrent(currentScopeKeyRef.current)) return false;
+        setFeedback({
+          scopeKey: operation.scopeKey,
+          type: "success",
+          message: t("updated"),
+        });
         return true;
       }
     } catch (error) {
+      if (!operation.isCurrent(currentScopeKeyRef.current)) return false;
       console.error("Failed to update user:", error);
-      setFeedback({ type: "error", message: t("updateFailed") });
+      setFeedback({
+        scopeKey: operation.scopeKey,
+        type: "error",
+        message: t("updateFailed"),
+      });
       return false;
     } finally {
-      setBusyUserId(null);
+      finishUserMutation(operation);
     }
   };
 
@@ -267,26 +336,35 @@ export default function UserManagement({
   };
 
   const handlePasswordReset = async (user: User) => {
-    setBusyUserId(user.id);
-    setFeedback(null);
+    const operation = beginUserMutation(user.id);
+    if (!operation) return;
+    setSetupCredential(null);
+    shouldFocusSetupCredentialRef.current = false;
     try {
       const { data, error } = await startManagedPasswordReset({
         userId: user.id,
         setupMethod: "setup_code",
       });
+      if (!operation.isCurrent(currentScopeKeyRef.current)) return;
       if (error) {
-        setFeedback({ type: "error", message: getActionError(error) });
+        setFeedback({
+          scopeKey: operation.scopeKey,
+          type: "error",
+          message: getActionError(error),
+        });
         return;
       }
       if (data) {
         shouldFocusSetupCredentialRef.current = true;
         setSetupCredential({
+          scopeKey: operation.scopeKey,
           userName: user.name,
           setupMethod: data.setupMethod,
           setupCode: data.setupCode,
           expiresAt: data.expiresAt,
         });
         setFeedback({
+          scopeKey: operation.scopeKey,
           type: "success",
           message:
             data.setupMethod === "admin_approved"
@@ -296,54 +374,96 @@ export default function UserManagement({
         await loadUsers();
       }
     } catch (error: unknown) {
+      if (!operation.isCurrent(currentScopeKeyRef.current)) return;
       console.error("Failed to reset user password:", error);
-      setFeedback({ type: "error", message: t("resetPasswordFailed") });
+      setFeedback({
+        scopeKey: operation.scopeKey,
+        type: "error",
+        message: t("resetPasswordFailed"),
+      });
     } finally {
-      setBusyUserId(null);
+      finishUserMutation(operation);
     }
   };
 
   const handleUserDelete = async (user: User) => {
-    setBusyUserId(user.id);
-    setFeedback(null);
+    const operation = beginUserMutation(user.id);
+    if (!operation) return;
     try {
       const { error } = await deleteUserViaEdge(user.id);
+      if (!operation.isCurrent(currentScopeKeyRef.current)) return;
       if (error) {
         console.error("Failed to delete user:", error);
-        setFeedback({ type: "error", message: getActionError(error) });
+        setFeedback({
+          scopeKey: operation.scopeKey,
+          type: "error",
+          message: getActionError(error),
+        });
       } else {
         await loadUsers();
-        setFeedback({ type: "success", message: t("deleted") });
+        if (!operation.isCurrent(currentScopeKeyRef.current)) return;
+        setFeedback({
+          scopeKey: operation.scopeKey,
+          type: "success",
+          message: t("deleted"),
+        });
       }
     } catch (error: unknown) {
+      if (!operation.isCurrent(currentScopeKeyRef.current)) return;
       console.error("Failed to delete user:", error);
-      setFeedback({ type: "error", message: t("deleteFailed") });
+      setFeedback({
+        scopeKey: operation.scopeKey,
+        type: "error",
+        message: t("deleteFailed"),
+      });
     } finally {
-      setBusyUserId(null);
+      finishUserMutation(operation);
     }
   };
 
   const confirmPendingUserAction = async () => {
     if (!pendingUserAction) return;
     const { kind, user } = pendingUserAction;
+    const operationScopeKey = requestScopeKey;
     if (kind === "toggle") await handleActiveChange(user);
     if (kind === "reset-password") await handlePasswordReset(user);
     if (kind === "delete") await handleUserDelete(user);
-    setPendingUserAction(null);
+    if (currentScopeKeyRef.current === operationScopeKey) {
+      setPendingUserAction((current) =>
+        current?.kind === kind && current.user.id === user.id ? null : current,
+      );
+    }
   };
 
   const copySetupCode = async () => {
-    if (!setupCredential?.setupCode) return;
+    const setupCode = scopedSetupCredential?.setupCode;
+    if (!setupCode) return;
+    const operation = mutationGuard.beginOperation(
+      requestScopeKey,
+      "copy-setup-code",
+    );
     try {
       await navigator.clipboard.writeText(
         t("setupCodeShareTemplate", {
           url: setupPasswordUrl,
-          code: setupCredential.setupCode,
+          code: setupCode,
         }),
       );
-      setFeedback({ type: "success", message: t("setupCodeCopied") });
+      if (!operation.isCurrent(currentScopeKeyRef.current)) return;
+      setFeedback({
+        scopeKey: operation.scopeKey,
+        type: "success",
+        message: t("setupCodeCopied"),
+      });
     } catch {
-      setFeedback({ type: "error", message: t("setupCodeCopyFailed") });
+      if (!operation.isCurrent(currentScopeKeyRef.current)) return;
+      setFeedback({
+        scopeKey: operation.scopeKey,
+        type: "error",
+        message: t("setupCodeCopyFailed"),
+      });
+    } finally {
+      operation.finish(currentScopeKeyRef.current);
     }
   };
 
@@ -377,12 +497,24 @@ export default function UserManagement({
       return matchesSearch && matchesRole && matchesStatus;
     });
   }, [roleFilter, scopedUsers, searchQuery, statusFilter]);
+  const listState = deriveAsyncListState({
+    hasStarted: isLoading || loadOutcome !== "idle",
+    isLoading: isCurrentScopeLoading,
+    itemCount: filteredUsers.length,
+    hasError: loadOutcome === "error",
+    isPartial: loadOutcome === "partial",
+  });
 
-  const formatActivityDate = (value: string): string =>
-    new Intl.DateTimeFormat(locale === "ko" ? "ko-KR" : "en-US", {
-      dateStyle: "medium",
-      timeStyle: "short",
-    }).format(new Date(value));
+  const formatActivityDate = (
+    value: string,
+    venueId?: string | null,
+  ): string =>
+    formatVenueDateTime(value, {
+      locale: locale === "ko" ? "ko-KR" : "en-US",
+      timeZone:
+        venues.find((venue) => venue.id === venueId)?.timezone ??
+        currentVenue?.timezone,
+    }) ?? "-";
 
   const resolveAuditUserName = (userId: string | null): string => {
     if (!userId) return t("systemActor");
@@ -454,6 +586,7 @@ export default function UserManagement({
     <OperationsLayout
       variant="stacked"
       title={t("title")}
+      headingLevel={null}
       dashboard={
         <>
         {/* Venue selector for super_admin */}
@@ -472,9 +605,6 @@ export default function UserManagement({
             items={[
               { id: "create", label: t("create"), icon: "user-add" },
               { id: "users", label: t("users"), icon: "user" },
-              ...(isSuperAdmin
-                ? [{ id: "migrate" as const, label: t("migrate"), icon: "database" as const }]
-                : []),
             ]}
             activeId={activeTab}
             onChange={setActiveTab}
@@ -551,7 +681,6 @@ export default function UserManagement({
 
       <div className="min-w-0">
         {activeTab === "create" && <InviteUser />}
-        {activeTab === "migrate" && <LegacyUserMigration />}
         {activeTab === "users" && (
           <div className="app-panel">
             <PanelHeader
@@ -562,10 +691,10 @@ export default function UserManagement({
             />
             <div className="p-4">
               {loadError && <Alert type="error" message={loadError} className="mb-4" />}
-              {feedback && (
-                <Alert type={feedback.type} message={feedback.message} className="mb-4" />
+              {scopedFeedback && (
+                <Alert type={scopedFeedback.type} message={scopedFeedback.message} className="mb-4" />
               )}
-              {setupCredential && (
+              {scopedSetupCredential && (
                 <div
                   ref={setupCredentialPanelRef}
                   className="mb-4 border border-status-waiting/70 bg-status-waiting/10 p-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-border-focus"
@@ -577,20 +706,20 @@ export default function UserManagement({
                   <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                     <div className="min-w-0">
                       <p className="break-words text-sm font-semibold text-status-waiting">
-                        {setupCredential.setupMethod === "admin_approved"
-                          ? t("directResetTitle", { name: setupCredential.userName })
-                          : t("setupCodeTitle", { name: setupCredential.userName })}
+                        {scopedSetupCredential.setupMethod === "admin_approved"
+                          ? t("directResetTitle", { name: scopedSetupCredential.userName })
+                          : t("setupCodeTitle", { name: scopedSetupCredential.userName })}
                       </p>
                       <p className="mt-2 text-xs leading-relaxed text-text-muted">
-                        {setupCredential.setupMethod === "admin_approved"
+                        {scopedSetupCredential.setupMethod === "admin_approved"
                           ? t("directResetHelp", {
                               expiresAt: formatActivityDate(
-                                setupCredential.expiresAt ?? new Date().toISOString(),
+                                scopedSetupCredential.expiresAt ?? new Date().toISOString(),
                               ),
                             })
                           : t("setupCodeHelp")}
                       </p>
-                      {setupCredential.setupCode && (
+                      {scopedSetupCredential.setupCode && (
                         <div className="mt-3 space-y-2">
                           <a
                             href="/auth/setup-password"
@@ -601,13 +730,13 @@ export default function UserManagement({
                             {setupPasswordUrl}
                           </a>
                           <code className="block select-all break-all bg-canvas px-3 py-2 font-mono text-base tracking-wider text-text-heading">
-                            {setupCredential.setupCode}
+                            {scopedSetupCredential.setupCode}
                           </code>
                         </div>
                       )}
                     </div>
                     <div className="flex shrink-0 gap-2">
-                      {setupCredential.setupCode && (
+                      {scopedSetupCredential.setupCode && (
                         <button
                           type="button"
                           onClick={copySetupCode}
@@ -689,9 +818,9 @@ export default function UserManagement({
                 </div>
               </div>
 
-              {isCurrentScopeLoading && scopedUsers.length === 0 ? (
+              {listState === "loading" ? (
                 <Skeleton rows={5} />
-              ) : filteredUsers.length === 0 ? (
+              ) : shouldShowEmptyState(listState) ? (
                 <EmptyState
                   icon="users"
                   message={
@@ -713,6 +842,10 @@ export default function UserManagement({
                       user={user}
                       actorRole={currentUser?.role || null}
                       currentUserId={currentUser?.id || null}
+                      timeZone={
+                        venues.find((venue) => venue.id === user.venueId)?.timezone ??
+                        currentVenue?.timezone
+                      }
                       isBusy={busyUserId === user.id}
                       onUpdate={handleUserUpdate}
                       onToggleActive={async (user) =>
@@ -753,7 +886,7 @@ export default function UserManagement({
                           </span>
                         </p>
                         <time className="shrink-0 font-mono text-text-dim" dateTime={event.createdAt}>
-                          {formatActivityDate(event.createdAt)}
+                          {formatActivityDate(event.createdAt, event.venueId)}
                         </time>
                       </div>
                     ))}
@@ -803,6 +936,7 @@ function UserCard({
   user,
   actorRole,
   currentUserId,
+  timeZone,
   isBusy,
   onUpdate,
   onToggleActive,
@@ -812,6 +946,7 @@ function UserCard({
   user: User;
   actorRole: User["role"] | null;
   currentUserId: string | null;
+  timeZone?: string | null;
   isBusy: boolean;
   onUpdate: (
     id: string,
@@ -888,10 +1023,12 @@ function UserCard({
 
   const formatDate = (value: string | null): string => {
     if (!value) return t("never");
-    return new Intl.DateTimeFormat(locale === "ko" ? "ko-KR" : "en-US", {
-      dateStyle: "medium",
-      timeStyle: "short",
-    }).format(new Date(value));
+    return (
+      formatVenueDateTime(value, {
+        locale: locale === "ko" ? "ko-KR" : "en-US",
+        timeZone,
+      }) ?? t("never")
+    );
   };
 
   const statusLabel = isDeleted

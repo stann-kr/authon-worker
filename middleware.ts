@@ -13,6 +13,12 @@ import {
   REQUEST_LOCALE_HEADER,
 } from "@/i18n/config";
 import { hasAccess, isAccountKind, isRole } from "@/lib/users/policy";
+import { hasActiveVenueAccess } from "@/lib/tenant/active-policy";
+import {
+  getRequestId,
+  reportServerError,
+  writeStructuredLog,
+} from "@/lib/observability/structured-log";
 
 function parseStoredSession(raw: string): { userId?: string; sessionVersion?: number } | null {
   try {
@@ -24,6 +30,7 @@ function parseStoredSession(raw: string): { userId?: string; sessionVersion?: nu
 }
 
 export async function middleware(request: NextRequest) {
+  const requestId = getRequestId(request);
   const { pathname, searchParams } = request.nextUrl;
   const explicitLocale = searchParams.get("lang");
   const requestHeaders = new Headers(request.headers);
@@ -110,7 +117,12 @@ export async function middleware(request: NextRequest) {
   }
 
   if (!env.JWT_SECRET) {
-    console.error("JWT_SECRET is not configured");
+    await writeStructuredLog("error", {
+      event: "auth.middleware",
+      requestId,
+      outcome: "unavailable",
+      errorKind: "MissingConfiguration",
+    });
     return NextResponse.redirect(new URL("/auth/login", request.url));
   }
 
@@ -142,8 +154,10 @@ export async function middleware(request: NextRequest) {
         active: users.active,
         deletedAt: users.deletedAt,
         sessionVersion: users.sessionVersion,
+        venueActive: venues.active,
       })
       .from(users)
+      .leftJoin(venues, eq(users.venueId, venues.id))
       .where(eq(users.id, userId))
       .limit(1);
     const user = userRows[0];
@@ -153,7 +167,12 @@ export async function middleware(request: NextRequest) {
       !user?.active ||
       user.deletedAt ||
       !isRole(currentRole) ||
-      !isAccountKind(currentAccountKind)
+      !isAccountKind(currentAccountKind) ||
+      !hasActiveVenueAccess({
+        role: currentRole,
+        venueId: user.venueId,
+        venueActive: user.venueActive,
+      })
     ) {
       return NextResponse.redirect(new URL("/auth/login", request.url));
     }
@@ -188,7 +207,7 @@ export async function middleware(request: NextRequest) {
 
     return continueRequest();
   } catch (error) {
-    console.error("JWT Verify Error:", error);
+    await reportServerError("auth.middleware", error, { requestId });
     return NextResponse.redirect(new URL("/auth/login", request.url));
   }
 }

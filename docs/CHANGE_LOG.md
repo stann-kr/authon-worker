@@ -2,6 +2,64 @@
 
 공개 가능한 결과 중심 변경 요약이다. 항목은 일자 단위이며 최신 항목을 위에 둔다. 파일 단위 세부 구현 이력은 공개 문서에 포함하지 않는다.
 
+## 2026-08-13
+
+### 재현 가능한 검증과 production 작업 분리
+
+#### Added
+
+- Node 24와 npm 11을 저장소·CI·Docker의 공통 runtime으로 고정하고, clean `npm ci`부터 source 검증과 Next/Worker build까지 실행하는 CI를 추가했다.
+- lint, typecheck, 전체 회귀, EN/KO key·placeholder parity와 민감 asset 검사를 `verify`로 묶고 `verify:release`에서 production artifact까지 한 번에 검증한다.
+- manual D1 migration history와 Drizzle schema를 disposable SQLite에서 비교하는 authority guard, priority route·폐기 경로·민감 asset을 확인하는 Worker artifact smoke를 추가했다.
+- request correlation과 actor 비식별화를 적용하고 raw error·email·credential·SQL을 버리는 structured logger 계약을 추가했다.
+
+#### Changed
+
+- 기본 Docker Compose 개발 서비스에서 Cloudflare account ID와 API token 주입을 제거했다. 승인된 production 작업은 별도 `ops` profile과 `deploy:prod` 명령, 명시적 intent flag를 요구한다.
+- Wrangler와 취약 transitive dependency를 force/major 변경 없이 최소 patch해 전체·production dependency audit를 0건으로 정리했다.
+
+### 베뉴·날짜 전환 중 비동기 상태 정합성
+
+#### Fixed
+
+- 사용자 재설정 설정 코드와 외부 링크 생성 결과는 요청을 시작한 베뉴·날짜가 현재 화면과 일치할 때만 표시한다.
+- Door·Admin 체크인/취소 중에는 명단 polling을 중단하고, 성공 뒤 권위 있는 최신 명단을 다시 조회해 늦은 poll 응답이 상태를 되돌리지 않도록 했다.
+- polling은 느린 요청을 겹쳐 실행하지 않고 숨김 탭과 offline 상태에서 멈추며, 실패 뒤 busy 상태를 정상 해제한다.
+
+### Terminal 게스트 동기화 멱등성
+
+#### Changed
+
+- 내부 terminal 동기화 요청은 `terminalRequestId`를 필수로 보내야 한다.
+- 같은 요청 ID와 같은 payload를 재전송하면 새 게스트를 만들지 않고 최초 guest ID를 반환하며, 같은 ID에 다른 payload를 보내면 `409`로 거부한다.
+
+#### Security
+
+- 베뉴와 요청 ID의 원자적 claim을 별도 테이블에 기록해 동시 재시도 10건에서도 Guest가 하나만 생성되도록 했다.
+
+### 비활성 베뉴 즉시 운영 중지
+
+#### Changed
+
+- 비활성 베뉴는 custom domain과 기본 Worker 주소 모두에서 신규 로그인, 기존 tenant session의 운영 요청, 공개 DJ 링크 조회·등록을 중단한다.
+- platform super admin은 비활성 베뉴의 다른 설정을 함께 바꾸지 않고 정확히 재활성화하는 복구 동작만 수행할 수 있다.
+
+#### Security
+
+- 로그인·비밀번호 재설정·Guest 변경의 최종 데이터 쓰기에서도 베뉴 활성 상태를 다시 검사해 비활성화 이전 session·token을 재사용할 수 없도록 했다.
+
+### 레거시 사용자 이관 경로 폐기
+
+#### Changed
+
+- 운영 cutover가 끝난 public JSON 기반 사용자 이관 화면과 API를 제거했다. 기존 사용자 생성, 관리자 승인 재설정과 1회용 설정 코드 흐름은 유지한다.
+- 오래된 migration deep link는 더 이상 mutation 화면을 열지 않고 사용자 생성 화면으로 이동한다.
+
+#### Security
+
+- private 문서·이관 산출물·local user 파일·로컬 환경 파일을 Docker build context에서 제외했다.
+- Worker build 전후와 deploy 직전에 금지된 public source·배포 asset을 검사해 발견 시 배포 경로를 중단한다.
+
 ## 2026-08-11
 
 ### Worker 공개 주소 단일화

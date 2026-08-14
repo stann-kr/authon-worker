@@ -16,6 +16,12 @@ import {
   toRetainedBulkGuestLineText,
   toStoredGuestName,
 } from "@/lib/guests/bulk-entry";
+import {
+  inferGuestNameColumn,
+  parseGuestCsv,
+  previewGuestCsvColumn,
+  type ParsedGuestCsv,
+} from "@/lib/guests/csv-import";
 
 interface GuestBulkEntryProps {
   existingNames: string[];
@@ -61,12 +67,19 @@ export default function GuestBulkEntry({
   const overflowWarningId = `${fieldId}-overflow-warning`;
   const capacityWarningId = `${fieldId}-capacity-warning`;
   const feedbackId = `${fieldId}-feedback`;
+  const csvFileId = `${fieldId}-csv-file`;
+  const csvColumnId = `${fieldId}-csv-column`;
+  const csvStatusId = `${fieldId}-csv-status`;
+  const csvErrorId = `${fieldId}-csv-error`;
   const [rawInput, setRawInput] = useState("");
   const [duplicateOverrides, setDuplicateOverrides] = useState<Set<number>>(
     () => new Set(),
   );
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [feedback, setFeedback] = useState<FeedbackState | null>(null);
+  const [csvDocument, setCsvDocument] = useState<ParsedGuestCsv | null>(null);
+  const [csvColumnIndex, setCsvColumnIndex] = useState<number | null>(null);
+  const [csvError, setCsvError] = useState<ParsedGuestCsv["error"] | "READ_FAILED" | null>(null);
   const isMountedRef = useRef(true);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const shouldRestoreFocusRef = useRef(false);
@@ -81,6 +94,17 @@ export default function GuestBulkEntry({
   const preview = useMemo(
     () => parseBulkGuestInput(rawInput, existingNames),
     [existingNames, rawInput],
+  );
+  const csvPreview = useMemo(
+    () =>
+      csvDocument && csvColumnIndex !== null
+        ? previewGuestCsvColumn({
+            parsed: csvDocument,
+            columnIndex: csvColumnIndex,
+            existingNames,
+          })
+        : null,
+    [csvColumnIndex, csvDocument, existingNames],
   );
 
   const validLines = preview.lines.filter(
@@ -122,6 +146,38 @@ export default function GuestBulkEntry({
         }
         : null,
     );
+  };
+
+  const handleCsvFile = async (file: File | null) => {
+    setCsvDocument(null);
+    setCsvColumnIndex(null);
+    setCsvError(null);
+    if (!file) return;
+    if (file.size > MAX_BULK_INPUT_CHARACTERS * 4) {
+      setCsvError("TOO_LARGE");
+      return;
+    }
+    try {
+      const parsed = parseGuestCsv(await file.text());
+      if (parsed.error) {
+        setCsvError(parsed.error);
+        return;
+      }
+      setCsvDocument(parsed);
+      setCsvColumnIndex(inferGuestNameColumn(parsed.headers));
+    } catch {
+      setCsvError("READ_FAILED");
+    }
+  };
+
+  const applyCsvMapping = () => {
+    if (!csvPreview?.canApply) return;
+    handleRawInputChange(csvPreview.rawInput);
+    setFeedback({
+      tone: "success",
+      message: t("csv.applied", { count: csvPreview.bulk.lines.length }),
+    });
+    focusTextarea();
   };
 
   const focusTextarea = () => {
@@ -296,6 +352,97 @@ export default function GuestBulkEntry({
           : t("optional")
       }
     >
+        <div className="mb-4 border border-border-default bg-canvas p-3 sm:p-4">
+          <label htmlFor={csvFileId} className="app-label">
+            {t("csv.fileLabel")}
+          </label>
+          <input
+            id={csvFileId}
+            name="guest-csv-file"
+            type="file"
+            accept=".csv,text/csv,text/plain"
+            disabled={disabled || isSubmitting}
+            onChange={(event) => void handleCsvFile(event.target.files?.[0] ?? null)}
+            aria-describedby={csvError ? csvErrorId : undefined}
+            aria-invalid={csvError ? true : undefined}
+            className="app-field file:mr-3 file:border-0 file:bg-surface-raised file:px-3 file:py-2 file:text-xs file:font-semibold file:text-text-heading"
+          />
+          <p className="app-helper">{t("csv.helper")}</p>
+
+          {csvError && (
+            <p id={csvErrorId} role="alert" className="mt-2 text-xs text-status-danger">
+              {t(`csv.error.${csvError}`)}
+            </p>
+          )}
+
+          {csvDocument && (
+            <div className="mt-3 grid gap-3">
+              <div>
+                <label htmlFor={csvColumnId} className="app-label">
+                  {t("csv.columnLabel")}
+                </label>
+                <select
+                  id={csvColumnId}
+                  name="guest-csv-name-column"
+                  value={csvColumnIndex ?? ""}
+                  onChange={(event) =>
+                    setCsvColumnIndex(
+                      event.target.value === "" ? null : Number(event.target.value),
+                    )
+                  }
+                  disabled={disabled || isSubmitting}
+                  aria-describedby={csvPreview ? csvStatusId : undefined}
+                  className="app-field"
+                >
+                  <option value="">{t("csv.selectColumn")}</option>
+                  {csvDocument.headers.map((header, index) => (
+                    <option key={`${index}:${header}`} value={index}>
+                      {header}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {csvPreview && (
+                <div
+                  id={csvStatusId}
+                  role="status"
+                  aria-live="polite"
+                  aria-atomic="true"
+                  className="border-l-2 border-action-primary bg-surface-raised px-3 py-2 text-xs leading-relaxed text-text-body"
+                >
+                  {csvPreview.multilineCellCount > 0
+                    ? t("csv.multilineBlocked", {
+                        count: csvPreview.multilineCellCount,
+                      })
+                    : t("csv.preview", {
+                        rows: csvPreview.sourceRowCount,
+                        ready: csvPreview.bulk.lines.filter(
+                          (line) => line.error === null,
+                        ).length,
+                        duplicates: csvPreview.bulk.lines.filter(
+                          (line) =>
+                            line.isDuplicateExisting || line.isDuplicateInInput,
+                        ).length,
+                        invalid: csvPreview.bulk.lines.filter(
+                          (line) => line.error !== null,
+                        ).length,
+                      })}
+                </div>
+              )}
+
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={applyCsvMapping}
+                disabled={!csvPreview?.canApply || disabled || isSubmitting}
+              >
+                {t("csv.apply")}
+              </Button>
+            </div>
+          )}
+        </div>
+
         <label htmlFor={fieldId} className="app-label">
           {t("fieldLabel")}
         </label>

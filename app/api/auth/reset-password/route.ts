@@ -4,6 +4,11 @@ import { hashPassword } from "@/lib/auth/password";
 import { getPasswordPolicyError } from "@/lib/auth/password-policy";
 import { hashResetToken } from "@/lib/auth/token";
 import { getTenantContextForRequest } from "@/lib/tenant/server";
+import {
+  getRequestId,
+  reportServerError,
+  writeStructuredLog,
+} from "@/lib/observability/structured-log";
 
 const RESET_TOKEN_PATTERN = /^[A-Za-z0-9_-]{43}$/;
 
@@ -16,6 +21,14 @@ const SELECT_VALID_RESET_TOKEN_CANDIDATE_SQL = `
     AND prt.expires_at > ?
     AND u.active = 1
     AND u.deleted_at IS NULL
+    AND (
+      u.role = 'super_admin'
+      OR EXISTS (
+        SELECT 1 FROM venues candidate_venue
+        WHERE candidate_venue.id = u.venue_id
+          AND candidate_venue.active = 1
+      )
+    )
     AND (? IS NULL OR u.venue_id = ?)
   LIMIT 1
 `;
@@ -38,6 +51,14 @@ const UPDATE_PASSWORD_WITH_VALID_TOKEN_SQL = `
       AND prt.expires_at > ?
       AND u.active = 1
       AND u.deleted_at IS NULL
+      AND (
+        u.role = 'super_admin'
+        OR EXISTS (
+          SELECT 1 FROM venues candidate_venue
+          WHERE candidate_venue.id = u.venue_id
+            AND candidate_venue.active = 1
+        )
+      )
       AND (? IS NULL OR u.venue_id = ?)
   )
   RETURNING id
@@ -107,6 +128,7 @@ export async function POST() {
 }
 
 export async function PUT(request: Request) {
+  const requestId = getRequestId(request);
   try {
     const { env } = getCloudflareContext();
     const body: unknown = await request.json().catch(() => null);
@@ -201,9 +223,16 @@ export async function PUT(request: Request) {
       return NextResponse.json({ error: "유효하지 않거나 만료된 토큰입니다." }, { status: 400 });
     }
 
+    await writeStructuredLog("info", {
+      event: "auth.password_reset",
+      requestId,
+      actorId: updatedUserId,
+      venueId: expectedVenueId,
+      outcome: "success",
+    });
     return NextResponse.json({ ok: true, message: "비밀번호가 성공적으로 변경되었습니다." });
   } catch (error) {
-    console.error("Password reset update error:", error);
+    await reportServerError("auth.password_reset", error, { requestId });
     return NextResponse.json({ error: "비밀번호 변경 중 오류가 발생했습니다." }, { status: 500 });
   }
 }

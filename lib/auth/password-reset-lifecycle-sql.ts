@@ -9,6 +9,14 @@ export const MANAGEABLE_PASSWORD_RESET_TARGET_SQL = `
       AND actor.deleted_at IS NULL
       AND managed_target.active = 1
       AND managed_target.deleted_at IS NULL
+      AND (
+        managed_target.role = 'super_admin'
+        OR EXISTS (
+          SELECT 1 FROM venues managed_venue
+          WHERE managed_venue.id = managed_target.venue_id
+            AND managed_venue.active = 1
+        )
+      )
       AND actor.id <> managed_target.id
       AND (
         actor.role = 'super_admin'
@@ -68,6 +76,14 @@ export const SET_USER_SETUP_CODE_FOR_REQUEST_SQL = `
     AND session_version = ?
     AND active = 1
     AND deleted_at IS NULL
+    AND (
+      role = 'super_admin'
+      OR EXISTS (
+        SELECT 1 FROM venues claim_venue
+        WHERE claim_venue.id = users.venue_id
+          AND claim_venue.active = 1
+      )
+    )
     AND EXISTS (
       SELECT 1
       FROM password_reset_requests
@@ -119,6 +135,14 @@ export const UPDATE_USER_WITH_APPROVED_RESET_SQL = `
     AND session_version = ?
     AND active = 1
     AND deleted_at IS NULL
+    AND (
+      role = 'super_admin'
+      OR EXISTS (
+        SELECT 1 FROM venues claim_venue
+        WHERE claim_venue.id = users.venue_id
+          AND claim_venue.active = 1
+      )
+    )
     AND (? IS NULL OR venue_id = ? OR role = 'super_admin')
     AND (
       ? <> 'browser_receipt'

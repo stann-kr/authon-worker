@@ -1,19 +1,18 @@
 export type AdminTask =
   | "guest-list"
   | "guest-requests"
+  | "event-manage"
   | "link-create"
   | "link-manage"
   | "user-create"
   | "user-list"
   | "password-requests"
-  | "user-migrate"
   | "venue-list"
   | "venue-create";
 
-export type AdminTaskGroup = "guests" | "links" | "users" | "venues";
+export type AdminTaskGroup = "guests" | "events" | "links" | "users" | "venues";
 
 const SUPER_ADMIN_TASKS = new Set<AdminTask>([
-  "user-migrate",
   "venue-list",
   "venue-create",
 ]);
@@ -35,6 +34,7 @@ export function parseAdminTask(
   if (tab === "guests") {
     return view === "requests" ? "guest-requests" : "guest-list";
   }
+  if (tab === "events") return "event-manage";
   if (tab === "links") {
     return view === "manage" ? "link-manage" : "link-create";
   }
@@ -49,7 +49,6 @@ export function parseAdminTask(
     if (view === "users" || view === "list" || view === "directory") {
       return "user-list";
     }
-    if (view === "migrate" || view === "migration") return "user-migrate";
     return "user-create";
   }
   if (tab === "venues") {
@@ -63,12 +62,12 @@ export function getAdminTaskSearch(task: AdminTask): string {
   const taskSearch: Record<AdminTask, string> = {
     "guest-list": "?tab=guests&view=list",
     "guest-requests": "?tab=guests&view=requests",
+    "event-manage": "?tab=events&view=manage",
     "link-create": "?tab=links&view=create",
     "link-manage": "?tab=links&view=manage",
     "user-create": "?tab=users&view=create",
     "user-list": "?tab=users&view=directory",
     "password-requests": "?tab=users&view=password-requests",
-    "user-migrate": "?tab=users&view=migration",
     "venue-list": "?tab=venues&view=list",
     "venue-create": "?tab=venues&view=create",
   };
@@ -84,4 +83,13 @@ export function getAdminGroupDefaultTasks(
     "user-create",
     ...(isSuperAdmin ? (["venue-list"] as const) : []),
   ];
+}
+
+/** Escape belongs to the currently focused control/dialog, never navigation. */
+export function getAdminShortcutTask(
+  key: string,
+  isSuperAdmin: boolean,
+): AdminTask | null {
+  if (!/^[1-9]$/.test(key)) return null;
+  return getAdminGroupDefaultTasks(isSuperAdmin)[Number.parseInt(key, 10) - 1] ?? null;
 }

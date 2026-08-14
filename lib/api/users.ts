@@ -1,5 +1,7 @@
 "use server";
 
+import { reportServerError } from "@/lib/observability/structured-log";
+
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { and, asc, desc, eq, inArray, isNull, ne, sql, type SQL } from "drizzle-orm";
 import {
@@ -21,6 +23,7 @@ import { escapeHtml, isEmailConfigured, sendEmail } from "./email";
 import { generateResetToken, hashResetToken } from "../auth/token";
 import { getPasswordPolicyError } from "../auth/password-policy";
 import { getVenueDeliveryContext } from "../tenant/server";
+import { requireActiveVenueId } from "../tenant/active-server";
 import { isLocale, type Locale } from "@/i18n/config";
 import { getTranslations } from "next-intl/server";
 import {
@@ -204,7 +207,7 @@ export async function fetchUsersByVenue(
       error: null,
     };
   } catch (error: unknown) {
-    console.error("Failed to fetch user directory:", error);
+    await reportServerError("user.directory", error);
     return { data: null, error: "Unable to load users right now." };
   }
 }
@@ -236,7 +239,7 @@ export async function fetchManagedUsersByVenue(
     const result = await query.orderBy(asc(users.name));
     return { data: result.map(toUser), error: null };
   } catch (error: unknown) {
-    console.error("Failed to fetch managed users:", error);
+    await reportServerError("user.managed_list", error);
     return { data: null, error: "Unable to load users right now." };
   }
 }
@@ -262,7 +265,7 @@ export async function fetchUserAuditEvents(
       error: null,
     };
   } catch (error: unknown) {
-    console.error("Failed to fetch user audit events:", error);
+    await reportServerError("user.audit_list", error);
     return { data: null, error: "Unable to load user activity right now." };
   }
 }
@@ -283,6 +286,7 @@ export async function updateUserProfile(
     const isSelfUpdate = actor.id === userId;
     const db = getDb();
     const target = await getTargetUser(userId);
+    if (target.venueId) await requireActiveVenueId(target.venueId);
 
     if (isSelfUpdate) {
       if (
@@ -438,7 +442,7 @@ export async function updateUserProfile(
 
     return { data: await getTargetUser(userId), error: null };
   } catch (error: unknown) {
-    console.error("Failed to update user:", error);
+    await reportServerError("user.update", error);
     return { data: null, error: getUserActionError(error, "UPDATE_FAILED") };
   }
 }
@@ -468,6 +472,7 @@ export async function createUserViaEdge(params: {
     if (!venueId) {
       throw new UserActionError("FORBIDDEN");
     }
+    await requireActiveVenueId(venueId);
 
     if (
       !isRole(params.role) ||
@@ -534,7 +539,7 @@ export async function createUserViaEdge(params: {
 
     return { data: { id }, error: null };
   } catch (error: unknown) {
-    console.error("Failed to create user:", error);
+    await reportServerError("user.create", error);
     return { data: null, error: getUserActionError(error, "UPDATE_FAILED") };
   }
 }
@@ -543,6 +548,7 @@ export async function deleteUserViaEdge(userId: string): Promise<{ error: string
   try {
     const actor = await requireRole(["super_admin", "venue_admin"]);
     const target = await getTargetUser(userId);
+    if (target.venueId) await requireActiveVenueId(target.venueId);
     assertManagedTarget(actor, target);
     if (target.active) throw new UserActionError("USER_MUST_BE_INACTIVE");
     if (target.role === "super_admin") await assertAnotherActiveSuperAdmin(target.id);
@@ -599,7 +605,7 @@ export async function deleteUserViaEdge(userId: string): Promise<{ error: string
 
     return { error: null };
   } catch (error: unknown) {
-    console.error("Failed to delete user:", error);
+    await reportServerError("user.delete", error);
     return { error: getUserActionError(error, "UPDATE_FAILED") };
   }
 }
@@ -609,6 +615,7 @@ export async function resendInvitationViaEdge(userId: string): Promise<{ error: 
     const { env } = getCloudflareContext();
     const actor = await requireRole(["super_admin", "venue_admin"]);
     const user = await getTargetUser(userId);
+    if (user.venueId) await requireActiveVenueId(user.venueId);
     assertManagedTarget(actor, user);
     if (!user.active) throw new UserActionError("USER_INACTIVE");
 
@@ -683,7 +690,7 @@ export async function resendInvitationViaEdge(userId: string): Promise<{ error: 
 
     return { error: null };
   } catch (error: unknown) {
-    console.error("Resend invitation error:", error);
+    await reportServerError("user.invitation_resend", error);
     return { error: "Unable to resend invitation right now." };
   }
 }

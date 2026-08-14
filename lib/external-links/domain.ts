@@ -30,6 +30,7 @@ export interface ExternalLinkCreateDraft {
   event: string;
   maxGuests: number;
   localeMode: ExternalDJLink["localeMode"];
+  kind: ExternalDJLink["kind"];
 }
 
 export type ExternalLinkCreateInputError =
@@ -40,7 +41,8 @@ export type ExternalLinkCreateInputError =
   | "INVALID_EVENT"
   | "EVENT_TOO_LONG"
   | "INVALID_MAX_GUESTS"
-  | "INVALID_LOCALE_MODE";
+  | "INVALID_LOCALE_MODE"
+  | "INVALID_LINK_KIND";
 
 export type ExternalLinkCreateInputResult =
   | { draft: ExternalLinkCreateDraft; error: null }
@@ -75,6 +77,7 @@ interface ExternalLinkRecord {
   expiresAt: string | null;
   createdBy: string | null;
   localeMode: string;
+  kind: string;
   createdAt: string | null;
 }
 
@@ -160,6 +163,11 @@ export function prepareExternalLinkCreateInput(
     return invalidCreateInput("INVALID_LOCALE_MODE");
   }
 
+  const kind = candidate.kind ?? "contributor";
+  if (kind !== "contributor" && kind !== "self_rsvp") {
+    return invalidCreateInput("INVALID_LINK_KIND");
+  }
+
   return {
     draft: {
       date: candidate.date,
@@ -167,6 +175,7 @@ export function prepareExternalLinkCreateInput(
       event,
       maxGuests: candidate.maxGuests,
       localeMode,
+      kind,
     },
     error: null,
   };
@@ -180,7 +189,7 @@ export function prepareExternalLinkCreateInput(
 export function toExternalLinkTemplateDraft(
   source: Pick<
     ExternalDJLink,
-    "djName" | "event" | "maxGuests" | "localeMode"
+    "djName" | "event" | "maxGuests" | "localeMode" | "kind"
   >,
   targetDate: string,
 ): ExternalLinkCreateDraft {
@@ -190,6 +199,7 @@ export function toExternalLinkTemplateDraft(
     event: source.event ?? "",
     maxGuests: source.maxGuests,
     localeMode: source.localeMode,
+    kind: source.kind === "self_rsvp" ? "self_rsvp" : "contributor",
   };
 }
 
@@ -273,5 +283,6 @@ export function toExternalDJLink(
       link.localeMode === "en" || link.localeMode === "ko"
         ? link.localeMode
         : "auto",
+    kind: link.kind === "self_rsvp" ? "self_rsvp" : "contributor",
   };
 }

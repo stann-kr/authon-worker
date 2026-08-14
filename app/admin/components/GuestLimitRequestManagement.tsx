@@ -15,10 +15,20 @@ import type { GuestLimitRequestView } from "@/lib/api/types";
 import { useLatestRequestGuard } from "@/lib/hooks";
 import { useTranslations } from "next-intl";
 import { useSectionLoadingTask } from "@/components/RouteTransitionProvider";
+import {
+  deriveAsyncListState,
+  shouldShowEmptyState,
+} from "@/lib/ui/async-list-state";
 
 const EMPTY_REQUESTS: GuestLimitRequestView[] = [];
 
-export default function GuestLimitRequestManagement() {
+export default function GuestLimitRequestManagement({
+  eventId,
+  businessDate,
+}: {
+  eventId: string | null;
+  businessDate: string;
+}) {
   const t = useTranslations("GuestLimitAdmin");
   const {
     venueId,
@@ -31,6 +41,10 @@ export default function GuestLimitRequestManagement() {
   const [approvedAmounts, setApprovedAmounts] = useState<Record<string, number>>({});
   const [busyId, setBusyId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [loadOutcome, setLoadOutcome] = useState<
+    "idle" | "success" | "error"
+  >("idle");
+  const [loadError, setLoadError] = useState("");
   const [loadedVenueId, setLoadedVenueId] = useState("");
   const [feedback, setFeedback] = useState<{
     type: "success" | "error";
@@ -41,6 +55,7 @@ export default function GuestLimitRequestManagement() {
 
   useEffect(() => {
     currentVenueIdRef.current = venueId;
+    setLoadOutcome("idle");
   }, [venueId]);
 
   const scopedRequests = loadedVenueId === venueId ? requests : EMPTY_REQUESTS;
@@ -54,36 +69,46 @@ export default function GuestLimitRequestManagement() {
     if (!venueId) {
       setRequests([]);
       setLoadedVenueId("");
+      setLoadOutcome("success");
+      setLoadError("");
       setIsLoading(false);
       return;
     }
     setIsLoading(true);
+    setLoadError("");
     try {
-      const { data, error } = await fetchGuestLimitRequests(venueId);
+      const { data, error } = await fetchGuestLimitRequests(
+        venueId,
+        eventId,
+        businessDate,
+      );
       if (!isLatestRequest() || currentVenueIdRef.current !== requestedVenueId) return;
       if (error) {
-        setFeedback({ type: "error", message: t("loadFailed") });
+        setLoadError(t("loadFailed"));
         setRequests([]);
         setApprovedAmounts({});
+        setLoadOutcome("error");
       } else {
         const nextRequests = data ?? [];
         setRequests(nextRequests);
         setApprovedAmounts(
           Object.fromEntries(nextRequests.map((request) => [request.id, request.requestedExtra])),
         );
+        setLoadOutcome("success");
       }
     } catch {
       if (!isLatestRequest() || currentVenueIdRef.current !== requestedVenueId) return;
-      setFeedback({ type: "error", message: t("loadFailed") });
+      setLoadError(t("loadFailed"));
       setRequests([]);
       setApprovedAmounts({});
+      setLoadOutcome("error");
     } finally {
       if (isLatestRequest() && currentVenueIdRef.current === requestedVenueId) {
         setLoadedVenueId(requestedVenueId);
         setIsLoading(false);
       }
     }
-  }, [requestGuard, t, venueId]);
+  }, [businessDate, eventId, requestGuard, t, venueId]);
 
   useEffect(() => {
     loadRequests();
@@ -97,6 +122,12 @@ export default function GuestLimitRequestManagement() {
     () => scopedRequests.filter((request) => request.status !== "pending"),
     [scopedRequests],
   );
+  const listState = deriveAsyncListState({
+    hasStarted: isLoading || loadOutcome !== "idle",
+    isLoading: isCurrentVenueLoading,
+    itemCount: pending.length,
+    hasError: loadOutcome === "error",
+  });
 
   const handleDecision = async (
     request: GuestLimitRequestView,
@@ -141,14 +172,15 @@ export default function GuestLimitRequestManagement() {
           isLoading={isCurrentVenueLoading}
         />
         <div className="space-y-4 p-4 sm:p-5">
+          {loadError && <Alert type="error" message={loadError} />}
           {feedback && <Alert type={feedback.type} message={feedback.message} />}
           {!venueId ? (
             <p className="border border-border-default bg-canvas p-4 text-sm text-text-muted">
               {t("selectVenue")}
             </p>
-          ) : isCurrentVenueLoading && scopedRequests.length === 0 ? (
+          ) : listState === "loading" ? (
             <Skeleton rows={4} />
-          ) : pending.length === 0 ? (
+          ) : shouldShowEmptyState(listState) ? (
             <EmptyState icon="user" message={t("noPending")} />
           ) : (
             <div className="grid gap-3 lg:grid-cols-2">

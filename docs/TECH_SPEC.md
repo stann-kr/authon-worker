@@ -29,6 +29,10 @@ Client
 - 외부에서 접근하는 Worker 주소는 기본 `workers.dev` 주소와 production custom domain뿐이며 두 주소는 같은 활성 production version을 제공한다.
 - preview URL과 non-main branch 자동 원격 build는 사용하지 않는다. `dev`는 production 배포 전 소스 검증용 branch이며 직접 서비스 주소를 갖지 않는다.
 - 모든 원격 요청은 같은 운영 D1·KV·secret을 사용한다.
+- 표준 개발·CI·Docker runtime은 Node 24 / npm 11이다. `npm run verify:release`가 lint, typecheck, 전체 회귀, EN/KO parity, 민감 asset 검사와 Next/OpenNext Worker build를 재현한다.
+- 기본 Compose `web` 서비스는 production Cloudflare credential을 받지 않는다. production deploy와 remote D1 migration은 별도 `ops` profile, 명시적 `:prod`/`:remote` 명령과 `AUTHON_PRODUCTION_INTENT=1`을 함께 요구한다.
+- 적용된 `migrations/`의 manual D1 SQL이 migration authority다. Drizzle generator는 `.docs/generated-migrations/`의 disposable review output만 만들고, CI는 임시 SQLite에서 manual history와 현재 schema의 table·column·foreign key·index 호환성을 검증한다.
+- Worker/server 오류 로그는 event, request ID, actor 비식별 surrogate, venue ID, outcome, error kind만 허용한다. error message·stack·email·credential·SQL 원문은 출력하지 않는다.
 
 ## 언어 결정
 
@@ -92,6 +96,7 @@ Client
 | `/api/auth/password-reset-requests` | 공개 API | 계정 존재 여부를 노출하지 않는 관리자 재설정 요청 등록 |
 | `/api/auth/password-reset-requests/status` | 공개 API | 서명된 브라우저 영수증에 결속된 승인 상태 확인 |
 | `/api/auth/claim-account` | 공개 API | 검증된 1회용 설정 코드 또는 요청 브라우저의 유효한 관리자 승인으로 비밀번호 설정 |
+| `/api/internal/sync-guest` | 내부 API | shared secret과 필수 `terminalRequestId`를 검증하는 terminal 게스트 동기화 |
 | `/guest?token=...` | 공개 링크 | 외부 DJ 게스트 등록 |
 | `/` | 인증 필요 | 역할별 대시보드와 Venue Admin의 미처리 추가 게스트 요청 알림 |
 | `/guest` | 인증 필요 | 게스트 등록/관리 |
@@ -133,6 +138,14 @@ Client
 - 삭제·상태 변경의 쓰기 조건은 사전 조회 결과의 베뉴와 소유권을 다시 확인하고, 삭제된 게스트는 `pending` 또는 `checked` 상태로 되돌릴 수 없다.
 - 공개 등록·삭제 뒤 최신 명단 재조회가 실패하면 입력은 유지하고 추가 쓰기를 잠근 뒤 명시적 재시도로만 해제한다.
 - 기존 링크를 템플릿으로 사용할 때는 DJ·이벤트·정원·언어만 복사하며, ID·token·URL·사용량·생성자·수명주기는 새로 만든다.
+- terminal 동기화는 베뉴 단위 `terminalRequestId`를 필수 idempotency key로 사용한다. 같은 key와 정규화된 payload의 retry는 최초 guest ID를 반환하고, 다른 payload 재사용은 `409`로 거부한다.
+
+## 클라이언트 비동기 상태 원칙
+
+- 베뉴·날짜에 결속된 mutation은 시작 시 scope와 operation ID를 함께 캡처한다. 완료 시 현재 scope와 operation 소유권이 모두 일치할 때만 credential, feedback과 busy 상태를 갱신한다.
+- setup code와 외부 링크 token 같은 일회성 결과는 저장된 scope가 현재 화면과 다르면 render 단계에서 숨기며, 전환 effect에만 삭제를 의존하지 않는다.
+- Guest roster polling은 한 번에 하나만 실행하고 숨김 탭·offline·mutation 중에는 중단한다. 체크인·취소 성공 뒤에는 기존 poll을 무효화하고 권위 있는 roster를 다시 조회한다.
+- route 전환, scope 변경, reject와 abort는 진행 중 작업의 소유권을 폐기하고 현재 작업이 소유한 busy 상태만 해제한다.
 
 ## 데이터 모델 요약
 
@@ -144,6 +157,7 @@ Client
 | `user_audit_events` | 사용자 계정 관리 작업의 actor, 대상, 작업 종류와 시각 |
 | `external_dj_links` | 외부 DJ 등록 링크, 정원/사용량, 생성 시각과 언어 모드 |
 | `guests` | 게스트 등록 정보, 공용 계정 실제 입력자와 체크인 전 상태 |
+| `terminal_guest_sync_requests` | terminal 요청의 베뉴별 idempotency key, payload hash와 최초 guest 결과 |
 | `guest_limit_requests` | 사용자·날짜별 추가 한도 요청, 선택 사유, 승인 수량과 결정 기록 |
 | `check_ins` | 체크인 기록 |
 | `password_reset_tokens` | 비밀번호 재설정 token hash와 만료/사용 상태 |

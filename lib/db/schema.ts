@@ -1,5 +1,5 @@
-import { sql } from 'drizzle-orm';
-import { sqliteTable, text, integer, index, uniqueIndex, type AnySQLiteColumn } from 'drizzle-orm/sqlite-core';
+import { desc, sql } from 'drizzle-orm';
+import { sqliteTable, text, integer, index, primaryKey, uniqueIndex, type AnySQLiteColumn } from 'drizzle-orm/sqlite-core';
 
 export const venues = sqliteTable('venues', {
   id: text('id').primaryKey(),
@@ -72,6 +72,32 @@ export const userAuditEvents = sqliteTable('user_audit_events', {
   index('idx_user_audit_events_venue_created').on(t.venueId, t.createdAt),
 ]);
 
+export const events = sqliteTable('events', {
+  id: text('id').primaryKey(),
+  venueId: text('venue_id').notNull().references(() => venues.id),
+  businessDate: text('business_date').notNull(),
+  name: text('name').notNull(),
+  doorOpensAt: text('door_opens_at'),
+  guestCutoffAt: text('guest_cutoff_at'),
+  capacity: integer('capacity'),
+  targetGuests: integer('target_guests'),
+  state: text('state').notNull().default('draft'),
+  templateSourceEventId: text('template_source_event_id').references(
+    (): AnySQLiteColumn => events.id,
+  ),
+  compatibilityKey: text('compatibility_key'),
+  createdByUserId: text('created_by_user_id').references(() => users.id),
+  updatedByUserId: text('updated_by_user_id').references(() => users.id),
+  createdAt: text('created_at').notNull(),
+  updatedAt: text('updated_at').notNull(),
+  openedAt: text('opened_at'),
+  closedAt: text('closed_at'),
+}, (t) => [
+  index('idx_events_venue_business_date').on(t.venueId, t.businessDate),
+  index('idx_events_venue_state_business_date').on(t.venueId, t.state, t.businessDate),
+  uniqueIndex('idx_events_compatibility_key').on(t.compatibilityKey),
+]);
+
 export const externalDjLinks = sqliteTable('external_dj_links', {
   id: text('id').primaryKey(),
   venueId: text('venue_id').notNull().references(() => venues.id),
@@ -79,23 +105,26 @@ export const externalDjLinks = sqliteTable('external_dj_links', {
   djName: text('dj_name').notNull(),
   event: text('event'),
   date: text('date'),
+  eventId: text('event_id').references(() => events.id),
   maxGuests: integer('max_guests').notNull().default(10),
   usedGuests: integer('used_guests').notNull().default(0),
   active: integer('active', { mode: 'boolean' }).notNull().default(true),
   expiresAt: text('expires_at'),
   createdBy: text('created_by').references(() => users.id),
   localeMode: text('locale_mode').notNull().default('auto'),
+  kind: text('kind').notNull().default('contributor'),
   createdAt: text('created_at'),
   deletedAt: text('deleted_at'),
   deletedBy: text('deleted_by').references(() => users.id),
 }, (t) => [
   index('idx_external_dj_links_venue').on(t.venueId),
-  index('idx_external_links_venue_created').on(t.venueId, t.createdAt),
+  index('idx_external_links_venue_created').on(t.venueId, desc(t.createdAt)),
   index('idx_external_links_venue_deleted_created').on(
     t.venueId,
     t.deletedAt,
     t.createdAt,
   ),
+  index('idx_external_links_event').on(t.eventId),
 ]);
 
 export const guests = sqliteTable('guests', {
@@ -108,6 +137,7 @@ export const guests = sqliteTable('guests', {
   createdByUserId: text('created_by_user_id').references(() => users.id),
   registeredByName: text('registered_by_name'),
   terminalRequestId: text('terminal_request_id'),
+  eventId: text('event_id').references(() => events.id),
   source: text('source').notNull().default('authon'),
   status: text('status').notNull().default('pending'),
   checkInTime: text('check_in_time'),
@@ -118,6 +148,31 @@ export const guests = sqliteTable('guests', {
   index('idx_guests_venue_date').on(t.venueId, t.date),
   index('idx_guests_external_link').on(t.externalLinkId),
   index('idx_guests_created_by').on(t.createdByUserId),
+  index('idx_guests_event_status').on(t.eventId, t.status),
+]);
+
+export const externalGuestOwners = sqliteTable('external_guest_owners', {
+  guestId: text('guest_id').primaryKey().references(() => guests.id, { onDelete: 'cascade' }),
+  externalLinkId: text('external_link_id').notNull().references(() => externalDjLinks.id),
+  ownerKeyHash: text('owner_key_hash').notNull(),
+  createdAt: text('created_at').notNull(),
+  releasedAt: text('released_at'),
+}, (t) => [
+  index('idx_external_guest_owners_link').on(t.externalLinkId),
+  uniqueIndex('idx_external_guest_owners_active_key')
+    .on(t.externalLinkId, t.ownerKeyHash)
+    .where(sql`${t.releasedAt} IS NULL`),
+]);
+
+export const terminalGuestSyncRequests = sqliteTable('terminal_guest_sync_requests', {
+  venueId: text('venue_id').notNull().references(() => venues.id),
+  requestId: text('request_id').notNull(),
+  payloadHash: text('payload_hash').notNull(),
+  guestId: text('guest_id').notNull().unique(),
+  createdAt: text('created_at').notNull(),
+}, (t) => [
+  primaryKey({ columns: [t.venueId, t.requestId] }),
+  index('idx_terminal_guest_sync_requests_created').on(t.createdAt),
 ]);
 
 export const checkIns = sqliteTable('check_ins', {
@@ -127,11 +182,79 @@ export const checkIns = sqliteTable('check_ins', {
   checkedAt: text('checked_at').notNull(),
 });
 
+export const guestActivityLedger = sqliteTable('guest_activity_ledger', {
+  id: text('id').primaryKey(),
+  venueId: text('venue_id').notNull().references(() => venues.id),
+  eventId: text('event_id').references(() => events.id),
+  guestId: text('guest_id').notNull(),
+  action: text('action').notNull(),
+  actorUserId: text('actor_user_id').references(() => users.id),
+  actorType: text('actor_type').notNull(),
+  channel: text('channel').notNull(),
+  requestId: text('request_id').notNull(),
+  idempotencyKey: text('idempotency_key'),
+  payloadHash: text('payload_hash'),
+  outcome: text('outcome').notNull(),
+  previousStatus: text('previous_status'),
+  nextStatus: text('next_status'),
+  deviceKeyHash: text('device_key_hash'),
+  sessionKeyHash: text('session_key_hash'),
+  occurredAt: text('occurred_at').notNull(),
+}, (t) => [
+  uniqueIndex('idx_guest_activity_venue_request').on(t.venueId, t.requestId),
+  index('idx_guest_activity_event_occurred').on(t.eventId, t.occurredAt),
+  index('idx_guest_activity_guest_occurred').on(t.guestId, t.occurredAt),
+  index('idx_guest_activity_venue_occurred').on(t.venueId, t.occurredAt),
+]);
+
+export const guestActivityRequests = sqliteTable('guest_activity_requests', {
+  venueId: text('venue_id').notNull().references(() => venues.id),
+  idempotencyKey: text('idempotency_key').notNull(),
+  payloadHash: text('payload_hash').notNull(),
+  activityId: text('activity_id').notNull().unique(),
+  guestId: text('guest_id').notNull(),
+  action: text('action').notNull(),
+  outcome: text('outcome').notNull().default('claimed'),
+  resultStatus: text('result_status'),
+  createdAt: text('created_at').notNull(),
+  completedAt: text('completed_at'),
+}, (t) => [
+  primaryKey({ columns: [t.venueId, t.idempotencyKey] }),
+  index('idx_guest_activity_requests_created').on(t.createdAt),
+]);
+
+export const eventContributorLimits = sqliteTable('event_contributor_limits', {
+  eventId: text('event_id').notNull().references(() => events.id),
+  venueId: text('venue_id').notNull().references(() => venues.id),
+  userId: text('user_id').notNull().references(() => users.id),
+  guestLimit: integer('guest_limit'),
+  sourceEventId: text('source_event_id').references(() => events.id),
+  createdByUserId: text('created_by_user_id').references(() => users.id),
+  createdAt: text('created_at').notNull(),
+}, (t) => [
+  primaryKey({ columns: [t.eventId, t.userId] }),
+  index('idx_event_contributor_limits_venue_event').on(t.venueId, t.eventId),
+]);
+
+export const eventCloseouts = sqliteTable('event_closeouts', {
+  eventId: text('event_id').primaryKey().references(() => events.id),
+  venueId: text('venue_id').notNull().references(() => venues.id),
+  confirmedByUserId: text('confirmed_by_user_id').notNull().references(() => users.id),
+  confirmedAt: text('confirmed_at').notNull(),
+  reportHash: text('report_hash').notNull(),
+  registeredCount: integer('registered_count').notNull(),
+  checkedInCount: integer('checked_in_count').notNull(),
+  sourceActivityCount: integer('source_activity_count').notNull(),
+}, (t) => [
+  index('idx_event_closeouts_venue_confirmed').on(t.venueId, t.confirmedAt),
+]);
+
 export const guestLimitRequests = sqliteTable('guest_limit_requests', {
   id: text('id').primaryKey(),
   venueId: text('venue_id').notNull().references(() => venues.id),
   userId: text('user_id').notNull().references(() => users.id),
   date: text('date').notNull(),
+  eventId: text('event_id').references(() => events.id),
   requestedExtra: integer('requested_extra').notNull(),
   approvedExtra: integer('approved_extra').notNull().default(0),
   reason: text('reason'),
@@ -144,9 +267,13 @@ export const guestLimitRequests = sqliteTable('guest_limit_requests', {
 }, (t) => [
   index('idx_guest_limit_requests_venue_status_date').on(t.venueId, t.status, t.date),
   index('idx_guest_limit_requests_user_date').on(t.userId, t.date),
-  uniqueIndex('idx_guest_limit_requests_one_pending').on(t.userId, t.date).where(
-    sql`${t.status} = 'pending'`,
+  uniqueIndex('idx_guest_limit_requests_pending_event').on(t.userId, t.eventId).where(
+    sql`${t.status} = 'pending' AND ${t.eventId} IS NOT NULL`,
   ),
+  uniqueIndex('idx_guest_limit_requests_pending_legacy_date').on(t.userId, t.date).where(
+    sql`${t.status} = 'pending' AND ${t.eventId} IS NULL`,
+  ),
+  index('idx_guest_limit_requests_event_status').on(t.eventId, t.status),
 ]);
 
 export const passwordResetRequests = sqliteTable('password_reset_requests', {

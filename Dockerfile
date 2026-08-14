@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1
-FROM node:20-bookworm-slim
+FROM node:24.19.0-bookworm-slim
 
 # 네이티브 의존성 빌드 + wrangler/workerd 실행에 필요한 패키지
 RUN apt-get update && apt-get install -y python3 make g++ curl && rm -rf /var/lib/apt/lists/*
@@ -10,7 +10,7 @@ ENV NEXT_TELEMETRY_DISABLED=1
 
 # 의존성 설치 최적화 (레이어 캐싱)
 COPY package.json package-lock.json* ./
-RUN npm install --legacy-peer-deps
+RUN npm ci
 
 COPY . .
 

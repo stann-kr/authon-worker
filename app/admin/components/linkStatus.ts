@@ -1,3 +1,5 @@
+import { formatVenueDateTime } from "../../../lib/date";
+
 export type ManageFilter =
   | "all"
   | "active"
@@ -100,19 +102,17 @@ export function formatTimestamp(
   emptyLabel = "Unknown",
   invalidLabel = "Invalid timestamp",
   locale = "en-US",
+  timeZone?: string | null,
 ): string {
   if (!value) return emptyLabel;
-
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return invalidLabel;
-
-  return new Intl.DateTimeFormat(locale, {
-    year: "numeric",
-    month: "short",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-  }).format(date);
+  return (
+    formatVenueDateTime(value, {
+      locale,
+      timeZone,
+      dateStyle: "medium",
+      timeStyle: "short",
+    }) ?? invalidLabel
+  );
 }
 
 export function deriveLinkStatus(

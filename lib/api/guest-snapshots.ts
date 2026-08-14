@@ -1,9 +1,12 @@
 "use server";
 
-import { and, asc, desc, eq, ne, sql } from "drizzle-orm";
+import { reportServerError } from "@/lib/observability/structured-log";
+
+import { and, asc, desc, eq, isNull, ne, or, sql } from "drizzle-orm";
 import { externalDjLinks, guestLimitRequests, guests, users } from "../db/schema";
 import { getDb } from "../db/client";
 import { requireAccess, type SessionUser } from "../auth/server";
+import { requireActiveVenueId } from "../tenant/active-server";
 import { canRequestGuestLimit, isAccountKind, isRole } from "@/lib/users/policy";
 import { resolveSnapshotVenueId } from "@/lib/guest-snapshot-policy";
 import type {
@@ -14,7 +17,13 @@ import type {
   GuestQuota,
   GuestWorkspaceSnapshot,
   UserDirectoryEntry,
+  Event,
 } from "./types";
+import {
+  eventIncludesLegacyDateRows,
+  findCompatibilityEvent,
+  loadEventById,
+} from "@/lib/events/server";
 
 type Db = ReturnType<typeof getDb>;
 
@@ -26,8 +35,8 @@ function isValidDate(value: string): boolean {
   return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
 }
 
-function logRejectedSection(section: string, result: PromiseRejectedResult): void {
-  console.error(`Failed to load ${section} snapshot section:`, result.reason);
+async function logRejectedSection(section: string, result: PromiseRejectedResult): Promise<void> {
+  await reportServerError(`guest_snapshot.${section.replaceAll(" ", "_")}`, result.reason);
 }
 
 async function loadGuestsByDate(
@@ -35,10 +44,19 @@ async function loadGuestsByDate(
   venueId: string,
   date: string,
   createdByUserId?: string,
+  event?: Event | null,
 ): Promise<Guest[]> {
+  const eventScope = event
+    ? eventIncludesLegacyDateRows(event)
+      ? or(
+          eq(guests.eventId, event.id),
+          and(isNull(guests.eventId), eq(guests.date, date)),
+        )
+      : eq(guests.eventId, event.id)
+    : and(isNull(guests.eventId), eq(guests.date, date));
   const conditions = [
     eq(guests.venueId, venueId),
-    eq(guests.date, date),
+    eventScope,
     ne(guests.status, "deleted"),
   ];
   if (createdByUserId) {
@@ -94,7 +112,16 @@ async function loadExternalLinksByDate(
   db: Db,
   venueId: string,
   date: string,
+  event?: Event | null,
 ): Promise<ExternalLinkDirectoryEntry[]> {
+  const eventScope = event
+    ? eventIncludesLegacyDateRows(event)
+      ? or(
+          eq(externalDjLinks.eventId, event.id),
+          and(isNull(externalDjLinks.eventId), eq(externalDjLinks.date, date)),
+        )
+      : eq(externalDjLinks.eventId, event.id)
+    : and(isNull(externalDjLinks.eventId), eq(externalDjLinks.date, date));
   return db
     .select({
       id: externalDjLinks.id,
@@ -104,7 +131,7 @@ async function loadExternalLinksByDate(
     .where(
       and(
         eq(externalDjLinks.venueId, venueId),
-        eq(externalDjLinks.date, date),
+        eventScope,
       ),
     )
     .orderBy(desc(externalDjLinks.createdAt));
@@ -114,7 +141,30 @@ async function loadGuestQuota(
   db: Db,
   actor: SessionUser,
   date: string,
+  event?: Event | null,
 ): Promise<GuestQuota> {
+  const guestScope = event
+    ? eventIncludesLegacyDateRows(event)
+      ? or(
+          eq(guests.eventId, event.id),
+          and(isNull(guests.eventId), eq(guests.date, date)),
+        )
+      : eq(guests.eventId, event.id)
+    : and(isNull(guests.eventId), eq(guests.date, date));
+  const requestScope = event
+    ? eventIncludesLegacyDateRows(event)
+      ? or(
+          eq(guestLimitRequests.eventId, event.id),
+          and(
+            isNull(guestLimitRequests.eventId),
+            eq(guestLimitRequests.date, date),
+          ),
+        )
+      : eq(guestLimitRequests.eventId, event.id)
+    : and(
+        isNull(guestLimitRequests.eventId),
+        eq(guestLimitRequests.date, date),
+      );
   const [usage, extra, pending] = await Promise.all([
     db
       .select({ used: sql<number>`count(*)` })
@@ -122,7 +172,7 @@ async function loadGuestQuota(
       .where(
         and(
           eq(guests.createdByUserId, actor.id),
-          eq(guests.date, date),
+          guestScope,
           ne(guests.status, "deleted"),
         ),
       ),
@@ -134,7 +184,7 @@ async function loadGuestQuota(
       .where(
         and(
           eq(guestLimitRequests.userId, actor.id),
-          eq(guestLimitRequests.date, date),
+          requestScope,
           eq(guestLimitRequests.status, "approved"),
         ),
       ),
@@ -144,7 +194,7 @@ async function loadGuestQuota(
       .where(
         and(
           eq(guestLimitRequests.userId, actor.id),
-          eq(guestLimitRequests.date, date),
+          requestScope,
           eq(guestLimitRequests.status, "pending"),
         ),
       )
@@ -175,22 +225,35 @@ async function loadGuestQuota(
 export async function fetchGuestOperationsSnapshot(
   date: string,
   venueId: string,
+  eventId?: string | null,
 ): Promise<ApiResponse<GuestOperationsSnapshot>> {
   try {
     if (!isValidDate(date)) throw new Error("Invalid date");
     const actor = await requireAccess("door");
     const effectiveVenueId = resolveSnapshotVenueId(actor, venueId);
+    await requireActiveVenueId(effectiveVenueId);
     const db = getDb();
+    const event = eventId
+      ? await loadEventById(db, eventId)
+      : await findCompatibilityEvent(effectiveVenueId, date);
+    if (
+      eventId &&
+      (!event ||
+        event.venueId !== effectiveVenueId ||
+        event.businessDate !== date)
+    ) {
+      throw new Error("EVENT_NOT_FOUND");
+    }
 
     const [guestResult, userResult, linkResult] = await Promise.allSettled([
-      loadGuestsByDate(db, effectiveVenueId, date),
+      loadGuestsByDate(db, effectiveVenueId, date, undefined, event),
       loadUserDirectory(db, actor, effectiveVenueId),
-      loadExternalLinksByDate(db, effectiveVenueId, date),
+      loadExternalLinksByDate(db, effectiveVenueId, date, event),
     ]);
 
-    if (guestResult.status === "rejected") logRejectedSection("guests", guestResult);
-    if (userResult.status === "rejected") logRejectedSection("users", userResult);
-    if (linkResult.status === "rejected") logRejectedSection("external links", linkResult);
+    if (guestResult.status === "rejected") await logRejectedSection("guests", guestResult);
+    if (userResult.status === "rejected") await logRejectedSection("users", userResult);
+    if (linkResult.status === "rejected") await logRejectedSection("external links", linkResult);
     const failedSections: GuestOperationsSnapshot["failedSections"] = [];
     if (guestResult.status === "rejected") failedSections.push("guests");
     if (userResult.status === "rejected") failedSections.push("users");
@@ -208,7 +271,7 @@ export async function fetchGuestOperationsSnapshot(
         : null,
     };
   } catch (error: unknown) {
-    console.error("Failed to fetch guest operations snapshot:", error);
+    await reportServerError("guest_snapshot.operations", error);
     return {
       data: null,
       error: "Unable to load guest operations data right now.",
@@ -219,20 +282,33 @@ export async function fetchGuestOperationsSnapshot(
 export async function fetchGuestWorkspaceSnapshot(
   date: string,
   venueId: string,
+  eventId?: string | null,
 ): Promise<ApiResponse<GuestWorkspaceSnapshot>> {
   try {
     if (!isValidDate(date)) throw new Error("Invalid date");
     const actor = await requireAccess("guest");
     const effectiveVenueId = resolveSnapshotVenueId(actor, venueId);
+    await requireActiveVenueId(effectiveVenueId);
     const db = getDb();
+    const event = eventId
+      ? await loadEventById(db, eventId)
+      : await findCompatibilityEvent(effectiveVenueId, date);
+    if (
+      eventId &&
+      (!event ||
+        event.venueId !== effectiveVenueId ||
+        event.businessDate !== date)
+    ) {
+      throw new Error("EVENT_NOT_FOUND");
+    }
 
     const [guestResult, quotaResult] = await Promise.allSettled([
-      loadGuestsByDate(db, effectiveVenueId, date, actor.id),
-      loadGuestQuota(db, actor, date),
+      loadGuestsByDate(db, effectiveVenueId, date, actor.id, event),
+      loadGuestQuota(db, actor, date, event),
     ]);
 
-    if (guestResult.status === "rejected") logRejectedSection("guests", guestResult);
-    if (quotaResult.status === "rejected") logRejectedSection("guest quota", quotaResult);
+    if (guestResult.status === "rejected") await logRejectedSection("guests", guestResult);
+    if (quotaResult.status === "rejected") await logRejectedSection("guest quota", quotaResult);
     const failedSections: GuestWorkspaceSnapshot["failedSections"] = [];
     if (guestResult.status === "rejected") failedSections.push("guests");
     if (quotaResult.status === "rejected") failedSections.push("quota");
@@ -248,7 +324,7 @@ export async function fetchGuestWorkspaceSnapshot(
         : null,
     };
   } catch (error: unknown) {
-    console.error("Failed to fetch guest workspace snapshot:", error);
+    await reportServerError("guest_snapshot.workspace", error);
     return {
       data: null,
       error: "Unable to load guest workspace data right now.",

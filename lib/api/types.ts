@@ -34,6 +34,38 @@ export interface Venue {
   active: boolean;
 }
 
+export type EventState = "draft" | "open" | "closed" | "archived";
+
+export interface Event {
+  id: string;
+  venueId: string;
+  businessDate: string;
+  name: string;
+  doorOpensAt: string | null;
+  guestCutoffAt: string | null;
+  capacity: number | null;
+  targetGuests: number | null;
+  state: EventState;
+  templateSourceEventId: string | null;
+  compatibilityKey: string | null;
+  createdByUserId: string | null;
+  updatedByUserId: string | null;
+  createdAt: string;
+  updatedAt: string;
+  openedAt: string | null;
+  closedAt: string | null;
+}
+
+export interface EventTemplateCloneSummary {
+  contributors: number;
+  externalLinks: number;
+}
+
+export interface EventCreationResult {
+  event: Event;
+  templateClone: EventTemplateCloneSummary;
+}
+
 export interface User {
   id: string;
   venueId: string | null; // null for super_admin
@@ -79,6 +111,7 @@ export interface Guest {
   externalLinkId?: string | null;
   createdByUserId?: string | null;
   registeredByName?: string | null;
+  eventId?: string | null;
   status: "pending" | "checked" | "deleted";
   checkInTime?: string | null;
   date: string;
@@ -121,6 +154,7 @@ export interface GuestLimitRequest {
   venueId: string;
   userId: string;
   date: string;
+  eventId?: string | null;
   requestedExtra: number;
   approvedExtra: number;
   reason: string | null;
@@ -179,6 +213,7 @@ export interface ExternalDJLink {
   djName: string;
   event: string | null;
   date: string | null;
+  eventId?: string | null;
   maxGuests: number;
   usedGuests: number;
   active: boolean;
@@ -187,6 +222,7 @@ export interface ExternalDJLink {
   createdAt?: string | null;
   guestUrl?: string | null;
   localeMode: "auto" | "en" | "ko";
+  kind: "contributor" | "self_rsvp";
 }
 
 /** Minimal external contributor identity for Door/Admin guest rosters. */

@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { drizzle } from "drizzle-orm/d1";
 import { eq } from "drizzle-orm";
-import { users } from "@/lib/db/schema";
+import { users, venues } from "@/lib/db/schema";
 import {
   consumeRateLimitOrDeny,
   getRequestIp,
@@ -24,10 +24,16 @@ import { shouldCreatePasswordResetRequest } from "@/lib/auth/password-reset-requ
 import { getTenantContextForRequest } from "@/lib/tenant/server";
 import { isTrustedMutationOrigin } from "@/lib/auth/request-origin";
 import {
+  CANCEL_BROWSER_PASSWORD_RESET_REQUEST_SQL,
   CANCEL_EXPIRED_OPEN_PASSWORD_RESET_REQUESTS_SQL,
   INSERT_SELF_SERVICE_PASSWORD_RESET_REQUEST_WITH_EXPIRY_SQL,
   SELECT_EXISTING_BROWSER_PASSWORD_RESET_REQUEST_SQL,
 } from "@/lib/auth/password-reset-request-sql";
+import {
+  getRequestId,
+  reportServerError,
+  writeStructuredLog,
+} from "@/lib/observability/structured-log";
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -36,6 +42,7 @@ const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
  * 계정 존재 여부와 기존 open request 여부를 같은 202 응답으로 숨긴다.
  */
 export async function POST(request: Request) {
+  const correlationId = getRequestId(request);
   try {
     if (!isTrustedMutationOrigin(request)) {
       return NextResponse.json(
@@ -92,7 +99,13 @@ export async function POST(request: Request) {
 
     const { env } = getCloudflareContext();
     if (!env.JWT_SECRET) {
-      console.error("JWT_SECRET is not configured");
+      await writeStructuredLog("error", {
+        event: "auth.password_reset_request",
+        requestId: correlationId,
+        venueId: tenant.venueId,
+        outcome: "unavailable",
+        errorKind: "MissingConfiguration",
+      });
       return NextResponse.json(
         { code: "SERVER_ERROR", error: "Unable to submit the request right now." },
         { status: 500, headers: { "Cache-Control": "no-store" } },
@@ -105,10 +118,12 @@ export async function POST(request: Request) {
         id: users.id,
         venueId: users.venueId,
         role: users.role,
+        venueActive: venues.active,
         active: users.active,
         deletedAt: users.deletedAt,
       })
       .from(users)
+      .leftJoin(venues, eq(users.venueId, venues.id))
       .where(eq(users.email, normalizedEmail))
       .limit(1);
 
@@ -176,7 +191,10 @@ export async function POST(request: Request) {
     } catch (error: unknown) {
       // 계정 존재 여부에 따라 write 실패 응답이 달라지지 않게 decoy
       // receipt와 공통 202를 유지한다. 원문 이메일은 로그에 남기지 않는다.
-      console.error("Password reset request persistence failed:", error);
+      await reportServerError("auth.password_reset_request.persist", error, {
+        requestId: correlationId,
+        venueId: tenant.venueId,
+      });
     }
     const [receipt, challenge] = await Promise.all([
       createPasswordResetReceipt(
@@ -201,10 +219,18 @@ export async function POST(request: Request) {
         shouldUseSecureAuthCookies(request),
       ),
     });
+    await writeStructuredLog("info", {
+      event: "auth.password_reset_request",
+      requestId: correlationId,
+      venueId: tenant.venueId,
+      outcome: "success",
+    });
     return response;
-  } catch {
+  } catch (error: unknown) {
     // Receipt와 expected challenge는 로그에 포함하지 않는다.
-    console.error("Password reset administrator request failed");
+    await reportServerError("auth.password_reset_request", error, {
+      requestId: correlationId,
+    });
     return NextResponse.json(
       { code: "REQUEST_FAILED", error: "Unable to submit the request right now." },
       { status: 500, headers: { "Cache-Control": "no-store" } },
@@ -217,6 +243,7 @@ export async function POST(request: Request) {
  * 없거나 유효하지 않아도 같은 204를 반환한다.
  */
 export async function DELETE(request: Request) {
+  const correlationId = getRequestId(request);
   const response = new NextResponse(null, {
     status: 204,
     headers: { "Cache-Control": "no-store" },
@@ -248,22 +275,13 @@ export async function DELETE(request: Request) {
     const requestId = claimGrant?.requestId ?? receiptRequestId;
     if (!requestId || !tenant.resolved) return response;
 
-    await env.DB.prepare(
-      `UPDATE password_reset_requests
-       SET status = 'cancelled',
-           updated_at = ?
-       WHERE id = ?
-         AND source = 'self_service'
-         AND status IN ('pending', 'approved')
-         AND (
-           ? = 'platform'
-           OR venue_id = ?
-         )`,
-    )
+    await env.DB.prepare(CANCEL_BROWSER_PASSWORD_RESET_REQUEST_SQL)
       .bind(new Date().toISOString(), requestId, tenant.scope, tenant.venueId)
       .run();
   } catch (error: unknown) {
-    console.error("Password reset request cancellation failed:", error);
+    await reportServerError("auth.password_reset_request.cancel", error, {
+      requestId: correlationId,
+    });
   }
 
   return response;

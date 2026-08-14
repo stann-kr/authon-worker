@@ -18,6 +18,11 @@ import ConfirmDialog from "../../../components/ConfirmDialog";
 import Button from "../../../components/Button";
 import { useSectionLoadingTask } from "../../../components/RouteTransitionProvider";
 import { useLatestRequestGuard } from "../../../lib/hooks";
+import { captureImmutableDraft } from "../../../lib/forms/immutable-draft";
+import {
+  deriveAsyncListState,
+  shouldShowEmptyState,
+} from "../../../lib/ui/async-list-state";
 import { getVenueTypeColor } from "../../../lib/colors";
 import { useTranslations } from "next-intl";
 import { useVenueSelector } from "../../../components/VenueSelector";
@@ -26,6 +31,10 @@ import {
   DEFAULT_OPENING_TIME,
   DEFAULT_VENUE_TIMEZONE,
 } from "../../../lib/date";
+import {
+  VENUE_MUTATION_ERROR_KEYS,
+  selectDomainMessageKey,
+} from "../../../lib/api/domain-error";
 
 const VENUE_TYPES = [
   { value: "club", label: "CLUB" },
@@ -103,6 +112,9 @@ export default function VenueManagement({
   const [formSuccess, setFormSuccess] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [listError, setListError] = useState("");
+  const [loadOutcome, setLoadOutcome] = useState<
+    "idle" | "success" | "partial" | "error"
+  >("idle");
   const { refreshVenues: refreshActiveVenues } = useVenueSelector();
   const requestGuard = useLatestRequestGuard();
   useSectionLoadingTask(isLoading);
@@ -118,11 +130,15 @@ export default function VenueManagement({
       if (error) {
         console.error("Failed to load venues:", error);
         setListError(t("loadFailed"));
+        setLoadOutcome(data ? "partial" : "error");
+      } else {
+        setLoadOutcome("success");
       }
     } catch (error: unknown) {
       if (!isLatestRequest()) return;
       console.error("Failed to load venues:", error);
       setListError(t("loadFailed"));
+      setLoadOutcome("error");
     } finally {
       if (isLatestRequest()) setIsLoading(false);
     }
@@ -134,57 +150,61 @@ export default function VenueManagement({
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmitting) return;
+    const draft = captureImmutableDraft(formData);
     setIsSubmitting(true);
     setFormError("");
     setFormSuccess("");
 
-    if (!formData.name.trim()) {
+    if (!draft.name.trim()) {
       setFormError(t("nameRequired"));
       setIsSubmitting(false);
       return;
     }
 
-    const { data, error } = await createVenue({
-      name: formData.name.trim(),
-      type: formData.type,
-      address: formData.address.trim() || undefined,
-      description: formData.description.trim() || undefined,
-      brandName: formData.brandName.trim() || undefined,
-      brandTagline: formData.brandTagline.trim() || undefined,
-      primaryDomain: formData.primaryDomain.trim() || undefined,
-      defaultLocale: formData.defaultLocale,
-      timezone: formData.timezone.trim(),
-      openingTime: formData.openingTime,
-      closingTime: formData.closingTime,
-    });
-
-    if (error) {
-      console.error("Failed to create venue:", error);
-      setFormError(
-        error === "INVALID_TIMEZONE"
-          ? t("invalidTimezone")
-          : error === "INVALID_OPERATING_HOURS"
-            ? t("invalidOperatingHours")
-            : t("createFailed"),
-      );
-    } else if (data) {
-      setFormSuccess(t("created", { name: data.name }));
-      setFormData({
-        name: "",
-        type: "club",
-        address: "",
-        description: "",
-        brandName: "",
-        brandTagline: "",
-        primaryDomain: "",
-        defaultLocale: "en",
-        timezone: DEFAULT_VENUE_TIMEZONE,
-        openingTime: DEFAULT_OPENING_TIME,
-        closingTime: DEFAULT_CLOSING_TIME,
+    try {
+      const { data, error } = await createVenue({
+        name: draft.name.trim(),
+        type: draft.type,
+        address: draft.address.trim() || undefined,
+        description: draft.description.trim() || undefined,
+        brandName: draft.brandName.trim() || undefined,
+        brandTagline: draft.brandTagline.trim() || undefined,
+        primaryDomain: draft.primaryDomain.trim() || undefined,
+        defaultLocale: draft.defaultLocale,
+        timezone: draft.timezone.trim(),
+        openingTime: draft.openingTime,
+        closingTime: draft.closingTime,
       });
-      await Promise.all([loadVenues(), refreshActiveVenues()]);
+
+      if (error) {
+        console.error("Failed to create venue:", error);
+        setFormError(
+          t(selectDomainMessageKey(error, VENUE_MUTATION_ERROR_KEYS, "createFailed")),
+        );
+      } else if (data) {
+        setFormSuccess(t("created", { name: data.name }));
+        setFormData({
+          name: "",
+          type: "club",
+          address: "",
+          description: "",
+          brandName: "",
+          brandTagline: "",
+          primaryDomain: "",
+          defaultLocale: "en",
+          timezone: DEFAULT_VENUE_TIMEZONE,
+          openingTime: DEFAULT_OPENING_TIME,
+          closingTime: DEFAULT_CLOSING_TIME,
+        });
+        await Promise.all([loadVenues(), refreshActiveVenues()]);
+      }
+    } catch (error: unknown) {
+      console.error("Failed to create venue:", error);
+      setFormError(t("createFailed"));
+    } finally {
+      setIsSubmitting(false);
     }
-    setIsSubmitting(false);
   };
 
   const handleToggleActive = async (venue: Venue) => {
@@ -196,11 +216,19 @@ export default function VenueManagement({
       await Promise.all([loadVenues(), refreshActiveVenues()]);
     }
   };
+  const listState = deriveAsyncListState({
+    hasStarted: isLoading || loadOutcome !== "idle",
+    isLoading,
+    itemCount: venues.length,
+    hasError: loadOutcome === "error",
+    isPartial: loadOutcome === "partial",
+  });
 
   return (
     <OperationsLayout
       variant="stacked"
       title={t("title")}
+      headingLevel={null}
       dashboard={
         <>
         {showSectionNavigation && (
@@ -247,11 +275,12 @@ export default function VenueManagement({
         {activeTab === "create" && (
           <div className="space-y-6">
             <div className="app-panel p-4 sm:p-5">
-              <h2 className="type-section-title mb-4">
+              <h3 className="type-section-title mb-4">
                 {t("createNew")}
-              </h2>
+              </h3>
 
-              <form onSubmit={handleCreate} className="space-y-4">
+              <form onSubmit={handleCreate} aria-busy={isSubmitting}>
+                <fieldset disabled={isSubmitting} className="space-y-4">
                 <div>
                   <label htmlFor="venue-create-name" className="app-label">
                     {t("venueName")}
@@ -492,6 +521,7 @@ export default function VenueManagement({
                 >
                   {isSubmitting ? t("creating") : t("createVenue")}
                 </Button>
+                </fieldset>
               </form>
             </div>
           </div>
@@ -507,9 +537,9 @@ export default function VenueManagement({
             />
             <div className="p-4">
               {listError && <Alert type="error" message={listError} className="mb-4" />}
-              {isLoading && venues.length === 0 ? (
+              {listState === "loading" ? (
                 <Skeleton rows={4} />
-              ) : venues.length === 0 ? (
+              ) : shouldShowEmptyState(listState) ? (
                 <EmptyState icon="store" message={t("noVenues")} />
               ) : (
                 <div
@@ -530,11 +560,13 @@ export default function VenueManagement({
                           await Promise.all([loadVenues(), refreshActiveVenues()]);
                         } else {
                           setListError(
-                            error === "INVALID_TIMEZONE"
-                              ? t("invalidTimezone")
-                              : error === "INVALID_OPERATING_HOURS"
-                                ? t("invalidOperatingHours")
-                                : t("updateFailed"),
+                            t(
+                              selectDomainMessageKey(
+                                error,
+                                VENUE_MUTATION_ERROR_KEYS,
+                                "updateFailed",
+                              ),
+                            ),
                           );
                         }
                         return error;
@@ -604,22 +636,30 @@ function VenueCard({
   });
   const [isDeactivateConfirmOpen, setIsDeactivateConfirmOpen] = useState(false);
   const [isTogglingActive, setIsTogglingActive] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
 
   const handleSave = async () => {
-    const error = await onSave(venue.id, {
-      name: editData.name,
-      type: editData.type,
-      address: editData.address || undefined,
-      description: editData.description || undefined,
-      brandName: editData.brandName,
-      brandTagline: editData.brandTagline,
-      primaryDomain: editData.primaryDomain,
-      defaultLocale: editData.defaultLocale,
-      timezone: editData.timezone,
-      openingTime: editData.openingTime,
-      closingTime: editData.closingTime,
-    });
-    if (!error) setIsEditing(false);
+    if (isSaving) return;
+    const draft = captureImmutableDraft(editData);
+    setIsSaving(true);
+    try {
+      const error = await onSave(venue.id, {
+        name: draft.name,
+        type: draft.type,
+        address: draft.address || undefined,
+        description: draft.description || undefined,
+        brandName: draft.brandName,
+        brandTagline: draft.brandTagline,
+        primaryDomain: draft.primaryDomain,
+        defaultLocale: draft.defaultLocale,
+        timezone: draft.timezone,
+        openingTime: draft.openingTime,
+        closingTime: draft.closingTime,
+      });
+      if (!error) setIsEditing(false);
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const handleToggleActive = async () => {
@@ -734,7 +774,7 @@ function VenueCard({
           </div>
         </div>
       ) : (
-        <div className="space-y-3">
+        <fieldset disabled={isSaving} className="space-y-3" aria-busy={isSaving}>
           <div>
             <label htmlFor={`venue-name-${venue.id}`} className="app-label">
               {t("venueName")}
@@ -957,6 +997,7 @@ function VenueCard({
             <Button
               type="button"
               onClick={handleSave}
+              isLoading={isSaving}
               size="sm"
               fullWidth
             >
@@ -987,7 +1028,7 @@ function VenueCard({
               {commonT("cancel")}
             </Button>
           </div>
-        </div>
+        </fieldset>
       )}
       </div>
       <ConfirmDialog

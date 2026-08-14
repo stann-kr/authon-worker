@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
 import { useLocalStorage } from "../../lib/hooks";
 import GuestList from "./components/GuestList";
 import LinkManagement, {
@@ -15,6 +14,8 @@ import VenueManagement, {
 } from "./components/VenueManagement";
 import GuestLimitRequestManagement from "./components/GuestLimitRequestManagement";
 import PasswordResetRequestManagement from "./components/PasswordResetRequestManagement";
+import EventManagement from "./components/EventManagement";
+import EventScopeSelector from "@/components/EventScopeSelector";
 import AdminTaskSwitcher, {
   type AdminTaskOption,
 } from "./components/AdminTaskSwitcher";
@@ -22,15 +23,15 @@ import AuthGuard from "../../components/AuthGuard";
 import WorkspaceShell from "../../components/WorkspaceShell";
 import VenueLoadNotice from "../../components/VenueLoadNotice";
 import { getBusinessDate } from "../../lib/date";
-import { getUser } from "../../lib/auth";
 import { useTranslations } from "next-intl";
+import { useAuthSession } from "../../components/AuthSessionProvider";
 import { useVenueSelector } from "../../components/VenueSelector";
 import {
   useRouteLoadingTask,
   useRouteTransition,
 } from "../../components/RouteTransitionProvider";
 import {
-  getAdminGroupDefaultTasks,
+  getAdminShortcutTask,
   getAdminTaskSearch,
   isAdminTaskAvailable,
   parseAdminTask,
@@ -52,11 +53,11 @@ function AdminPageContent() {
   const linkT = useTranslations("LinkAdmin");
   const userT = useTranslations("UserAdmin");
   const venueT = useTranslations("VenueAdmin");
-  const router = useRouter();
-  const { isRouteTransitionActive, startRouteTransition } =
-    useRouteTransition();
+  const { user } = useAuthSession();
+  const { isRouteTransitionActive } = useRouteTransition();
   const {
     currentVenue,
+    venueId,
     isLoadingVenues,
     venueLoadError,
     refreshVenues,
@@ -67,7 +68,9 @@ function AdminPageContent() {
     getBusinessDate(),
   );
   const [activeTask, setActiveTask] = useState<AdminTask>("guest-list");
-  const [isSuperAdmin, setIsSuperAdmin] = useState(false);
+  const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
+  const [eventRefreshKey, setEventRefreshKey] = useState(0);
+  const isSuperAdmin = user?.role === "super_admin";
   const [isRoleReady, setIsRoleReady] = useState(false);
   const [pendingPasswordResetCount, setPendingPasswordResetCount] = useState(0);
   useRouteLoadingTask(!isRoleReady);
@@ -77,16 +80,17 @@ function AdminPageContent() {
   }, [businessDate, currentVenue, setSelectedDate]);
 
   useEffect(() => {
-    const user = getUser();
-    const nextIsSuperAdmin = user?.role === "super_admin";
+    setSelectedEventId(null);
+  }, [selectedDate, venueId]);
+
+  useEffect(() => {
     const requestedTask = parseAdminTask(
       new URLSearchParams(window.location.search),
     );
     const nextTask =
-      requestedTask && isAdminTaskAvailable(requestedTask, nextIsSuperAdmin)
+      requestedTask && isAdminTaskAvailable(requestedTask, isSuperAdmin)
         ? requestedTask
         : "guest-list";
-    setIsSuperAdmin(nextIsSuperAdmin);
     setActiveTask(nextTask);
 
     const nextSearch = getAdminTaskSearch(nextTask);
@@ -94,7 +98,7 @@ function AdminPageContent() {
       window.history.replaceState(null, "", `/admin${nextSearch}`);
     }
     setIsRoleReady(true);
-  }, []);
+  }, [isSuperAdmin]);
 
   useEffect(() => {
     if (!isRoleReady) return;
@@ -119,6 +123,7 @@ function AdminPageContent() {
       [
         { id: "guest-list", group: "guests", label: t("guestList") },
         { id: "guest-requests", group: "guests", label: t("requests") },
+        { id: "event-manage", group: "events", label: t("eventManagement") },
         { id: "link-create", group: "links", label: linkT("createLink") },
         { id: "link-manage", group: "links", label: linkT("manageLinks") },
         { id: "user-create", group: "users", label: userT("createUser") },
@@ -131,11 +136,6 @@ function AdminPageContent() {
         },
         ...(isSuperAdmin
           ? [
-              {
-                id: "user-migrate" as const,
-                group: "users" as const,
-                label: userT("migration"),
-              },
               {
                 id: "venue-list" as const,
                 group: "venues" as const,
@@ -223,14 +223,9 @@ function AdminPageContent() {
         return;
       }
 
-      if (e.key === "Escape") {
-        if (startRouteTransition("/")) router.push("/");
-      } else {
-        const shortcutIndex = Number.parseInt(e.key, 10) - 1;
-        const shortcutTasks = getAdminGroupDefaultTasks(isSuperAdmin);
-        if (!Number.isNaN(shortcutIndex) && shortcutTasks[shortcutIndex]) {
-          changeTask(shortcutTasks[shortcutIndex]);
-        }
+      const shortcutTask = getAdminShortcutTask(e.key, isSuperAdmin);
+      if (shortcutTask) {
+        changeTask(shortcutTask);
       }
     };
 
@@ -240,12 +235,11 @@ function AdminPageContent() {
     changeTask,
     isRouteTransitionActive,
     isSuperAdmin,
-    router,
-    startRouteTransition,
   ]);
 
   const groupLabels: Record<AdminTaskGroup, string> = {
     guests: t("guests"),
+    events: t("events"),
     links: t("links"),
     users: t("users"),
     venues: t("venues"),
@@ -257,15 +251,8 @@ function AdminPageContent() {
     [changeTask],
   );
   const handleUserSectionChange = useCallback(
-    (section: UserManagementSection) => {
-      const task: AdminTask =
-        section === "create"
-          ? "user-create"
-            : section === "users"
-              ? "user-list"
-            : "user-migrate";
-      changeTask(task);
-    },
+    (section: UserManagementSection) =>
+      changeTask(section === "create" ? "user-create" : "user-list"),
     [changeTask],
   );
   const handleVenueSectionChange = useCallback(
@@ -310,17 +297,53 @@ function AdminPageContent() {
 
         <section
           id="admin-workspace"
-          aria-label={activeTaskLabel}
+          aria-labelledby="admin-active-task-title"
           className="min-h-0"
         >
+        <h2 id="admin-active-task-title" className="sr-only">
+          {activeTaskLabel}
+        </h2>
+        {[
+          "guest-list",
+          "guest-requests",
+          "event-manage",
+          "link-create",
+          "link-manage",
+        ].includes(activeTask) && (
+          <div className="context-bar mb-4">
+            <EventScopeSelector
+              venueId={venueId}
+              businessDate={selectedDate}
+              value={selectedEventId}
+              onChange={setSelectedEventId}
+              reloadKey={eventRefreshKey}
+            />
+          </div>
+        )}
         {activeTask === "guest-list" && (
           <GuestList
             selectedDate={selectedDate}
             onDateChange={setSelectedDate}
             businessDate={businessDate}
+            eventId={selectedEventId}
           />
         )}
-        {activeTask === "guest-requests" && <GuestLimitRequestManagement />}
+        {activeTask === "guest-requests" && (
+          <GuestLimitRequestManagement
+            eventId={selectedEventId}
+            businessDate={selectedDate}
+          />
+        )}
+        {activeTask === "event-manage" && (
+          <EventManagement
+            selectedDate={selectedDate}
+            onDateChange={setSelectedDate}
+            businessDate={businessDate}
+            selectedEventId={selectedEventId}
+            onSelectedEventChange={setSelectedEventId}
+            onEventsChanged={() => setEventRefreshKey((value) => value + 1)}
+          />
+        )}
         {(activeTask === "link-create" || activeTask === "link-manage") && (
           <LinkManagement
             selectedDate={selectedDate}
@@ -331,18 +354,13 @@ function AdminPageContent() {
             }
             onActiveSectionChange={handleLinkSectionChange}
             showSectionNavigation={false}
+            eventId={selectedEventId}
           />
         )}
-        {(activeTask === "user-create" ||
-          activeTask === "user-list" ||
-          activeTask === "user-migrate") && (
+        {(activeTask === "user-create" || activeTask === "user-list") && (
           <UserManagement
             activeSection={
-              activeTask === "user-create"
-                ? "create"
-                : activeTask === "user-list"
-                  ? "users"
-                  : "migrate"
+              activeTask === "user-create" ? "create" : "users"
             }
             onActiveSectionChange={handleUserSectionChange}
             showSectionNavigation={false}

@@ -7,6 +7,11 @@ import { verifyPassword, hashPassword } from "@/lib/auth/password";
 import { requireAuth } from "@/lib/auth/server";
 import { getPasswordPolicyError } from "@/lib/auth/password-policy";
 import { shouldUseSecureAuthCookies } from "@/lib/auth/cookie-policy";
+import {
+  getRequestId,
+  reportServerError,
+  writeStructuredLog,
+} from "@/lib/observability/structured-log";
 
 const UPDATE_PROFILE_PASSWORD_CAS_SQL = `
   UPDATE users
@@ -69,6 +74,7 @@ function getAuthErrorStatus(error: unknown): number | null {
 }
 
 export async function PUT(request: Request) {
+  const requestId = getRequestId(request);
   try {
     const { env } = getCloudflareContext();
     const authUser = await requireAuth();
@@ -150,7 +156,11 @@ export async function PUT(request: Request) {
       } catch (error: unknown) {
         // DB session_version is authoritative, so KV cleanup failure must not
         // turn an already-committed password change into a client-visible failure.
-        console.error("Failed to delete superseded profile session:", error);
+        await reportServerError("auth.profile_password.session_cleanup", error, {
+          requestId,
+          actorId: user.id,
+          venueId: user.venueId,
+        });
       }
     }
 
@@ -179,9 +189,16 @@ export async function PUT(request: Request) {
       path: "/",
     });
 
+    await writeStructuredLog("info", {
+      event: "auth.profile_password",
+      requestId,
+      actorId: user.id,
+      venueId: user.venueId,
+      outcome: "success",
+    });
     return response;
   } catch (error: unknown) {
-    console.error("Update password error:", error);
+    await reportServerError("auth.profile_password", error, { requestId });
     const authStatus = getAuthErrorStatus(error);
     if (authStatus) {
       return NextResponse.json({ error: "Unauthorized" }, { status: authStatus });

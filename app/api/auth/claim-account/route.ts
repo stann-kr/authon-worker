@@ -28,6 +28,11 @@ import {
 } from "@/lib/auth/password-reset-lifecycle-sql";
 import { getTenantContextForRequest } from "@/lib/tenant/server";
 import { isTrustedMutationOrigin } from "@/lib/auth/request-origin";
+import {
+  getRequestId,
+  reportServerError,
+  writeStructuredLog,
+} from "@/lib/observability/structured-log";
 
 interface ClaimCandidate {
   id: string;
@@ -45,6 +50,7 @@ interface ClaimCandidate {
  * Browser-bound 관리자 승인 또는 유효한 1회용 설정 코드를 원자적으로 소비한다.
  */
 export async function POST(request: Request) {
+  const requestId = getRequestId(request);
   try {
     if (!isTrustedMutationOrigin(request)) {
       return NextResponse.json(
@@ -97,7 +103,12 @@ export async function POST(request: Request) {
 
     const { env } = getCloudflareContext();
     if (useBrowserReceipt && !env.JWT_SECRET) {
-      console.error("JWT_SECRET is not configured");
+      await writeStructuredLog("error", {
+        event: "auth.account_claim",
+        requestId,
+        outcome: "unavailable",
+        errorKind: "MissingConfiguration",
+      });
       return NextResponse.json(
         { code: "SERVER_ERROR", error: "Unable to complete account setup right now." },
         { status: 500 },
@@ -166,6 +177,11 @@ export async function POST(request: Request) {
            AND pr.venue_id IS u.venue_id
            AND u.active = 1
            AND u.deleted_at IS NULL
+           AND EXISTS (
+             SELECT 1 FROM venues candidate_venue
+             WHERE candidate_venue.id = u.venue_id
+               AND candidate_venue.active = 1
+           )
            AND u.account_kind = 'personal'
            AND u.role IN ('door_staff', 'staff', 'dj')
            AND (? IS NULL OR u.venue_id = ? OR u.role = 'super_admin')
@@ -236,6 +252,14 @@ export async function POST(request: Request) {
          WHERE u.email = ?
            AND u.active = 1
            AND u.deleted_at IS NULL
+           AND (
+             u.role = 'super_admin'
+             OR EXISTS (
+               SELECT 1 FROM venues candidate_venue
+               WHERE candidate_venue.id = u.venue_id
+                 AND candidate_venue.active = 1
+             )
+           )
            AND u.migration_status = 'pending_reset'
            AND u.password_set_at IS NULL
            AND (? IS NULL OR u.venue_id = ? OR u.role = 'super_admin')
@@ -380,9 +404,16 @@ export async function POST(request: Request) {
         maxAge: 0,
       });
     }
+    await writeStructuredLog("info", {
+      event: "auth.account_claim",
+      requestId,
+      actorId: candidate.id,
+      venueId: candidate.venue_id,
+      outcome: "success",
+    });
     return response;
   } catch (error: unknown) {
-    console.error("Account claim error:", error);
+    await reportServerError("auth.account_claim", error, { requestId });
     return NextResponse.json(
       { code: "SERVER_ERROR", error: "Unable to complete account setup right now." },
       { status: 500 },

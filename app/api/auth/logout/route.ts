@@ -1,8 +1,14 @@
 import { NextResponse } from "next/server";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { shouldUseSecureAuthCookies } from "@/lib/auth/cookie-policy";
+import {
+  getRequestId,
+  reportServerError,
+  writeStructuredLog,
+} from "@/lib/observability/structured-log";
 
 export async function POST(request: Request) {
+  const requestId = getRequestId(request);
   try {
     const { env } = getCloudflareContext();
 
@@ -46,9 +52,14 @@ export async function POST(request: Request) {
       path: "/",
     });
 
+    await writeStructuredLog("info", {
+      event: "auth.logout",
+      requestId,
+      outcome: "success",
+    });
     return response;
   } catch (error) {
-    console.error("Logout error:", error);
+    await reportServerError("auth.logout", error, { requestId });
     return NextResponse.json(
       { error: "로그아웃 처리 중 오류가 발생했습니다." },
       { status: 500 }
