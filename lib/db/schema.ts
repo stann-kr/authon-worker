@@ -33,12 +33,25 @@ export const venueDomains = sqliteTable('venue_domains', {
   ),
 ]);
 
+export const venueContributors = sqliteTable('venue_contributors', {
+  id: text('id').primaryKey(),
+  venueId: text('venue_id').notNull().references(() => venues.id),
+  displayName: text('display_name').notNull(),
+  kind: text('kind').notNull().default('dj'),
+  active: integer('active', { mode: 'boolean' }).notNull().default(true),
+  createdAt: text('created_at').notNull(),
+  updatedAt: text('updated_at').notNull(),
+}, (t) => [
+  index('idx_venue_contributors_venue_active').on(t.venueId, t.active),
+]);
+
 export const users = sqliteTable('users', {
   id: text('id').primaryKey(),
   legacyAuthUserId: text('legacy_auth_user_id'),
   email: text('email').notNull().unique(),
   passwordHash: text('password_hash').notNull(),
   name: text('name').notNull(),
+  contributorId: text('contributor_id').references(() => venueContributors.id),
   role: text('role').notNull(),
   accountKind: text('account_kind').notNull().default('personal'),
   doorAccessEnabled: integer('door_access_enabled', { mode: 'boolean' }).notNull().default(false),
@@ -57,6 +70,25 @@ export const users = sqliteTable('users', {
 }, (t) => [
   index('idx_users_venue').on(t.venueId),
   index('idx_users_venue_active_deleted').on(t.venueId, t.active, t.deletedAt),
+  index('idx_users_contributor').on(t.contributorId),
+]);
+
+export const contributorAuditEvents = sqliteTable('contributor_audit_events', {
+  id: text('id').primaryKey(),
+  venueId: text('venue_id').notNull().references(() => venues.id),
+  contributorId: text('contributor_id').references(() => venueContributors.id),
+  actorUserId: text('actor_user_id').references(() => users.id),
+  sourceKind: text('source_kind').notNull(),
+  sourceId: text('source_id').notNull(),
+  action: text('action').notNull(),
+  details: text('details'),
+  createdAt: text('created_at').notNull(),
+}, (t) => [
+  index('idx_contributor_audit_venue_created').on(t.venueId, desc(t.createdAt)),
+  index('idx_contributor_audit_contributor_created').on(
+    t.contributorId,
+    desc(t.createdAt),
+  ),
 ]);
 
 export const userAuditEvents = sqliteTable('user_audit_events', {
@@ -103,6 +135,7 @@ export const externalDjLinks = sqliteTable('external_dj_links', {
   venueId: text('venue_id').notNull().references(() => venues.id),
   token: text('token').notNull().unique(),
   djName: text('dj_name').notNull(),
+  contributorId: text('contributor_id').references(() => venueContributors.id),
   event: text('event'),
   date: text('date'),
   eventId: text('event_id').references(() => events.id),
@@ -125,6 +158,7 @@ export const externalDjLinks = sqliteTable('external_dj_links', {
     t.createdAt,
   ),
   index('idx_external_links_event').on(t.eventId),
+  index('idx_external_links_contributor').on(t.contributorId),
 ]);
 
 export const guests = sqliteTable('guests', {
@@ -248,6 +282,28 @@ export const eventCloseouts = sqliteTable('event_closeouts', {
 }, (t) => [
   index('idx_event_closeouts_venue_confirmed').on(t.venueId, t.confirmedAt),
 ]);
+
+export const eventCloseoutContributorMetrics = sqliteTable(
+  'event_closeout_contributor_metrics',
+  {
+    eventId: text('event_id').notNull().references(() => eventCloseouts.eventId),
+    venueId: text('venue_id').notNull().references(() => venues.id),
+    contributorId: text('contributor_id').references(() => venueContributors.id),
+    sourceKind: text('source_kind').notNull(),
+    sourceId: text('source_id').notNull(),
+    registeredCount: integer('registered_count').notNull(),
+    checkedInCount: integer('checked_in_count').notNull(),
+    createdAt: text('created_at').notNull(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.eventId, t.sourceKind, t.sourceId] }),
+    index('idx_closeout_contributor_metrics_venue_event').on(t.venueId, t.eventId),
+    index('idx_closeout_contributor_metrics_contributor_event').on(
+      t.contributorId,
+      t.eventId,
+    ),
+  ],
+);
 
 export const guestLimitRequests = sqliteTable('guest_limit_requests', {
   id: text('id').primaryKey(),

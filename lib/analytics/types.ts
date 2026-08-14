@@ -99,11 +99,29 @@ export interface AnalyticsContributorRow {
   contributorId: string | null;
   displayName: string;
   sourceStatus: "mapped" | "unmapped" | "deleted";
+  source: {
+    kind: "user" | "external_link" | "unattributed";
+    id: string;
+  } | null;
   events: number;
   registered: number;
   checkedIn: number;
   entryRatePercent: number | null;
   registeredPerEvent: number | null;
+}
+
+export interface AnalyticsContributorSnapshotInput {
+  eventId: string;
+  contributorId: string | null;
+  sourceKind: "user" | "external_link" | "unattributed";
+  sourceId: string;
+  registeredCount: number;
+  checkedInCount: number;
+}
+
+export interface AnalyticsContributorDirectoryInput {
+  id: string;
+  displayName: string;
 }
 
 export interface AnalyticsEventRow {
