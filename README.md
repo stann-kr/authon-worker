@@ -30,6 +30,8 @@ docker compose --profile ops run --rm ops npm run deploy:prod
 
 로컬 release-candidate 검증은 `npm run verify:release` 한 명령으로 실행한다.
 
+원격 배포는 branch별 Cloudflare Workers Builds로 분리한다. `dev` merge는 전용 D1·KV·JWT secret을 사용하는 고정 development Worker에 자동 배포되고, `main` merge는 별도 승인을 거쳐 production Worker를 갱신한다. development Worker는 production custom domain이나 운영 데이터에 연결하지 않는다.
+
 적용 이력의 권위는 `migrations/`의 순차 manual D1 SQL이다. `npm run db:generate`는 `.docs/generated-migrations/`에 검토용 baseline만 만들며, `npm run check:migrations`가 임시 SQLite에서 manual 이력과 현재 Drizzle schema의 구조 호환성을 비교한다. 이미 적용된 migration을 generator 결과로 덮어쓰지 않는다.
 
 ---
