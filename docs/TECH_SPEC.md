@@ -24,9 +24,8 @@ Client
 
 ## 배포 환경
 
-- production `authon-worker`는 production custom domain과 기본 `workers.dev` 주소, 운영 D1·KV·secret을 사용한다.
-- development `authon-worker-dev`는 별도 `workers.dev` 주소와 전용 D1·KV·JWT secret을 사용한다. production custom domain route와 운영 데이터·secret은 상속하거나 복제하지 않는다.
-- `dev` merge는 Cloudflare Workers Builds에서 `npm run verify:release`를 통과한 뒤 고정 development Worker에 자동 배포한다. preview URL은 사용하지 않는다.
+- production과 development build는 하나의 `authon-worker` 및 동일한 기본 binding 구성을 사용한다.
+- `dev` push는 Cloudflare Workers Builds에서 `npm run verify:release`를 통과한 뒤 OpenNext `upload`로 `dev` tag의 새 Worker version만 만든다. 이 version에는 traffic을 배정하지 않고 preview alias도 만들지 않으므로 production URL에서 제공되지 않는다.
 - `main` merge는 별도 production 승인을 거쳐 `npm run verify:release`를 통과한 뒤 production Worker에 자동 배포한다. development 승인과 migration·secret 변경을 production 권한으로 확대하지 않는다.
 - Worker code deploy와 D1 migration, secret·binding·route·data 변경은 서로 다른 운영 단계로 검증한다.
 - 표준 개발·CI·Docker runtime은 Node 24 / npm 11이다. `npm run verify:release`가 lint, typecheck, 전체 회귀, EN/KO parity, 민감 asset 검사와 Next/OpenNext Worker build를 재현한다.

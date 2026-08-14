@@ -4,6 +4,18 @@
 
 ## 2026-08-14
 
+### 단일 Worker dev version upload 복원
+
+#### Changed
+
+- `dev` branch는 별도 Worker를 배포하지 않고 production과 같은 `authon-worker`에 `dev` tag의 traffic 미배정 version만 업로드한다.
+- Workers Builds는 `dev`에서 전체 release-candidate gate 뒤 OpenNext `upload`, `main`에서 별도 승인 뒤 production `deploy`를 수행하도록 분리한다.
+- source의 `env.dev`와 별도 development Worker·D1·KV binding 계약을 제거했다.
+
+#### Security
+
+- dev version upload는 production traffic assignment, public preview alias, D1 migration과 secret·data write를 수행하지 않는다.
+
 ### branch별 Worker 자동 배포 분리
 
 #### Added

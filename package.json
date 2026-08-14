@@ -14,7 +14,7 @@
     "prebuild:worker": "npm run check:sensitive-assets -- --skip-assets",
     "build:worker": "opennextjs-cloudflare build",
     "postbuild:worker": "npm run check:sensitive-assets && npm run check:worker-artifact",
-    "deploy:dev": "node scripts/ops/require-development-intent.mjs && wrangler deploy --env dev",
+    "deploy:dev": "node scripts/ops/require-development-intent.mjs && npm run build:worker && opennextjs-cloudflare upload --tag dev",
     "deploy:prod": "node scripts/ops/require-production-intent.mjs && npm run build:worker && opennextjs-cloudflare deploy",
     "cf:preview": "opennextjs-cloudflare preview",
     "lint": "eslint .",

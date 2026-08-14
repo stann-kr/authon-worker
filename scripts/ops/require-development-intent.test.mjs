@@ -3,7 +3,7 @@ import test from "node:test";
 
 import { inspectDevelopmentIntent } from "./require-development-intent.mjs";
 
-test("development deploy requires an exact explicit intent", () => {
+test("development version upload requires an exact explicit intent", () => {
   assert.deepEqual(inspectDevelopmentIntent({}), {
     ok: false,
     missing: ["AUTHON_DEVELOPMENT_INTENT"],
