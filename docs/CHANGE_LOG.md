@@ -4,7 +4,7 @@
 
 ## 2026-08-14
 
-### development Worker 자동 배포 분리
+### branch별 Worker 자동 배포 분리
 
 #### Added
 
@@ -15,6 +15,7 @@
 #### Changed
 
 - `dev` merge는 전체 release-candidate 검증 뒤 development Worker에 배포되고, `main` production 배포는 별도 승인 경계로 유지한다.
+- production Workers Builds도 일부 Worker build만 실행하던 구성에서 전체 `verify:release` gate를 통과하도록 강화했다.
 - development D1에 현재 manual migration history를 적용하되 production 데이터는 복제하지 않는다.
 
 #### Security
