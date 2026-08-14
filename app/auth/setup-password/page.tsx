@@ -12,6 +12,8 @@ import PasswordInput from "@/components/PasswordInput";
 import { useVenueBrand } from "@/components/VenueBrandProvider";
 import { claimMigratedAccount, login } from "@/lib/auth";
 import { getPasswordPolicyErrorCode } from "@/lib/auth/password-policy";
+import { completeAuthenticatedClientSession } from "@/lib/auth/client-session";
+import { useAuthSession } from "@/components/AuthSessionProvider";
 
 type SetupErrorTarget =
   | "form"
@@ -29,6 +31,7 @@ export default function SetupPasswordPage() {
   const t = useTranslations("Auth");
   const { brand } = useVenueBrand();
   const router = useRouter();
+  const { setUser } = useAuthSession();
   const [email, setEmail] = useState("");
   const [setupCode, setSetupCode] = useState("");
   const [newPassword, setNewPassword] = useState("");
@@ -109,7 +112,11 @@ export default function SetupPasswordPage() {
         showError(t("automaticSignInFailed"));
         return;
       }
-      router.push("/");
+      completeAuthenticatedClientSession({
+        user: loginResult.user,
+        setUser,
+        navigate: (href) => router.replace(href),
+      });
     } catch {
       showError(t("firstSetupFailed"));
     } finally {

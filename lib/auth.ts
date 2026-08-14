@@ -20,6 +20,16 @@ import {
 
 export type { User } from "@/lib/auth/user-profile";
 
+export type LoginResult =
+  | { success: true; user: User }
+  | {
+      success: false;
+      message?: string;
+      code?: string;
+      requiresSetup?: boolean;
+      setupMethod?: FirstLoginSetupMethod;
+    };
+
 export const cacheUser = (user: User | null): void => {
   if (typeof window === "undefined") return;
   if (user) localStorage.setItem("user", JSON.stringify(user));
@@ -34,13 +44,7 @@ export const cacheUser = (user: User | null): void => {
 export const login = async (
   email: string,
   password: string,
-): Promise<{
-  success: boolean;
-  message?: string;
-  code?: string;
-  requiresSetup?: boolean;
-  setupMethod?: FirstLoginSetupMethod;
-}> => {
+): Promise<LoginResult> => {
   try {
     const res = await fetch("/api/auth/login", {
       method: "POST",
@@ -77,7 +81,7 @@ export const login = async (
 
     cacheUser(userInfo);
 
-    return { success: true };
+    return { success: true, user: userInfo };
   } catch (error) {
     console.error("Login error:", error);
     return { success: false, message: "An error occurred during login." };

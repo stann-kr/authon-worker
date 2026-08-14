@@ -35,7 +35,7 @@
     "test:closeout": "node --experimental-strip-types --test lib/closeout/domain.test.mjs lib/closeout/schema.test.mjs lib/closeout/sql.test.mjs",
     "test:rate-limit": "node --experimental-strip-types --test lib/auth/rate-limit-policy.test.mjs",
     "test:observability": "node --experimental-strip-types --test lib/observability/structured-log.test.mjs lib/observability/server-log-source.test.mjs",
-    "test:auth": "node --experimental-strip-types --test lib/auth/cookie-policy.test.mjs lib/auth/first-login-policy.test.mjs lib/auth/request-origin.test.mjs lib/auth/password-reset-receipt.test.mjs lib/auth/password-reset-request-policy.test.mjs lib/auth/password-reset-request-sql.test.mjs lib/auth/password-reset-lifecycle-sql.test.mjs lib/auth/credential-lifecycle-sql.test.mjs lib/auth/user-profile.test.mjs lib/tenant/active-policy.test.mjs scripts/dev/local-test-password.test.mjs",
+    "test:auth": "node --experimental-strip-types --test lib/auth/client-session.test.mjs lib/auth/cookie-policy.test.mjs lib/auth/first-login-policy.test.mjs lib/auth/request-origin.test.mjs lib/auth/password-reset-receipt.test.mjs lib/auth/password-reset-request-policy.test.mjs lib/auth/password-reset-request-sql.test.mjs lib/auth/password-reset-lifecycle-sql.test.mjs lib/auth/credential-lifecycle-sql.test.mjs lib/auth/user-profile.test.mjs lib/tenant/active-policy.test.mjs scripts/dev/local-test-password.test.mjs",
     "check:sensitive-assets": "node scripts/check-sensitive-assets.mjs",
     "test:sensitive-assets": "node --test scripts/check-sensitive-assets.test.mjs",
     "test:ops": "node --test scripts/ops/require-production-intent.test.mjs scripts/migration/check-authority.test.mjs scripts/check-worker-artifact.test.mjs",

@@ -11,7 +11,9 @@ import LanguageSwitcher from "@/components/LanguageSwitcher";
 import { useTranslations } from "next-intl";
 import { claimMigratedAccount, login } from "@/lib/auth";
 import { getPasswordPolicyErrorCode } from "@/lib/auth/password-policy";
+import { completeAuthenticatedClientSession } from "@/lib/auth/client-session";
 import { useVenueBrand } from "@/components/VenueBrandProvider";
+import { useAuthSession } from "@/components/AuthSessionProvider";
 
 type LoginMode = "login" | "setup";
 type AuthErrorTarget =
@@ -40,6 +42,7 @@ export default function LoginPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [authError, setAuthError] = useState<AuthErrorState | null>(null);
   const router = useRouter();
+  const { setUser } = useAuthSession();
   const showError = (message: string, target: AuthErrorTarget = "form") => {
     setAuthError({ message, target });
   };
@@ -105,7 +108,11 @@ export default function LoginPage() {
       const result = await login(formData.email, formData.password);
 
       if (result.success) {
-        router.push("/");
+        completeAuthenticatedClientSession({
+          user: result.user,
+          setUser,
+          navigate: (href) => router.replace(href),
+        });
       } else if (result.requiresSetup) {
         enterSetupMode();
       } else {
@@ -167,7 +174,11 @@ export default function LoginPage() {
         return;
       }
 
-      router.push("/");
+      completeAuthenticatedClientSession({
+        user: loginResult.user,
+        setUser,
+        navigate: (href) => router.replace(href),
+      });
     } catch {
       showError(t("firstSetupFailed"));
     } finally {
