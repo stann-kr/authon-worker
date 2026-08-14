@@ -24,11 +24,11 @@ Client
 
 ## 배포 환경
 
-- `authon-worker` 하나가 custom domain, 운영 D1과 운영 KV를 사용한다. Wrangler 환경별 Worker나 별도 개발 데이터베이스는 두지 않는다.
-- `main`은 `deploy` 명령으로 현재 production deployment를 갱신한다.
-- 외부에서 접근하는 Worker 주소는 기본 `workers.dev` 주소와 production custom domain뿐이며 두 주소는 같은 활성 production version을 제공한다.
-- preview URL과 non-main branch 자동 원격 build는 사용하지 않는다. `dev`는 production 배포 전 소스 검증용 branch이며 직접 서비스 주소를 갖지 않는다.
-- 모든 원격 요청은 같은 운영 D1·KV·secret을 사용한다.
+- production `authon-worker`는 production custom domain과 기본 `workers.dev` 주소, 운영 D1·KV·secret을 사용한다.
+- development `authon-worker-dev`는 별도 `workers.dev` 주소와 전용 D1·KV·JWT secret을 사용한다. production custom domain route와 운영 데이터·secret은 상속하거나 복제하지 않는다.
+- `dev` merge는 Cloudflare Workers Builds에서 `npm run verify:release`를 통과한 뒤 고정 development Worker에 자동 배포한다. preview URL은 사용하지 않는다.
+- `main` merge는 별도 production 승인을 거쳐 production Worker의 자동 배포 trigger를 실행한다. development 승인과 migration·secret 변경을 production 권한으로 확대하지 않는다.
+- Worker code deploy와 D1 migration, secret·binding·route·data 변경은 서로 다른 운영 단계로 검증한다.
 - 표준 개발·CI·Docker runtime은 Node 24 / npm 11이다. `npm run verify:release`가 lint, typecheck, 전체 회귀, EN/KO parity, 민감 asset 검사와 Next/OpenNext Worker build를 재현한다.
 - 기본 Compose `web` 서비스는 production Cloudflare credential을 받지 않는다. production deploy와 remote D1 migration은 별도 `ops` profile, 명시적 `:prod`/`:remote` 명령과 `AUTHON_PRODUCTION_INTENT=1`을 함께 요구한다.
 - 적용된 `migrations/`의 manual D1 SQL이 migration authority다. Drizzle generator는 `.docs/generated-migrations/`의 disposable review output만 만들고, CI는 임시 SQLite에서 manual history와 현재 schema의 table·column·foreign key·index 호환성을 검증한다.
