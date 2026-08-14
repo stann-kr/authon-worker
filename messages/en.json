@@ -411,7 +411,94 @@
     "passwordRequests": "Password requests",
     "events": "Events",
     "eventManagement": "Event management",
+    "analytics": "Analytics",
+    "guestAnalytics": "Guest analytics",
     "venues": "Venues"
+  },
+  "AdminAnalytics": {
+    "title": "Guest analytics",
+    "description": "Only confirmed night-closeout snapshots are included. Compare registrations, check-ins and contributor results with the previous period.",
+    "loading": "Loading guest analytics",
+    "refresh": "Refresh",
+    "retry": "Try again",
+    "loadFailed": "Guest analytics could not be loaded.",
+    "invalidPeriod": "This period is not available. Choose the current period or an earlier one.",
+    "venueUnavailable": "Analytics for this venue are unavailable.",
+    "selectVenue": "Select an active venue to view analytics",
+    "period": {
+      "granularity": "Period unit",
+      "selected": "Selected period",
+      "month": "Month",
+      "quarter": "Quarter",
+      "year": "Year",
+      "previous": "Previous period",
+      "next": "Next period",
+      "inProgress": "In progress",
+      "loading": "Preparing period",
+      "comparison": "Compared with {start}–{end}"
+    },
+    "comparison": {
+      "notCalculable": "Comparison unavailable",
+      "noBaseline": "No comparison baseline",
+      "percentagePoint": "pp"
+    },
+    "summary": {
+      "title": "Key results",
+      "registered": "Guest registrations",
+      "checkedIn": "Checked-in guests",
+      "entryRatePercent": "Entry rate",
+      "registeredPerEvent": "Registrations per Event",
+      "registrationDefinition": "Guest registrations count active registration rows, not unique visitors. The same person registered for multiple Events counts once per Event."
+    },
+    "coverage": {
+      "title": "Data coverage",
+      "summary": "{confirmed} confirmed Events · {days} operating days · {unconfirmed} unconfirmed Events",
+      "partial": "Some Events in this period are not yet confirmed or cannot be analyzed. The key results below include confirmed closeout snapshots only.",
+      "confirmed": "Confirmed Events",
+      "operatingDays": "Operating days",
+      "unconfirmed": "Unconfirmed closed",
+      "open": "Open",
+      "draft": "Draft",
+      "drifted": "Review required",
+      "legacy": "Legacy gaps",
+      "mapped": "Contributor mapping"
+    },
+    "trend": {
+      "title": "Period trend",
+      "description": "Monthly views use actual operating days; quarter and year views use monthly confirmed totals. The solid line is registrations and the dashed line is check-ins.",
+      "tableTitle": "Chart data",
+      "date": "Period"
+    },
+    "contributors": {
+      "title": "Guests by DJ or contributor",
+      "description": "Only explicitly mapped Contributor sources are combined. Unmapped sources and deleted contributors remain separate.",
+      "name": "DJ or contributor",
+      "events": "Events",
+      "sort": "Sort by",
+      "ascending": "Ascending",
+      "descending": "Descending",
+      "emptyTitle": "No contributor analytics",
+      "emptyDescription": "Contributor sources from confirmed Events appear here with their explicit mapping status.",
+      "deleted": "Deleted contributor",
+      "unmappedLink": "Unmapped external link",
+      "unmappedUser": "Unmapped internal account",
+      "unattributed": "Unattributed registrations"
+    },
+    "events": {
+      "title": "Results by Event",
+      "description": "Up to 100 confirmed Events are shown from the latest operating date.",
+      "date": "Operating date",
+      "event": "Event",
+      "status": "Status",
+      "confirmed": "Confirmed",
+      "drifted": "Review required",
+      "action": "Action",
+      "open": "Open Event"
+    },
+    "empty": {
+      "title": "No confirmed analytics for this period",
+      "description": "Confirmed Event closeouts will add registration and check-in results here. Unconfirmed Events remain visible in data coverage."
+    }
   },
   "EventScope": {
     "label": "Event",

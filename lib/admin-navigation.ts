@@ -7,10 +7,17 @@ export type AdminTask =
   | "user-create"
   | "user-list"
   | "password-requests"
+  | "analytics"
   | "venue-list"
   | "venue-create";
 
-export type AdminTaskGroup = "guests" | "events" | "links" | "users" | "venues";
+export type AdminTaskGroup =
+  | "guests"
+  | "events"
+  | "links"
+  | "users"
+  | "analytics"
+  | "venues";
 
 const SUPER_ADMIN_TASKS = new Set<AdminTask>([
   "venue-list",
@@ -54,6 +61,7 @@ export function parseAdminTask(
   if (tab === "venues") {
     return view === "create" ? "venue-create" : "venue-list";
   }
+  if (tab === "analytics") return "analytics";
 
   return null;
 }
@@ -68,6 +76,7 @@ export function getAdminTaskSearch(task: AdminTask): string {
     "user-create": "?tab=users&view=create",
     "user-list": "?tab=users&view=directory",
     "password-requests": "?tab=users&view=password-requests",
+    analytics: "?tab=analytics",
     "venue-list": "?tab=venues&view=list",
     "venue-create": "?tab=venues&view=create",
   };
@@ -81,6 +90,7 @@ export function getAdminGroupDefaultTasks(
     "guest-list",
     "link-create",
     "user-create",
+    "analytics",
     ...(isSuperAdmin ? (["venue-list"] as const) : []),
   ];
 }

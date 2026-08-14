@@ -9,6 +9,13 @@ export type AnalyticsComparisonStatus =
   | "zero_baseline"
   | "not_calculable";
 
+export interface AdminAnalyticsQuery {
+  venueId: string;
+  granularity: AnalyticsGranularity;
+  anchorDate: string;
+  compare: "previous";
+}
+
 export interface AnalyticsDateRange {
   startDate: string;
   endDateExclusive: string;
@@ -138,6 +145,7 @@ export interface AnalyticsEventRow {
 export interface AdminAnalyticsView {
   period: AnalyticsPeriod;
   comparisonPeriod: AnalyticsDateRange;
+  navigation: AnalyticsPeriodSelection["navigation"];
   coverage: AnalyticsCoverage;
   summary: AnalyticsSummary;
   trend: AnalyticsTrendPoint[];

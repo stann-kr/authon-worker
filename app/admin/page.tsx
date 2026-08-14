@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import dynamic from "next/dynamic";
 import { useLocalStorage } from "../../lib/hooks";
 import GuestList from "./components/GuestList";
 import LinkManagement, {
@@ -23,6 +24,7 @@ import AuthGuard from "../../components/AuthGuard";
 import WorkspaceShell from "../../components/WorkspaceShell";
 import VenueLoadNotice from "../../components/VenueLoadNotice";
 import { getBusinessDate } from "../../lib/date";
+import { isBusinessDate } from "../../lib/events/domain";
 import { useTranslations } from "next-intl";
 import { useAuthSession } from "../../components/AuthSessionProvider";
 import { useVenueSelector } from "../../components/VenueSelector";
@@ -39,6 +41,8 @@ import {
   type AdminTaskGroup,
 } from "../../lib/admin-navigation";
 import { fetchPendingPasswordResetRequestCount } from "@/lib/api/password-reset-requests";
+
+const AdminAnalytics = dynamic(() => import("./components/AdminAnalytics"));
 
 export default function AdminPage() {
   return (
@@ -69,6 +73,11 @@ function AdminPageContent() {
   );
   const [activeTask, setActiveTask] = useState<AdminTask>("guest-list");
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
+  const pendingEventScopeRef = useRef<{
+    eventId: string;
+    businessDate: string;
+    venueId: string;
+  } | null>(null);
   const [eventRefreshKey, setEventRefreshKey] = useState(0);
   const isSuperAdmin = user?.role === "super_admin";
   const [isRoleReady, setIsRoleReady] = useState(false);
@@ -76,10 +85,28 @@ function AdminPageContent() {
   useRouteLoadingTask(!isRoleReady);
 
   useEffect(() => {
-    if (currentVenue) setSelectedDate(businessDate);
-  }, [businessDate, currentVenue, setSelectedDate]);
+    if (!currentVenue) return;
+    const search = new URLSearchParams(window.location.search);
+    const requestedDate = search.get("date");
+    const hasCurrentVenueEventScope =
+      parseAdminTask(search) === "event-manage" &&
+      search.get("venue") === venueId &&
+      requestedDate !== null &&
+      isBusinessDate(requestedDate);
+    if (!hasCurrentVenueEventScope) setSelectedDate(businessDate);
+  }, [businessDate, currentVenue, setSelectedDate, venueId]);
 
   useEffect(() => {
+    const pendingScope = pendingEventScopeRef.current;
+    if (
+      pendingScope &&
+      pendingScope.businessDate === selectedDate &&
+      pendingScope.venueId === venueId
+    ) {
+      setSelectedEventId(pendingScope.eventId);
+      pendingEventScopeRef.current = null;
+      return;
+    }
     setSelectedEventId(null);
   }, [selectedDate, venueId]);
 
@@ -93,12 +120,38 @@ function AdminPageContent() {
         : "guest-list";
     setActiveTask(nextTask);
 
-    const nextSearch = getAdminTaskSearch(nextTask);
+    if (nextTask === "event-manage") {
+      const requestedEventId = new URLSearchParams(window.location.search).get("eventId");
+      const requestedDate = new URLSearchParams(window.location.search).get("date");
+      const requestedVenueId = new URLSearchParams(window.location.search).get("venue");
+      if (
+        requestedVenueId === venueId &&
+        requestedEventId &&
+        requestedDate &&
+        isBusinessDate(requestedDate)
+      ) {
+        pendingEventScopeRef.current = {
+          eventId: requestedEventId,
+          businessDate: requestedDate,
+          venueId,
+        };
+        setSelectedDate(requestedDate);
+        setSelectedEventId(requestedEventId);
+      }
+    }
+
+    const nextSearch =
+      nextTask === "analytics" ||
+      (nextTask === "event-manage" &&
+        new URLSearchParams(window.location.search).has("eventId") &&
+        new URLSearchParams(window.location.search).get("venue") === venueId)
+        ? window.location.search
+        : getAdminTaskSearch(nextTask);
     if (window.location.search !== nextSearch) {
       window.history.replaceState(null, "", `/admin${nextSearch}`);
     }
     setIsRoleReady(true);
-  }, [isSuperAdmin]);
+  }, [isSuperAdmin, setSelectedDate, venueId]);
 
   useEffect(() => {
     if (!isRoleReady) return;
@@ -134,6 +187,7 @@ function AdminPageContent() {
           label: t("passwordRequests"),
           badgeCount: pendingPasswordResetCount,
         },
+        { id: "analytics", group: "analytics", label: t("guestAnalytics") },
         ...(isSuperAdmin
           ? [
               {
@@ -188,6 +242,26 @@ function AdminPageContent() {
         requestedTask &&
         isAdminTaskAvailable(requestedTask, isSuperAdmin)
       ) {
+        if (requestedTask === "event-manage") {
+          const search = new URLSearchParams(window.location.search);
+          const requestedEventId = search.get("eventId");
+          const requestedDate = search.get("date");
+          const requestedVenueId = search.get("venue");
+          if (
+            requestedVenueId === venueId &&
+            requestedEventId &&
+            requestedDate &&
+            isBusinessDate(requestedDate)
+          ) {
+            pendingEventScopeRef.current = {
+              eventId: requestedEventId,
+              businessDate: requestedDate,
+              venueId,
+            };
+            setSelectedDate(requestedDate);
+            setSelectedEventId(requestedEventId);
+          }
+        }
         setActiveTask(requestedTask);
       } else {
         setActiveTask("guest-list");
@@ -195,7 +269,7 @@ function AdminPageContent() {
     };
     window.addEventListener("popstate", handlePopState);
     return () => window.removeEventListener("popstate", handlePopState);
-  }, [isRoleReady, isSuperAdmin]);
+  }, [isRoleReady, isSuperAdmin, setSelectedDate, venueId]);
 
   // Keyboard shortcut listener for tab switching & home return
   useEffect(() => {
@@ -242,6 +316,7 @@ function AdminPageContent() {
     events: t("events"),
     links: t("links"),
     users: t("users"),
+    analytics: t("analytics"),
     venues: t("venues"),
   };
 
@@ -259,6 +334,27 @@ function AdminPageContent() {
     (section: VenueManagementSection) =>
       changeTask(section === "create" ? "venue-create" : "venue-list"),
     [changeTask],
+  );
+  const handleAnalyticsEventOpen = useCallback(
+    (eventId: string, eventBusinessDate: string) => {
+      pendingEventScopeRef.current = {
+        eventId,
+        businessDate: eventBusinessDate,
+        venueId,
+      };
+      setSelectedDate(eventBusinessDate);
+      setSelectedEventId(eventId);
+      setActiveTask("event-manage");
+      const search = new URLSearchParams({
+        tab: "events",
+        view: "manage",
+        venue: venueId,
+        eventId,
+        date: eventBusinessDate,
+      });
+      window.history.pushState(null, "", `/admin?${search.toString()}`);
+    },
+    [setSelectedDate, venueId],
   );
   const activeTaskLabel =
     taskOptions.find((option) => option.id === activeTask)?.label ?? t("title");
@@ -370,6 +466,9 @@ function AdminPageContent() {
           <PasswordResetRequestManagement
             onPendingCountChange={setPendingPasswordResetCount}
           />
+        )}
+        {activeTask === "analytics" && (
+          <AdminAnalytics onOpenEvent={handleAnalyticsEventOpen} />
         )}
         {(activeTask === "venue-list" || activeTask === "venue-create") && (
           <VenueManagement

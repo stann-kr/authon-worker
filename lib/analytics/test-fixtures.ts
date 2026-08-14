@@ -65,6 +65,10 @@ export const EMPTY_ANALYTICS_DTO_FIXTURE: AdminAnalyticsView = {
     startDate: "2026-07-01",
     endDateExclusive: "2026-08-01",
   },
+  navigation: {
+    previousAnchorDate: "2026-07-01",
+    nextAnchorDate: "2026-09-01",
+  },
   coverage: {
     confirmedEvents: 0,
     operatingDays: 0,
