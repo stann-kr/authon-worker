@@ -21,6 +21,7 @@ export interface CloseoutActivityInput {
 export interface CloseoutContributorInput {
   kind: "user" | "external_link";
   id: string;
+  contributorId?: string | null;
   label: string;
   baseLimit: number | null;
   approvedExtra?: number;
@@ -38,6 +39,7 @@ export interface CloseoutEventInput {
 export interface CloseoutContributorMetric {
   kind: "user" | "external_link" | "unattributed";
   id: string | null;
+  contributorId: string | null;
   label: string;
   registered: number;
   checkedIn: number;
@@ -229,6 +231,7 @@ export function buildNightCloseout(params: {
       return {
         kind: group.kind,
         id: group.id,
+        contributorId: descriptor?.contributorId ?? null,
         label: descriptor?.label ?? (group.kind === "unattributed" ? "Unattributed" : "Unknown"),
         registered,
         checkedIn: groupCheckedIn,

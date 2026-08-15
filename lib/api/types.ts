@@ -34,6 +34,22 @@ export interface Venue {
   active: boolean;
 }
 
+export interface VenueContributor {
+  id: string;
+  venueId: string;
+  displayName: string;
+  kind: "dj";
+  active: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ContributorSourceMapping {
+  sourceKind: "user" | "external_link";
+  sourceId: string;
+  contributorId: string | null;
+}
+
 export type EventState = "draft" | "open" | "closed" | "archived";
 
 export interface Event {

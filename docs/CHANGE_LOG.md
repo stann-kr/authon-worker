@@ -2,6 +2,39 @@
 
 공개 가능한 결과 중심 변경 요약이다. 항목은 일자 단위이며 최신 항목을 위에 둔다. 파일 단위 세부 구현 이력은 공개 문서에 포함하지 않는다.
 
+## 2026-08-14
+
+### 단일 Worker dev version upload 복원
+
+#### Changed
+
+- `dev` branch는 별도 Worker를 배포하지 않고 production과 같은 `authon-worker`에 `dev` tag의 traffic 미배정 version만 업로드한다.
+- Workers Builds는 `dev`에서 전체 release-candidate gate 뒤 OpenNext `upload`, `main`에서 별도 승인 뒤 production `deploy`를 수행하도록 분리한다.
+- source의 `env.dev`와 별도 development Worker·D1·KV binding 계약을 제거했다.
+
+#### Security
+
+- dev version upload는 production traffic assignment, public preview alias, D1 migration과 secret·data write를 수행하지 않는다.
+
+### branch별 Worker 자동 배포 분리
+
+#### Added
+
+- `dev` branch 전용 고정 development Worker와 Cloudflare Workers Builds 자동 배포 trigger를 추가했다.
+- development 환경은 독립 D1·KV·JWT secret과 `workers.dev` endpoint를 사용한다.
+- development 배포가 명시적 intent와 `env.dev`를 거치는지, production binding과 custom domain을 사용하지 않는지 검증하는 회귀 계약을 추가했다.
+
+#### Changed
+
+- `dev` merge는 전체 release-candidate 검증 뒤 development Worker에 배포되고, `main` production 배포는 별도 승인 경계로 유지한다.
+- production Workers Builds도 일부 Worker build만 실행하던 구성에서 전체 `verify:release` gate를 통과하도록 강화했다.
+- development D1에 현재 manual migration history를 적용하되 production 데이터는 복제하지 않는다.
+
+#### Security
+
+- development 환경에 빈 route 목록을 명시해 production custom domain이 상속·재할당되지 않도록 차단했다.
+- production D1·KV·JWT secret을 development 환경에 공유하지 않고 이메일·내부 connector 자격 증명은 미설정 시 fail-closed로 유지한다.
+
 ## 2026-08-13
 
 ### 재현 가능한 검증과 production 작업 분리

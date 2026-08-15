@@ -1,7 +1,7 @@
 "use client";
 
 import { Suspense, useCallback, useEffect, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import Footer from "@/components/Footer";
 import { useVenueBrand } from "@/components/VenueBrandProvider";
 import Spinner from "@/components/Spinner";
@@ -12,6 +12,7 @@ import ButtonLink from "@/components/ButtonLink";
 import Icon from "@/components/Icon";
 import LanguageSwitcher from "@/components/LanguageSwitcher";
 import { getPasswordPolicyErrorCode } from "@/lib/auth/password-policy";
+import { extractResetTokenFromUrl } from "@/lib/auth/token";
 import { useTranslations } from "next-intl";
 
 function StepIndicator({
@@ -74,9 +75,9 @@ function ResetPasswordContent() {
   const authT = useTranslations("Auth");
   const { brand } = useVenueBrand();
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const token = searchParams.get("token");
 
+  const [token, setToken] = useState<string | null>(null);
+  const [isTokenLocationReady, setIsTokenLocationReady] = useState(false);
   const [email, setEmail] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -89,11 +90,28 @@ function ResetPasswordContent() {
   const [step, setStep] = useState<"request" | "reset" | "requestSent" | "resetComplete">("request");
 
   useEffect(() => {
-    if (token) {
-      setResetKind("token");
-      setStep("reset");
+    const extracted = extractResetTokenFromUrl(window.location.href);
+    if (extracted.hadToken) {
+      window.history.replaceState(
+        window.history.state,
+        "",
+        extracted.sanitizedPath,
+      );
+      if (extracted.token) {
+        setToken(extracted.token);
+        setResetKind("token");
+        setStep("reset");
+        setCheckingApproval(false);
+      } else {
+        setMessage({
+          type: "error",
+          text: t("invalidLink"),
+          target: "form",
+        });
+      }
     }
-  }, [token]);
+    setIsTokenLocationReady(true);
+  }, [t]);
 
   const checkApprovalStatus = useCallback(async (restore = false) => {
     setCheckingApproval(true);
@@ -164,9 +182,9 @@ function ResetPasswordContent() {
   }, [t]);
 
   useEffect(() => {
-    if (token) return;
+    if (!isTokenLocationReady || token) return;
     void checkApprovalStatus(true);
-  }, [checkApprovalStatus, token]);
+  }, [checkApprovalStatus, isTokenLocationReady, token]);
 
   useEffect(() => {
     if (step !== "requestSent" || token) return;
@@ -350,6 +368,18 @@ function ResetPasswordContent() {
       setLoading(false);
     }
   };
+
+  if (!isTokenLocationReady) {
+    return (
+      <main
+        id="main-content"
+        tabIndex={-1}
+        className="flex min-h-[100dvh] items-center justify-center bg-canvas"
+      >
+        <Spinner mode="inline" />
+      </main>
+    );
+  }
 
   return (
     <main id="main-content" tabIndex={-1} className="flex min-h-[100dvh] items-center justify-center bg-canvas px-4 py-10 sm:px-6 lg:px-8">

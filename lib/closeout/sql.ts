@@ -11,3 +11,17 @@ export const CONFIRM_EVENT_CLOSEOUT_SQL = `
   ON CONFLICT DO NOTHING
   RETURNING event_id AS eventId
 `;
+
+export const INSERT_EVENT_CLOSEOUT_CONTRIBUTOR_METRIC_SQL = `
+  INSERT INTO event_closeout_contributor_metrics (
+    event_id, venue_id, contributor_id, source_kind, source_id,
+    registered_count, checked_in_count, created_at
+  )
+  SELECT ?, ?, ?, ?, ?, ?, ?, ?
+  WHERE EXISTS (
+    SELECT 1 FROM event_closeouts
+    WHERE event_id = ? AND venue_id = ? AND confirmed_at = ? AND report_hash = ?
+  )
+  ON CONFLICT DO NOTHING
+  RETURNING event_id AS eventId
+`;

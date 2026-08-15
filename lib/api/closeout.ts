@@ -5,6 +5,7 @@ import { and, eq, isNull, or, sql } from "drizzle-orm";
 import { requireAccess, type SessionUser } from "@/lib/auth/server";
 import {
   eventCloseouts,
+  eventCloseoutContributorMetrics,
   eventContributorLimits,
   externalDjLinks,
   guestActivityLedger,
@@ -22,7 +23,12 @@ import {
   type CloseoutContributorInput,
   type NightCloseoutReport,
 } from "@/lib/closeout/domain";
-import { CONFIRM_EVENT_CLOSEOUT_SQL } from "@/lib/closeout/sql";
+import {
+  buildCloseoutContributorSnapshot,
+  getContributorSnapshotIntegrity,
+  type ContributorSnapshotIntegrity,
+} from "@/lib/closeout/contributor-snapshot";
+import { persistEventCloseoutConfirmation } from "@/lib/closeout/persistence";
 import type { ApiResponse, Event } from "@/lib/api/types";
 
 type Db = ReturnType<typeof getDb>;
@@ -30,6 +36,7 @@ type Db = ReturnType<typeof getDb>;
 export interface EventCloseoutView {
   report: NightCloseoutReport;
   confirmationIntegrity: "unconfirmed" | "verified" | "drifted";
+  contributorSnapshotIntegrity: ContributorSnapshotIntegrity;
 }
 
 async function sha256(value: string): Promise<string> {
@@ -94,6 +101,7 @@ async function buildEventCloseout(
     configuredLimits,
     approvedExtras,
     confirmationRows,
+    contributorMetricRows,
   ] = await Promise.all([
     db
       .select({
@@ -123,12 +131,18 @@ async function buildEventCloseout(
         ),
       ),
     db
-      .select({ id: users.id, name: users.name, guestLimit: users.guestLimit })
+      .select({
+        id: users.id,
+        contributorId: users.contributorId,
+        name: users.name,
+        guestLimit: users.guestLimit,
+      })
       .from(users)
       .where(eq(users.venueId, event.venueId)),
     db
       .select({
         id: externalDjLinks.id,
+        contributorId: externalDjLinks.contributorId,
         name: externalDjLinks.djName,
         maxGuests: externalDjLinks.maxGuests,
       })
@@ -170,6 +184,24 @@ async function buildEventCloseout(
         ),
       )
       .limit(1),
+    db
+      .select({
+        eventId: eventCloseoutContributorMetrics.eventId,
+        venueId: eventCloseoutContributorMetrics.venueId,
+        contributorId: eventCloseoutContributorMetrics.contributorId,
+        sourceKind: eventCloseoutContributorMetrics.sourceKind,
+        sourceId: eventCloseoutContributorMetrics.sourceId,
+        registeredCount: eventCloseoutContributorMetrics.registeredCount,
+        checkedInCount: eventCloseoutContributorMetrics.checkedInCount,
+        createdAt: eventCloseoutContributorMetrics.createdAt,
+      })
+      .from(eventCloseoutContributorMetrics)
+      .where(
+        and(
+          eq(eventCloseoutContributorMetrics.eventId, event.id),
+          eq(eventCloseoutContributorMetrics.venueId, event.venueId),
+        ),
+      ),
   ]);
 
   const configuredLimitMap = new Map(
@@ -182,6 +214,7 @@ async function buildEventCloseout(
     ...userRows.map((user) => ({
       kind: "user" as const,
       id: user.id,
+      contributorId: user.contributorId,
       label: user.name,
       baseLimit: configuredLimitMap.has(user.id)
         ? configuredLimitMap.get(user.id) ?? null
@@ -191,6 +224,7 @@ async function buildEventCloseout(
     ...linkRows.map((link) => ({
       kind: "external_link" as const,
       id: link.id,
+      contributorId: link.contributorId,
       label: link.name,
       baseLimit: link.maxGuests,
       approvedExtra: 0,
@@ -224,7 +258,25 @@ async function buildEventCloseout(
       ? "verified"
       : "drifted";
   if (confirmationIntegrity === "drifted") report.status = "inconsistent";
-  return { event, view: { report, confirmationIntegrity }, reportHash };
+  const expectedContributorMetrics = buildCloseoutContributorSnapshot({
+    eventId: event.id,
+    venueId: event.venueId,
+    createdAt: confirmation?.confirmedAt ?? "",
+    report,
+  });
+  const contributorSnapshotIntegrity = getContributorSnapshotIntegrity({
+    isConfirmed: confirmation !== null,
+    expected: expectedContributorMetrics,
+    persisted: contributorMetricRows.map((metric) => ({
+      ...metric,
+      sourceKind: metric.sourceKind as "user" | "external_link" | "unattributed",
+    })),
+  });
+  return {
+    event,
+    view: { report, confirmationIntegrity, contributorSnapshotIntegrity },
+    reportHash,
+  };
 }
 
 export async function fetchEventCloseout(
@@ -259,20 +311,29 @@ export async function confirmEventCloseout(
     }
     const confirmedAt = new Date().toISOString();
     const { env } = getCloudflareContext();
-    await env.DB.prepare(CONFIRM_EVENT_CLOSEOUT_SQL).bind(
-      current.event.id,
-      current.event.venueId,
-      actor.id,
+    const contributorMetrics = buildCloseoutContributorSnapshot({
+      eventId: current.event.id,
+      venueId: current.event.venueId,
+      createdAt: confirmedAt,
+      report: current.view.report,
+    });
+    await persistEventCloseoutConfirmation({
+      database: env.DB,
+      eventId: current.event.id,
+      venueId: current.event.venueId,
+      confirmedByUserId: actor.id,
       confirmedAt,
-      current.reportHash,
-      current.view.report.registered,
-      current.view.report.checkedIn,
-      current.view.report.ledger.sourceActivityCount,
-      current.event.id,
-      current.event.venueId,
-    ).run();
+      reportHash: current.reportHash,
+      registeredCount: current.view.report.registered,
+      checkedInCount: current.view.report.checkedIn,
+      sourceActivityCount: current.view.report.ledger.sourceActivityCount,
+      contributorMetrics,
+    });
     const confirmed = await buildEventCloseout(db, actor, eventId);
-    if (confirmed.view.confirmationIntegrity !== "verified") {
+    if (
+      confirmed.view.confirmationIntegrity !== "verified" ||
+      confirmed.view.contributorSnapshotIntegrity !== "verified"
+    ) {
       throw new Error("EVENT_CLOSEOUT_CONFIRMATION_FAILED");
     }
     return { data: confirmed.view, error: null };

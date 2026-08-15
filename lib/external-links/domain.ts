@@ -1,4 +1,12 @@
 import type { ExternalDJLink } from "../api/types";
+import {
+  isUrlShareCancellation,
+  shareUrl,
+  toUrlShareData,
+  type UrlShareAdapter,
+  type UrlShareData,
+  type UrlShareResult,
+} from "../share/url.ts";
 
 export type ExternalLinkDeletionDisposition = "archive" | "hard-delete";
 export type ExternalLinkValidationDisposition =
@@ -48,21 +56,9 @@ export type ExternalLinkCreateInputResult =
   | { draft: ExternalLinkCreateDraft; error: null }
   | { draft: null; error: ExternalLinkCreateInputError };
 
-export interface ExternalLinkShareData {
-  url: string;
-}
-
-export interface ExternalLinkShareAdapter {
-  share?: (data: ExternalLinkShareData) => Promise<void>;
-  canShare?: (data: ExternalLinkShareData) => boolean;
-  copy: (url: string) => Promise<void>;
-}
-
-export type ExternalLinkShareResult =
-  | "shared"
-  | "copied"
-  | "cancelled"
-  | "failed";
+export type ExternalLinkShareData = UrlShareData;
+export type ExternalLinkShareAdapter = UrlShareAdapter;
+export type ExternalLinkShareResult = UrlShareResult;
 
 interface ExternalLinkRecord {
   id: string;
@@ -206,16 +202,11 @@ export function toExternalLinkTemplateDraft(
 export function toExternalLinkShareData(
   url: string,
 ): ExternalLinkShareData {
-  return { url };
+  return toUrlShareData(url);
 }
 
 export function isExternalLinkShareCancellation(error: unknown): boolean {
-  return (
-    typeof error === "object" &&
-    error !== null &&
-    "name" in error &&
-    (error as { name?: unknown }).name === "AbortError"
-  );
+  return isUrlShareCancellation(error);
 }
 
 /**
@@ -229,30 +220,7 @@ export async function shareExternalLink(
   data: ExternalLinkShareData,
   adapter: ExternalLinkShareAdapter,
 ): Promise<ExternalLinkShareResult> {
-  let canUseNativeShare = typeof adapter.share === "function";
-  if (canUseNativeShare && adapter.canShare) {
-    try {
-      canUseNativeShare = adapter.canShare(data);
-    } catch {
-      canUseNativeShare = false;
-    }
-  }
-
-  if (canUseNativeShare && adapter.share) {
-    try {
-      await adapter.share(data);
-      return "shared";
-    } catch (error: unknown) {
-      if (isExternalLinkShareCancellation(error)) return "cancelled";
-    }
-  }
-
-  try {
-    await adapter.copy(data.url);
-    return "copied";
-  } catch {
-    return "failed";
-  }
+  return shareUrl(data, adapter);
 }
 
 export function getExternalLinkDeletionDisposition(

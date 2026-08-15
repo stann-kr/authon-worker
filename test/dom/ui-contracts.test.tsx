@@ -11,10 +11,12 @@ import {
 } from "@testing-library/react";
 
 import AdminTaskSwitcher from "@/app/admin/components/AdminTaskSwitcher";
+import AnalyticsPeriodBar from "@/app/admin/components/analytics/AnalyticsPeriodBar";
 import AsyncListContent from "@/components/AsyncListContent";
 import ConfirmDialog from "@/components/ConfirmDialog";
 import OperationalSectionNav from "@/components/OperationalSectionNav";
 import GuestBulkEntry from "@/components/GuestBulkEntry";
+import { EMPTY_ANALYTICS_DTO_FIXTURE } from "@/lib/analytics/test-fixtures";
 
 afterEach(() => {
   cleanup();
@@ -57,6 +59,7 @@ test("task and section controls expose current state and respect busy locks", ()
         events: "Events",
         links: "Links",
         users: "Users",
+        analytics: "Analytics",
         venues: "Venues",
       }}
       options={[
@@ -83,6 +86,7 @@ test("task and section controls expose current state and respect busy locks", ()
         events: "Events",
         links: "Links",
         users: "Users",
+        analytics: "Analytics",
         venues: "Venues",
       }}
       options={[
@@ -118,6 +122,58 @@ test("task and section controls expose current state and respect busy locks", ()
     "true",
   );
   assert.equal(screen.getByRole("button", { name: "Manage" }).hasAttribute("disabled"), true);
+});
+
+test("analytics period controls expose selection and keyboard-native navigation", () => {
+  let previousAnchor = "";
+  let nextGranularity = "";
+  render(
+    <NextIntlClientProvider
+      locale="en"
+      messages={{
+        AdminAnalytics: {
+          refresh: "Refresh",
+          period: {
+            granularity: "Period unit",
+            selected: "Selected period",
+            month: "Month",
+            quarter: "Quarter",
+            year: "Year",
+            previous: "Previous period",
+            next: "Next period",
+            inProgress: "In progress",
+            loading: "Preparing period",
+            comparison: "Compared with {start}-{end}",
+          },
+          coverage: {
+            summary: "{confirmed} confirmed, {days} days, {unconfirmed} unconfirmed",
+          },
+        },
+      }}
+    >
+      <AnalyticsPeriodBar
+        granularity="month"
+        view={EMPTY_ANALYTICS_DTO_FIXTURE}
+        isLoading={false}
+        onGranularityChange={(value) => {
+          nextGranularity = value;
+        }}
+        onAnchorDateChange={(value) => {
+          previousAnchor = value;
+        }}
+        onRefresh={() => {}}
+      />
+    </NextIntlClientProvider>,
+  );
+
+  assert.equal(
+    screen.getByRole("button", { name: "Month" }).getAttribute("aria-pressed"),
+    "true",
+  );
+  fireEvent.click(screen.getByRole("button", { name: "Quarter" }));
+  assert.equal(nextGranularity, "quarter");
+  fireEvent.click(screen.getByRole("button", { name: "Previous period" }));
+  assert.equal(previousAnchor, "2026-07-01");
 });
 
 test("dialog traps the interaction, Escape closes it, and focus returns", async () => {

@@ -1,21 +1,24 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { createUserViaEdge } from "../../../lib/api/users";
-import PasswordInput from "../../../components/PasswordInput";
 import Alert from "../../../components/Alert";
 import Icon from "../../../components/Icon";
-import { getPasswordPolicyErrorCode } from "../../../lib/auth/password-policy";
 import RoleLabel from "../../../components/RoleLabel";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { useVenueSelector } from "../../../components/VenueSelector";
 import Button from "../../../components/Button";
 import { captureImmutableDraft } from "../../../lib/forms/immutable-draft";
+import { shareUrl, toUrlShareData } from "../../../lib/share/url";
+
+interface CreatedInvitation {
+  expiresAt: string;
+  url: string;
+}
 
 export default function InviteUser() {
   const t = useTranslations("UserAdmin");
-  const authT = useTranslations("Auth");
-  const [createMode, setCreateMode] = useState<"invite" | "password">("password");
+  const locale = useLocale();
   const [formData, setFormData] = useState({
     email: "",
     name: "",
@@ -24,14 +27,16 @@ export default function InviteUser() {
     door_access_enabled: false,
     guest_limit: "",
     venue_id: "",
-    password: "",
     preferred_locale: "auto" as "auto" | "en" | "ko",
   });
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
-  const [tempPassword, setTempPassword] = useState("");
-  const [showTempPassword, setShowTempPassword] = useState(false);
+  const [createdInvitation, setCreatedInvitation] =
+    useState<CreatedInvitation | null>(null);
+  const [invitationActionMessage, setInvitationActionMessage] = useState("");
+  const [isInvitationActionPending, setIsInvitationActionPending] = useState(false);
+  const invitationPanelRef = useRef<HTMLDivElement>(null);
   const { venues, user: currentUser } = useVenueSelector();
 
   useEffect(() => {
@@ -43,6 +48,15 @@ export default function InviteUser() {
       }));
     }
   }, [currentUser?.venue_id]);
+
+  useEffect(() => {
+    if (!createdInvitation) return;
+    const frameId = window.requestAnimationFrame(() => {
+      invitationPanelRef.current?.focus({ preventScroll: true });
+      invitationPanelRef.current?.scrollIntoView({ block: "center" });
+    });
+    return () => window.cancelAnimationFrame(frameId);
+  }, [createdInvitation]);
 
   const isSuperAdmin = currentUser?.role === "super_admin";
 
@@ -64,30 +78,16 @@ export default function InviteUser() {
     e.preventDefault();
     if (isLoading) return;
     const draft = captureImmutableDraft(formData);
-    const mode = createMode;
     setIsLoading(true);
     setError("");
     setSuccess("");
+    setCreatedInvitation(null);
+    setInvitationActionMessage("");
 
     if (!draft.venue_id) {
       setError(t("venueRequired"));
       setIsLoading(false);
       return;
-    }
-
-    if (mode === "password") {
-      const passwordPolicyErrorCode = getPasswordPolicyErrorCode(draft.password);
-      if (passwordPolicyErrorCode) {
-        setError(
-          authT(
-            passwordPolicyErrorCode === "PASSWORD_TOO_SHORT"
-              ? "passwordTooShort"
-              : "passwordRequiresLettersAndNumbers",
-          ),
-        );
-        setIsLoading(false);
-        return;
-      }
     }
 
     // guest_limit 유효성 검사
@@ -101,7 +101,7 @@ export default function InviteUser() {
     }
 
     try {
-      const { error: createError } = await createUserViaEdge({
+      const { data, error: createError } = await createUserViaEdge({
         email: draft.email,
         name: draft.name,
         role: draft.role,
@@ -113,28 +113,22 @@ export default function InviteUser() {
           draft.role === "venue_admin"
             ? null
             : parseInt(String(draft.guest_limit)),
-        ...(mode === "password" && draft.password
-          ? { password: draft.password }
-          : {}),
         preferredLocale:
           draft.preferred_locale === "auto"
             ? null
             : draft.preferred_locale,
       });
 
-      if (createError) {
+      if (createError || !data) {
         console.error("Failed to create user:", createError);
         setError(t("createFailed"));
       } else {
-        if (mode === "password" && draft.password) {
-          setTempPassword(draft.password);
-          setShowTempPassword(false);
-        }
-        const msg =
-          mode === "password"
-            ? t("created", { name: draft.name, email: draft.email })
-            : t("invited", { name: draft.name, email: draft.email });
+        const msg = t("created", { name: draft.name, email: draft.email });
         setSuccess(msg);
+        setCreatedInvitation({
+          expiresAt: data.expiresAt,
+          url: data.invitationUrl,
+        });
         setFormData((prev) => ({
           ...prev,
           email: "",
@@ -143,7 +137,6 @@ export default function InviteUser() {
           account_kind: "personal",
           door_access_enabled: false,
           guest_limit: "",
-          password: "",
         }));
       }
     } catch (err: unknown) {
@@ -154,6 +147,38 @@ export default function InviteUser() {
     }
   };
 
+  const handleInvitationShare = async () => {
+    if (!createdInvitation || isInvitationActionPending) return;
+    setIsInvitationActionPending(true);
+    setInvitationActionMessage("");
+
+    const result = await shareUrl(toUrlShareData(createdInvitation.url), {
+      share:
+        typeof navigator.share === "function"
+          ? (data) => navigator.share(data)
+          : undefined,
+      canShare:
+        typeof navigator.canShare === "function"
+          ? (data) => navigator.canShare(data)
+          : undefined,
+      copy: async (url) => {
+        if (!navigator.clipboard?.writeText) {
+          throw new Error("Clipboard API is unavailable");
+        }
+        await navigator.clipboard.writeText(url);
+      },
+    });
+
+    if (result === "shared") {
+      setInvitationActionMessage(t("invitationLinkShared"));
+    } else if (result === "copied") {
+      setInvitationActionMessage(t("invitationLinkCopied"));
+    } else if (result === "failed") {
+      setInvitationActionMessage(t("invitationLinkCopyFailed"));
+    }
+    setIsInvitationActionPending(false);
+  };
+
   return (
     <div className="space-y-6">
       <div className="app-panel p-4 sm:p-5">
@@ -161,39 +186,8 @@ export default function InviteUser() {
           {t("createUser")}
         </h3>
 
-        <div className="grid grid-cols-2 gap-px bg-surface-active mb-4">
-          <button
-            type="button"
-            disabled
-            aria-disabled="true"
-            title={t("inviteUnavailableTitle")}
-            className={`flex min-h-12 items-center justify-center gap-2 p-3 text-xs font-medium transition-colors ${
-              createMode === "invite"
-                ? "border border-border-default border-l-2 border-l-action-primary bg-surface-raised text-text-heading"
-                : "bg-canvas text-text-dim cursor-not-allowed"
-            }`}
-          >
-            <Icon name="email" size={16} />
-            <span>{t("emailLater")}</span>
-          </button>
-          <button
-            type="button"
-            disabled={isLoading}
-            onClick={() => setCreateMode("password")}
-            aria-pressed={createMode === "password"}
-            className={`flex min-h-12 items-center justify-center gap-2 p-3 text-xs font-medium transition-colors ${
-              createMode === "password"
-                ? "border border-border-default border-l-2 border-l-action-primary bg-surface-raised text-text-heading"
-                : "bg-canvas text-text-muted hover:text-text-heading"
-            }`}
-          >
-            <Icon name="key" size={16} />
-            <span>{t("temporaryPassword")}</span>
-          </button>
-        </div>
-
         <p className="mb-4 border border-border-strong bg-surface-raised p-3 font-mono text-xs leading-relaxed tracking-[0.12em] text-text-muted" role="note">
-          {t("inviteUnavailableHelp")}
+          {t("invitationLinkHelp")}
         </p>
 
         <form onSubmit={handleSubmit} aria-busy={isLoading}>
@@ -405,65 +399,70 @@ export default function InviteUser() {
             <p className="app-helper">{t("preferredLanguageHelp")}</p>
           </div>
 
-          {createMode === "password" && (
-            <div>
-              <label htmlFor="invite-password" className="app-label">
-                {t("temporaryPassword")}
-              </label>
-              <PasswordInput
-                id="invite-password"
-                name="temporary-password"
-                value={formData.password}
-                onChange={(e) =>
-                  setFormData({ ...formData, password: e.target.value })
-                }
-                inputClassName="app-field pr-12"
-                placeholder={t("passwordPlaceholder")}
-                autoComplete="new-password"
-                aria-describedby="invite-password-help"
-                required
-              />
-              <p id="invite-password-help" className="app-helper">
-                {authT("passwordPolicyHint")} {t("passwordShareHelp")}
-              </p>
-            </div>
-          )}
-
           {error && <Alert type="error" message={error} />}
 
-          {success && (
-            <div className="bg-surface-raised border border-border-strong p-4 space-y-2" role="status" aria-live="polite">
-              <p className="text-text-heading text-xs font-medium">
-                {tempPassword ? t("accountCreated") : t("invitationSent")}
+          {success && createdInvitation && (
+            <div
+              ref={invitationPanelRef}
+              className="space-y-3 border border-status-waiting/70 bg-status-waiting/10 p-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-border-focus"
+              role="region"
+              aria-labelledby="created-invitation-title"
+              tabIndex={-1}
+            >
+              <p id="created-invitation-title" className="text-text-heading text-xs font-medium">
+                {t("accountCreated")}
               </p>
               <p className="break-words text-text-heading font-mono text-xs tracking-wider">
                 {success}
               </p>
-              {tempPassword && (
-                <div className="mt-2 flex flex-col gap-2 border border-border-strong p-2 sm:flex-row sm:items-center sm:justify-between">
-                  <span className="min-w-0 break-all font-mono text-xs text-text-heading tracking-wider">
-                    {t("tempPassword")}:{" "}
-                    <span className="select-all">
-                      {showTempPassword ? tempPassword : "•".repeat(tempPassword.length)}
-                    </span>
-                  </span>
-                  <div className="flex gap-2 shrink-0">
-                    <button
-                      type="button"
-                      onClick={() => setShowTempPassword((v) => !v)}
-                      className="min-h-11 px-2 text-xs font-medium text-text-heading"
-                    >
-                      {showTempPassword ? t("hide") : t("show")}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => navigator.clipboard.writeText(tempPassword)}
-                      className="min-h-11 px-2 text-xs font-medium text-text-heading"
-                    >
-                      {t("copy")}
-                    </button>
-                  </div>
-                </div>
+              <p className="text-xs leading-relaxed text-text-muted">
+                {t("invitationLinkCreatedHelp")}
+              </p>
+              <a
+                href={createdInvitation.url}
+                target="_blank"
+                rel="noreferrer"
+                className="block select-all break-all border border-border-strong bg-canvas px-3 py-2 font-mono text-xs text-text-heading underline decoration-border-strong underline-offset-4 hover:text-text-heading"
+              >
+                {createdInvitation.url}
+              </a>
+              <p className="text-xs text-text-muted">
+                {t("invitationExpiresAt", {
+                  expiresAt: new Intl.DateTimeFormat(locale, {
+                    dateStyle: "medium",
+                    timeStyle: "short",
+                  }).format(new Date(createdInvitation.expiresAt)),
+                })}
+              </p>
+              <div className="grid grid-cols-2 gap-2">
+                <Button
+                  type="button"
+                  size="sm"
+                  fullWidth
+                  isLoading={isInvitationActionPending}
+                  onClick={() => void handleInvitationShare()}
+                >
+                  {t("shareInvitationLink")}
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  fullWidth
+                  variant="secondary"
+                  disabled={isInvitationActionPending}
+                  onClick={() => {
+                    setCreatedInvitation(null);
+                    setSuccess("");
+                    setInvitationActionMessage("");
+                  }}
+                >
+                  {t("closeInvitationLink")}
+                </Button>
+              </div>
+              {invitationActionMessage && (
+                <p className="text-xs text-text-muted" role="status">
+                  {invitationActionMessage}
+                </p>
               )}
             </div>
           )}
@@ -474,13 +473,7 @@ export default function InviteUser() {
             fullWidth
             size="lg"
           >
-            {isLoading
-              ? createMode === "password"
-                ? t("creating")
-                : t("sending")
-              : createMode === "password"
-                ? t("createAccount")
-                : t("sendInvitation")}
+            {isLoading ? t("creating") : t("createAccountAndLink")}
           </Button>
           </fieldset>
         </form>
