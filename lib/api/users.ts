@@ -21,7 +21,18 @@ import { requireAuth, requireRole, type Role } from "../auth/server";
 import { getDb } from "../db/client";
 import { escapeHtml, isEmailConfigured, sendEmail } from "./email";
 import { generateResetToken, hashResetToken } from "../auth/token";
-import { getPasswordPolicyError } from "../auth/password-policy";
+import {
+  buildPasswordLinkUrl,
+  getPasswordLinkExpiry,
+  type OneTimePasswordLink,
+  type PasswordLinkPurpose,
+} from "../auth/password-link";
+import {
+  ACTIVATE_MANAGED_PASSWORD_LINK_SQL,
+  CANCEL_MANAGED_PASSWORD_RESET_REQUESTS_SQL,
+  INSERT_MANAGED_PASSWORD_LINK_AUDIT_SQL,
+  INVALIDATE_OTHER_MANAGED_PASSWORD_LINKS_SQL,
+} from "../auth/password-link-lifecycle-sql";
 import { getVenueDeliveryContext } from "../tenant/server";
 import { requireActiveVenueId } from "../tenant/active-server";
 import { isLocale, type Locale } from "@/i18n/config";
@@ -52,6 +63,31 @@ class UserActionError extends Error {
   constructor(readonly code: UserActionErrorCode) {
     super(code);
   }
+}
+
+async function preparePasswordLink(params: {
+  venueId: string | null;
+  preferredLocale: Locale | null;
+  purpose: PasswordLinkPurpose;
+  expiresAt?: string;
+}): Promise<OneTimePasswordLink & { id: string; tokenHash: string }> {
+  const token = generateResetToken();
+  const [tokenHash, delivery] = await Promise.all([
+    hashResetToken(token),
+    getVenueDeliveryContext(params.venueId),
+  ]);
+  const locale = params.preferredLocale ?? delivery.defaultLocale;
+
+  return {
+    id: crypto.randomUUID(),
+    tokenHash,
+    expiresAt: params.expiresAt ?? getPasswordLinkExpiry(params.purpose),
+    url: buildPasswordLinkUrl({
+      baseUrl: delivery.baseUrl,
+      token,
+      locale,
+    }),
+  };
 }
 
 const managedUserFields = {
@@ -453,20 +489,12 @@ export async function createUserViaEdge(params: {
   role: Role;
   venueId?: string | null;
   guestLimit?: number | null;
-  password?: string;
   preferredLocale?: Locale | null;
   accountKind?: AccountKind;
   doorAccessEnabled?: boolean;
-}): Promise<ApiResponse<{ id: string }>> {
+}): Promise<ApiResponse<{ id: string; invitationUrl: string; expiresAt: string }>> {
   try {
     const actor = await requireRole(["super_admin", "venue_admin"]);
-
-    if (!params.password) return { data: null, error: "INVALID_INPUT" };
-
-    const passwordPolicyError = getPasswordPolicyError(params.password);
-    if (passwordPolicyError) {
-      return { data: null, error: "INVALID_INPUT" };
-    }
 
     const venueId = actor.role === "super_admin" ? params.venueId || null : actor.venueId;
     if (!venueId) {
@@ -494,7 +522,6 @@ export async function createUserViaEdge(params: {
 
     const db = getDb();
     const id = crypto.randomUUID();
-    const passwordHash = await hashPassword(params.password);
     const normalizedEmail = params.email.trim().toLowerCase();
     const name = params.name.trim();
     if (!normalizedEmail || !name || name.length > 100) {
@@ -508,6 +535,15 @@ export async function createUserViaEdge(params: {
       throw new UserActionError("INVALID_INPUT");
     }
     const nowIso = new Date().toISOString();
+    const preferredLocale = isLocale(params.preferredLocale) ? params.preferredLocale : null;
+    const [passwordHash, invitation] = await Promise.all([
+      hashPassword(generateResetToken()),
+      preparePasswordLink({
+        venueId,
+        preferredLocale,
+        purpose: "account_invitation",
+      }),
+    ]);
 
     await db.batch([
       db.insert(users).values({
@@ -523,7 +559,15 @@ export async function createUserViaEdge(params: {
         active: true,
         migrationStatus: "pending_reset",
         passwordSetAt: null,
-        preferredLocale: isLocale(params.preferredLocale) ? params.preferredLocale : null,
+        preferredLocale,
+        createdAt: nowIso,
+      }),
+      db.insert(passwordResetTokens).values({
+        id: invitation.id,
+        userId: id,
+        token: invitation.tokenHash,
+        expiresAt: invitation.expiresAt,
+        used: false,
         createdAt: nowIso,
       }),
       db.insert(userAuditEvents).values({
@@ -532,14 +576,164 @@ export async function createUserViaEdge(params: {
         actorUserId: actor.id,
         targetUserId: id,
         action: "created",
-        details: JSON.stringify({ role: params.role, accountKind, doorAccessEnabled }),
+        details: JSON.stringify({
+          role: params.role,
+          accountKind,
+          doorAccessEnabled,
+          setupMethod: "invitation_link",
+          invitationExpiresAt: invitation.expiresAt,
+        }),
         createdAt: nowIso,
       }),
     ]);
 
-    return { data: { id }, error: null };
+    return {
+      data: {
+        id,
+        invitationUrl: invitation.url,
+        expiresAt: invitation.expiresAt,
+      },
+      error: null,
+    };
   } catch (error: unknown) {
     await reportServerError("user.create", error);
+    return { data: null, error: getUserActionError(error, "UPDATE_FAILED") };
+  }
+}
+
+export async function issueManagedPasswordLinkViaEdge(
+  userId: string,
+): Promise<
+  ApiResponse<{
+    linkKind: "invitation" | "password_reset";
+    passwordUrl: string;
+    expiresAt: string;
+  }>
+> {
+  let passwordLinkTokenId: string | null = null;
+  try {
+    const { env } = getCloudflareContext();
+    const actor = await requireRole(["super_admin", "venue_admin"]);
+    const user = await getTargetUser(userId);
+    if (user.venueId) await requireActiveVenueId(user.venueId);
+    assertManagedTarget(actor, user);
+    if (!user.active) throw new UserActionError("USER_INACTIVE");
+
+    const db = getDb();
+    const [credentialSnapshot] = await db
+      .select({
+        passwordHash: users.passwordHash,
+        sessionVersion: users.sessionVersion,
+      })
+      .from(users)
+      .where(eq(users.id, userId))
+      .limit(1);
+    if (!credentialSnapshot) throw new UserActionError("USER_NOT_FOUND");
+
+    const isInitialSetup =
+      user.migrationStatus === "pending_reset" && !user.passwordSetAt;
+    const purpose: PasswordLinkPurpose = isInitialSetup
+      ? "account_invitation"
+      : "password_reset";
+    const passwordLink = await preparePasswordLink({
+      venueId: user.venueId,
+      preferredLocale: user.preferredLocale,
+      purpose,
+    });
+    passwordLinkTokenId = passwordLink.id;
+    const nowIso = new Date().toISOString();
+    const auditEventId = crypto.randomUUID();
+    const auditAction = isInitialSetup
+      ? "invitation_reissued"
+      : "password_reset_link_issued";
+    const setupMethod = isInitialSetup
+      ? "invitation_link"
+      : "password_reset_link";
+
+    // 새 token은 먼저 비활성 상태로 저장한다. 현재 actor 권한과 target의
+    // credential snapshot이 그대로일 때만 이전 링크를 폐기하고 활성화한다.
+    await db.insert(passwordResetTokens).values({
+      id: passwordLink.id,
+      userId,
+      token: passwordLink.tokenHash,
+      expiresAt: passwordLink.expiresAt,
+      used: true,
+      createdAt: nowIso,
+    });
+    const [, activatedTokenResult, auditResult] = await env.DB.batch<{
+      user_id?: string;
+      target_user_id?: string;
+    }>([
+      env.DB.prepare(INVALIDATE_OTHER_MANAGED_PASSWORD_LINKS_SQL).bind(
+        userId,
+        passwordLink.id,
+        userId,
+        credentialSnapshot.passwordHash,
+        credentialSnapshot.sessionVersion,
+        userId,
+        actor.id,
+        actor.sessionVersion,
+      ),
+      env.DB.prepare(ACTIVATE_MANAGED_PASSWORD_LINK_SQL).bind(
+        passwordLink.id,
+        userId,
+        nowIso,
+        userId,
+        credentialSnapshot.passwordHash,
+        credentialSnapshot.sessionVersion,
+        userId,
+        actor.id,
+        actor.sessionVersion,
+      ),
+      env.DB.prepare(INSERT_MANAGED_PASSWORD_LINK_AUDIT_SQL).bind(
+        auditEventId,
+        actor.id,
+        auditAction,
+        JSON.stringify({
+          setupMethod,
+          linkExpiresAt: passwordLink.expiresAt,
+        }),
+        nowIso,
+        userId,
+        passwordLink.id,
+        nowIso,
+      ),
+      env.DB.prepare(CANCEL_MANAGED_PASSWORD_RESET_REQUESTS_SQL).bind(
+        nowIso,
+        userId,
+        auditEventId,
+      ),
+    ]);
+
+    const activatedUserId = (
+      activatedTokenResult.results?.[0] as { user_id?: string } | undefined
+    )?.user_id;
+    const auditedUserId = (
+      auditResult.results?.[0] as { target_user_id?: string } | undefined
+    )?.target_user_id;
+    if (activatedUserId !== userId || auditedUserId !== userId) {
+      throw new UserActionError("UPDATE_FAILED");
+    }
+
+    return {
+      data: {
+        linkKind: isInitialSetup ? "invitation" : "password_reset",
+        passwordUrl: passwordLink.url,
+        expiresAt: passwordLink.expiresAt,
+      },
+      error: null,
+    };
+  } catch (error: unknown) {
+    if (passwordLinkTokenId) {
+      try {
+        await getDb()
+          .delete(passwordResetTokens)
+          .where(eq(passwordResetTokens.id, passwordLinkTokenId));
+      } catch {
+        // 비활성 token 잔존은 credential 권한을 만들지 않는다.
+      }
+    }
+    await reportServerError("user.password_link_issue", error);
     return { data: null, error: getUserActionError(error, "UPDATE_FAILED") };
   }
 }
@@ -648,7 +842,11 @@ export async function resendInvitationViaEdge(userId: string): Promise<{ error: 
       ? user.preferredLocale
       : delivery.defaultLocale;
     const t = await getTranslations({ locale: emailLocale, namespace: "Email" });
-    const resetLink = `${delivery.baseUrl}/auth/reset-password?token=${token}&lang=${emailLocale}`;
+    const resetLink = buildPasswordLinkUrl({
+      baseUrl: delivery.baseUrl,
+      token,
+      locale: emailLocale,
+    });
     const safeResetLink = escapeHtml(resetLink);
 
     try {

@@ -26,21 +26,20 @@ import {
   fetchUserAuditEvents,
   updateUserProfile,
   deleteUserViaEdge,
+  issueManagedPasswordLinkViaEdge,
 } from "../../../lib/api/users";
-import { startManagedPasswordReset } from "@/lib/api/password-reset-requests";
 import type {
-  PasswordResetSetupMethod,
   User,
   UserAuditEvent,
 } from "../../../lib/api/types";
 import { useLocale, useTranslations } from "next-intl";
 import { isVenueManagedRole } from "@/lib/users/policy";
-import { useVenueBrand } from "@/components/VenueBrandProvider";
 import { formatVenueDateTime } from "@/lib/date";
 import {
   deriveAsyncListState,
   shouldShowEmptyState,
 } from "@/lib/ui/async-list-state";
+import { shareUrl, toUrlShareData } from "@/lib/share/url";
 
 type StatusFilter = "current" | "ready" | "setup" | "inactive" | "deleted";
 export type UserManagementSection = "create" | "users";
@@ -72,8 +71,6 @@ export default function UserManagement({
   const t = useTranslations("UserAdmin");
   const commonT = useTranslations("Common");
   const locale = useLocale();
-  const { baseUrl } = useVenueBrand();
-  const setupPasswordUrl = `${baseUrl.replace(/\/$/, "")}/auth/setup-password`;
   const [internalActiveSection, setInternalActiveSection] =
     useLocalStorage<UserManagementSection>(
     "usermgmt:activeTab",
@@ -105,15 +102,15 @@ export default function UserManagement({
   const [busyUserId, setBusyUserId] = useState<string | null>(null);
   const [pendingUserAction, setPendingUserAction] =
     useState<PendingUserAction>(null);
-  const [setupCredential, setSetupCredential] = useState<{
+  const [passwordLink, setPasswordLink] = useState<{
     scopeKey: string;
     userName: string;
-    setupMethod: PasswordResetSetupMethod;
-    setupCode: string | null;
-    expiresAt: string | null;
+    linkKind: "invitation" | "password_reset";
+    passwordUrl: string;
+    expiresAt: string;
   } | null>(null);
-  const setupCredentialPanelRef = useRef<HTMLDivElement>(null);
-  const shouldFocusSetupCredentialRef = useRef(false);
+  const passwordLinkPanelRef = useRef<HTMLDivElement>(null);
+  const shouldFocusPasswordLinkRef = useRef(false);
 
   const {
     venues,
@@ -133,8 +130,8 @@ export default function UserManagement({
   const currentScopeKeyRef = useRef(requestScopeKey);
   const activeMutationIdRef = useRef<number | null>(null);
   currentScopeKeyRef.current = requestScopeKey;
-  const scopedSetupCredential =
-    setupCredential?.scopeKey === requestScopeKey ? setupCredential : null;
+  const scopedPasswordLink =
+    passwordLink?.scopeKey === requestScopeKey ? passwordLink : null;
   const scopedFeedback =
     feedback?.scopeKey === requestScopeKey ? feedback : null;
 
@@ -157,32 +154,32 @@ export default function UserManagement({
     activeMutationIdRef.current = null;
     setBusyUserId(null);
     setPendingUserAction(null);
-    setSetupCredential(null);
-    shouldFocusSetupCredentialRef.current = false;
+    setPasswordLink(null);
+    shouldFocusPasswordLinkRef.current = false;
     setFeedback(null);
     setLoadOutcome("idle");
   }, [mutationGuard, requestGuard, requestScopeKey]);
 
   useEffect(() => {
     if (
-      !scopedSetupCredential ||
+      !scopedPasswordLink ||
       pendingUserAction ||
-      !shouldFocusSetupCredentialRef.current
+      !shouldFocusPasswordLinkRef.current
     ) {
       return;
     }
 
-    shouldFocusSetupCredentialRef.current = false;
+    shouldFocusPasswordLinkRef.current = false;
 
     const frameId = window.requestAnimationFrame(() => {
-      const panel = setupCredentialPanelRef.current;
+      const panel = passwordLinkPanelRef.current;
       if (!panel) return;
       panel.focus({ preventScroll: true });
       panel.scrollIntoView({ block: "center" });
     });
 
     return () => window.cancelAnimationFrame(frameId);
-  }, [pendingUserAction, scopedSetupCredential]);
+  }, [pendingUserAction, scopedPasswordLink]);
 
   const loadUsers = useCallback(async () => {
     if (currentScopeKeyRef.current !== requestScopeKey) return;
@@ -338,41 +335,36 @@ export default function UserManagement({
   const handlePasswordReset = async (user: User) => {
     const operation = beginUserMutation(user.id);
     if (!operation) return;
-    setSetupCredential(null);
-    shouldFocusSetupCredentialRef.current = false;
+    setPasswordLink(null);
+    shouldFocusPasswordLinkRef.current = false;
     try {
-      const { data, error } = await startManagedPasswordReset({
-        userId: user.id,
-        setupMethod: "setup_code",
-      });
+      const { data, error } = await issueManagedPasswordLinkViaEdge(user.id);
       if (!operation.isCurrent(currentScopeKeyRef.current)) return;
-      if (error) {
+      if (error || !data) {
         setFeedback({
           scopeKey: operation.scopeKey,
           type: "error",
-          message: getActionError(error),
+          message: getActionError(error ?? "UPDATE_FAILED"),
         });
         return;
       }
-      if (data) {
-        shouldFocusSetupCredentialRef.current = true;
-        setSetupCredential({
-          scopeKey: operation.scopeKey,
-          userName: user.name,
-          setupMethod: data.setupMethod,
-          setupCode: data.setupCode,
-          expiresAt: data.expiresAt,
-        });
-        setFeedback({
-          scopeKey: operation.scopeKey,
-          type: "success",
-          message:
-            data.setupMethod === "admin_approved"
-              ? t("directResetReady")
-              : t("resetPasswordReady"),
-        });
-        await loadUsers();
-      }
+      shouldFocusPasswordLinkRef.current = true;
+      setPasswordLink({
+        scopeKey: operation.scopeKey,
+        userName: user.name,
+        linkKind: data.linkKind,
+        passwordUrl: data.passwordUrl,
+        expiresAt: data.expiresAt,
+      });
+      setFeedback({
+        scopeKey: operation.scopeKey,
+        type: "success",
+        message:
+          data.linkKind === "invitation"
+            ? t("invitationReissued")
+            : t("passwordResetLinkIssued"),
+      });
+      await loadUsers();
     } catch (error: unknown) {
       if (!operation.isCurrent(currentScopeKeyRef.current)) return;
       console.error("Failed to reset user password:", error);
@@ -435,36 +427,46 @@ export default function UserManagement({
     }
   };
 
-  const copySetupCode = async () => {
-    const setupCode = scopedSetupCredential?.setupCode;
-    if (!setupCode) return;
+  const sharePasswordLink = async () => {
+    if (!scopedPasswordLink) return;
     const operation = mutationGuard.beginOperation(
       requestScopeKey,
-      "copy-setup-code",
+      "share-password-link",
     );
-    try {
-      await navigator.clipboard.writeText(
-        t("setupCodeShareTemplate", {
-          url: setupPasswordUrl,
-          code: setupCode,
-        }),
-      );
-      if (!operation.isCurrent(currentScopeKeyRef.current)) return;
+    const result = await shareUrl(toUrlShareData(scopedPasswordLink.passwordUrl), {
+      share:
+        typeof navigator.share === "function"
+          ? (data) => navigator.share(data)
+          : undefined,
+      canShare:
+        typeof navigator.canShare === "function"
+          ? (data) => navigator.canShare(data)
+          : undefined,
+      copy: async (url) => {
+        if (!navigator.clipboard?.writeText) {
+          throw new Error("Clipboard API is unavailable");
+        }
+        await navigator.clipboard.writeText(url);
+      },
+    });
+    if (!operation.isCurrent(currentScopeKeyRef.current)) return;
+    if (result === "shared" || result === "copied") {
       setFeedback({
         scopeKey: operation.scopeKey,
         type: "success",
-        message: t("setupCodeCopied"),
+        message:
+          result === "shared"
+            ? t("passwordLinkShared")
+            : t("passwordLinkCopied"),
       });
-    } catch {
-      if (!operation.isCurrent(currentScopeKeyRef.current)) return;
+    } else if (result === "failed") {
       setFeedback({
         scopeKey: operation.scopeKey,
         type: "error",
-        message: t("setupCodeCopyFailed"),
+        message: t("passwordLinkCopyFailed"),
       });
-    } finally {
-      operation.finish(currentScopeKeyRef.current);
     }
+    operation.finish(currentScopeKeyRef.current);
   };
 
   const currentUsers = useMemo(
@@ -544,6 +546,10 @@ export default function UserManagement({
         return t("audit_password_reset_completed");
       case "password_reset_request_rejected":
         return t("audit_password_reset_request_rejected");
+      case "invitation_reissued":
+        return t("audit_invitation_reissued");
+      case "password_reset_link_issued":
+        return t("audit_password_reset_link_issued");
       case "password_changed":
         return t("audit_password_changed");
       case "deleted":
@@ -553,13 +559,19 @@ export default function UserManagement({
     }
   };
 
+  const isPendingInvitationReissue =
+    pendingUserAction?.kind === "reset-password" &&
+    pendingUserAction.user.migrationStatus === "pending_reset" &&
+    !pendingUserAction.user.passwordSetAt;
   const pendingActionTitle = pendingUserAction
     ? pendingUserAction.kind === "toggle"
       ? pendingUserAction.user.active
         ? t("deactivateTitle")
         : t("activateTitle")
       : pendingUserAction.kind === "reset-password"
-        ? t("resetPasswordTitle")
+        ? isPendingInvitationReissue
+          ? t("reissueInvitationTitle")
+          : t("resetPasswordTitle")
         : t("deleteTitle")
     : "";
   const pendingActionDescription = pendingUserAction
@@ -568,7 +580,9 @@ export default function UserManagement({
         ? t("deactivateConfirm")
         : t("activateConfirm")
       : pendingUserAction.kind === "reset-password"
-        ? t("resetPasswordConfirm", { name: pendingUserAction.user.name })
+        ? isPendingInvitationReissue
+          ? t("reissueInvitationConfirm", { name: pendingUserAction.user.name })
+          : t("resetPasswordConfirm", { name: pendingUserAction.user.name })
         : t("deleteConfirm", { name: pendingUserAction.user.name })
     : "";
   const pendingActionLabel = pendingUserAction
@@ -577,7 +591,9 @@ export default function UserManagement({
         ? t("deactivate")
         : t("activate")
       : pendingUserAction.kind === "reset-password"
-        ? t("resetPassword")
+        ? isPendingInvitationReissue
+          ? t("reissueInvitation")
+          : t("issuePasswordResetLink")
         : t("delete")
     : "";
 
@@ -694,63 +710,63 @@ export default function UserManagement({
               {scopedFeedback && (
                 <Alert type={scopedFeedback.type} message={scopedFeedback.message} className="mb-4" />
               )}
-              {scopedSetupCredential && (
+              {scopedPasswordLink && (
                 <div
-                  ref={setupCredentialPanelRef}
+                  ref={passwordLinkPanelRef}
                   className="mb-4 border border-status-waiting/70 bg-status-waiting/10 p-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-border-focus"
-                  role="status"
-                  aria-live="polite"
-                  aria-atomic="true"
+                  role="region"
+                  aria-labelledby="managed-password-link-title"
                   tabIndex={-1}
                 >
                   <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                     <div className="min-w-0">
-                      <p className="break-words text-sm font-semibold text-status-waiting">
-                        {scopedSetupCredential.setupMethod === "admin_approved"
-                          ? t("directResetTitle", { name: scopedSetupCredential.userName })
-                          : t("setupCodeTitle", { name: scopedSetupCredential.userName })}
+                      <p id="managed-password-link-title" className="break-words text-sm font-semibold text-status-waiting">
+                        {scopedPasswordLink.linkKind === "invitation"
+                          ? t("invitationLinkTitle", {
+                              name: scopedPasswordLink.userName,
+                            })
+                          : t("passwordResetLinkTitle", {
+                              name: scopedPasswordLink.userName,
+                            })}
                       </p>
                       <p className="mt-2 text-xs leading-relaxed text-text-muted">
-                        {scopedSetupCredential.setupMethod === "admin_approved"
-                          ? t("directResetHelp", {
+                        {scopedPasswordLink.linkKind === "invitation"
+                          ? t("invitationLinkPanelHelp", {
                               expiresAt: formatActivityDate(
-                                scopedSetupCredential.expiresAt ?? new Date().toISOString(),
+                                scopedPasswordLink.expiresAt,
                               ),
                             })
-                          : t("setupCodeHelp")}
+                          : t("passwordResetLinkPanelHelp", {
+                              expiresAt: formatActivityDate(
+                                scopedPasswordLink.expiresAt,
+                              ),
+                            })}
                       </p>
-                      {scopedSetupCredential.setupCode && (
-                        <div className="mt-3 space-y-2">
-                          <a
-                            href="/auth/setup-password"
-                            target="_blank"
-                            rel="noreferrer"
-                            className="block break-all text-xs font-medium text-text-body underline decoration-border-strong underline-offset-4 hover:text-text-heading"
-                          >
-                            {setupPasswordUrl}
-                          </a>
-                          <code className="block select-all break-all bg-canvas px-3 py-2 font-mono text-base tracking-wider text-text-heading">
-                            {scopedSetupCredential.setupCode}
-                          </code>
-                        </div>
-                      )}
+                      <a
+                        href={scopedPasswordLink.passwordUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="mt-3 block select-all break-all bg-canvas px-3 py-2 font-mono text-xs text-text-heading underline decoration-border-strong underline-offset-4 hover:text-text-heading"
+                      >
+                        {scopedPasswordLink.passwordUrl}
+                      </a>
                     </div>
                     <div className="flex shrink-0 gap-2">
-                      {scopedSetupCredential.setupCode && (
-                        <button
-                          type="button"
-                          onClick={copySetupCode}
-                          className="min-h-11 bg-action-primary px-3 py-2 text-xs font-semibold text-action-text hover:bg-action-hover"
-                        >
-                          {t("copySetupInstructions")}
-                        </button>
-                      )}
                       <button
                         type="button"
-                        onClick={() => setSetupCredential(null)}
+                        onClick={() => void sharePasswordLink()}
+                        className="min-h-11 bg-action-primary px-3 py-2 text-xs font-semibold text-action-text hover:bg-action-hover"
+                      >
+                        {scopedPasswordLink.linkKind === "invitation"
+                          ? t("shareInvitationLink")
+                          : t("sharePasswordResetLink")}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setPasswordLink(null)}
                         className="min-h-11 border border-border-default px-3 py-2 text-xs text-text-muted hover:text-text-heading"
                       >
-                        {t("closeSetupCode")}
+                        {t("closeCredential")}
                       </button>
                     </div>
                   </div>
@@ -919,10 +935,14 @@ export default function UserManagement({
           {pendingUserAction.kind === "reset-password" && (
             <div className="border border-border-default bg-surface p-3">
               <p className="text-sm font-semibold text-text-heading">
-                {t("setupCodeMethod")}
+                {isPendingInvitationReissue
+                  ? t("invitationLinkMethod")
+                  : t("passwordResetLinkMethod")}
               </p>
               <p className="mt-1 text-xs leading-relaxed text-text-muted">
-                {t("manualResetCodeOnlyHelp")}
+                {isPendingInvitationReissue
+                  ? t("reissueInvitationHelp")
+                  : t("issuePasswordResetLinkHelp")}
               </p>
             </div>
           )}
@@ -1151,7 +1171,9 @@ function UserCard({
                 size="sm"
                 fullWidth
               >
-                {t("resetPassword")}
+                {isSetupPending
+                  ? t("reissueInvitation")
+                  : t("issuePasswordResetLink")}
               </Button>
               <Button
                 type="button"

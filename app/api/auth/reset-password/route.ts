@@ -2,7 +2,12 @@ import { NextResponse } from "next/server";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { hashPassword } from "@/lib/auth/password";
 import { getPasswordPolicyError } from "@/lib/auth/password-policy";
-import { hashResetToken } from "@/lib/auth/token";
+import { hashResetToken, isResetToken } from "@/lib/auth/token";
+import {
+  consumeRateLimitOrDeny,
+  getRequestIp,
+} from "@/lib/auth/rate-limit";
+import { isTrustedMutationOrigin } from "@/lib/auth/request-origin";
 import { getTenantContextForRequest } from "@/lib/tenant/server";
 import {
   getRequestId,
@@ -10,10 +15,8 @@ import {
   writeStructuredLog,
 } from "@/lib/observability/structured-log";
 
-const RESET_TOKEN_PATTERN = /^[A-Za-z0-9_-]{43}$/;
-
 const SELECT_VALID_RESET_TOKEN_CANDIDATE_SQL = `
-  SELECT prt.user_id
+  SELECT prt.user_id, u.migration_status, u.password_set_at
   FROM password_reset_tokens prt
   JOIN users u ON u.id = prt.user_id
   WHERE prt.token = ?
@@ -78,7 +81,7 @@ const INSERT_TOKEN_RESET_AUDIT_SQL = `
   INSERT INTO user_audit_events (
     id, venue_id, actor_user_id, target_user_id, action, details, created_at
   )
-  SELECT ?, u.venue_id, u.id, u.id, 'password_reset_completed', ?, ?
+  SELECT ?, u.venue_id, u.id, u.id, ?, ?, ?
   FROM users u
   JOIN password_reset_tokens prt ON prt.user_id = u.id
   WHERE prt.token = ?
@@ -95,7 +98,7 @@ const INVALIDATE_ALL_USER_RESET_TOKENS_SQL = `
       SELECT target_user_id
       FROM user_audit_events
       WHERE id = ?
-        AND action = 'password_reset_completed'
+        AND action IN ('password_setup_completed', 'password_reset_completed')
     )
 `;
 
@@ -109,7 +112,7 @@ const COMPLETE_TOKEN_RESET_REQUESTS_SQL = `
       SELECT target_user_id
       FROM user_audit_events
       WHERE id = ?
-        AND action = 'password_reset_completed'
+        AND action IN ('password_setup_completed', 'password_reset_completed')
     )
 `;
 
@@ -130,6 +133,12 @@ export async function POST() {
 export async function PUT(request: Request) {
   const requestId = getRequestId(request);
   try {
+    if (!isTrustedMutationOrigin(request)) {
+      return NextResponse.json(
+        { code: "FORBIDDEN_ORIGIN", error: "Request origin is not allowed." },
+        { status: 403 },
+      );
+    }
     const { env } = getCloudflareContext();
     const body: unknown = await request.json().catch(() => null);
     const token = body && typeof body === "object" && "token" in body
@@ -150,8 +159,27 @@ export async function PUT(request: Request) {
 
     const nowIso = new Date().toISOString();
     const normalizedToken = token.trim();
-    if (!RESET_TOKEN_PATTERN.test(normalizedToken)) {
+    if (!isResetToken(normalizedToken)) {
       return NextResponse.json({ error: "유효하지 않거나 만료된 토큰입니다." }, { status: 400 });
+    }
+
+    const rateLimit = await consumeRateLimitOrDeny({
+      namespace: "password-reset-token",
+      identifier: getRequestIp(request),
+      limit: 20,
+      windowSeconds: 60 * 15,
+    });
+    if (!rateLimit.allowed) {
+      return NextResponse.json(
+        {
+          code: "RATE_LIMITED",
+          error: "Too many password reset attempts. Please try again later.",
+        },
+        {
+          status: 429,
+          headers: { "Retry-After": String(rateLimit.retryAfterSeconds) },
+        },
+      );
     }
 
     const tokenHash = await hashResetToken(normalizedToken);
@@ -166,7 +194,11 @@ export async function PUT(request: Request) {
       SELECT_VALID_RESET_TOKEN_CANDIDATE_SQL,
     )
       .bind(tokenHash, nowIso, expectedVenueId, expectedVenueId)
-      .first<{ user_id: string }>();
+      .first<{
+        user_id: string;
+        migration_status: string;
+        password_set_at: string | null;
+      }>();
     if (!candidate?.user_id) {
       return NextResponse.json({ error: "유효하지 않거나 만료된 토큰입니다." }, { status: 400 });
     }
@@ -174,6 +206,12 @@ export async function PUT(request: Request) {
     // 고비용 password hash는 고엔트로피 exact token과 tenant가 먼저
     // 검증된 경우에만 계산한다. 아래 batch가 최종 경쟁 승자를 다시 판정한다.
     const passwordHash = await hashPassword(newPassword);
+    const isInitialSetup =
+      candidate.migration_status === "pending_reset" && !candidate.password_set_at;
+    const auditAction = isInitialSetup
+      ? "password_setup_completed"
+      : "password_reset_completed";
+    const auditMethod = isInitialSetup ? "invitation_link" : "password_reset_link";
 
     // The exact token consumption is the winning operation. The immediately
     // following audit row receives changes() from that operation, and every
@@ -195,7 +233,8 @@ export async function PUT(request: Request) {
       env.DB.prepare(CONSUME_EXACT_RESET_TOKEN_SQL).bind(tokenHash, nowIso),
       env.DB.prepare(INSERT_TOKEN_RESET_AUDIT_SQL).bind(
         auditEventId,
-        JSON.stringify({ method: "email_token" }),
+        auditAction,
+        JSON.stringify({ method: auditMethod }),
         nowIso,
         tokenHash,
       ),
@@ -224,7 +263,7 @@ export async function PUT(request: Request) {
     }
 
     await writeStructuredLog("info", {
-      event: "auth.password_reset",
+      event: isInitialSetup ? "auth.account_invitation" : "auth.password_reset",
       requestId,
       actorId: updatedUserId,
       venueId: expectedVenueId,
