@@ -902,6 +902,7 @@
     "venueRequired": "베뉴를 선택해주세요.",
     "guestLimitInvalid": "게스트 한도는 0 이상의 숫자여야 합니다.",
     "createFailed": "사용자를 생성하지 못했습니다.",
+    "emailAlreadyExists": "이미 등록된 이메일입니다. 사용자 목록에서 기존 계정의 초대 링크 재발급 또는 비밀번호 재설정을 진행해주세요.",
     "accountAlreadySetup": "이미 최초 설정을 마친 계정에는 초대 링크를 발급할 수 없습니다.",
     "created": "{name} ({email}) 계정을 생성했습니다.",
     "invited": "{name} ({email})에게 초대 메일을 보냈습니다.",
