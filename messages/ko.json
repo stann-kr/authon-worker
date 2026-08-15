@@ -24,7 +24,7 @@
     "created": "등록순",
     "refresh": "새로고침",
     "venueLoadFailed": "베뉴를 불러오지 못했습니다.",
-    "removeGuestConfirm": "이 게스트를 목록에서 삭제할까요?",
+    "removeGuestConfirm": "이 게스트 등록을 삭제하면 명단과 통계에서 제외됩니다. 삭제할까요?",
     "byName": "By {name}",
     "registered": "등록",
     "checkedIn": "입장 완료",
@@ -419,6 +419,7 @@
   "AdminAnalytics": {
     "title": "게스트 통계",
     "description": "게스트가 한 명 이상 등록된 영업일을 집계합니다. Event 생성 여부와 관계없이 등록, 입장과 기여자별 결과를 이전 기간과 비교할 수 있습니다.",
+    "dataBasis": "현재 명단에 포함된 게스트 기준입니다. 게스트를 삭제하면 해당 등록은 과거 통계에서도 제외됩니다.",
     "loading": "게스트 통계를 불러오는 중",
     "refresh": "새로고침",
     "retry": "다시 시도",

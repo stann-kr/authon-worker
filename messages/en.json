@@ -24,7 +24,7 @@
     "created": "Created",
     "refresh": "Refresh",
     "venueLoadFailed": "Venues could not be loaded.",
-    "removeGuestConfirm": "Remove this guest from the list?",
+    "removeGuestConfirm": "Deleting this guest registration removes it from the guest list and analytics. Continue?",
     "byName": "By {name}",
     "registered": "Registered",
     "checkedIn": "Checked in",
@@ -419,6 +419,7 @@
   "AdminAnalytics": {
     "title": "Guest analytics",
     "description": "Every operating day with at least one guest registration is included, whether or not an Event was created. Compare registrations, check-ins and contributor results with the previous period.",
+    "dataBasis": "Based on guest registrations currently included in the list. Deleting a guest also removes that registration from historical analytics.",
     "loading": "Loading guest analytics",
     "refresh": "Refresh",
     "retry": "Try again",

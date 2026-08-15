@@ -14,6 +14,7 @@ import AdminTaskSwitcher from "@/app/admin/components/AdminTaskSwitcher";
 import AnalyticsPeriodBar from "@/app/admin/components/analytics/AnalyticsPeriodBar";
 import AsyncListContent from "@/components/AsyncListContent";
 import ConfirmDialog from "@/components/ConfirmDialog";
+import GuestListCard from "@/components/GuestListCard";
 import OperationalSectionNav from "@/components/OperationalSectionNav";
 import GuestBulkEntry from "@/components/GuestBulkEntry";
 import { EMPTY_ANALYTICS_DTO_FIXTURE } from "@/lib/analytics/test-fixtures";
@@ -237,6 +238,39 @@ test("busy dialog reports aria-busy and ignores Escape", () => {
   fireEvent.keyDown(document, { key: "Escape" });
   assert.equal(cancelled, false);
   assert.ok(screen.getByRole("alertdialog"));
+});
+
+test("guest deletion dialog explains that analytics will change", () => {
+  render(
+    <NextIntlClientProvider
+      locale="en"
+      messages={{
+        Common: {
+          waitingStatus: "Status: waiting.",
+          delete: "Delete",
+          deleteGuest: "Delete guest",
+          removeGuestConfirm:
+            "Deleting this guest registration removes it from the guest list and analytics. Continue?",
+          cancel: "Cancel",
+        },
+      }}
+    >
+      <GuestListCard
+        guest={{ id: "guest-a", name: "Guest A", status: "pending" }}
+        index={0}
+        onDelete={() => {}}
+      />
+    </NextIntlClientProvider>,
+  );
+
+  fireEvent.click(screen.getByRole("button", { name: "Delete" }));
+  const dialog = screen.getByRole("alertdialog", { name: "Delete guest" });
+  const descriptionId = dialog.getAttribute("aria-describedby");
+  assert.ok(descriptionId);
+  assert.equal(
+    document.getElementById(descriptionId)?.textContent,
+    "Deleting this guest registration removes it from the guest list and analytics. Continue?",
+  );
 });
 
 test("CSV mapping and line preview controls keep native labels and file boundaries", () => {

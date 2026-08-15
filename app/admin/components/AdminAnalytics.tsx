@@ -164,6 +164,9 @@ export default function AdminAnalytics({
         <p className="mt-2 max-w-[70ch] text-sm leading-relaxed text-text-muted">
           {t("description")}
         </p>
+        <p className="mt-3 max-w-[70ch] border-l-2 border-border-strong pl-3 text-xs leading-relaxed text-text-muted">
+          {t("dataBasis")}
+        </p>
       </header>
 
       <AnalyticsPeriodBar
