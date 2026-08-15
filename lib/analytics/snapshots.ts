@@ -1,12 +1,13 @@
+import { isBusinessDate } from "../events/domain.ts";
 import { isDateInAnalyticsRange } from "./period.ts";
-import { summarizeAnalyticsEvents } from "./metrics.ts";
+import { summarizeAnalyticsGuestDays } from "./metrics.ts";
 import type {
   AnalyticsAggregate,
-  AnalyticsConfirmedEventInput,
   AnalyticsContributorDirectoryInput,
   AnalyticsContributorRow,
   AnalyticsContributorSnapshotInput,
   AnalyticsDateRange,
+  AnalyticsGuestDayInput,
 } from "./types.ts";
 
 function roundOne(value: number): number {
@@ -20,12 +21,27 @@ function assertMetricCount(value: number): void {
 }
 
 export function summarizeAnalyticsSnapshotPeriod(
-  events: readonly AnalyticsConfirmedEventInput[],
+  events: readonly (AnalyticsGuestDayInput & { eventId: string })[],
   range: AnalyticsDateRange,
 ): AnalyticsAggregate {
-  return summarizeAnalyticsEvents(
-    events.filter((event) => isDateInAnalyticsRange(event.businessDate, range)),
-  );
+  const eventIds = new Set<string>();
+  const days = new Map<string, AnalyticsGuestDayInput>();
+  for (const event of events) {
+    if (!event.eventId || eventIds.has(event.eventId)) {
+      throw new Error("Analytics event snapshots must have unique event IDs");
+    }
+    eventIds.add(event.eventId);
+    if (!isDateInAnalyticsRange(event.businessDate, range)) continue;
+    const day = days.get(event.businessDate) ?? {
+      businessDate: event.businessDate,
+      registered: 0,
+      checkedIn: 0,
+    };
+    day.registered += event.registered;
+    day.checkedIn += event.checkedIn;
+    days.set(event.businessDate, day);
+  }
+  return summarizeAnalyticsGuestDays([...days.values()]);
 }
 
 export function aggregateContributorSnapshots(
@@ -41,7 +57,7 @@ export function aggregateContributorSnapshots(
     {
       contributorId: string | null;
       source: AnalyticsContributorRow["source"];
-      eventIds: Set<string>;
+      operatingDates: Set<string>;
       registered: number;
       checkedIn: number;
     }
@@ -54,7 +70,12 @@ export function aggregateContributorSnapshots(
       throw new RangeError("Contributor checked-in count cannot exceed registered count");
     }
     const sourceKey = `${metric.eventId}:${metric.sourceKind}:${metric.sourceId}`;
-    if (!metric.eventId || !metric.sourceId || seenSources.has(sourceKey)) {
+    if (
+      !metric.eventId ||
+      !isBusinessDate(metric.businessDate) ||
+      !metric.sourceId ||
+      seenSources.has(sourceKey)
+    ) {
       throw new Error("Contributor snapshot sources must be unique per event");
     }
     seenSources.add(sourceKey);
@@ -67,11 +88,11 @@ export function aggregateContributorSnapshots(
       source: metric.contributorId
         ? null
         : { kind: metric.sourceKind, id: metric.sourceId },
-      eventIds: new Set<string>(),
+      operatingDates: new Set<string>(),
       registered: 0,
       checkedIn: 0,
     };
-    group.eventIds.add(metric.eventId);
+    group.operatingDates.add(metric.businessDate);
     group.registered += metric.registeredCount;
     group.checkedIn += metric.checkedInCount;
     assertMetricCount(group.registered);
@@ -84,7 +105,7 @@ export function aggregateContributorSnapshots(
       const contributor = group.contributorId
         ? contributorDirectory.get(group.contributorId)
         : null;
-      const events = group.eventIds.size;
+      const operatingDays = group.operatingDates.size;
       return {
         contributorId: group.contributorId,
         displayName: contributor?.displayName ?? "",
@@ -94,15 +115,15 @@ export function aggregateContributorSnapshots(
             : "deleted"
           : "unmapped",
         source: group.source,
-        events,
+        operatingDays,
         registered: group.registered,
         checkedIn: group.checkedIn,
         entryRatePercent:
           group.registered === 0
             ? null
             : roundOne((group.checkedIn / group.registered) * 100),
-        registeredPerEvent:
-          events === 0 ? null : roundOne(group.registered / events),
+        registeredPerOperatingDay:
+          operatingDays === 0 ? null : roundOne(group.registered / operatingDays),
       };
     })
     .sort(

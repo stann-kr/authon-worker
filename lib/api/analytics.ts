@@ -6,6 +6,7 @@ import {
   eq,
   gte,
   lt,
+  ne,
   or,
   sql,
 } from "drizzle-orm";
@@ -14,6 +15,9 @@ import {
   eventCloseoutContributorMetrics,
   eventCloseouts,
   events,
+  externalDjLinks,
+  guests,
+  users,
   venueContributors,
   venues,
 } from "@/lib/db/schema";
@@ -89,10 +93,25 @@ export async function fetchAdminAnalytics(
       anchorDate: query.anchorDate,
       timezone: venue.timezone,
     });
-    const sourceKindGroup = sql<string>`case when ${eventCloseoutContributorMetrics.contributorId} is null then ${eventCloseoutContributorMetrics.sourceKind} else '' end`;
-    const sourceIdGroup = sql<string>`case when ${eventCloseoutContributorMetrics.contributorId} is null then ${eventCloseoutContributorMetrics.sourceId} else ${eventCloseoutContributorMetrics.contributorId} end`;
+    const guestContributorId = sql<string | null>`case
+      when ${guests.externalLinkId} is not null then ${externalDjLinks.contributorId}
+      when ${guests.createdByUserId} is not null then ${users.contributorId}
+      else null
+    end`;
+    const guestSourceKind = sql<string>`case
+      when ${guests.externalLinkId} is not null then 'external_link'
+      when ${guests.createdByUserId} is not null then 'user'
+      else 'unattributed'
+    end`;
+    const guestSourceId = sql<string>`case
+      when ${guests.externalLinkId} is not null then ${guests.externalLinkId}
+      when ${guests.createdByUserId} is not null then ${guests.createdByUserId}
+      else 'unattributed'
+    end`;
+    const contributorSourceKindGroup = sql<string>`case when ${guestContributorId} is null then ${guestSourceKind} else '' end`;
+    const contributorSourceIdGroup = sql<string>`case when ${guestContributorId} is null then ${guestSourceId} else ${guestContributorId} end`;
 
-    const [eventRows, contributorRows] = await Promise.all([
+    const [eventRows, guestDayRows, contributorRows] = await Promise.all([
       db
         .select({
           eventId: events.id,
@@ -147,49 +166,81 @@ export async function fetchAdminAnalytics(
         .limit(MAX_ANALYTICS_QUERY_ROWS + 1),
       db
         .select({
-          contributorId: eventCloseoutContributorMetrics.contributorId,
-          displayName: sql<string | null>`max(${venueContributors.displayName})`,
-          sourceKind: sql<string>`min(${eventCloseoutContributorMetrics.sourceKind})`,
-          sourceId: sql<string>`min(${eventCloseoutContributorMetrics.sourceId})`,
-          events: sql<number>`count(distinct ${eventCloseoutContributorMetrics.eventId})`.mapWith(Number),
-          registered: sql<number>`coalesce(sum(${eventCloseoutContributorMetrics.registeredCount}), 0)`.mapWith(Number),
-          checkedIn: sql<number>`coalesce(sum(${eventCloseoutContributorMetrics.checkedInCount}), 0)`.mapWith(Number),
-          snapshotRows: sql<number>`count(*)`.mapWith(Number),
+          businessDate: guests.date,
+          registeredCount: sql<number>`count(*)`.mapWith(Number),
+          checkedInCount: sql<number>`coalesce(sum(case when ${guests.status} = 'checked' then 1 else 0 end), 0)`.mapWith(Number),
         })
-        .from(eventCloseoutContributorMetrics)
-        .innerJoin(
-          events,
+        .from(guests)
+        .where(
           and(
-            eq(events.id, eventCloseoutContributorMetrics.eventId),
-            eq(events.venueId, venueId),
+            eq(guests.venueId, venueId),
+            ne(guests.status, "deleted"),
+            or(
+              and(
+                gte(guests.date, selection.comparisonPeriod.startDate),
+                lt(guests.date, selection.comparisonPeriod.endDateExclusive),
+              ),
+              and(
+                gte(guests.date, selection.period.startDate),
+                lt(guests.date, selection.period.dataEndDateExclusive),
+              ),
+            ),
+          ),
+        )
+        .groupBy(guests.date)
+        .orderBy(desc(guests.date))
+        .limit(MAX_ANALYTICS_QUERY_ROWS + 1),
+      db
+        .select({
+          contributorId: guestContributorId,
+          displayName: sql<string | null>`max(${venueContributors.displayName})`,
+          sourceKind: sql<string>`min(${guestSourceKind})`,
+          sourceId: sql<string>`min(${guestSourceId})`,
+          operatingDays: sql<number>`count(distinct ${guests.date})`.mapWith(Number),
+          registered: sql<number>`count(*)`.mapWith(Number),
+          checkedIn: sql<number>`coalesce(sum(case when ${guests.status} = 'checked' then 1 else 0 end), 0)`.mapWith(Number),
+          guestRows: sql<number>`count(*)`.mapWith(Number),
+        })
+        .from(guests)
+        .leftJoin(
+          users,
+          and(
+            eq(users.id, guests.createdByUserId),
+            eq(users.venueId, venueId),
+          ),
+        )
+        .leftJoin(
+          externalDjLinks,
+          and(
+            eq(externalDjLinks.id, guests.externalLinkId),
+            eq(externalDjLinks.venueId, venueId),
           ),
         )
         .leftJoin(
           venueContributors,
           and(
-            eq(
-              venueContributors.id,
-              eventCloseoutContributorMetrics.contributorId,
-            ),
+            eq(venueContributors.id, guestContributorId),
             eq(venueContributors.venueId, venueId),
           ),
         )
         .where(
           and(
-            eq(eventCloseoutContributorMetrics.venueId, venueId),
-            gte(events.businessDate, selection.period.startDate),
-            lt(events.businessDate, selection.period.dataEndDateExclusive),
+            eq(guests.venueId, venueId),
+            ne(guests.status, "deleted"),
+            gte(guests.date, selection.period.startDate),
+            lt(guests.date, selection.period.dataEndDateExclusive),
           ),
         )
         .groupBy(
-          eventCloseoutContributorMetrics.contributorId,
-          sourceKindGroup,
-          sourceIdGroup,
+          guestContributorId,
+          contributorSourceKindGroup,
+          contributorSourceIdGroup,
         )
         .limit(MAX_ANALYTICS_QUERY_ROWS + 1),
     ]);
     if (
       eventRows.length > MAX_ANALYTICS_QUERY_ROWS ||
+      guestDayRows.length > MAX_ANALYTICS_QUERY_ROWS ||
       contributorRows.length > MAX_ANALYTICS_QUERY_ROWS
     ) {
       throw new AnalyticsActionError("INVALID_ANALYTICS_QUERY");
@@ -199,6 +250,7 @@ export async function fetchAdminAnalytics(
       data: buildAdminAnalyticsView({
         selection,
         eventRows,
+        guestDayRows,
         contributorRows,
       }),
       error: null,

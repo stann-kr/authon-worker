@@ -24,7 +24,7 @@
     "created": "Created",
     "refresh": "Refresh",
     "venueLoadFailed": "Venues could not be loaded.",
-    "removeGuestConfirm": "Remove this guest from the list?",
+    "removeGuestConfirm": "Deleting this guest registration removes it from the guest list and analytics. Continue?",
     "byName": "By {name}",
     "registered": "Registered",
     "checkedIn": "Checked in",
@@ -418,7 +418,8 @@
   },
   "AdminAnalytics": {
     "title": "Guest analytics",
-    "description": "Only confirmed night-closeout snapshots are included. Compare registrations, check-ins and contributor results with the previous period.",
+    "description": "Every operating day with at least one guest registration is included, whether or not an Event was created. Compare registrations, check-ins and contributor results with the previous period.",
+    "dataBasis": "Based on guest registrations currently included in the list. Deleting a guest also removes that registration from historical analytics.",
     "loading": "Loading guest analytics",
     "refresh": "Refresh",
     "retry": "Try again",
@@ -448,15 +449,15 @@
       "registered": "Guest registrations",
       "checkedIn": "Checked-in guests",
       "entryRatePercent": "Entry rate",
-      "registeredPerEvent": "Registrations per Event",
-      "registrationDefinition": "Guest registrations count active registration rows, not unique visitors. The same person registered for multiple Events counts once per Event."
+      "registeredPerOperatingDay": "Registrations per operating day",
+      "registrationDefinition": "Guest registrations count non-deleted registration rows, not unique visitors. The same person registered on multiple dates or rosters counts once for each registration."
     },
     "coverage": {
       "title": "Data coverage",
-      "summary": "{confirmed} confirmed Events · {days} operating days · {unconfirmed} unconfirmed Events",
-      "partial": "Some Events in this period are not yet confirmed or cannot be analyzed. The key results below include confirmed closeout snapshots only.",
+      "summary": "{days} included operating days · {confirmed} confirmed Events · {unconfirmed} unconfirmed Events",
+      "partial": "A confirmed Event has mismatched closeout and contributor totals. Review that Event separately from the Guest-date key results.",
       "confirmed": "Confirmed Events",
-      "operatingDays": "Operating days",
+      "operatingDays": "Included operating days",
       "unconfirmed": "Unconfirmed closed",
       "open": "Open",
       "draft": "Draft",
@@ -466,7 +467,7 @@
     },
     "trend": {
       "title": "Period trend",
-      "description": "Monthly views use actual operating days; quarter and year views use monthly confirmed totals. The solid line is registrations and the dashed line is check-ins.",
+      "description": "Monthly views use operating days with guests; quarter and year views use monthly totals. The solid line is registrations and the dashed line is check-ins.",
       "tableTitle": "Chart data",
       "date": "Period"
     },
@@ -474,12 +475,12 @@
       "title": "Guests by DJ or contributor",
       "description": "Only explicitly mapped Contributor sources are combined. Unmapped sources and deleted contributors remain separate.",
       "name": "DJ or contributor",
-      "events": "Events",
+      "operatingDays": "Registration days",
       "sort": "Sort by",
       "ascending": "Ascending",
       "descending": "Descending",
       "emptyTitle": "No contributor analytics",
-      "emptyDescription": "Contributor sources from confirmed Events appear here with their explicit mapping status.",
+      "emptyDescription": "Contributor sources from guest registrations appear here with their explicit mapping status.",
       "deleted": "Deleted contributor",
       "unmappedLink": "Unmapped external link",
       "unmappedUser": "Unmapped internal account",
@@ -497,8 +498,8 @@
       "open": "Open Event"
     },
     "empty": {
-      "title": "No confirmed analytics for this period",
-      "description": "Confirmed Event closeouts will add registration and check-in results here. Unconfirmed Events remain visible in data coverage."
+      "title": "No guest registrations for this period",
+      "description": "Registration and check-in results appear once at least one guest is registered on a date."
     }
   },
   "EventScope": {

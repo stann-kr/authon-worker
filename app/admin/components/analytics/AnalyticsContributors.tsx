@@ -4,7 +4,11 @@ import { useCallback, useMemo, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import type { AnalyticsContributorRow } from "@/lib/analytics/types";
 
-type SortKey = "registered" | "checkedIn" | "entryRatePercent" | "events";
+type SortKey =
+  | "registered"
+  | "checkedIn"
+  | "entryRatePercent"
+  | "operatingDays";
 
 export default function AnalyticsContributors({
   rows,
@@ -83,7 +87,7 @@ export default function AnalyticsContributors({
               <option value="registered">{t("summary.registered")}</option>
               <option value="checkedIn">{t("summary.checkedIn")}</option>
               <option value="entryRatePercent">{t("summary.entryRatePercent")}</option>
-              <option value="events">{t("contributors.events")}</option>
+              <option value="operatingDays">{t("contributors.operatingDays")}</option>
             </select>
           </label>
           <button type="button" aria-pressed={isAscending} onClick={() => setIsAscending((value) => !value)} className="pressable mt-[1.25rem] min-h-11 border border-border-default bg-surface-raised px-3 py-2 text-xs font-medium text-text-muted">
@@ -94,9 +98,9 @@ export default function AnalyticsContributors({
           <article key={row.contributorId ?? `${row.source?.kind}:${row.source?.id}`} className="border border-border-default bg-canvas p-3">
             <h4 className="text-sm font-semibold text-text-heading">{contributorLabel(row)}</h4>
             <dl className="mt-3 grid grid-cols-2 gap-3 text-xs">
-              {(["registered", "checkedIn", "events"] as const).map((key) => (
+              {(["registered", "checkedIn", "operatingDays"] as const).map((key) => (
                 <div key={key}>
-                  <dt className="text-text-dim">{key === "events" ? t("contributors.events") : t(`summary.${key}`)}</dt>
+                  <dt className="text-text-dim">{key === "operatingDays" ? t("contributors.operatingDays") : t(`summary.${key}`)}</dt>
                   <dd className="mt-1 font-mono tabular-nums text-text-body">{numberFormat.format(row[key])}</dd>
                 </div>
               ))}
@@ -114,10 +118,10 @@ export default function AnalyticsContributors({
           <thead className="bg-canvas text-xs text-text-muted">
             <tr>
               <th scope="col" className="px-4 py-3 font-medium">{t("contributors.name")}</th>
-              {(["registered", "checkedIn", "entryRatePercent", "events"] as const).map((key) => (
+              {(["registered", "checkedIn", "entryRatePercent", "operatingDays"] as const).map((key) => (
                 <th key={key} scope="col" aria-sort={ariaSort(key)} className="px-3 py-2 text-right font-medium">
                   <button type="button" onClick={() => changeSort(key)} className="min-h-11 px-1 text-xs text-text-muted hover:text-text-heading">
-                    {key === "events" ? t("contributors.events") : t(`summary.${key}`)}
+                    {key === "operatingDays" ? t("contributors.operatingDays") : t(`summary.${key}`)}
                   </button>
                 </th>
               ))}
@@ -130,7 +134,7 @@ export default function AnalyticsContributors({
                 <td className="px-4 py-3 text-right font-mono tabular-nums">{numberFormat.format(row.registered)}</td>
                 <td className="px-4 py-3 text-right font-mono tabular-nums">{numberFormat.format(row.checkedIn)}</td>
                 <td className="px-4 py-3 text-right font-mono tabular-nums">{row.entryRatePercent === null ? "—" : `${numberFormat.format(row.entryRatePercent)}%`}</td>
-                <td className="px-4 py-3 text-right font-mono tabular-nums">{numberFormat.format(row.events)}</td>
+                <td className="px-4 py-3 text-right font-mono tabular-nums">{numberFormat.format(row.operatingDays)}</td>
               </tr>
             ))}
           </tbody>

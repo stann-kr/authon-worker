@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
 import Alert from "@/components/Alert";
 import Button from "@/components/Button";
@@ -130,18 +130,8 @@ export default function AdminAnalytics({
 
   const scopedView = loadedScope === scope ? view : null;
   const isScopeLoading = isLoading || loadedScope !== scope;
-  const hasPartialCoverage = useMemo(
-    () =>
-      Boolean(
-        scopedView &&
-          (scopedView.coverage.unconfirmedClosedEvents > 0 ||
-            scopedView.coverage.openEvents > 0 ||
-            scopedView.coverage.draftEvents > 0 ||
-            scopedView.coverage.driftedEvents > 0 ||
-            scopedView.coverage.legacyEvents > 0),
-      ),
-    [scopedView],
-  );
+  const hasCloseoutIntegrityWarning =
+    (scopedView?.coverage.driftedEvents ?? 0) > 0;
   const changeGranularity = (granularity: AnalyticsGranularity) => {
     if (granularity === urlState.granularity) return;
     applyUrlState({ granularity, anchorDate: urlState.anchorDate }, "push");
@@ -174,6 +164,9 @@ export default function AdminAnalytics({
         <p className="mt-2 max-w-[70ch] text-sm leading-relaxed text-text-muted">
           {t("description")}
         </p>
+        <p className="mt-3 max-w-[70ch] border-l-2 border-border-strong pl-3 text-xs leading-relaxed text-text-muted">
+          {t("dataBasis")}
+        </p>
       </header>
 
       <AnalyticsPeriodBar
@@ -202,7 +195,7 @@ export default function AdminAnalytics({
         </section>
       ) : (
         <>
-          {hasPartialCoverage && (
+          {hasCloseoutIntegrityWarning && (
             <aside className="border border-status-waiting/70 bg-status-waiting/10 p-4 text-sm leading-relaxed text-status-waiting" role="status">
               {t("coverage.partial")}
             </aside>
@@ -233,7 +226,7 @@ export default function AdminAnalytics({
             </dl>
           </section>
 
-          {scopedView.coverage.confirmedEvents === 0 ? (
+          {scopedView.coverage.operatingDays === 0 ? (
             <section className="app-panel">
               <EmptyState icon="chart-line" message={t("empty.title")} description={t("empty.description")} />
             </section>
@@ -251,11 +244,13 @@ export default function AdminAnalytics({
                   />
                 </section>
               )}
-              <AnalyticsEvents
-                rows={scopedView.events}
-                venueId={venueId}
-                onOpenEvent={onOpenEvent}
-              />
+              {scopedView.events.length > 0 && (
+                <AnalyticsEvents
+                  rows={scopedView.events}
+                  venueId={venueId}
+                  onOpenEvent={onOpenEvent}
+                />
+              )}
             </>
           )}
         </>

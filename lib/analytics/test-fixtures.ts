@@ -1,6 +1,6 @@
 import type {
   AdminAnalyticsView,
-  AnalyticsConfirmedEventInput,
+  AnalyticsGuestDayInput,
 } from "./types.ts";
 
 const WEEKEND_BUSINESS_DATES = [
@@ -37,17 +37,15 @@ const WEEKDAY_BUSINESS_DATES = [
   "2026-08-28",
 ] as const;
 
-export const WEEKEND_EVENT_FIXTURE: readonly AnalyticsConfirmedEventInput[] =
-  WEEKEND_BUSINESS_DATES.map((businessDate, index) => ({
-    eventId: `weekend-${index + 1}`,
+export const WEEKEND_GUEST_DAY_FIXTURE: readonly AnalyticsGuestDayInput[] =
+  WEEKEND_BUSINESS_DATES.map((businessDate) => ({
     businessDate,
     registered: 50,
     checkedIn: 40,
   }));
 
-export const WEEKDAY_EVENT_FIXTURE: readonly AnalyticsConfirmedEventInput[] =
-  WEEKDAY_BUSINESS_DATES.map((businessDate, index) => ({
-    eventId: `weekday-${index + 1}`,
+export const WEEKDAY_GUEST_DAY_FIXTURE: readonly AnalyticsGuestDayInput[] =
+  WEEKDAY_BUSINESS_DATES.map((businessDate) => ({
     businessDate,
     registered: 20,
     checkedIn: 15,
@@ -104,7 +102,7 @@ export const EMPTY_ANALYTICS_DTO_FIXTURE: AdminAnalyticsView = {
       deltaKind: "percentage_point",
       status: "not_calculable",
     },
-    registeredPerEvent: {
+    registeredPerOperatingDay: {
       value: null,
       comparisonValue: null,
       delta: null,
