@@ -37,22 +37,20 @@ export interface AnalyticsPeriodSelection {
   };
 }
 
-export interface AnalyticsConfirmedEventInput {
-  eventId: string;
+export interface AnalyticsGuestDayInput {
   businessDate: string;
   registered: number;
   checkedIn: number;
 }
 
 export interface AnalyticsAggregate {
-  confirmedEvents: number;
   operatingDays: number;
   registered: number;
   checkedIn: number;
   noShow: number;
   entryRatePercent: number | null;
-  registeredPerEvent: number | null;
-  checkedInPerEvent: number | null;
+  registeredPerOperatingDay: number | null;
+  checkedInPerOperatingDay: number | null;
 }
 
 export interface AnalyticsMetricComparison {
@@ -68,7 +66,7 @@ export interface AnalyticsSummary {
   registered: AnalyticsMetricComparison;
   checkedIn: AnalyticsMetricComparison;
   entryRatePercent: AnalyticsMetricComparison;
-  registeredPerEvent: AnalyticsMetricComparison;
+  registeredPerOperatingDay: AnalyticsMetricComparison;
 }
 
 export type AnalyticsCloseoutCoverageStatus =
@@ -99,7 +97,7 @@ export interface AnalyticsTrendPoint {
   bucketStartDate: string;
   registered: number;
   checkedIn: number;
-  eventCount: number;
+  operatingDays: number;
 }
 
 export interface AnalyticsContributorRow {
@@ -110,15 +108,16 @@ export interface AnalyticsContributorRow {
     kind: "user" | "external_link" | "unattributed";
     id: string;
   } | null;
-  events: number;
+  operatingDays: number;
   registered: number;
   checkedIn: number;
   entryRatePercent: number | null;
-  registeredPerEvent: number | null;
+  registeredPerOperatingDay: number | null;
 }
 
 export interface AnalyticsContributorSnapshotInput {
   eventId: string;
+  businessDate: string;
   contributorId: string | null;
   sourceKind: "user" | "external_link" | "unattributed";
   sourceId: string;

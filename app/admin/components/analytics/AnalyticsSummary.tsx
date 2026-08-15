@@ -26,7 +26,10 @@ export default function AnalyticsSummary({ summary }: AnalyticsSummaryProps) {
     { id: "registered", metric: summary.registered },
     { id: "checkedIn", metric: summary.checkedIn },
     { id: "entryRatePercent", metric: summary.entryRatePercent, suffix: "%" },
-    { id: "registeredPerEvent", metric: summary.registeredPerEvent },
+    {
+      id: "registeredPerOperatingDay",
+      metric: summary.registeredPerOperatingDay,
+    },
   ];
 
   return (

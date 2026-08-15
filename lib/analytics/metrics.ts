@@ -1,9 +1,9 @@
 import { isBusinessDate } from "../events/domain.ts";
 import type {
   AnalyticsAggregate,
-  AnalyticsConfirmedEventInput,
   AnalyticsCoverage,
   AnalyticsCoverageEventInput,
+  AnalyticsGuestDayInput,
   AnalyticsMetricComparison,
   AnalyticsSummary,
 } from "./types.ts";
@@ -24,45 +24,45 @@ function addSafeCounts(left: number, right: number, label: string): number {
   return result;
 }
 
-export function summarizeAnalyticsEvents(
-  events: readonly AnalyticsConfirmedEventInput[],
+export function summarizeAnalyticsGuestDays(
+  days: readonly AnalyticsGuestDayInput[],
 ): AnalyticsAggregate {
-  const eventIds = new Set<string>();
   const operatingDates = new Set<string>();
   let registered = 0;
   let checkedIn = 0;
 
-  for (const event of events) {
-    if (!event.eventId || eventIds.has(event.eventId)) {
-      throw new Error("Analytics event snapshots must have unique event IDs");
+  for (const day of days) {
+    if (
+      !isBusinessDate(day.businessDate) ||
+      operatingDates.has(day.businessDate)
+    ) {
+      throw new Error("Analytics guest days must have unique valid business dates");
     }
-    if (!isBusinessDate(event.businessDate)) {
-      throw new RangeError("Analytics event has an invalid business date");
+    assertCount(day.registered, "Registered count");
+    assertCount(day.checkedIn, "Checked-in count");
+    if (day.registered === 0) {
+      throw new RangeError("Analytics guest days require at least one registration");
     }
-    assertCount(event.registered, "Registered count");
-    assertCount(event.checkedIn, "Checked-in count");
-    if (event.checkedIn > event.registered) {
+    if (day.checkedIn > day.registered) {
       throw new RangeError("Checked-in count cannot exceed registered count");
     }
-    eventIds.add(event.eventId);
-    operatingDates.add(event.businessDate);
-    registered = addSafeCounts(registered, event.registered, "Registered total");
-    checkedIn = addSafeCounts(checkedIn, event.checkedIn, "Checked-in total");
+    operatingDates.add(day.businessDate);
+    registered = addSafeCounts(registered, day.registered, "Registered total");
+    checkedIn = addSafeCounts(checkedIn, day.checkedIn, "Checked-in total");
   }
 
-  const confirmedEvents = eventIds.size;
+  const operatingDays = operatingDates.size;
   return {
-    confirmedEvents,
-    operatingDays: operatingDates.size,
+    operatingDays,
     registered,
     checkedIn,
     noShow: registered - checkedIn,
     entryRatePercent:
       registered === 0 ? null : roundOne((checkedIn / registered) * 100),
-    registeredPerEvent:
-      confirmedEvents === 0 ? null : roundOne(registered / confirmedEvents),
-    checkedInPerEvent:
-      confirmedEvents === 0 ? null : roundOne(checkedIn / confirmedEvents),
+    registeredPerOperatingDay:
+      operatingDays === 0 ? null : roundOne(registered / operatingDays),
+    checkedInPerOperatingDay:
+      operatingDays === 0 ? null : roundOne(checkedIn / operatingDays),
   };
 }
 
@@ -135,9 +135,9 @@ export function buildAnalyticsSummary(
       comparison.entryRatePercent,
       "percentage_point",
     ),
-    registeredPerEvent: compareAnalyticsMetric(
-      current.registeredPerEvent,
-      comparison.registeredPerEvent,
+    registeredPerOperatingDay: compareAnalyticsMetric(
+      current.registeredPerOperatingDay,
+      comparison.registeredPerOperatingDay,
       "number",
     ),
   };
@@ -145,10 +145,9 @@ export function buildAnalyticsSummary(
 
 export function calculateAnalyticsCoverage(
   events: readonly AnalyticsCoverageEventInput[],
-  contributorCounts?: { mapped: number; total: number },
+  guestCoverage: { operatingDays: number; mapped: number; total: number },
 ): AnalyticsCoverage {
   const eventIds = new Set<string>();
-  const confirmedDates = new Set<string>();
   let confirmedEvents = 0;
   let unconfirmedClosedEvents = 0;
   let openEvents = 0;
@@ -167,7 +166,6 @@ export function calculateAnalyticsCoverage(
 
     if (event.closeoutStatus === "confirmed" || event.closeoutStatus === "drifted") {
       confirmedEvents += 1;
-      confirmedDates.add(event.businessDate);
       if (event.closeoutStatus === "drifted") driftedEvents += 1;
       continue;
     }
@@ -184,22 +182,20 @@ export function calculateAnalyticsCoverage(
     }
   }
 
-  let mappedContributorPercent: number | null = null;
-  if (contributorCounts) {
-    assertCount(contributorCounts.mapped, "Mapped contributor count");
-    assertCount(contributorCounts.total, "Contributor count");
-    if (contributorCounts.mapped > contributorCounts.total) {
-      throw new RangeError("Mapped contributor count cannot exceed total count");
-    }
-    mappedContributorPercent =
-      contributorCounts.total === 0
-        ? null
-        : roundOne((contributorCounts.mapped / contributorCounts.total) * 100);
+  assertCount(guestCoverage.operatingDays, "Operating day count");
+  assertCount(guestCoverage.mapped, "Mapped contributor count");
+  assertCount(guestCoverage.total, "Contributor count");
+  if (guestCoverage.mapped > guestCoverage.total) {
+    throw new RangeError("Mapped contributor count cannot exceed total count");
   }
+  const mappedContributorPercent =
+    guestCoverage.total === 0
+      ? null
+      : roundOne((guestCoverage.mapped / guestCoverage.total) * 100);
 
   return {
     confirmedEvents,
-    operatingDays: confirmedDates.size,
+    operatingDays: guestCoverage.operatingDays,
     unconfirmedClosedEvents,
     openEvents,
     draftEvents,

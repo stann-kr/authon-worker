@@ -1,7 +1,10 @@
 import { isBusinessDate, isEventState } from "../events/domain.ts";
-import { buildAnalyticsSummary, calculateAnalyticsCoverage } from "./metrics.ts";
+import {
+  buildAnalyticsSummary,
+  calculateAnalyticsCoverage,
+  summarizeAnalyticsGuestDays,
+} from "./metrics.ts";
 import { isDateInAnalyticsRange } from "./period.ts";
-import { summarizeAnalyticsSnapshotPeriod } from "./snapshots.ts";
 import type {
   AdminAnalyticsView,
   AnalyticsContributorRow,
@@ -24,15 +27,21 @@ export interface AnalyticsServiceEventRow {
   contributorCheckedInCount: number;
 }
 
+export interface AnalyticsServiceGuestDayRow {
+  businessDate: string;
+  registeredCount: number;
+  checkedInCount: number;
+}
+
 export interface AnalyticsServiceContributorRow {
   contributorId: string | null;
   displayName: string | null;
   sourceKind: string;
   sourceId: string;
-  events: number;
+  operatingDays: number;
   registered: number;
   checkedIn: number;
-  snapshotRows: number;
+  guestRows: number;
 }
 
 function roundOne(value: number): number {
@@ -94,6 +103,29 @@ function assertEventRows(
   }
 }
 
+function assertGuestDayRows(
+  rows: readonly AnalyticsServiceGuestDayRow[],
+): void {
+  const businessDates = new Set<string>();
+  for (const row of rows) {
+    if (
+      !isBusinessDate(row.businessDate) ||
+      businessDates.has(row.businessDate)
+    ) {
+      throw new Error("Analytics service received an invalid guest day row");
+    }
+    assertCount(row.registeredCount, "Guest day registered count");
+    assertCount(row.checkedInCount, "Guest day checked-in count");
+    if (
+      row.registeredCount === 0 ||
+      row.checkedInCount > row.registeredCount
+    ) {
+      throw new RangeError("Analytics guest day totals are inconsistent");
+    }
+    businessDates.add(row.businessDate);
+  }
+}
+
 function hasContributorSnapshotDrift(row: AnalyticsServiceEventRow): boolean {
   return (
     row.confirmedAt !== null &&
@@ -102,33 +134,13 @@ function hasContributorSnapshotDrift(row: AnalyticsServiceEventRow): boolean {
   );
 }
 
-function toConfirmedSnapshot(row: AnalyticsServiceEventRow) {
-  if (
-    row.confirmedAt === null ||
-    row.registeredCount === null ||
-    row.checkedInCount === null
-  ) {
-    return null;
-  }
-  return {
-    eventId: row.eventId,
-    businessDate: row.businessDate,
-    registered: row.registeredCount,
-    checkedIn: row.checkedInCount,
-  };
-}
-
 function buildTrend(
-  rows: readonly AnalyticsServiceEventRow[],
+  rows: readonly AnalyticsServiceGuestDayRow[],
   selection: AnalyticsPeriodSelection,
 ): AnalyticsTrendPoint[] {
   const buckets = new Map<string, AnalyticsTrendPoint>();
   for (const row of rows) {
-    const snapshot = toConfirmedSnapshot(row);
-    if (
-      !snapshot ||
-      !isDateInAnalyticsRange(row.businessDate, selection.period)
-    ) {
+    if (!isDateInAnalyticsRange(row.businessDate, selection.period)) {
       continue;
     }
     const bucketStartDate =
@@ -139,14 +151,14 @@ function buildTrend(
       bucketStartDate,
       registered: 0,
       checkedIn: 0,
-      eventCount: 0,
+      operatingDays: 0,
     };
-    point.registered += snapshot.registered;
-    point.checkedIn += snapshot.checkedIn;
-    point.eventCount += 1;
+    point.registered += row.registeredCount;
+    point.checkedIn += row.checkedInCount;
+    point.operatingDays += 1;
     assertCount(point.registered, "Trend registered total");
     assertCount(point.checkedIn, "Trend checked-in total");
-    assertCount(point.eventCount, "Trend event count");
+    assertCount(point.operatingDays, "Trend operating day count");
     buckets.set(bucketStartDate, point);
   }
   return [...buckets.values()].sort((left, right) =>
@@ -160,13 +172,14 @@ function buildContributorRows(
   const groupKeys = new Set<string>();
   return rows
     .map((row): AnalyticsContributorRow => {
-      assertCount(row.events, "Contributor event count");
+      assertCount(row.operatingDays, "Contributor operating day count");
       assertCount(row.registered, "Contributor registered count");
       assertCount(row.checkedIn, "Contributor checked-in count");
-      assertCount(row.snapshotRows, "Contributor snapshot row count");
+      assertCount(row.guestRows, "Contributor guest row count");
       if (
         row.checkedIn > row.registered ||
-        row.events > row.snapshotRows ||
+        row.registered !== row.guestRows ||
+        row.operatingDays > row.guestRows ||
         (row.sourceKind !== "user" &&
           row.sourceKind !== "external_link" &&
           row.sourceKind !== "unattributed")
@@ -194,15 +207,17 @@ function buildContributorRows(
               kind: row.sourceKind,
               id: row.sourceId,
             },
-        events: row.events,
+        operatingDays: row.operatingDays,
         registered: row.registered,
         checkedIn: row.checkedIn,
         entryRatePercent:
           row.registered === 0
             ? null
             : roundOne((row.checkedIn / row.registered) * 100),
-        registeredPerEvent:
-          row.events === 0 ? null : roundOne(row.registered / row.events),
+        registeredPerOperatingDay:
+          row.operatingDays === 0
+            ? null
+            : roundOne(row.registered / row.operatingDays),
       };
     })
     .sort(
@@ -219,37 +234,60 @@ function buildContributorRows(
 export function buildAdminAnalyticsView({
   selection,
   eventRows,
+  guestDayRows,
   contributorRows,
 }: {
   selection: AnalyticsPeriodSelection;
   eventRows: readonly AnalyticsServiceEventRow[];
+  guestDayRows: readonly AnalyticsServiceGuestDayRow[];
   contributorRows: readonly AnalyticsServiceContributorRow[];
 }): AdminAnalyticsView {
   assertEventRows(eventRows);
-  const confirmedSnapshots = eventRows
-    .map(toConfirmedSnapshot)
-    .filter((row) => row !== null);
-  const currentAggregate = summarizeAnalyticsSnapshotPeriod(
-    confirmedSnapshots,
-    selection.period,
+  assertGuestDayRows(guestDayRows);
+  const currentAggregate = summarizeAnalyticsGuestDays(
+    guestDayRows
+      .filter((row) => isDateInAnalyticsRange(row.businessDate, selection.period))
+      .map((row) => ({
+        businessDate: row.businessDate,
+        registered: row.registeredCount,
+        checkedIn: row.checkedInCount,
+      })),
   );
-  const comparisonAggregate = summarizeAnalyticsSnapshotPeriod(
-    confirmedSnapshots,
-    selection.comparisonPeriod,
+  const comparisonAggregate = summarizeAnalyticsGuestDays(
+    guestDayRows
+      .filter((row) =>
+        isDateInAnalyticsRange(row.businessDate, selection.comparisonPeriod),
+      )
+      .map((row) => ({
+        businessDate: row.businessDate,
+        registered: row.registeredCount,
+        checkedIn: row.checkedInCount,
+      })),
   );
   const currentEvents = eventRows.filter((row) =>
     isDateInAnalyticsRange(row.businessDate, selection.period),
   );
-  const mappedSnapshotRows = contributorRows.reduce(
-    (total, row) => total + (row.contributorId ? row.snapshotRows : 0),
+  const mappedGuestRows = contributorRows.reduce(
+    (total, row) => total + (row.contributorId ? row.guestRows : 0),
     0,
   );
-  const totalSnapshotRows = contributorRows.reduce(
-    (total, row) => total + row.snapshotRows,
+  const totalGuestRows = contributorRows.reduce(
+    (total, row) => total + row.guestRows,
     0,
   );
-  assertCount(mappedSnapshotRows, "Mapped snapshot row total");
-  assertCount(totalSnapshotRows, "Snapshot row total");
+  const contributorCheckedIn = contributorRows.reduce(
+    (total, row) => total + row.checkedIn,
+    0,
+  );
+  assertCount(mappedGuestRows, "Mapped guest row total");
+  assertCount(totalGuestRows, "Guest row total");
+  assertCount(contributorCheckedIn, "Contributor checked-in total");
+  if (
+    totalGuestRows !== currentAggregate.registered ||
+    contributorCheckedIn !== currentAggregate.checkedIn
+  ) {
+    throw new Error("Analytics guest-day and contributor totals must match");
+  }
 
   const coverage = calculateAnalyticsCoverage(
     currentEvents.map((row) => ({
@@ -264,7 +302,11 @@ export function buildAdminAnalyticsView({
           ? ("legacy_unlinked" as const)
           : ("missing" as const),
     })),
-    { mapped: mappedSnapshotRows, total: totalSnapshotRows },
+    {
+      operatingDays: currentAggregate.operatingDays,
+      mapped: mappedGuestRows,
+      total: totalGuestRows,
+    },
   );
 
   return {
@@ -273,7 +315,7 @@ export function buildAdminAnalyticsView({
     navigation: selection.navigation,
     coverage,
     summary: buildAnalyticsSummary(currentAggregate, comparisonAggregate),
-    trend: buildTrend(eventRows, selection),
+    trend: buildTrend(guestDayRows, selection),
     contributors: buildContributorRows(contributorRows),
     events: currentEvents
       .filter((row) => row.confirmedAt !== null)
