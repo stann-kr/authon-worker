@@ -49,6 +49,7 @@ import {
 
 type UserActionErrorCode =
   | "CANNOT_MANAGE_SELF"
+  | "EMAIL_ALREADY_EXISTS"
   | "FORBIDDEN"
   | "INVALID_INPUT"
   | "INVALID_ROLE"
@@ -158,6 +159,11 @@ function parseAuditDetails(details: string | null): Record<string, unknown> | nu
 
 function getUserActionError(error: unknown, fallback: UserActionErrorCode): string {
   return error instanceof UserActionError ? error.code : fallback;
+}
+
+function isUserEmailUniqueConstraint(error: unknown): boolean {
+  return error instanceof Error &&
+    error.message.includes("UNIQUE constraint failed: users.email");
 }
 
 async function getTargetUser(userId: string) {
@@ -534,6 +540,14 @@ export async function createUserViaEdge(params: {
     ) {
       throw new UserActionError("INVALID_INPUT");
     }
+    const [existingUser] = await db
+      .select({ id: users.id })
+      .from(users)
+      .where(eq(users.email, normalizedEmail))
+      .limit(1);
+    if (existingUser) {
+      throw new UserActionError("EMAIL_ALREADY_EXISTS");
+    }
     const nowIso = new Date().toISOString();
     const preferredLocale = isLocale(params.preferredLocale) ? params.preferredLocale : null;
     const [passwordHash, invitation] = await Promise.all([
@@ -597,7 +611,12 @@ export async function createUserViaEdge(params: {
     };
   } catch (error: unknown) {
     await reportServerError("user.create", error);
-    return { data: null, error: getUserActionError(error, "UPDATE_FAILED") };
+    return {
+      data: null,
+      error: isUserEmailUniqueConstraint(error)
+        ? "EMAIL_ALREADY_EXISTS"
+        : getUserActionError(error, "UPDATE_FAILED"),
+    };
   }
 }
 

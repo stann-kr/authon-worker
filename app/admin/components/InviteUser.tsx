@@ -10,6 +10,10 @@ import { useVenueSelector } from "../../../components/VenueSelector";
 import Button from "../../../components/Button";
 import { captureImmutableDraft } from "../../../lib/forms/immutable-draft";
 import { shareUrl, toUrlShareData } from "../../../lib/share/url";
+import {
+  selectDomainMessageKey,
+  USER_CREATE_ERROR_KEYS,
+} from "../../../lib/api/domain-error";
 
 interface CreatedInvitation {
   expiresAt: string;
@@ -121,7 +125,15 @@ export default function InviteUser() {
 
       if (createError || !data) {
         console.error("Failed to create user:", createError);
-        setError(t("createFailed"));
+        setError(
+          t(
+            selectDomainMessageKey(
+              createError,
+              USER_CREATE_ERROR_KEYS,
+              "createFailed",
+            ),
+          ),
+        );
       } else {
         const msg = t("created", { name: draft.name, email: draft.email });
         setSuccess(msg);

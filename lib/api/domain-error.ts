@@ -10,6 +10,13 @@ export const GUEST_CREATE_ERROR_KEYS = {
   INVALID_GUEST_NAME: "registerFailed",
 } as const;
 
+export const USER_CREATE_ERROR_KEYS = {
+  EMAIL_ALREADY_EXISTS: "emailAlreadyExists",
+  FORBIDDEN: "forbiddenAction",
+  INVALID_INPUT: "invalidInput",
+  INVALID_ROLE: "invalidRole",
+} as const;
+
 export function selectDomainMessageKey<
   const TMapping extends Readonly<Record<string, string>>,
   const TFallback extends string,

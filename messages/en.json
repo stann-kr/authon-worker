@@ -902,6 +902,7 @@
     "venueRequired": "Please select a venue.",
     "guestLimitInvalid": "Guest limit must be zero or a positive number.",
     "createFailed": "Failed to create the user.",
+    "emailAlreadyExists": "This email is already registered. Open the existing account in Users to reissue its invitation link or reset its password.",
     "accountAlreadySetup": "An invitation link cannot be issued after the account completes first-time setup.",
     "created": "Account created for {name} ({email}).",
     "invited": "Invitation email sent to {name} ({email}).",
