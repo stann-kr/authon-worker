@@ -10,6 +10,7 @@ import {
   venues,
 } from "@/lib/db/schema";
 import { getBusinessDate } from "@/lib/date";
+import { getCompatibilityEventKey } from "@/lib/events/domain";
 import { loadEventById, findCompatibilityEvent } from "@/lib/events/server";
 import { requireActiveVenueId } from "@/lib/tenant/active-server";
 import { reportServerError } from "@/lib/observability/structured-log";
@@ -18,13 +19,13 @@ import {
   canApplyAttendanceEventMutation,
   isAttendanceScope,
   isAttendanceIdempotencyKey,
-  prepareAttendanceAdjustment,
+  prepareAttendanceReconciliation,
   prepareAttendanceSyncBatch,
   type AttendanceScope,
   type PreparedAttendanceMutation,
 } from "@/lib/attendance/domain";
 import {
-  persistAttendanceAdjustment,
+  persistAttendanceReconciliation,
   persistDoorAttendanceMutation,
 } from "@/lib/attendance/persistence";
 import type {
@@ -288,38 +289,49 @@ export async function syncDoorAttendanceMutations(params: {
   }
 }
 
-export async function adjustDoorAttendance(params: {
+export async function reconcileDoorAttendance(params: {
   scope: AttendanceScope;
-  delta: number;
+  targetTotalAttendance: number;
+  expectedCheckedInGuests: number;
+  expectedWalkIns: number;
   reason: string;
   idempotencyKey: string;
 }): Promise<ApiResponse<DoorAttendanceSummary>> {
   try {
     const actor = await requireAccess("admin");
     const { venue, event } = await loadAttendanceScope({ actor, scope: params.scope });
-    const adjustment = prepareAttendanceAdjustment(params);
+    const reconciliation = prepareAttendanceReconciliation(params);
     if (
       !isAttendanceIdempotencyKey(params.idempotencyKey) ||
       params.idempotencyKey.length < 8
     ) {
-      throw new AttendanceActionError("INVALID_ATTENDANCE_ADJUSTMENT");
+      throw new AttendanceActionError("INVALID_ATTENDANCE_RECONCILIATION");
     }
     const { env } = getCloudflareContext();
     const occurredAt = new Date().toISOString();
-    const result = await persistAttendanceAdjustment({
+    const result = await persistAttendanceReconciliation({
       database: env.DB,
       scope: params.scope,
+      compatibilityEventKey: getCompatibilityEventKey(
+        params.scope.venueId,
+        params.scope.businessDate,
+      ),
       actorUserId: actor.id,
       idempotencyKey: params.idempotencyKey,
-      delta: adjustment.delta,
-      reason: adjustment.reason,
+      targetTotalAttendance: reconciliation.targetTotalAttendance,
+      expectedCheckedInGuests: reconciliation.expectedCheckedInGuests,
+      expectedWalkIns: reconciliation.expectedWalkIns,
+      reason: reconciliation.reason,
       occurredAt,
     });
     if (result.outcome === "conflict") {
       throw new AttendanceActionError("ATTENDANCE_IDEMPOTENCY_CONFLICT");
     }
+    if (result.outcome === "stale") {
+      throw new AttendanceActionError("ATTENDANCE_RECONCILIATION_STALE");
+    }
     if (result.outcome === "rejected") {
-      throw new AttendanceActionError("ATTENDANCE_ADJUSTMENT_REJECTED");
+      throw new AttendanceActionError("ATTENDANCE_RECONCILIATION_REJECTED");
     }
     return {
       data: await buildDoorAttendanceSummary({
@@ -332,12 +344,12 @@ export async function adjustDoorAttendance(params: {
       error: null,
     };
   } catch (error: unknown) {
-    await reportServerError("attendance.adjust", error);
+    await reportServerError("attendance.reconcile", error);
     return {
       data: null,
       error: error instanceof AttendanceActionError
         ? error.code
-        : "ATTENDANCE_ADJUSTMENT_FAILED",
+        : "ATTENDANCE_RECONCILIATION_FAILED",
     };
   }
 }

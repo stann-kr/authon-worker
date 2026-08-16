@@ -773,7 +773,10 @@ function DoorPageContent() {
   );
 
   return (
-    <WorkspaceShell contentClassName="gap-4 pb-[calc(16rem+env(safe-area-inset-bottom))] md:pb-8 lg:gap-6">
+    <WorkspaceShell
+      contentClassName="gap-4 md:pb-8 lg:gap-6"
+      bottomInsetClassName="pb-[calc(13rem+env(safe-area-inset-bottom))] md:pb-0"
+    >
       {venueLoadError && (
         <VenueLoadNotice
           onRetry={refreshVenues}
@@ -788,6 +791,7 @@ function DoorPageContent() {
               scope={attendanceScope}
               currentBusinessDate={businessDate}
               checkedInGuests={scopeCheckedInGuests}
+              hasPendingGuestMutations={offlineQueueCounts.queued > 0}
             />
             <div className="context-bar">
                   <DatePicker

@@ -6,6 +6,7 @@ interface WorkspaceShellProps {
   children: ReactNode;
   width?: "default" | "narrow";
   contentClassName?: string;
+  bottomInsetClassName?: string;
 }
 
 const widthClasses = {
@@ -17,11 +18,12 @@ export default function WorkspaceShell({
   children,
   width = "default",
   contentClassName = "",
+  bottomInsetClassName = "",
 }: WorkspaceShellProps) {
   return (
     <div className="page-shell">
       <AdminHeader />
-      <div className="page-scroll">
+      <div className={`page-scroll ${bottomInsetClassName}`}>
         <main
           id="main-content"
           tabIndex={-1}

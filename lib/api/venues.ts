@@ -2,8 +2,8 @@
 
 import { reportServerError } from "@/lib/observability/structured-log";
 
-import { and, asc, eq, inArray } from "drizzle-orm";
-import { venueDomains, venues } from "../db/schema";
+import { and, asc, eq, inArray, sql } from "drizzle-orm";
+import { users, venueDomains, venues } from "../db/schema";
 import { type Venue, type ApiResponse } from "./types";
 import { requireRole } from "../auth/server";
 import { getDb } from "../db/client";
@@ -315,7 +315,19 @@ export async function updateVenue(
     if (updates.active !== undefined) dbUpdates.active = updates.active;
 
     if (Object.keys(dbUpdates).length > 0) {
-      await db.update(venues).set(dbUpdates).where(eq(venues.id, id));
+      const activeChanged =
+        updates.active !== undefined && updates.active !== currentVenue.active;
+      if (activeChanged) {
+        await db.batch([
+          db.update(venues).set(dbUpdates).where(eq(venues.id, id)),
+          db
+            .update(users)
+            .set({ sessionVersion: sql`${users.sessionVersion} + 1` })
+            .where(eq(users.venueId, id)),
+        ]);
+      } else {
+        await db.update(venues).set(dbUpdates).where(eq(venues.id, id));
+      }
     }
     if (primaryDomain !== undefined || updates.defaultLocale !== undefined) {
       const [currentDomain] = await db

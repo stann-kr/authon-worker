@@ -11,6 +11,11 @@ export type AttendancePersistenceOutcome =
   | "conflict"
   | "rejected";
 
+export type AttendanceReconciliationOutcome =
+  | AttendancePersistenceOutcome
+  | "stale"
+  | "unchanged";
+
 interface ExistingAttendanceActivity {
   id: string;
   payloadHash: string;
@@ -59,22 +64,87 @@ export const INSERT_REVERSAL_ATTENDANCE_SQL = `
   RETURNING id
 `;
 
-export const INSERT_ATTENDANCE_ADJUSTMENT_SQL = `
+export const INSERT_ATTENDANCE_RECONCILIATION_SQL = `
+  WITH current_counts AS (
+    SELECT
+      (
+        SELECT count(*)
+        FROM guests
+        WHERE venue_id = ?
+          AND date = ?
+          AND status = 'checked'
+          AND (
+            (? IS NOT NULL AND event_id = ?)
+            OR
+            (? IS NULL AND (
+              event_id IS NULL
+              OR event_id = (
+                SELECT id
+                FROM events
+                WHERE compatibility_key = ?
+                LIMIT 1
+              )
+            ))
+          )
+      ) AS checked_in_guests,
+      (
+        SELECT coalesce(sum(delta), 0)
+        FROM attendance_activity_ledger
+        WHERE venue_id = ? AND business_date = ? AND event_id IS ?
+      ) AS walk_ins
+  ),
+  candidate AS (
+    SELECT
+      checked_in_guests,
+      walk_ins,
+      ? - checked_in_guests - walk_ins AS delta
+    FROM current_counts
+  )
   INSERT INTO attendance_activity_ledger (
     id, venue_id, business_date, event_id, action, delta,
     reverses_activity_id, adjustment_reason, actor_user_id, channel,
     request_id, idempotency_key, payload_hash, device_key_hash,
     device_sequence, occurred_at, created_at
   )
-  SELECT ?, ?, ?, ?, 'manual_adjustment', ?, NULL, ?, ?, 'admin',
+  SELECT ?, ?, ?, ?, 'manual_adjustment', candidate.delta, NULL, ?, ?, 'admin',
     ?, ?, ?, NULL, NULL, ?, ?
-  WHERE (
-    SELECT coalesce(sum(delta), 0) + ?
-    FROM attendance_activity_ledger
-    WHERE venue_id = ? AND business_date = ? AND event_id IS ?
-  ) >= 0
+  FROM candidate
+  WHERE candidate.checked_in_guests = ?
+    AND candidate.walk_ins = ?
+    AND ? >= candidate.checked_in_guests
+    AND candidate.delta BETWEEN -500 AND 500
+    AND candidate.delta <> 0
   ON CONFLICT DO NOTHING
   RETURNING id
+`;
+
+const SELECT_ATTENDANCE_RECONCILIATION_COUNTS_SQL = `
+  SELECT
+    (
+      SELECT count(*)
+      FROM guests
+      WHERE venue_id = ?
+        AND date = ?
+        AND status = 'checked'
+        AND (
+          (? IS NOT NULL AND event_id = ?)
+          OR
+          (? IS NULL AND (
+            event_id IS NULL
+            OR event_id = (
+              SELECT id
+              FROM events
+              WHERE compatibility_key = ?
+              LIMIT 1
+            )
+          ))
+        )
+    ) AS checkedInGuests,
+    (
+      SELECT coalesce(sum(delta), 0)
+      FROM attendance_activity_ledger
+      WHERE venue_id = ? AND business_date = ? AND event_id IS ?
+    ) AS walkIns
 `;
 
 async function loadExisting(
@@ -111,7 +181,7 @@ async function resolveInsertOutcome(params: {
 
 export async function hashAttendancePayload(params: {
   scope: AttendanceScope;
-  action: DoorAttendanceAction | "manual_adjustment";
+  action: DoorAttendanceAction;
   delta: number;
   reversesIdempotencyKey?: string | null;
   reason?: string | null;
@@ -128,10 +198,29 @@ export async function hashAttendancePayload(params: {
     params.reversesIdempotencyKey ?? null,
     params.reason ?? null,
     params.actorUserId,
-    params.action === "manual_adjustment"
-      ? null
-      : params.deviceSequence ?? null,
-    params.action === "manual_adjustment" ? null : params.occurredAt,
+    params.deviceSequence ?? null,
+    params.occurredAt,
+  ]));
+}
+
+export async function hashAttendanceReconciliationPayload(params: {
+  scope: AttendanceScope;
+  targetTotalAttendance: number;
+  expectedCheckedInGuests: number;
+  expectedWalkIns: number;
+  reason: string;
+  actorUserId: string;
+}): Promise<string> {
+  return hashOpaqueIdentifier(JSON.stringify([
+    params.scope.venueId,
+    params.scope.businessDate,
+    params.scope.eventId,
+    "total_reconciliation",
+    params.targetTotalAttendance,
+    params.expectedCheckedInGuests,
+    params.expectedWalkIns,
+    params.reason,
+    params.actorUserId,
   ]));
 }
 
@@ -217,22 +306,25 @@ export async function persistDoorAttendanceMutation(params: {
   });
 }
 
-export async function persistAttendanceAdjustment(params: {
+export async function persistAttendanceReconciliation(params: {
   database: D1Database;
   scope: AttendanceScope;
+  compatibilityEventKey: string;
   actorUserId: string;
   idempotencyKey: string;
-  delta: number;
+  targetTotalAttendance: number;
+  expectedCheckedInGuests: number;
+  expectedWalkIns: number;
   reason: string;
   occurredAt: string;
-}): Promise<{ outcome: AttendancePersistenceOutcome; activityId: string | null }> {
-  const payloadHash = await hashAttendancePayload({
+}): Promise<{ outcome: AttendanceReconciliationOutcome; activityId: string | null }> {
+  const payloadHash = await hashAttendanceReconciliationPayload({
     scope: params.scope,
-    action: "manual_adjustment",
-    delta: params.delta,
+    targetTotalAttendance: params.targetTotalAttendance,
+    expectedCheckedInGuests: params.expectedCheckedInGuests,
+    expectedWalkIns: params.expectedWalkIns,
     reason: params.reason,
     actorUserId: params.actorUserId,
-    occurredAt: params.occurredAt,
   });
   const existing = await loadExisting(
     params.database,
@@ -246,13 +338,22 @@ export async function persistAttendanceAdjustment(params: {
   }
   const activityId = crypto.randomUUID();
   const inserted = await params.database
-    .prepare(INSERT_ATTENDANCE_ADJUSTMENT_SQL)
+    .prepare(INSERT_ATTENDANCE_RECONCILIATION_SQL)
     .bind(
+      params.scope.venueId,
+      params.scope.businessDate,
+      params.scope.eventId,
+      params.scope.eventId,
+      params.scope.eventId,
+      params.compatibilityEventKey,
+      params.scope.venueId,
+      params.scope.businessDate,
+      params.scope.eventId,
+      params.targetTotalAttendance,
       activityId,
       params.scope.venueId,
       params.scope.businessDate,
       params.scope.eventId,
-      params.delta,
       params.reason,
       params.actorUserId,
       crypto.randomUUID(),
@@ -260,17 +361,43 @@ export async function persistAttendanceAdjustment(params: {
       payloadHash,
       params.occurredAt,
       params.occurredAt,
-      params.delta,
-      params.scope.venueId,
-      params.scope.businessDate,
-      params.scope.eventId,
+      params.expectedCheckedInGuests,
+      params.expectedWalkIns,
+      params.targetTotalAttendance,
     )
     .first<{ id: string }>();
-  return resolveInsertOutcome({
+  const insertOutcome = await resolveInsertOutcome({
     database: params.database,
     venueId: params.scope.venueId,
     idempotencyKey: params.idempotencyKey,
     payloadHash,
     insertedId: inserted?.id ?? null,
   });
+  if (insertOutcome.outcome !== "rejected") return insertOutcome;
+
+  const current = await params.database
+    .prepare(SELECT_ATTENDANCE_RECONCILIATION_COUNTS_SQL)
+    .bind(
+      params.scope.venueId,
+      params.scope.businessDate,
+      params.scope.eventId,
+      params.scope.eventId,
+      params.scope.eventId,
+      params.compatibilityEventKey,
+      params.scope.venueId,
+      params.scope.businessDate,
+      params.scope.eventId,
+    )
+    .first<{ checkedInGuests: number; walkIns: number }>();
+  const checkedInGuests = Number(current?.checkedInGuests ?? -1);
+  const walkIns = Number(current?.walkIns ?? -1);
+  if (
+    checkedInGuests !== params.expectedCheckedInGuests ||
+    walkIns !== params.expectedWalkIns
+  ) {
+    return { outcome: "stale", activityId: null };
+  }
+  return params.targetTotalAttendance === checkedInGuests + walkIns
+    ? { outcome: "unchanged", activityId: null }
+    : insertOutcome;
 }

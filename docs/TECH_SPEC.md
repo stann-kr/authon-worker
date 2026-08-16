@@ -68,6 +68,7 @@ Client
 | Guest Limit Request | Staff·DJ의 날짜별 추가 게스트 한도 요청과 관리자 승인 기록 |
 | External Link | 외부 DJ가 계정 없이 게스트를 등록하고 설정을 새 credential로 재사용하는 공개 링크와 베뉴별 DJ 디렉터리 연결 |
 | Check-in | 도어 운영자의 입장 확인 기록 |
+| Attendance | 등록 게스트 체크인과 비식별 워크인 원장을 결합한 영업일·Event 단위 누적 입장 기록 |
 | Password Reset | 사용자 관리자 요청, 관리자 결정, 기존 재설정 token의 일회성 소비 |
 | Account Setup | `pending_reset` 계정의 1회용 설정 코드 또는 요청 브라우저에 결속된 관리자 승인 기반 비밀번호 설정 |
 | User Audit | 계정 생성, Role·상태·비밀번호 설정과 삭제 작업 기록 |
@@ -100,7 +101,7 @@ Client
 | `/guest?token=...` | 공개 링크 | 외부 DJ 게스트 등록 |
 | `/` | 인증 필요 | 역할별 대시보드와 Venue Admin의 미처리 추가 게스트 요청 알림 |
 | `/guest` | 인증 필요 | 게스트 등록/관리 |
-| `/door` | 인증 필요 | 도어 체크인 |
+| `/door` | 인증 필요 | 게스트 체크인, 워크인 기록과 관리자 마감 수기 합계 반영 |
 | `/admin` | 관리자 | 게스트 목록·추가 한도 요청을 포함한 게스트 운영과 링크·사용자·베뉴 관리 |
 | `/profile` | 인증 필요 | 프로필과 비밀번호 변경 |
 
@@ -108,6 +109,9 @@ Client
 
 - 로그인 후 HTTP-only cookie 기반 JWT를 발급한다.
 - KV session을 함께 확인해 로그아웃과 세션 무효화를 반영한다.
+- 기본 로그인 세션은 갱신 없는 24시간 고정 수명이다. 사용자가 `로그인 유지`를 선택한 세션만 30일 idle 수명을 사용하고 만료 7일 전부터 활동 시 갱신하되 최초 로그인 후 180일을 넘기지 않는다.
+- remembered session은 최초 로그인 때 KV record를 180일 absolute 수명으로 한 번만 저장한다. 갱신은 KV, 사용자·베뉴 활성 상태, tenant, role과 session version 검증을 모두 통과한 뒤 같은 session ID의 JWT와 두 cookie에만 적용해 동일 KV key의 병렬 write 경쟁을 만들지 않는다. remembered metadata가 없는 기존 세션은 장기 세션으로 승격하지 않는다.
+- 로그아웃은 브라우저의 JWT와 session ID cookie를 즉시 만료하고 D1 session version을 CAS 증가시킨 뒤 KV record를 정리한다. 따라서 늦게 끝난 갱신 응답과 다른 기기의 기존 세션도 다시 사용할 수 없다. 베뉴 활성 상태가 바뀔 때도 해당 베뉴 사용자 session version을 함께 올린다.
 - 비밀번호 변경/재설정 이후 기존 세션을 무효화할 수 있도록 session version을 사용한다.
 - Role, 계정 유형, 공용 계정 Door capability 변경과 비활성화·재활성화, 삭제 처리도 session version을 변경해 기존 세션의 재사용을 차단한다.
 - 신규 비밀번호 hash는 WebCrypto PBKDF2 계열을 기준으로 관리하고, 기존 hash는 점진 전환한다.
@@ -142,6 +146,13 @@ Client
 - 기존 링크를 템플릿으로 사용할 때는 DJ·이벤트·정원·언어만 복사하며, ID·token·URL·사용량·생성자·수명주기는 새로 만든다.
 - terminal 동기화는 베뉴 단위 `terminalRequestId`를 필수 idempotency key로 사용한다. 같은 key와 정규화된 payload의 retry는 최초 guest ID를 반환하고, 다른 payload 재사용은 `409`로 거부한다.
 
+## Door 입장 기록 일관성
+
+- 등록 게스트는 기존 Guest 체크인으로 집계하고 명단에 없는 첫 입장만 비식별 워크인 원장에 `+1`로 기록한다. Door 화면은 두 수치를 분리해 표시하며 현재 재실 인원이나 재입장 횟수로 해석하지 않는다.
+- 워크인 빠른 입력은 기기별 IndexedDB queue에 먼저 기록하고 idempotency key와 device sequence로 서버에 동기화한다. 마지막 입력 취소는 같은 operator·device·scope의 취소되지 않은 워크인만 대상으로 한다.
+- 관리자 마감 보정은 증감값을 직접 받지 않는다. 수기로 확인한 누적 입장객 목표와 화면에 표시된 Guest·워크인 기준값을 함께 보내고, 서버가 같은 D1 statement에서 현재값을 다시 계산해 둘 다 일치할 때만 차이를 `manual_adjustment`로 append한다.
+- 보정 전에 사용한 모든 Door 기기의 대기 입력을 동기화해야 한다. 입력 중 기준값이 바뀌면 stale 응답으로 거부하고 최신 합계를 다시 확인하게 하며, 반영 뒤 늦게 도착한 다른 기기의 offline 입력까지 마감 수치를 동결하지는 않는다.
+
 ## 클라이언트 비동기 상태 원칙
 
 - 베뉴·날짜에 결속된 mutation은 시작 시 scope와 operation ID를 함께 캡처한다. 완료 시 현재 scope와 operation 소유권이 모두 일치할 때만 credential, feedback과 busy 상태를 갱신한다.
@@ -164,6 +175,7 @@ Client
 | `terminal_guest_sync_requests` | terminal 요청의 베뉴별 idempotency key, payload hash와 최초 guest 결과 |
 | `guest_limit_requests` | 사용자·날짜별 추가 한도 요청, 선택 사유, 승인 수량과 결정 기록 |
 | `check_ins` | 체크인 기록 |
+| `attendance_activity_ledger` | 이름·연락처를 저장하지 않는 워크인, 취소와 관리자 수기 보정 불변 원장 |
 | `password_reset_tokens` | 비밀번호 재설정 token hash와 만료/사용 상태 |
 | `password_reset_requests` | 사용자 관리자 요청, 처리 상태·방식·결정자와 코드 없는 승인 만료 시각 |
 
@@ -175,6 +187,7 @@ Client
 | 권한/role | route guard, Server Action guard, 계정 유형 capability, venue scoping, session 무효화, 자기 계정·권한 상승 방지 |
 | 도메인/브랜드 | host resolver, venue domain mapping, metadata, email/link canonical URL |
 | 게스트 등록 | external link flow, 공용 계정 입력자, 기본·승인 추가 한도의 원자적 적용, date/status 계산 |
+| Door 입장 기록 | Guest 체크인 포함 범위, attendance queue·idempotency·device sequence, 관리자 target reconciliation CAS |
 | 베뉴 시간 기준 | IANA timezone 검증, 자정 통과 운영시간, Guest·Door·Admin 기본 영업일 계산 |
 | D1 schema | Drizzle schema, migration files, affected queries |
 | 배포 runtime | OpenNext compatibility, Worker build result |

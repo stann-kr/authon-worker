@@ -256,20 +256,49 @@ export function prepareAttendanceSyncBatch(params: {
   return items.sort((left, right) => left.sequence - right.sequence);
 }
 
-export function prepareAttendanceAdjustment(params: {
-  delta: unknown;
+export function prepareAttendanceReconciliation(params: {
+  targetTotalAttendance: unknown;
+  expectedCheckedInGuests: unknown;
+  expectedWalkIns: unknown;
   reason: unknown;
-}): { delta: number; reason: string } {
+}): {
+  targetTotalAttendance: number;
+  expectedCheckedInGuests: number;
+  expectedWalkIns: number;
+  delta: number;
+  reason: string;
+} {
   const reason = typeof params.reason === "string" ? params.reason.trim() : "";
+  const targetTotalAttendance = params.targetTotalAttendance;
+  const expectedCheckedInGuests = params.expectedCheckedInGuests;
+  const expectedWalkIns = params.expectedWalkIns;
+  const delta =
+    typeof targetTotalAttendance === "number" &&
+    typeof expectedCheckedInGuests === "number" &&
+    typeof expectedWalkIns === "number"
+      ? targetTotalAttendance - expectedCheckedInGuests - expectedWalkIns
+      : Number.NaN;
   if (
-    !Number.isSafeInteger(params.delta) ||
-    params.delta === 0 ||
-    Math.abs(params.delta as number) > MAX_ATTENDANCE_ADJUSTMENT ||
+    !Number.isSafeInteger(targetTotalAttendance) ||
+    !Number.isSafeInteger(expectedCheckedInGuests) ||
+    !Number.isSafeInteger(expectedWalkIns) ||
+    (targetTotalAttendance as number) < 0 ||
+    (expectedCheckedInGuests as number) < 0 ||
+    (expectedWalkIns as number) < 0 ||
+    (targetTotalAttendance as number) < (expectedCheckedInGuests as number) ||
+    !Number.isSafeInteger(delta) ||
+    Math.abs(delta) > MAX_ATTENDANCE_ADJUSTMENT ||
     reason.length < 1 ||
     reason.length > 500 ||
     /[\u0000-\u001f\u007f]/.test(reason)
   ) {
-    throw new Error("INVALID_ATTENDANCE_ADJUSTMENT");
+    throw new Error("INVALID_ATTENDANCE_RECONCILIATION");
   }
-  return { delta: params.delta as number, reason };
+  return {
+    targetTotalAttendance: targetTotalAttendance as number,
+    expectedCheckedInGuests: expectedCheckedInGuests as number,
+    expectedWalkIns: expectedWalkIns as number,
+    delta,
+    reason,
+  };
 }

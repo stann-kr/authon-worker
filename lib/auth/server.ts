@@ -6,6 +6,7 @@ import { users, venues } from "../db/schema";
 import { getDb } from "../db/client";
 import { getRequestTenantContext } from "../tenant/server";
 import { hasActiveVenueAccess } from "../tenant/active-policy";
+import { parseStoredSession } from "./session-policy";
 import { isLocale, type Locale } from "@/i18n/config";
 import {
   hasAccess,
@@ -29,20 +30,6 @@ export interface SessionUser {
   guestLimit: number | null;
   sessionVersion: number;
   preferredLocale: Locale | null;
-}
-
-interface StoredSession {
-  userId?: string;
-  sessionVersion?: number;
-}
-
-function parseStoredSession(raw: string): StoredSession | null {
-  try {
-    const parsed = JSON.parse(raw) as StoredSession;
-    return parsed && typeof parsed === "object" ? parsed : null;
-  } catch {
-    return null;
-  }
 }
 
 /** JWT + KV 세션 + DB 사용자 상태 검증. 실패 시 Error throw. */

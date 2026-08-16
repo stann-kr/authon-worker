@@ -44,12 +44,13 @@ export const cacheUser = (user: User | null): void => {
 export const login = async (
   email: string,
   password: string,
+  keepSignedIn = false,
 ): Promise<LoginResult> => {
   try {
     const res = await fetch("/api/auth/login", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, password }),
+      body: JSON.stringify({ email, password, keepSignedIn }),
     });
 
     if (!res.ok) {

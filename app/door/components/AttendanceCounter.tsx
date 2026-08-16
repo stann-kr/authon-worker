@@ -11,8 +11,8 @@ import {
 import { useTranslations } from "next-intl";
 import { useAuthSession } from "@/components/AuthSessionProvider";
 import {
-  adjustDoorAttendance,
   fetchDoorAttendanceSummary,
+  reconcileDoorAttendance,
   syncDoorAttendanceMutations,
 } from "@/lib/api/attendance";
 import {
@@ -32,12 +32,22 @@ import {
   removeAttendanceMutations,
   resolveAttendanceMutation,
 } from "@/lib/attendance/offline-store";
+import {
+  beginAttendanceSummaryMutation,
+  beginAttendanceSummaryRead,
+  claimAttendanceSummaryMutation,
+  createAttendanceSummaryAuthority,
+  invalidateAttendanceSummaries,
+  isAttendanceSummaryMutationClaimCurrent,
+  isAttendanceSummaryReadCurrent,
+} from "@/lib/attendance/summary-authority";
 import type { DoorAttendanceSummary } from "@/lib/attendance/types";
 
 interface AttendanceCounterProps {
   scope: AttendanceScope | null;
   currentBusinessDate: string;
   checkedInGuests: number;
+  hasPendingGuestMutations: boolean;
 }
 
 type CounterNotice =
@@ -45,6 +55,7 @@ type CounterNotice =
   | "queueFailed"
   | "syncFailed"
   | "adjustmentFailed"
+  | "reconciliationStale"
   | null;
 
 function scopeKey(scope: AttendanceScope | null): string {
@@ -57,6 +68,7 @@ export default function AttendanceCounter({
   scope,
   currentBusinessDate,
   checkedInGuests,
+  hasPendingGuestMutations,
 }: AttendanceCounterProps) {
   const t = useTranslations("Door.attendance");
   const { user } = useAuthSession();
@@ -70,17 +82,21 @@ export default function AttendanceCounter({
   const [isUndoing, setIsUndoing] = useState(false);
   const [notice, setNotice] = useState<CounterNotice>(null);
   const [announcement, setAnnouncement] = useState("");
-  const [adjustmentDelta, setAdjustmentDelta] = useState("");
+  const [reconciliationTarget, setReconciliationTarget] = useState("");
   const [adjustmentReason, setAdjustmentReason] = useState("");
   const [isAdjusting, setIsAdjusting] = useState(false);
   const currentScopeKeyRef = useRef(scopeKey(scope));
   const syncingRef = useRef(false);
   const pendingSyncScopeRef = useRef<AttendanceScope | null>(null);
+  const summaryAuthorityRef = useRef(createAttendanceSummaryAuthority());
   const syncQueueRef = useRef<(
     targetScope: AttendanceScope,
   ) => Promise<void>>(async () => {});
   const undoingRef = useRef(false);
-  const adjustmentIdempotencyKeyRef = useRef<string | null>(null);
+  const reconciliationAttemptRef = useRef<{
+    fingerprint: string;
+    idempotencyKey: string;
+  } | null>(null);
   currentScopeKeyRef.current = scopeKey(scope);
 
   const canAdjust = user?.role === "super_admin" || user?.role === "venue_admin";
@@ -111,7 +127,24 @@ export default function AttendanceCounter({
   );
   const localDelta = pendingAttendanceDelta(scopedMutations);
   const walkIns = Math.max(0, (scopedSummary?.walkIns ?? 0) + localDelta);
-  const totalAttendance = checkedInGuests + walkIns;
+  const serverCheckedInGuests = scopedSummary?.checkedInGuests ?? 0;
+  const serverWalkIns = scopedSummary?.walkIns ?? 0;
+  const serverTotalAttendance = serverCheckedInGuests + serverWalkIns;
+  const parsedReconciliationTarget = reconciliationTarget === ""
+    ? null
+    : Number(reconciliationTarget);
+  const reconciliationDelta =
+    parsedReconciliationTarget !== null &&
+    Number.isSafeInteger(parsedReconciliationTarget)
+      ? parsedReconciliationTarget - serverTotalAttendance
+      : null;
+  const isReconciliationBelowCheckedGuests =
+    parsedReconciliationTarget !== null &&
+    parsedReconciliationTarget < serverCheckedInGuests;
+  const isReconciliationDeltaOutOfRange =
+    reconciliationDelta !== null && Math.abs(reconciliationDelta) > 500;
+  const hasPendingReconciliationMutations =
+    queuedMutations.length > 0 || hasPendingGuestMutations;
   const queuedReversalTargets = useMemo(
     () => new Set(
       queuedMutations.flatMap((mutation) =>
@@ -150,6 +183,14 @@ export default function AttendanceCounter({
 
   const loadSummary = useCallback(async (targetScope: AttendanceScope) => {
     const targetKey = scopeKey(targetScope);
+    if (currentScopeKeyRef.current !== targetKey) return;
+    const requestToken = beginAttendanceSummaryRead(summaryAuthorityRef.current);
+    const isCurrentRequest = () =>
+      currentScopeKeyRef.current === targetKey &&
+      isAttendanceSummaryReadCurrent(
+        summaryAuthorityRef.current,
+        requestToken,
+      );
     setIsLoading(true);
     try {
       let deviceId: string | null = null;
@@ -167,7 +208,7 @@ export default function AttendanceCounter({
         scope: targetScope,
         deviceId,
       });
-      if (currentScopeKeyRef.current !== targetKey) return;
+      if (!isCurrentRequest()) return;
       if (response.error || !response.data) {
         setNotice("loadFailed");
       } else {
@@ -175,9 +216,9 @@ export default function AttendanceCounter({
         setNotice((current) => current === "loadFailed" ? null : current);
       }
     } catch {
-      if (currentScopeKeyRef.current === targetKey) setNotice("loadFailed");
+      if (isCurrentRequest()) setNotice("loadFailed");
     } finally {
-      if (currentScopeKeyRef.current === targetKey) setIsLoading(false);
+      if (isCurrentRequest()) setIsLoading(false);
     }
   }, []);
 
@@ -207,6 +248,11 @@ export default function AttendanceCounter({
             offset,
             offset + MAX_ATTENDANCE_SYNC_BATCH,
           );
+          const summaryMutationToken =
+            currentScopeKeyRef.current === targetKey
+              ? beginAttendanceSummaryMutation(summaryAuthorityRef.current)
+              : null;
+          if (summaryMutationToken) setIsLoading(false);
           const response = await syncDoorAttendanceMutations({
             scope: targetScope,
             deviceId: group.deviceId,
@@ -218,6 +264,14 @@ export default function AttendanceCounter({
               occurredAt: mutation.queuedAt,
             })),
           });
+          const summaryMutationClaim =
+            summaryMutationToken && currentScopeKeyRef.current === targetKey
+              ? claimAttendanceSummaryMutation(
+                  summaryAuthorityRef.current,
+                  summaryMutationToken,
+                )
+              : null;
+          if (summaryMutationClaim) setIsLoading(false);
           if (response.error || !response.data) {
             throw new Error("ATTENDANCE_SYNC_FAILED");
           }
@@ -234,7 +288,14 @@ export default function AttendanceCounter({
           }
           await removeAttendanceMutations(removable);
           await refreshLocalMutations(targetScope);
-          if (currentScopeKeyRef.current === targetKey) {
+          if (
+            summaryMutationClaim &&
+            currentScopeKeyRef.current === targetKey &&
+            isAttendanceSummaryMutationClaimCurrent(
+              summaryAuthorityRef.current,
+              summaryMutationClaim,
+            )
+          ) {
             setSummary(response.data.summary);
           }
         }
@@ -270,14 +331,15 @@ export default function AttendanceCounter({
   }, [syncQueue]);
 
   useEffect(() => {
+    invalidateAttendanceSummaries(summaryAuthorityRef.current);
     setSummary(null);
     setMutations([]);
     setNotice(null);
     setAnnouncement("");
     setIsStorageAvailable(null);
-    setAdjustmentDelta("");
+    setReconciliationTarget("");
     setAdjustmentReason("");
-    adjustmentIdempotencyKeyRef.current = null;
+    reconciliationAttemptRef.current = null;
     if (!scope) {
       setIsLoading(false);
       return;
@@ -327,9 +389,7 @@ export default function AttendanceCounter({
       await refreshLocalMutations(scope);
       if (currentScopeKeyRef.current === targetKey) {
         setNotice(null);
-        setAnnouncement(t("recordedAnnouncement", {
-          count: totalAttendance + 1,
-        }));
+        setAnnouncement(t("recordedAnnouncement"));
       }
     } catch {
       setIsStorageAvailable(false);
@@ -351,9 +411,7 @@ export default function AttendanceCounter({
       await refreshLocalMutations(scope);
       if (currentScopeKeyRef.current === targetKey) {
         setNotice(null);
-        setAnnouncement(t("undoneAnnouncement", {
-          count: Math.max(0, totalAttendance - 1),
-        }));
+        setAnnouncement(t("undoneAnnouncement"));
       }
     } catch {
       setIsStorageAvailable(false);
@@ -366,38 +424,78 @@ export default function AttendanceCounter({
 
   const submitAdjustment = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!scope || !canAdjust || queuedMutations.length > 0) return;
-    const delta = Number(adjustmentDelta);
-    const idempotencyKey =
-      adjustmentIdempotencyKeyRef.current ??
-      `admin-adjustment:${crypto.randomUUID()}`;
-    adjustmentIdempotencyKeyRef.current = idempotencyKey;
+    if (
+      !scope ||
+      !canAdjust ||
+      !scopedSummary ||
+      hasPendingReconciliationMutations
+    ) return;
+    const targetTotalAttendance = Number(reconciliationTarget);
+    const attemptFingerprint = JSON.stringify([
+      scope.venueId,
+      scope.businessDate,
+      scope.eventId,
+      targetTotalAttendance,
+      scopedSummary.checkedInGuests,
+      scopedSummary.walkIns,
+      adjustmentReason.trim(),
+    ]);
+    const existingAttempt = reconciliationAttemptRef.current;
+    const idempotencyKey = existingAttempt?.fingerprint === attemptFingerprint
+      ? existingAttempt.idempotencyKey
+      : `admin-adjustment:${crypto.randomUUID()}`;
+    reconciliationAttemptRef.current = {
+      fingerprint: attemptFingerprint,
+      idempotencyKey,
+    };
     const targetKey = scopeKey(scope);
     setIsAdjusting(true);
+    const reconciliationToken = beginAttendanceSummaryMutation(
+      summaryAuthorityRef.current,
+    );
+    setIsLoading(false);
     try {
-      const response = await adjustDoorAttendance({
+      const response = await reconcileDoorAttendance({
         scope,
-        delta,
+        targetTotalAttendance,
+        expectedCheckedInGuests: scopedSummary.checkedInGuests,
+        expectedWalkIns: scopedSummary.walkIns,
         reason: adjustmentReason,
         idempotencyKey,
       });
+      const reconciliationClaim = currentScopeKeyRef.current === targetKey
+        ? claimAttendanceSummaryMutation(
+            summaryAuthorityRef.current,
+            reconciliationToken,
+          )
+        : null;
+      if (!reconciliationClaim) return;
+      setIsLoading(false);
       if (response.error || !response.data) {
-        if (currentScopeKeyRef.current === targetKey) {
+        if (response.error === "ATTENDANCE_RECONCILIATION_STALE") {
+          reconciliationAttemptRef.current = null;
+          setNotice("reconciliationStale");
+          await loadSummary(scope);
+        } else {
           setNotice("adjustmentFailed");
         }
         return;
       }
-      if (currentScopeKeyRef.current !== targetKey) return;
       setSummary(response.data);
-      setAdjustmentDelta("");
+      setReconciliationTarget("");
       setAdjustmentReason("");
-      adjustmentIdempotencyKeyRef.current = null;
+      reconciliationAttemptRef.current = null;
       setNotice(null);
-      setAnnouncement(t("adjustedAnnouncement", {
-        count: checkedInGuests + response.data.walkIns,
-      }));
+      setAnnouncement(t("adjustedAnnouncement"));
     } catch {
-      if (currentScopeKeyRef.current === targetKey) {
+      const reconciliationClaim = currentScopeKeyRef.current === targetKey
+        ? claimAttendanceSummaryMutation(
+            summaryAuthorityRef.current,
+            reconciliationToken,
+          )
+        : null;
+      if (reconciliationClaim) {
+        setIsLoading(false);
         setNotice("adjustmentFailed");
       }
     } finally {
@@ -437,26 +535,18 @@ export default function AttendanceCounter({
         aria-labelledby="attendance-counter-title"
         aria-busy={isLoading || isSyncing}
       >
-        <div className="mx-auto max-w-[1440px] px-4 py-3 sm:px-6 md:px-4 md:py-4">
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <h2 id="attendance-counter-title" className="text-sm font-semibold text-text-heading">
-                {t("title")}
-              </h2>
-              <p className="mt-1 text-xs text-text-muted">{statusText}</p>
-              <p className="mt-1 text-xs text-text-dim md:hidden">
-                {t("checkedInGuests")} {checkedInGuests} · {t("walkIns")} {walkIns}
-              </p>
-            </div>
-            <div className="text-right">
-              <p className="text-xs text-text-muted">{t("totalAttendance")}</p>
-              <p className="font-mono text-3xl font-semibold tabular-nums text-text-heading">
-                {totalAttendance}
-              </p>
-            </div>
+        <div className="mx-auto max-w-[1440px] px-4 py-2 sm:px-6 md:px-4 md:py-3">
+          <div>
+            <h2 id="attendance-counter-title" className="text-sm font-semibold text-text-heading">
+              {t("title")}
+            </h2>
+            <p className="mt-0.5 text-xs text-text-muted">{statusText}</p>
+            <p className="mt-0.5 text-xs text-text-dim md:hidden">
+              {t("checkedInGuests")} {checkedInGuests} · {t("walkIns")} {walkIns}
+            </p>
           </div>
 
-          <dl className="mt-3 hidden grid-cols-2 gap-px bg-border-subtle text-center text-xs md:grid">
+          <dl className="mt-2 hidden grid-cols-2 gap-px bg-border-subtle text-center text-xs md:grid">
             <div className="bg-surface-raised px-2 py-2">
               <dt className="text-text-muted">{t("checkedInGuests")}</dt>
               <dd className="mt-1 font-mono text-lg tabular-nums text-text-heading">
@@ -471,37 +561,37 @@ export default function AttendanceCounter({
             </div>
           </dl>
 
-          <div className="mt-3 grid grid-cols-[minmax(0,1fr)_auto] gap-2">
+          <div className="mt-2 grid grid-cols-[minmax(0,1fr)_auto] gap-2">
             <button
               type="button"
               onClick={() => void queueWalkIn()}
               disabled={!canRecord}
               aria-describedby="attendance-counter-help"
-              className="pressable flex min-h-[4.5rem] items-center justify-center gap-3 border border-action-primary bg-action-primary px-4 py-3 font-semibold text-action-text disabled:cursor-not-allowed disabled:opacity-50"
+              className="pressable flex min-h-14 items-center justify-center gap-2 border border-action-primary bg-action-primary px-3 py-2 text-sm font-semibold text-action-text disabled:cursor-not-allowed disabled:opacity-50"
             >
               <span>{t("addWalkIn")}</span>
-              <span className="font-mono text-3xl leading-none" aria-hidden="true">+1</span>
+              <span className="font-mono text-2xl leading-none" aria-hidden="true">+1</span>
             </button>
             <button
               type="button"
               onClick={() => void queueUndo()}
               disabled={!canRecord || !undoableKey || isUndoing}
-              className="pressable min-h-14 min-w-24 border border-border-default bg-surface-raised px-3 py-2 text-xs font-medium text-text-heading disabled:cursor-not-allowed disabled:opacity-40"
+              className="pressable min-h-11 min-w-20 border border-border-default bg-surface-raised px-2 py-2 text-xs font-medium text-text-heading disabled:cursor-not-allowed disabled:opacity-40"
             >
               {t("undoLast")}
             </button>
           </div>
-          <p id="attendance-counter-help" className="mt-2 text-xs leading-relaxed text-text-dim">
+          <p id="attendance-counter-help" className="mt-1 text-xs leading-snug text-text-dim">
             {unavailableText ?? t("helper")}
           </p>
 
           {notice && (
-            <p className="mt-2 border-l-2 border-status-danger bg-status-danger/10 px-3 py-2 text-xs text-status-danger" role="alert">
+            <p className="mt-1.5 border-l-2 border-status-danger bg-status-danger/10 px-3 py-2 text-xs text-status-danger" role="alert">
               {t(`notice.${notice}`)}
             </p>
           )}
           {failedMutations.length > 0 && (
-            <div className="mt-2 flex items-center justify-between gap-3 border-l-2 border-status-waiting bg-status-waiting/10 px-3 py-2 text-xs text-text-muted">
+            <div className="mt-1.5 flex items-center justify-between gap-3 border-l-2 border-status-waiting bg-status-waiting/10 px-3 py-2 text-xs text-text-muted">
               <span>{t("failedItems", { count: failedMutations.length })}</span>
               <button
                 type="button"
@@ -516,33 +606,80 @@ export default function AttendanceCounter({
       </section>
 
       {canAdjust && scope && (
-        <details className="app-panel p-4 sm:p-5">
+        <details
+          className="app-panel p-4 sm:p-5"
+          onToggle={(event) => {
+            if (event.currentTarget.open) void loadSummary(scope);
+          }}
+        >
           <summary className="pressable -mx-1 flex min-h-11 cursor-pointer list-none items-center px-1 text-sm font-semibold text-text-muted marker:hidden">
             {t("adjustment.title")}
           </summary>
           <form onSubmit={submitAdjustment} className="mt-3 space-y-3">
-            <p className="text-xs leading-relaxed text-text-dim">
+            <p
+              id="attendance-reconciliation-help"
+              className="text-xs leading-relaxed text-text-dim"
+            >
               {t("adjustment.help")}
             </p>
+            {scopedSummary && (
+              <p className="text-xs text-text-muted">
+                {t("adjustment.current", {
+                  checkedInGuests: serverCheckedInGuests,
+                  walkIns: serverWalkIns,
+                })}
+              </p>
+            )}
             <div>
-              <label htmlFor="attendance-adjustment-delta" className="app-label">
-                {t("adjustment.delta")}
+              <label htmlFor="attendance-reconciliation-target" className="app-label">
+                {t("adjustment.target")}
               </label>
               <input
-                id="attendance-adjustment-delta"
+                id="attendance-reconciliation-target"
                 type="number"
-                min={-500}
-                max={500}
+                min={0}
                 step={1}
                 required
-                value={adjustmentDelta}
+                inputMode="numeric"
+                value={reconciliationTarget}
+                aria-describedby="attendance-reconciliation-help attendance-reconciliation-feedback"
+                aria-invalid={
+                  isReconciliationBelowCheckedGuests ||
+                  isReconciliationDeltaOutOfRange
+                }
                 onChange={(event) => {
-                  adjustmentIdempotencyKeyRef.current = null;
-                  setAdjustmentDelta(event.target.value);
+                  reconciliationAttemptRef.current = null;
+                  setReconciliationTarget(event.target.value);
                 }}
                 className="app-field"
               />
             </div>
+            <p
+              id="attendance-reconciliation-feedback"
+              className={`text-xs ${
+                isReconciliationBelowCheckedGuests ||
+                isReconciliationDeltaOutOfRange
+                  ? "text-status-danger"
+                  : "text-text-muted"
+              }`}
+              role="status"
+            >
+              {!scopedSummary
+                ? t("adjustment.currentUnavailable")
+                : isReconciliationBelowCheckedGuests
+                  ? t("adjustment.belowCheckedGuests", {
+                      checkedInGuests: serverCheckedInGuests,
+                    })
+                  : isReconciliationDeltaOutOfRange
+                    ? t("adjustment.deltaLimit")
+                    : reconciliationDelta !== null
+                      ? t("adjustment.preview", {
+                          delta: reconciliationDelta > 0
+                            ? `+${reconciliationDelta}`
+                            : reconciliationDelta,
+                        })
+                      : t("adjustment.enterTarget")}
+            </p>
             <div>
               <label htmlFor="attendance-adjustment-reason" className="app-label">
                 {t("adjustment.reason")}
@@ -554,13 +691,13 @@ export default function AttendanceCounter({
                 required
                 value={adjustmentReason}
                 onChange={(event) => {
-                  adjustmentIdempotencyKeyRef.current = null;
+                  reconciliationAttemptRef.current = null;
                   setAdjustmentReason(event.target.value);
                 }}
                 className="app-field"
               />
             </div>
-            {queuedMutations.length > 0 && (
+            {hasPendingReconciliationMutations && (
               <p className="text-xs text-status-waiting" role="status">
                 {t("adjustment.syncFirst")}
               </p>
@@ -569,8 +706,13 @@ export default function AttendanceCounter({
               type="submit"
               disabled={
                 isAdjusting ||
-                queuedMutations.length > 0 ||
-                adjustmentDelta === "" ||
+                !scopedSummary ||
+                hasPendingReconciliationMutations ||
+                reconciliationTarget === "" ||
+                reconciliationDelta === null ||
+                reconciliationDelta === 0 ||
+                isReconciliationDeltaOutOfRange ||
+                isReconciliationBelowCheckedGuests ||
                 adjustmentReason.trim() === ""
               }
               className="pressable min-h-11 w-full border border-border-strong bg-surface-raised px-4 py-2 text-sm font-semibold text-text-heading disabled:cursor-not-allowed disabled:opacity-50"

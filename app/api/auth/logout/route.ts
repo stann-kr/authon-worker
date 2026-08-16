@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
+import { jwtVerify } from "jose";
 import { shouldUseSecureAuthCookies } from "@/lib/auth/cookie-policy";
+import { isTrustedMutationOrigin } from "@/lib/auth/request-origin";
+import { REVOKE_USER_SESSIONS_SQL } from "@/lib/auth/session-revocation";
+import { parseStoredSession } from "@/lib/auth/session-policy";
 import {
   getRequestId,
   reportServerError,
@@ -9,6 +13,34 @@ import {
 
 export async function POST(request: Request) {
   const requestId = getRequestId(request);
+  if (!isTrustedMutationOrigin(request)) {
+    return NextResponse.json(
+      { code: "FORBIDDEN_ORIGIN", error: "Request origin is not allowed." },
+      { status: 403 },
+    );
+  }
+  const response = NextResponse.json({ ok: true, message: "Logged out successfully" });
+  const secureCookies = shouldUseSecureAuthCookies(request);
+  response.cookies.set({
+    name: "token",
+    value: "",
+    httpOnly: true,
+    secure: secureCookies,
+    sameSite: "lax",
+    maxAge: 0,
+    path: "/",
+  });
+  response.cookies.set({
+    name: "sessionId",
+    value: "",
+    httpOnly: true,
+    secure: secureCookies,
+    sameSite: "lax",
+    maxAge: 0,
+    path: "/",
+  });
+
+  let cleanupFailed = false;
   try {
     const { env } = getCloudflareContext();
 
@@ -22,47 +54,76 @@ export async function POST(request: Request) {
     );
 
     const sessionId = cookies.sessionId;
+    const token = cookies.token;
+
+    if (token && sessionId && env.JWT_SECRET) {
+      try {
+        const [{ payload }, sessionRaw] = await Promise.all([
+          jwtVerify(
+            token,
+            new TextEncoder().encode(env.JWT_SECRET),
+            { algorithms: ["HS256"], clockTolerance: 60 },
+          ),
+          env.SESSIONS.get(`session:${sessionId}`),
+        ]);
+        const userId = payload.sub;
+        const sessionVersion = payload.sv;
+        const session = sessionRaw ? parseStoredSession(sessionRaw) : null;
+        if (
+          typeof userId === "string" &&
+          typeof sessionVersion === "number" &&
+          Number.isSafeInteger(sessionVersion) &&
+          sessionVersion >= 0 &&
+          session?.userId === userId &&
+          session.sessionVersion === sessionVersion
+        ) {
+          await env.DB.prepare(REVOKE_USER_SESSIONS_SQL)
+            .bind(userId, sessionVersion)
+            .first<{ sessionVersion: number }>();
+        }
+      } catch (error) {
+        cleanupFailed = true;
+        try {
+          await reportServerError("auth.logout.session_revocation", error, {
+            requestId,
+          });
+        } catch {
+          // The client-side termination response must survive observability failure.
+        }
+      }
+    }
 
     // Delete session from KV if exists
     if (sessionId && env.SESSIONS) {
-      await env.SESSIONS.delete(`session:${sessionId}`);
+      try {
+        await env.SESSIONS.delete(`session:${sessionId}`);
+      } catch (error) {
+        cleanupFailed = true;
+        try {
+          await reportServerError("auth.logout.session_cleanup", error, { requestId });
+        } catch {
+          // The client-side termination response must survive observability failure.
+        }
+      }
     }
 
-    const response = NextResponse.json({ ok: true, message: "Logged out successfully" });
-    const secureCookies = shouldUseSecureAuthCookies(request);
-
-    // Invalidate cookies
-    response.cookies.set({
-      name: "token",
-      value: "",
-      httpOnly: true,
-      secure: secureCookies,
-      sameSite: "lax",
-      maxAge: 0,
-      path: "/",
-    });
-
-    response.cookies.set({
-      name: "sessionId",
-      value: "",
-      httpOnly: true,
-      secure: secureCookies,
-      sameSite: "lax",
-      maxAge: 0,
-      path: "/",
-    });
-
-    await writeStructuredLog("info", {
-      event: "auth.logout",
-      requestId,
-      outcome: "success",
-    });
+    try {
+      await writeStructuredLog(cleanupFailed ? "warn" : "info", {
+        event: "auth.logout",
+        requestId,
+        outcome: cleanupFailed ? "failure" : "success",
+        ...(cleanupFailed ? { errorKind: "SessionCleanupFailed" } : {}),
+      });
+    } catch {
+      // Cookie clearing is the logout contract even when telemetry is unavailable.
+    }
     return response;
   } catch (error) {
-    await reportServerError("auth.logout", error, { requestId });
-    return NextResponse.json(
-      { error: "로그아웃 처리 중 오류가 발생했습니다." },
-      { status: 500 }
-    );
+    try {
+      await reportServerError("auth.logout", error, { requestId });
+    } catch {
+      // Cookie clearing is the logout contract even when telemetry is unavailable.
+    }
+    return response;
   }
 }
