@@ -30,7 +30,9 @@ docker compose --profile ops run --rm ops npm run deploy:prod
 
 로컬 release-candidate 검증은 `npm run verify:release` 한 명령으로 실행한다.
 
-원격 build는 하나의 `authon-worker`에서 branch별로 분리한다. `dev` push는 `npm run verify:release` 뒤 `dev` tag의 traffic 미배정 Worker version만 업로드하며 공개 preview URL이나 production traffic을 만들지 않는다. `main` merge는 별도 승인 후 같은 gate를 통과해 production deployment를 갱신한다. Worker version upload와 D1 migration·secret·data 변경은 서로 다른 운영 경계다.
+원격 build는 Cloudflare Workers 환경으로 분리한다. `dev` push는 `npm run verify:release` 뒤 고정 development Worker `authon-worker-dev`에 배포하며 development 전용 D1·KV·JWT secret을 사용한다. `main` merge는 별도 승인 후 같은 gate를 통과해 production Worker `authon-worker`를 갱신한다. Worker code deploy와 D1 migration·secret·data 변경은 서로 다른 운영 경계다.
+
+원격 development 초기 데이터는 production을 복제하지 않고 `AUTHON_DEVELOPMENT_INTENT=1 npm run db:seed:dev`로 synthetic venue와 관리자 계정만 만든다. 생성한 credential은 source나 문서가 아니라 macOS Keychain에 저장한다.
 
 적용 이력의 권위는 `migrations/`의 순차 manual D1 SQL이다. `npm run db:generate`는 `.docs/generated-migrations/`에 검토용 baseline만 만들며, `npm run check:migrations`가 임시 SQLite에서 manual 이력과 현재 Drizzle schema의 구조 호환성을 비교한다. 이미 적용된 migration을 generator 결과로 덮어쓰지 않는다.
 

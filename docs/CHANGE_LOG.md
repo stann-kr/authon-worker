@@ -4,6 +4,18 @@
 
 ## 2026-08-16
 
+### 고정 development Worker 복원
+
+#### Changed
+
+- `dev` branch를 Cloudflare Wrangler environment가 관리하는 고정 `authon-worker-dev`에 배포하도록 복원했다.
+- development Worker는 별도 D1·KV·JWT secret과 `workers.dev` 주소를 사용하고, `main`만 기존 production Worker와 custom domain을 갱신한다.
+- production 데이터를 복제하지 않고 synthetic venue·관리자 계정만 준비하는 명시적 development seed 명령을 추가했다.
+
+#### Security
+
+- development 환경에서 production D1·KV와 custom domain을 사용하지 않으며, Worker code 배포와 migration·secret 변경 경계를 분리한다.
+
 ### 외부 DJ 디렉터리
 
 #### Added

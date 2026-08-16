@@ -14,7 +14,7 @@
     "prebuild:worker": "npm run check:sensitive-assets -- --skip-assets",
     "build:worker": "opennextjs-cloudflare build",
     "postbuild:worker": "npm run check:sensitive-assets && npm run check:worker-artifact",
-    "deploy:dev": "node scripts/ops/require-development-intent.mjs && npm run build:worker && opennextjs-cloudflare upload --tag dev",
+    "deploy:dev": "node scripts/ops/require-development-intent.mjs && wrangler deploy --env dev",
     "deploy:prod": "node scripts/ops/require-production-intent.mjs && npm run build:worker && opennextjs-cloudflare deploy",
     "cf:preview": "opennextjs-cloudflare preview",
     "lint": "eslint .",
@@ -57,7 +57,8 @@
     "migration:verify:cutover": "cross-env ALLOW_RECONCILED_GUEST_COUNTS=1 node scripts/migration/verify-supabase-snapshot.mjs",
     "migration:generate:d1-import": "node scripts/migration/generate-d1-import-sql.mjs",
     "migration:generate:cutover-overlays": "node scripts/migration/generate-cutover-overlays.mjs",
-    "db:seed:local": "node scripts/dev/seed-local-test-data.mjs"
+    "db:seed:local": "node scripts/dev/seed-local-test-data.mjs",
+    "db:seed:dev": "node scripts/dev/seed-remote-dev-data.mjs"
   },
   "dependencies": {
     "@carbon/icons-react": "^11.85.0",

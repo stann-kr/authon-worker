@@ -3,8 +3,7 @@ main = ".open-next/worker.js"
 compatibility_date = "2026-07-27"
 compatibility_flags = ["nodejs_compat"]
 workers_dev = true
-# Branch versions stay off production traffic but remain directly testable.
-preview_urls = true
+preview_urls = false
 
 routes = [
   { pattern = "guest.faustseoul.kr", custom_domain = true }
@@ -45,3 +44,22 @@ NEXT_PUBLIC_APP_URL = "https://guest.faustseoul.kr"
 # 로컬 개발 URL은 .dev.vars의 NEXT_PUBLIC_APP_URL로 오버라이드:
 #   NEXT_PUBLIC_APP_URL = "http://localhost:3000"
 #   TERMINAL_VENUE_ID   = "<실제 베뉴 UUID>"
+
+[env.dev]
+name = "authon-worker-dev"
+workers_dev = true
+preview_urls = false
+routes = []
+
+[[env.dev.d1_databases]]
+binding = "DB"
+database_name = "authon-db-dev"
+database_id = "7a839c6c-f5ba-48e1-95f9-d1b4ed64afb1"
+migrations_dir = "migrations"
+
+[[env.dev.kv_namespaces]]
+binding = "SESSIONS"
+id = "a30736e015524e47985bf5407ff10db3"
+
+[env.dev.vars]
+NEXT_PUBLIC_APP_URL = "https://authon-worker-dev.ilsny7.workers.dev"
