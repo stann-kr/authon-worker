@@ -11,6 +11,7 @@ import {
 } from "@testing-library/react";
 
 import AdminTaskSwitcher from "@/app/admin/components/AdminTaskSwitcher";
+import AnalyticsContributors from "@/app/admin/components/analytics/AnalyticsContributors";
 import AnalyticsPeriodBar from "@/app/admin/components/analytics/AnalyticsPeriodBar";
 import AsyncListContent from "@/components/AsyncListContent";
 import ConfirmDialog from "@/components/ConfirmDialog";
@@ -175,6 +176,58 @@ test("analytics period controls expose selection and keyboard-native navigation"
   assert.equal(nextGranularity, "quarter");
   fireEvent.click(screen.getByRole("button", { name: "Previous period" }));
   assert.equal(previousAnchor, "2026-07-01");
+});
+
+test("unmapped contributor labels expose the source name and mapping status", () => {
+  render(
+    <NextIntlClientProvider
+      locale="ko"
+      messages={{
+        AdminAnalytics: {
+          contributors: {
+            title: "DJ·기여자별 게스트",
+            description: "미연결 출처는 이름과 상태를 함께 표시합니다.",
+            name: "DJ·기여자",
+            operatingDays: "등록 영업일",
+            sort: "정렬 기준",
+            ascending: "오름차순",
+            descending: "내림차순",
+            deleted: "삭제된 기여자",
+            unmappedLink: "미연결 외부 링크",
+            unmappedLinkWithName: "{name} · 미연결 외부 링크",
+            unmappedUser: "미연결 내부 계정",
+            unmappedUserWithName: "{name} · 미연결 내부 계정",
+            unattributed: "귀속되지 않은 등록",
+          },
+          summary: {
+            registered: "등록 게스트",
+            checkedIn: "입장 게스트",
+            entryRatePercent: "입장률",
+          },
+        },
+      }}
+    >
+      <AnalyticsContributors
+        rows={[
+          {
+            contributorId: null,
+            displayName: "DJ Nova",
+            sourceStatus: "unmapped",
+            source: { kind: "external_link", id: "link-nova" },
+            operatingDays: 2,
+            registered: 12,
+            checkedIn: 9,
+            entryRatePercent: 75,
+            registeredPerOperatingDay: 6,
+          },
+        ]}
+      />
+    </NextIntlClientProvider>,
+  );
+
+  const labels = screen.getAllByText("DJ Nova · 미연결 외부 링크");
+  assert.equal(labels.length, 3);
+  assert.ok(screen.getByRole("columnheader", { name: "DJ·기여자" }));
 });
 
 test("dialog traps the interaction, Escape closes it, and focus returns", async () => {

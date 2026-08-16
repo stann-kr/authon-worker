@@ -108,6 +108,11 @@ export async function fetchAdminAnalytics(
       when ${guests.createdByUserId} is not null then ${guests.createdByUserId}
       else 'unattributed'
     end`;
+    const guestSourceDisplayName = sql<string | null>`case
+      when ${guests.externalLinkId} is not null then ${externalDjLinks.djName}
+      when ${guests.createdByUserId} is not null then ${users.name}
+      else null
+    end`;
     const contributorSourceKindGroup = sql<string>`case when ${guestContributorId} is null then ${guestSourceKind} else '' end`;
     const contributorSourceIdGroup = sql<string>`case when ${guestContributorId} is null then ${guestSourceId} else ${guestContributorId} end`;
 
@@ -194,6 +199,7 @@ export async function fetchAdminAnalytics(
         .select({
           contributorId: guestContributorId,
           displayName: sql<string | null>`max(${venueContributors.displayName})`,
+          sourceDisplayName: sql<string | null>`max(${guestSourceDisplayName})`,
           sourceKind: sql<string>`min(${guestSourceKind})`,
           sourceId: sql<string>`min(${guestSourceId})`,
           operatingDays: sql<number>`count(distinct ${guests.date})`.mapWith(Number),

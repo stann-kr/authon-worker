@@ -24,9 +24,13 @@ export default function AnalyticsContributors({
     if (row.sourceStatus === "mapped") return row.displayName;
     if (row.sourceStatus === "deleted") return t("contributors.deleted");
     return row.source?.kind === "external_link"
-      ? t("contributors.unmappedLink")
+      ? row.displayName
+        ? t("contributors.unmappedLinkWithName", { name: row.displayName })
+        : t("contributors.unmappedLink")
       : row.source?.kind === "user"
-        ? t("contributors.unmappedUser")
+        ? row.displayName
+          ? t("contributors.unmappedUserWithName", { name: row.displayName })
+          : t("contributors.unmappedUser")
         : t("contributors.unattributed");
   }, [t]);
   const sortedRows = useMemo(() => {

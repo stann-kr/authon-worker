@@ -473,7 +473,7 @@
     },
     "contributors": {
       "title": "Guests by DJ or contributor",
-      "description": "Only explicitly mapped Contributor sources are combined. Unmapped sources and deleted contributors remain separate.",
+      "description": "Only explicitly mapped Contributor sources are combined. Unmapped accounts and links show their source name and status but remain separate. Deleted contributors are shown separately.",
       "name": "DJ or contributor",
       "operatingDays": "Registration days",
       "sort": "Sort by",
@@ -483,7 +483,9 @@
       "emptyDescription": "Contributor sources from guest registrations appear here with their explicit mapping status.",
       "deleted": "Deleted contributor",
       "unmappedLink": "Unmapped external link",
+      "unmappedLinkWithName": "{name} · Unmapped external link",
       "unmappedUser": "Unmapped internal account",
+      "unmappedUserWithName": "{name} · Unmapped internal account",
       "unattributed": "Unattributed registrations"
     },
     "events": {

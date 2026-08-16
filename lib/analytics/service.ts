@@ -36,6 +36,7 @@ export interface AnalyticsServiceGuestDayRow {
 export interface AnalyticsServiceContributorRow {
   contributorId: string | null;
   displayName: string | null;
+  sourceDisplayName: string | null;
   sourceKind: string;
   sourceId: string;
   operatingDays: number;
@@ -193,14 +194,19 @@ function buildContributorRows(
         throw new Error("Analytics contributor groups must be unique");
       }
       groupKeys.add(groupKey);
-      return {
-        contributorId: row.contributorId,
-        displayName: row.displayName ?? "",
-        sourceStatus: row.contributorId
+      const sourceStatus: AnalyticsContributorRow["sourceStatus"] =
+        row.contributorId
           ? row.displayName
             ? "mapped"
             : "deleted"
-          : "unmapped",
+          : "unmapped";
+      return {
+        contributorId: row.contributorId,
+        displayName:
+          sourceStatus === "unmapped"
+            ? row.sourceDisplayName ?? ""
+            : row.displayName ?? "",
+        sourceStatus,
         source: row.contributorId
           ? null
           : {
