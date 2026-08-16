@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 
-test("development builds upload an undeployed version to the main Worker", async () => {
+test("development builds upload a previewable undeployed version to the main Worker", async () => {
   const [packageJson, wranglerConfig] = await Promise.all([
     readFile(new URL("../../package.json", import.meta.url), "utf8").then(JSON.parse),
     readFile(new URL("../../wrangler.toml", import.meta.url), "utf8"),
@@ -22,7 +22,8 @@ test("development builds upload an undeployed version to the main Worker", async
   assert.doesNotMatch(developmentCommand, /--env dev/);
 
   assert.match(wranglerConfig, /^name = "authon-worker"$/m);
-  assert.match(wranglerConfig, /^preview_urls = false$/m);
+  assert.match(wranglerConfig, /^workers_dev = true$/m);
+  assert.match(wranglerConfig, /^preview_urls = true$/m);
   assert.match(wranglerConfig, /database_name = "authon-db"/);
   assert.match(wranglerConfig, /NEXT_PUBLIC_APP_URL = "https:\/\/guest\.faustseoul\.kr"/);
   assert.doesNotMatch(wranglerConfig, /\[env\.dev\]/);
