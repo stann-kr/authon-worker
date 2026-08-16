@@ -178,7 +178,7 @@ test("analytics period controls expose selection and keyboard-native navigation"
   assert.equal(previousAnchor, "2026-07-01");
 });
 
-test("unmapped contributor labels expose the source name and mapping status", () => {
+test("named unmapped contributors show only their source name", () => {
   render(
     <NextIntlClientProvider
       locale="ko"
@@ -186,7 +186,7 @@ test("unmapped contributor labels expose the source name and mapping status", ()
         AdminAnalytics: {
           contributors: {
             title: "DJ·기여자별 게스트",
-            description: "미연결 출처는 이름과 상태를 함께 표시합니다.",
+            description: "미연결 출처는 확인 가능한 이름을 표시합니다.",
             name: "DJ·기여자",
             operatingDays: "등록 영업일",
             sort: "정렬 기준",
@@ -194,9 +194,7 @@ test("unmapped contributor labels expose the source name and mapping status", ()
             descending: "내림차순",
             deleted: "삭제된 기여자",
             unmappedLink: "미연결 외부 링크",
-            unmappedLinkWithName: "{name} · 미연결 외부 링크",
             unmappedUser: "미연결 내부 계정",
-            unmappedUserWithName: "{name} · 미연결 내부 계정",
             unattributed: "귀속되지 않은 등록",
           },
           summary: {
@@ -220,13 +218,26 @@ test("unmapped contributor labels expose the source name and mapping status", ()
             entryRatePercent: 75,
             registeredPerOperatingDay: 6,
           },
+          {
+            contributorId: null,
+            displayName: "Staff Mina",
+            sourceStatus: "unmapped",
+            source: { kind: "user", id: "user-mina" },
+            operatingDays: 1,
+            registered: 8,
+            checkedIn: 5,
+            entryRatePercent: 62.5,
+            registeredPerOperatingDay: 8,
+          },
         ]}
       />
     </NextIntlClientProvider>,
   );
 
-  const labels = screen.getAllByText("DJ Nova · 미연결 외부 링크");
-  assert.equal(labels.length, 3);
+  assert.equal(screen.getAllByText("DJ Nova").length, 3);
+  assert.equal(screen.getAllByText("Staff Mina").length, 3);
+  assert.equal(screen.queryByText(/DJ Nova.*미연결 외부 링크/), null);
+  assert.equal(screen.queryByText(/Staff Mina.*미연결 내부 계정/), null);
   assert.ok(screen.getByRole("columnheader", { name: "DJ·기여자" }));
 });
 

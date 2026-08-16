@@ -473,19 +473,17 @@
     },
     "contributors": {
       "title": "Guests by DJ or contributor",
-      "description": "Only explicitly mapped Contributor sources are combined. Unmapped accounts and links show their source name and status but remain separate. Deleted contributors are shown separately.",
+      "description": "Only explicitly mapped Contributor sources are combined. Unmapped accounts and links show an available source name but remain separate. Sources without a name and deleted contributors use separate status labels.",
       "name": "DJ or contributor",
       "operatingDays": "Registration days",
       "sort": "Sort by",
       "ascending": "Ascending",
       "descending": "Descending",
       "emptyTitle": "No contributor analytics",
-      "emptyDescription": "Contributor sources from guest registrations appear here with their explicit mapping status.",
+      "emptyDescription": "Contributor sources from guest registrations appear here as separate account or link statistics.",
       "deleted": "Deleted contributor",
       "unmappedLink": "Unmapped external link",
-      "unmappedLinkWithName": "{name} · Unmapped external link",
       "unmappedUser": "Unmapped internal account",
-      "unmappedUserWithName": "{name} · Unmapped internal account",
       "unattributed": "Unattributed registrations"
     },
     "events": {
