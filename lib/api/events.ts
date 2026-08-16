@@ -211,15 +211,16 @@ export async function createEvent(params: EventDraftInput & {
       ...clonePlan.links.map((link) =>
         env.DB.prepare(`
           INSERT INTO external_dj_links (
-            id, venue_id, token, dj_name, event, date, event_id,
+            id, venue_id, token, dj_name, contributor_id, event, date, event_id,
             max_guests, used_guests, active, expires_at, created_by,
             locale_mode, kind, created_at
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, 0, ?, ?, ?, ?, ?)
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, ?, ?, ?, ?, ?)
         `).bind(
           link.id,
           link.venueId,
           link.token,
           link.djName,
+          link.contributorId,
           link.event,
           link.date,
           link.eventId,
@@ -231,6 +232,24 @@ export async function createEvent(params: EventDraftInput & {
           link.createdAt,
         ),
       ),
+      ...clonePlan.links
+        .filter((link) => link.contributorId !== null)
+        .map((link) =>
+          env.DB.prepare(`
+            INSERT INTO contributor_audit_events (
+              id, venue_id, contributor_id, actor_user_id, source_kind,
+              source_id, action, details, created_at
+            ) VALUES (?, ?, ?, ?, 'external_link', ?, 'mapped', ?, ?)
+          `).bind(
+            crypto.randomUUID(),
+            link.venueId,
+            link.contributorId,
+            actor.id,
+            link.id,
+            JSON.stringify({ reason: "event_template_clone" }),
+            now,
+          ),
+        ),
     ];
     await env.DB.batch(statements);
     const created = await loadEventById(db, id);

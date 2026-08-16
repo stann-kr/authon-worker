@@ -37,12 +37,16 @@ export const venueContributors = sqliteTable('venue_contributors', {
   id: text('id').primaryKey(),
   venueId: text('venue_id').notNull().references(() => venues.id),
   displayName: text('display_name').notNull(),
+  nameKey: text('name_key'),
   kind: text('kind').notNull().default('dj'),
   active: integer('active', { mode: 'boolean' }).notNull().default(true),
   createdAt: text('created_at').notNull(),
   updatedAt: text('updated_at').notNull(),
 }, (t) => [
   index('idx_venue_contributors_venue_active').on(t.venueId, t.active),
+  uniqueIndex('idx_venue_contributors_venue_name_key')
+    .on(t.venueId, t.nameKey)
+    .where(sql`${t.nameKey} IS NOT NULL`),
 ]);
 
 export const users = sqliteTable('users', {

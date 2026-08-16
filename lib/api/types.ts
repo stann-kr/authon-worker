@@ -50,6 +50,13 @@ export interface ContributorSourceMapping {
   contributorId: string | null;
 }
 
+export interface ExternalDjSuggestion {
+  contributorId: string;
+  displayName: string;
+  linkCount: number;
+  lastUsedDate: string | null;
+}
+
 export type EventState = "draft" | "open" | "closed" | "archived";
 
 export interface Event {
@@ -227,6 +234,7 @@ export interface ExternalDJLink {
   venueId: string;
   token: string;
   djName: string;
+  contributorId?: string | null;
   event: string | null;
   date: string | null;
   eventId?: string | null;

@@ -4,12 +4,25 @@ import { reportServerError } from "@/lib/observability/structured-log";
 
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { headers } from "next/headers";
-import { eq, and, ne, desc, inArray, isNull, or } from "drizzle-orm";
 import {
+  eq,
+  and,
+  ne,
+  desc,
+  asc,
+  inArray,
+  isNull,
+  isNotNull,
+  or,
+  sql,
+} from "drizzle-orm";
+import {
+  contributorAuditEvents,
   externalDjLinks,
   externalGuestOwners,
   venues,
   guests,
+  venueContributors,
 } from "../db/schema";
 import {
   type ApiResponse,
@@ -17,6 +30,7 @@ import {
   type BulkGuestCreateItemResult,
   type BulkGuestCreateResult,
   type ExternalDJLink,
+  type ExternalDjSuggestion,
   type Guest,
   type Venue,
 } from "./types";
@@ -58,6 +72,11 @@ import {
 import { prepareGuestActivityAfterChange } from "@/lib/guests/activity-ledger";
 import { hashOpaqueIdentifier } from "@/lib/guests/activity-ledger";
 import { isValidExternalOwnerKey } from "@/lib/external-links/ownership";
+import { getContributorNameKey } from "@/lib/contributors/domain";
+import {
+  getExternalDjContributorId,
+  getExternalDjCreatedAuditId,
+} from "@/lib/contributors/external-dj";
 
 type Db = ReturnType<typeof getDb>;
 
@@ -66,6 +85,13 @@ const EXTERNAL_GUEST_RATE_LIMIT_NAMES = 100;
 const EXTERNAL_GUEST_RATE_LIMIT_WINDOW_SECONDS = 60;
 const INVALID_EXTERNAL_LINK_ERROR = "INVALID_EXTERNAL_LINK";
 const EXTERNAL_LINK_UNAVAILABLE_ERROR = "EXTERNAL_LINK_UNAVAILABLE";
+const MAX_EXTERNAL_DJ_DIRECTORY_ROWS = 500;
+
+class ExternalDjContributorError extends Error {
+  constructor(readonly code: "INVALID_CONTRIBUTOR" | "DJ_DIRECTORY_TOO_LARGE") {
+    super(code);
+  }
+}
 
 function parseBulkGuestCreateInput(value: unknown): {
   name: string;
@@ -246,9 +272,100 @@ export async function fetchRecentExternalLinks(
   }
 }
 
+export async function fetchExternalDjDirectory(
+  venueId: string,
+): Promise<ApiResponse<ExternalDjSuggestion[]>> {
+  try {
+    const user = await requireRole(["super_admin", "venue_admin"]);
+    const db = getDb();
+    const effectiveVenueId = await scopedVenueId(user, venueId);
+    const rows = await db
+      .select({
+        contributorId: venueContributors.id,
+        displayName: venueContributors.displayName,
+        linkCount: sql<number>`count(${externalDjLinks.id})`.mapWith(Number),
+        lastUsedDate: sql<string | null>`max(${externalDjLinks.date})`,
+      })
+      .from(venueContributors)
+      .leftJoin(
+        externalDjLinks,
+        and(
+          eq(externalDjLinks.contributorId, venueContributors.id),
+          eq(externalDjLinks.kind, "contributor"),
+        ),
+      )
+      .where(
+        and(
+          eq(venueContributors.venueId, effectiveVenueId),
+          eq(venueContributors.active, true),
+          isNotNull(venueContributors.nameKey),
+        ),
+      )
+      .groupBy(venueContributors.id, venueContributors.displayName)
+      .orderBy(desc(sql`max(${externalDjLinks.date})`), asc(venueContributors.displayName))
+      .limit(MAX_EXTERNAL_DJ_DIRECTORY_ROWS + 1);
+    if (rows.length > MAX_EXTERNAL_DJ_DIRECTORY_ROWS) {
+      throw new ExternalDjContributorError("DJ_DIRECTORY_TOO_LARGE");
+    }
+    return { data: rows, error: null };
+  } catch (error: unknown) {
+    await reportServerError("external_dj.directory", error);
+    return {
+      data: null,
+      error:
+        error instanceof ExternalDjContributorError
+          ? error.code
+          : "DJ_DIRECTORY_UNAVAILABLE",
+    };
+  }
+}
+
+async function resolveExternalDjContributor(params: {
+  db: Db;
+  venueId: string;
+  displayName: string;
+  requestedContributorId: string | null;
+}) {
+  const nameKey = getContributorNameKey(params.displayName);
+  if (!nameKey) throw new ExternalDjContributorError("INVALID_CONTRIBUTOR");
+
+  const conditions = [
+    eq(venueContributors.venueId, params.venueId),
+    params.requestedContributorId
+      ? eq(venueContributors.id, params.requestedContributorId)
+      : eq(venueContributors.nameKey, nameKey),
+  ];
+  const [existing] = await params.db
+    .select()
+    .from(venueContributors)
+    .where(and(...conditions))
+    .limit(1);
+  if (existing) {
+    if (!existing.active || existing.nameKey !== nameKey) {
+      throw new ExternalDjContributorError("INVALID_CONTRIBUTOR");
+    }
+    return {
+      id: existing.id,
+      displayName: existing.displayName,
+      nameKey,
+      shouldCreate: false,
+    };
+  }
+  if (params.requestedContributorId) {
+    throw new ExternalDjContributorError("INVALID_CONTRIBUTOR");
+  }
+  return {
+    id: await getExternalDjContributorId(params.venueId, nameKey),
+    displayName: params.displayName,
+    nameKey,
+    shouldCreate: true,
+  };
+}
+
 export async function createExternalLink(link: {
   venueId: string;
   djName: string;
+  contributorId?: string | null;
   event: string;
   date: string;
   maxGuests: number;
@@ -276,11 +393,21 @@ export async function createExternalLink(link: {
     const id = crypto.randomUUID();
     const token = crypto.randomUUID();
     const createdAt = new Date().toISOString();
-    await db.insert(externalDjLinks).values({
+    const contributor =
+      draft.kind === "contributor"
+        ? await resolveExternalDjContributor({
+            db,
+            venueId: effectiveVenueId,
+            displayName: draft.djName,
+            requestedContributorId: draft.contributorId,
+          })
+        : null;
+    const linkInsert = db.insert(externalDjLinks).values({
       id,
       venueId: effectiveVenueId,
       token,
-      djName: draft.djName,
+      djName: contributor?.displayName ?? draft.djName,
+      contributorId: contributor?.id ?? null,
       event: draft.event,
       date: draft.date,
       eventId: event.id,
@@ -293,6 +420,56 @@ export async function createExternalLink(link: {
       createdBy: user.id,
       createdAt,
     });
+    if (contributor) {
+      const mappingAudit = db.insert(contributorAuditEvents).values({
+        id: crypto.randomUUID(),
+        venueId: effectiveVenueId,
+        contributorId: contributor.id,
+        actorUserId: user.id,
+        sourceKind: "external_link",
+        sourceId: id,
+        action: "mapped",
+        details: JSON.stringify({ reason: "external_link_create" }),
+        createdAt,
+      });
+      if (contributor.shouldCreate) {
+        await db.batch([
+          db
+            .insert(venueContributors)
+            .values({
+              id: contributor.id,
+              venueId: effectiveVenueId,
+              displayName: contributor.displayName,
+              nameKey: contributor.nameKey,
+              kind: "dj",
+              active: true,
+              createdAt,
+              updatedAt: createdAt,
+            })
+            .onConflictDoNothing(),
+          db
+            .insert(contributorAuditEvents)
+            .values({
+              id: getExternalDjCreatedAuditId(contributor.id),
+              venueId: effectiveVenueId,
+              contributorId: contributor.id,
+              actorUserId: user.id,
+              sourceKind: "contributor",
+              sourceId: contributor.id,
+              action: "created",
+              details: JSON.stringify({ kind: "dj", source: "external_link_create" }),
+              createdAt,
+            })
+            .onConflictDoNothing(),
+          linkInsert,
+          mappingAudit,
+        ]);
+      } else {
+        await db.batch([linkInsert, mappingAudit]);
+      }
+    } else {
+      await linkInsert;
+    }
     const result = await db.select().from(externalDjLinks).where(eq(externalDjLinks.id, id));
     const withGuestUrl = result[0]
       ? (await addGuestUrls(effectiveVenueId, [result[0]]))[0]
@@ -300,7 +477,13 @@ export async function createExternalLink(link: {
     return { data: withGuestUrl, error: null };
   } catch (error: unknown) {
     await reportServerError("external_link.create", error);
-    return { data: null, error: "Unable to create external link right now." };
+    return {
+      data: null,
+      error:
+        error instanceof ExternalDjContributorError
+          ? error.code
+          : "Unable to create external link right now.",
+    };
   }
 }
 
@@ -453,10 +636,12 @@ export async function validateExternalToken(
         .where(and(eq(guests.externalLinkId, link.id), ne(guests.status, "deleted")));
     }
 
+    const publicLink = toExternalDJLink(link);
+    delete publicLink.contributorId;
     return {
       data: {
         link: {
-          ...toExternalDJLink(link),
+          ...publicLink,
           usedGuests:
             link.kind === "self_rsvp" ? guestsResult.length : link.usedGuests,
         },

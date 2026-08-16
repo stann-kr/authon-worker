@@ -13,6 +13,7 @@ import {
 import AdminTaskSwitcher from "@/app/admin/components/AdminTaskSwitcher";
 import AnalyticsContributors from "@/app/admin/components/analytics/AnalyticsContributors";
 import AnalyticsPeriodBar from "@/app/admin/components/analytics/AnalyticsPeriodBar";
+import ExternalDjCombobox from "@/app/admin/components/ExternalDjCombobox";
 import AsyncListContent from "@/components/AsyncListContent";
 import ConfirmDialog from "@/components/ConfirmDialog";
 import GuestListCard from "@/components/GuestListCard";
@@ -239,6 +240,88 @@ test("named unmapped contributors show only their source name", () => {
   assert.equal(screen.queryByText(/DJ Nova.*미연결 외부 링크/), null);
   assert.equal(screen.queryByText(/Staff Mina.*미연결 내부 계정/), null);
   assert.ok(screen.getByRole("columnheader", { name: "DJ·기여자" }));
+});
+
+test("external DJ autocomplete supports keyboard selection and a new-name fallback", () => {
+  function Harness() {
+    const [value, setValue] = useState("");
+    const [contributorId, setContributorId] = useState<string | null>(null);
+
+    return (
+      <>
+        <label htmlFor="link-dj-name">DJ name</label>
+        <ExternalDjCombobox
+          value={value}
+          contributorId={contributorId}
+          suggestions={[
+            {
+              contributorId: "dj-stann",
+              displayName: "DJ STANN",
+              linkCount: 4,
+              lastUsedDate: "2026-08-16",
+            },
+            {
+              contributorId: "dj-stanley",
+              displayName: "DJ STANLEY",
+              linkCount: 2,
+              lastUsedDate: "2026-08-10",
+            },
+          ]}
+          isDirectoryEnabled
+          isDirectoryLoading={false}
+          directoryError={null}
+          disabled={false}
+          hasError={false}
+          onChange={(nextValue, nextContributorId) => {
+            setValue(nextValue);
+            setContributorId(nextContributorId);
+          }}
+        />
+        <output data-testid="selected-dj">{contributorId ?? "new"}</output>
+      </>
+    );
+  }
+
+  render(
+    <NextIntlClientProvider
+      locale="en"
+      messages={{
+        LinkAdmin: {
+          djName: "DJ name",
+          djSuggestions: "Existing DJ names",
+          djPreviousLinks: "{count} previous links",
+          djSuggestionsLoading: "Loading existing DJ names.",
+          existingDjSelected:
+            "Linking to existing DJ {name}. {count} previous links",
+          newDjWillBeCreated: "A new DJ will be added.",
+          djAutocompleteHelp: "Start typing to choose a DJ registered before.",
+        },
+      }}
+    >
+      <Harness />
+    </NextIntlClientProvider>,
+  );
+
+  const input = screen.getByRole("combobox", { name: "DJ name" });
+  fireEvent.focus(input);
+  fireEvent.change(input, { target: { value: "DJ STA" } });
+  assert.ok(screen.getByRole("listbox", { name: "Existing DJ names" }));
+
+  fireEvent.keyDown(input, { key: "ArrowDown" });
+  fireEvent.keyDown(input, { key: "ArrowUp" });
+  fireEvent.keyDown(input, { key: "Enter" });
+  assert.equal((input as HTMLInputElement).value, "DJ STANN");
+  assert.equal(screen.getByTestId("selected-dj").textContent, "dj-stann");
+  assert.equal(screen.queryByRole("listbox"), null);
+
+  fireEvent.change(input, { target: { value: "DJ NEW" } });
+  assert.equal(screen.getByTestId("selected-dj").textContent, "new");
+  assert.ok(screen.getByText("A new DJ will be added."));
+
+  fireEvent.change(input, { target: { value: "DJ STA" } });
+  assert.ok(screen.getByRole("listbox"));
+  fireEvent.keyDown(input, { key: "Escape" });
+  assert.equal(screen.queryByRole("listbox"), null);
 });
 
 test("dialog traps the interaction, Escape closes it, and focus returns", async () => {

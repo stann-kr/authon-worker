@@ -40,7 +40,15 @@ function toContributor(
   if (!isContributorKind(row.kind)) {
     throw new ContributorActionError("INVALID_INPUT");
   }
-  return { ...row, kind: row.kind };
+  return {
+    id: row.id,
+    venueId: row.venueId,
+    displayName: row.displayName,
+    kind: row.kind,
+    active: row.active,
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
+  };
 }
 
 async function requireManagedVenueId(
@@ -149,6 +157,7 @@ export async function createVenueContributor(params: {
         id,
         venueId,
         displayName: prepared.contributor.displayName,
+        nameKey: null,
         kind: prepared.contributor.kind,
         active: true,
         createdAt,
@@ -223,11 +232,14 @@ export async function updateVenueContributor(params: {
     }
 
     const updatedAt = new Date().toISOString();
+    const nextNameKey =
+      current.nameKey === null ? null : prepared.contributor.nameKey;
     await db.batch([
       db
         .update(venueContributors)
         .set({
           displayName: prepared.contributor.displayName,
+          nameKey: nextNameKey,
           active: nextActive,
           updatedAt,
         })
@@ -253,6 +265,7 @@ export async function updateVenueContributor(params: {
       data: toContributor({
         ...current,
         displayName: prepared.contributor.displayName,
+        nameKey: nextNameKey,
         active: nextActive,
         updatedAt,
       }),
