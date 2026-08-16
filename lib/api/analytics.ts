@@ -12,6 +12,7 @@ import {
 } from "drizzle-orm";
 import { requireAccess, type SessionUser } from "@/lib/auth/server";
 import {
+  attendanceActivityLedger,
   eventCloseoutContributorMetrics,
   eventCloseouts,
   events,
@@ -116,7 +117,7 @@ export async function fetchAdminAnalytics(
     const contributorSourceKindGroup = sql<string>`case when ${guestContributorId} is null then ${guestSourceKind} else '' end`;
     const contributorSourceIdGroup = sql<string>`case when ${guestContributorId} is null then ${guestSourceId} else ${guestContributorId} end`;
 
-    const [eventRows, guestDayRows, contributorRows] = await Promise.all([
+    const [eventRows, guestDayRows, walkInDayRows, contributorRows] = await Promise.all([
       db
         .select({
           eventId: events.id,
@@ -197,6 +198,43 @@ export async function fetchAdminAnalytics(
         .limit(MAX_ANALYTICS_QUERY_ROWS + 1),
       db
         .select({
+          businessDate: attendanceActivityLedger.businessDate,
+          walkInCount:
+            sql<number>`coalesce(sum(${attendanceActivityLedger.delta}), 0)`.mapWith(Number),
+        })
+        .from(attendanceActivityLedger)
+        .where(
+          and(
+            eq(attendanceActivityLedger.venueId, venueId),
+            or(
+              and(
+                gte(
+                  attendanceActivityLedger.businessDate,
+                  selection.comparisonPeriod.startDate,
+                ),
+                lt(
+                  attendanceActivityLedger.businessDate,
+                  selection.comparisonPeriod.endDateExclusive,
+                ),
+              ),
+              and(
+                gte(
+                  attendanceActivityLedger.businessDate,
+                  selection.period.startDate,
+                ),
+                lt(
+                  attendanceActivityLedger.businessDate,
+                  selection.period.dataEndDateExclusive,
+                ),
+              ),
+            ),
+          ),
+        )
+        .groupBy(attendanceActivityLedger.businessDate)
+        .orderBy(desc(attendanceActivityLedger.businessDate))
+        .limit(MAX_ANALYTICS_QUERY_ROWS + 1),
+      db
+        .select({
           contributorId: guestContributorId,
           displayName: sql<string | null>`max(${venueContributors.displayName})`,
           sourceDisplayName: sql<string | null>`max(${guestSourceDisplayName})`,
@@ -247,6 +285,7 @@ export async function fetchAdminAnalytics(
     if (
       eventRows.length > MAX_ANALYTICS_QUERY_ROWS ||
       guestDayRows.length > MAX_ANALYTICS_QUERY_ROWS ||
+      walkInDayRows.length > MAX_ANALYTICS_QUERY_ROWS ||
       contributorRows.length > MAX_ANALYTICS_QUERY_ROWS
     ) {
       throw new AnalyticsActionError("INVALID_ANALYTICS_QUERY");
@@ -257,6 +296,7 @@ export async function fetchAdminAnalytics(
         selection,
         eventRows,
         guestDayRows,
+        walkInDayRows,
         contributorRows,
       }),
       error: null,

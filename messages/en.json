@@ -397,6 +397,41 @@
       "found": "Guest found in this Event. The name list has been filtered.",
       "notFound": "No active guest matches this code in the selected Event.",
       "unavailable": "The code could not be checked right now. Use name search or try again."
+    },
+    "attendance": {
+      "title": "Attendance counter",
+      "totalAttendance": "Total attendance",
+      "checkedInGuests": "Checked-in guests",
+      "walkIns": "Walk-ins",
+      "addWalkIn": "Walk-in entry",
+      "undoLast": "Undo last entry",
+      "helper": "Count the first entry only when the visitor is not on the guest list.",
+      "confirmed": "Everything is confirmed on the server",
+      "pending": "{count} entries pending sync on this device",
+      "syncing": "Synchronizing attendance counts…",
+      "selectVenue": "Select a venue to use the counter.",
+      "pastDate": "Quick entry is available only for the current operational date.",
+      "eventInactive": "New entries cannot be recorded for an Event that is closed or not open.",
+      "recordedAnnouncement": "Walk-in recorded. Total attendance {count}.",
+      "undoneAnnouncement": "Last walk-in undone. Total attendance {count}.",
+      "adjustedAnnouncement": "Attendance adjusted. Total attendance {count}.",
+      "failedItems": "{count} sync results need review",
+      "clearFailed": "Clear results",
+      "notice": {
+        "loadFailed": "The latest server count could not be loaded. Pending entries remain stored on this device.",
+        "queueFailed": "This entry was not counted because it could not be safely stored on this device.",
+        "syncFailed": "Attendance counts could not be synchronized. They will retry when the connection returns.",
+        "adjustmentFailed": "Attendance could not be adjusted. Check the amount and current total."
+      },
+      "adjustment": {
+        "title": "Adjust attendance",
+        "help": "Use a positive number for missed entries and a negative number for duplicates. The reason is kept in the immutable operations record; do not include visitor names or other personal data.",
+        "delta": "Adjustment",
+        "reason": "Reason",
+        "syncFirst": "Synchronize pending entries on this device before adjusting the count.",
+        "save": "Save adjustment",
+        "saving": "Saving…"
+      }
     }
   },
   "AdminNav": {
@@ -417,10 +452,10 @@
     "venues": "Venues"
   },
   "AdminAnalytics": {
-    "title": "Guest analytics",
-    "description": "Every operating day with at least one guest registration is included, whether or not an Event was created. Compare registrations, check-ins and contributor results with the previous period.",
-    "dataBasis": "Based on guest registrations currently included in the list. Deleting a guest also removes that registration from historical analytics.",
-    "loading": "Loading guest analytics",
+    "title": "Operations analytics",
+    "description": "Guest registration results and total attendance are reported together, with or without an Event, and compared with the equivalent previous period.",
+    "dataBasis": "Guest metrics use the current roster. Total attendance combines checked-in guests with the anonymous walk-in ledger.",
+    "loading": "Loading operations analytics",
     "refresh": "Refresh",
     "retry": "Try again",
     "loadFailed": "Guest analytics could not be loaded.",
@@ -451,6 +486,20 @@
       "entryRatePercent": "Entry rate",
       "registeredPerOperatingDay": "Registrations per operating day",
       "registrationDefinition": "Guest registrations count non-deleted registration rows, not unique visitors. The same person registered on multiple dates or rosters counts once for each registration."
+    },
+    "attendance": {
+      "title": "Total attendance",
+      "description": "Combines checked-in guests with net walk-ins recorded at Door. Walk-in-only dates are included, while registration dates with no actual entry are excluded from attendance operating days.",
+      "totalAttendance": "Total attendance",
+      "checkedInGuests": "Checked-in guests",
+      "walkIns": "Walk-ins",
+      "attendancePerOperatingDay": "Attendance per operating day",
+      "trendTitle": "Attendance trend",
+      "trendDescription": "Monthly views show attendance operating days; quarter and year views show monthly checked-in guests, walk-ins, and total attendance.",
+      "tableTitle": "Attendance chart data",
+      "date": "Period",
+      "empty": "No attendance was recorded for this period.",
+      "definition": "Total attendance is checked-in guests plus net walk-ins, not a unique-visitor count. The operating rule is to count only the first entry of visitors who are not on the guest list."
     },
     "coverage": {
       "title": "Data coverage",

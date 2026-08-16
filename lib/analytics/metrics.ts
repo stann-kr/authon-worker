@@ -1,6 +1,9 @@
 import { isBusinessDate } from "../events/domain.ts";
 import type {
   AnalyticsAggregate,
+  AnalyticsAttendanceAggregate,
+  AnalyticsAttendanceDayInput,
+  AnalyticsAttendanceSummary,
   AnalyticsCoverage,
   AnalyticsCoverageEventInput,
   AnalyticsGuestDayInput,
@@ -138,6 +141,82 @@ export function buildAnalyticsSummary(
     registeredPerOperatingDay: compareAnalyticsMetric(
       current.registeredPerOperatingDay,
       comparison.registeredPerOperatingDay,
+      "number",
+    ),
+  };
+}
+
+export function summarizeAnalyticsAttendanceDays(
+  days: readonly AnalyticsAttendanceDayInput[],
+): AnalyticsAttendanceAggregate {
+  const operatingDates = new Set<string>();
+  let checkedInGuests = 0;
+  let walkIns = 0;
+
+  for (const day of days) {
+    if (
+      !isBusinessDate(day.businessDate) ||
+      operatingDates.has(day.businessDate)
+    ) {
+      throw new Error(
+        "Analytics attendance days must have unique valid business dates",
+      );
+    }
+    assertCount(day.checkedInGuests, "Attendance checked-in guest count");
+    assertCount(day.walkIns, "Attendance walk-in count");
+    if (day.checkedInGuests + day.walkIns === 0) {
+      throw new RangeError(
+        "Analytics attendance days require at least one attendee",
+      );
+    }
+    operatingDates.add(day.businessDate);
+    checkedInGuests = addSafeCounts(
+      checkedInGuests,
+      day.checkedInGuests,
+      "Attendance checked-in guest total",
+    );
+    walkIns = addSafeCounts(walkIns, day.walkIns, "Attendance walk-in total");
+  }
+
+  const operatingDays = operatingDates.size;
+  const totalAttendance = addSafeCounts(
+    checkedInGuests,
+    walkIns,
+    "Total attendance",
+  );
+  return {
+    operatingDays,
+    checkedInGuests,
+    walkIns,
+    totalAttendance,
+    attendancePerOperatingDay:
+      operatingDays === 0 ? null : roundOne(totalAttendance / operatingDays),
+  };
+}
+
+export function buildAnalyticsAttendanceSummary(
+  current: AnalyticsAttendanceAggregate,
+  comparison: AnalyticsAttendanceAggregate,
+): AnalyticsAttendanceSummary {
+  return {
+    totalAttendance: compareAnalyticsMetric(
+      current.totalAttendance,
+      comparison.totalAttendance,
+      "number",
+    ),
+    checkedInGuests: compareAnalyticsMetric(
+      current.checkedInGuests,
+      comparison.checkedInGuests,
+      "number",
+    ),
+    walkIns: compareAnalyticsMetric(
+      current.walkIns,
+      comparison.walkIns,
+      "number",
+    ),
+    attendancePerOperatingDay: compareAnalyticsMetric(
+      current.attendancePerOperatingDay,
+      comparison.attendancePerOperatingDay,
       "number",
     ),
   };

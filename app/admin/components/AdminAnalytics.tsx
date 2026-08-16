@@ -18,6 +18,7 @@ import {
 } from "@/lib/analytics/url-state";
 import type { AdminAnalyticsView, AnalyticsGranularity } from "@/lib/analytics/types";
 import AnalyticsContributors from "./analytics/AnalyticsContributors";
+import AnalyticsAttendance from "./analytics/AnalyticsAttendance";
 import AnalyticsEvents from "./analytics/AnalyticsEvents";
 import AnalyticsPeriodBar from "./analytics/AnalyticsPeriodBar";
 import AnalyticsSummary from "./analytics/AnalyticsSummary";
@@ -201,6 +202,7 @@ export default function AdminAnalytics({
             </aside>
           )}
           <AnalyticsSummary summary={scopedView.summary} />
+          <AnalyticsAttendance attendance={scopedView.attendance} />
           <section className="app-panel" aria-labelledby="analytics-coverage-title">
             <div className="border-b border-border-subtle px-4 py-3 sm:px-5">
               <h3 id="analytics-coverage-title" className="type-panel-title">{t("coverage.title")}</h3>

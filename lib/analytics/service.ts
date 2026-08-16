@@ -1,12 +1,16 @@
 import { isBusinessDate, isEventState } from "../events/domain.ts";
 import {
+  buildAnalyticsAttendanceSummary,
   buildAnalyticsSummary,
   calculateAnalyticsCoverage,
+  summarizeAnalyticsAttendanceDays,
   summarizeAnalyticsGuestDays,
 } from "./metrics.ts";
 import { isDateInAnalyticsRange } from "./period.ts";
 import type {
   AdminAnalyticsView,
+  AnalyticsAttendanceDayInput,
+  AnalyticsAttendanceTrendPoint,
   AnalyticsContributorRow,
   AnalyticsPeriodSelection,
   AnalyticsTrendPoint,
@@ -31,6 +35,11 @@ export interface AnalyticsServiceGuestDayRow {
   businessDate: string;
   registeredCount: number;
   checkedInCount: number;
+}
+
+export interface AnalyticsServiceWalkInDayRow {
+  businessDate: string;
+  walkInCount: number;
 }
 
 export interface AnalyticsServiceContributorRow {
@@ -127,6 +136,22 @@ function assertGuestDayRows(
   }
 }
 
+function assertWalkInDayRows(
+  rows: readonly AnalyticsServiceWalkInDayRow[],
+): void {
+  const businessDates = new Set<string>();
+  for (const row of rows) {
+    if (
+      !isBusinessDate(row.businessDate) ||
+      businessDates.has(row.businessDate)
+    ) {
+      throw new Error("Analytics service received an invalid walk-in day row");
+    }
+    assertCount(row.walkInCount, "Walk-in day count");
+    businessDates.add(row.businessDate);
+  }
+}
+
 function hasContributorSnapshotDrift(row: AnalyticsServiceEventRow): boolean {
   return (
     row.confirmedAt !== null &&
@@ -160,6 +185,67 @@ function buildTrend(
     assertCount(point.registered, "Trend registered total");
     assertCount(point.checkedIn, "Trend checked-in total");
     assertCount(point.operatingDays, "Trend operating day count");
+    buckets.set(bucketStartDate, point);
+  }
+  return [...buckets.values()].sort((left, right) =>
+    left.bucketStartDate.localeCompare(right.bucketStartDate),
+  );
+}
+
+function buildAttendanceDays(
+  guestRows: readonly AnalyticsServiceGuestDayRow[],
+  walkInRows: readonly AnalyticsServiceWalkInDayRow[],
+  range: AnalyticsPeriodSelection["comparisonPeriod"],
+): AnalyticsAttendanceDayInput[] {
+  const days = new Map<string, AnalyticsAttendanceDayInput>();
+  for (const row of guestRows) {
+    if (!isDateInAnalyticsRange(row.businessDate, range)) continue;
+    days.set(row.businessDate, {
+      businessDate: row.businessDate,
+      checkedInGuests: row.checkedInCount,
+      walkIns: 0,
+    });
+  }
+  for (const row of walkInRows) {
+    if (!isDateInAnalyticsRange(row.businessDate, range)) continue;
+    const day = days.get(row.businessDate) ?? {
+      businessDate: row.businessDate,
+      checkedInGuests: 0,
+      walkIns: 0,
+    };
+    day.walkIns = row.walkInCount;
+    days.set(row.businessDate, day);
+  }
+  return [...days.values()]
+    .filter((day) => day.checkedInGuests + day.walkIns > 0)
+    .sort((left, right) => left.businessDate.localeCompare(right.businessDate));
+}
+
+function buildAttendanceTrend(
+  rows: readonly AnalyticsAttendanceDayInput[],
+  selection: AnalyticsPeriodSelection,
+): AnalyticsAttendanceTrendPoint[] {
+  const buckets = new Map<string, AnalyticsAttendanceTrendPoint>();
+  for (const row of rows) {
+    const bucketStartDate =
+      selection.period.granularity === "month"
+        ? row.businessDate
+        : `${row.businessDate.slice(0, 7)}-01`;
+    const point = buckets.get(bucketStartDate) ?? {
+      bucketStartDate,
+      checkedInGuests: 0,
+      walkIns: 0,
+      totalAttendance: 0,
+      operatingDays: 0,
+    };
+    point.checkedInGuests += row.checkedInGuests;
+    point.walkIns += row.walkIns;
+    point.totalAttendance += row.checkedInGuests + row.walkIns;
+    point.operatingDays += 1;
+    assertCount(point.checkedInGuests, "Attendance trend checked-in total");
+    assertCount(point.walkIns, "Attendance trend walk-in total");
+    assertCount(point.totalAttendance, "Attendance trend total");
+    assertCount(point.operatingDays, "Attendance trend operating day count");
     buckets.set(bucketStartDate, point);
   }
   return [...buckets.values()].sort((left, right) =>
@@ -241,15 +327,18 @@ export function buildAdminAnalyticsView({
   selection,
   eventRows,
   guestDayRows,
+  walkInDayRows,
   contributorRows,
 }: {
   selection: AnalyticsPeriodSelection;
   eventRows: readonly AnalyticsServiceEventRow[];
   guestDayRows: readonly AnalyticsServiceGuestDayRow[];
+  walkInDayRows: readonly AnalyticsServiceWalkInDayRow[];
   contributorRows: readonly AnalyticsServiceContributorRow[];
 }): AdminAnalyticsView {
   assertEventRows(eventRows);
   assertGuestDayRows(guestDayRows);
+  assertWalkInDayRows(walkInDayRows);
   const currentAggregate = summarizeAnalyticsGuestDays(
     guestDayRows
       .filter((row) => isDateInAnalyticsRange(row.businessDate, selection.period))
@@ -269,6 +358,22 @@ export function buildAdminAnalyticsView({
         registered: row.registeredCount,
         checkedIn: row.checkedInCount,
       })),
+  );
+  const currentAttendanceDays = buildAttendanceDays(
+    guestDayRows,
+    walkInDayRows,
+    selection.period,
+  );
+  const comparisonAttendanceDays = buildAttendanceDays(
+    guestDayRows,
+    walkInDayRows,
+    selection.comparisonPeriod,
+  );
+  const currentAttendanceAggregate = summarizeAnalyticsAttendanceDays(
+    currentAttendanceDays,
+  );
+  const comparisonAttendanceAggregate = summarizeAnalyticsAttendanceDays(
+    comparisonAttendanceDays,
   );
   const currentEvents = eventRows.filter((row) =>
     isDateInAnalyticsRange(row.businessDate, selection.period),
@@ -321,6 +426,13 @@ export function buildAdminAnalyticsView({
     navigation: selection.navigation,
     coverage,
     summary: buildAnalyticsSummary(currentAggregate, comparisonAggregate),
+    attendance: {
+      summary: buildAnalyticsAttendanceSummary(
+        currentAttendanceAggregate,
+        comparisonAttendanceAggregate,
+      ),
+      trend: buildAttendanceTrend(currentAttendanceDays, selection),
+    },
     trend: buildTrend(guestDayRows, selection),
     contributors: buildContributorRows(contributorRows),
     events: currentEvents

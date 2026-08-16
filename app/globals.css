@@ -24,6 +24,7 @@
   --app-action-confirm-hover: #e1e4e6;
   --app-action-confirm-active: #c4c9cc;
   --app-focus: #f4f5f5;
+  --app-status-waiting: #c2a56c;
   --app-header-height: calc(4rem + env(safe-area-inset-top));
   --app-z-route-overlay: 40;
   --app-z-chrome: 45;

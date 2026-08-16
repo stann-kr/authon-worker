@@ -24,6 +24,7 @@ import Icon from "../../components/Icon";
 import Skeleton from "../../components/Skeleton";
 import OperationsLayout from "../../components/OperationsLayout";
 import EventScopeSelector from "../../components/EventScopeSelector";
+import AttendanceCounter from "./components/AttendanceCounter";
 import { useSectionLoadingTask } from "../../components/RouteTransitionProvider";
 import { getBusinessDate } from "../../lib/date";
 import { orderGuestDisplayList } from "../../lib/guests/display-order";
@@ -161,6 +162,17 @@ function DoorPageContent() {
             venueId,
             eventId: selectedEventId,
             businessDate: selectedDate,
+          }
+        : null,
+    [selectedDate, selectedEventId, venueId],
+  );
+  const attendanceScope = useMemo(
+    () =>
+      venueId
+        ? {
+            venueId,
+            businessDate: selectedDate,
+            eventId: selectedEventId,
           }
         : null,
     [selectedDate, selectedEventId, venueId],
@@ -725,6 +737,9 @@ function DoorPageContent() {
   const checkedGuests = filteredGuests.filter(
     (guest) => guest.status === "checked",
   );
+  const scopeCheckedInGuests = displayData.guests.filter(
+    (guest) => guest.status === "checked",
+  ).length;
   const sortedGuests = orderGuestDisplayList(filteredGuests, {
     sortMode,
     locale: locale === "ko" ? "ko-KR" : "en-US",
@@ -758,7 +773,7 @@ function DoorPageContent() {
   );
 
   return (
-    <WorkspaceShell contentClassName="gap-4 pb-8 lg:gap-6">
+    <WorkspaceShell contentClassName="gap-4 pb-[calc(16rem+env(safe-area-inset-bottom))] md:pb-8 lg:gap-6">
       {venueLoadError && (
         <VenueLoadNotice
           onRetry={refreshVenues}
@@ -769,7 +784,12 @@ function DoorPageContent() {
         title={commonT("door")}
         dashboard={
           <>
-                <div className="context-bar">
+            <AttendanceCounter
+              scope={attendanceScope}
+              currentBusinessDate={businessDate}
+              checkedInGuests={scopeCheckedInGuests}
+            />
+            <div className="context-bar">
                   <DatePicker
                     value={selectedDate}
                     onChange={setSelectedDate}

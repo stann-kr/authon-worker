@@ -261,6 +261,54 @@ export const guestActivityRequests = sqliteTable('guest_activity_requests', {
   index('idx_guest_activity_requests_created').on(t.createdAt),
 ]);
 
+export const attendanceActivityLedger = sqliteTable('attendance_activity_ledger', {
+  id: text('id').primaryKey(),
+  venueId: text('venue_id').notNull().references(() => venues.id),
+  businessDate: text('business_date').notNull(),
+  eventId: text('event_id').references(() => events.id),
+  action: text('action').notNull(),
+  delta: integer('delta').notNull(),
+  reversesActivityId: text('reverses_activity_id').references(
+    (): AnySQLiteColumn => attendanceActivityLedger.id,
+  ),
+  adjustmentReason: text('adjustment_reason'),
+  actorUserId: text('actor_user_id').notNull().references(() => users.id),
+  channel: text('channel').notNull(),
+  requestId: text('request_id').notNull(),
+  idempotencyKey: text('idempotency_key').notNull(),
+  payloadHash: text('payload_hash').notNull(),
+  deviceKeyHash: text('device_key_hash'),
+  deviceSequence: integer('device_sequence'),
+  occurredAt: text('occurred_at').notNull(),
+  createdAt: text('created_at').notNull(),
+}, (t) => [
+  uniqueIndex('idx_attendance_activity_venue_idempotency').on(
+    t.venueId,
+    t.idempotencyKey,
+  ),
+  uniqueIndex('idx_attendance_activity_reversal_once')
+    .on(t.reversesActivityId)
+    .where(sql`${t.reversesActivityId} IS NOT NULL`),
+  uniqueIndex('idx_attendance_activity_device_sequence')
+    .on(t.venueId, t.actorUserId, t.deviceKeyHash, t.deviceSequence)
+    .where(sql`${t.deviceKeyHash} IS NOT NULL`),
+  index('idx_attendance_activity_venue_date').on(
+    t.venueId,
+    t.businessDate,
+    t.eventId,
+  ),
+  index('idx_attendance_activity_event_occurred').on(t.eventId, t.occurredAt),
+  index('idx_attendance_activity_actor_scope').on(
+    t.actorUserId,
+    t.venueId,
+    t.businessDate,
+    t.eventId,
+    t.deviceKeyHash,
+    t.deviceSequence,
+    t.occurredAt,
+  ),
+]);
+
 export const eventContributorLimits = sqliteTable('event_contributor_limits', {
   eventId: text('event_id').notNull().references(() => events.id),
   venueId: text('venue_id').notNull().references(() => venues.id),

@@ -69,6 +69,40 @@ export interface AnalyticsSummary {
   registeredPerOperatingDay: AnalyticsMetricComparison;
 }
 
+export interface AnalyticsAttendanceDayInput {
+  businessDate: string;
+  checkedInGuests: number;
+  walkIns: number;
+}
+
+export interface AnalyticsAttendanceAggregate {
+  operatingDays: number;
+  checkedInGuests: number;
+  walkIns: number;
+  totalAttendance: number;
+  attendancePerOperatingDay: number | null;
+}
+
+export interface AnalyticsAttendanceSummary {
+  totalAttendance: AnalyticsMetricComparison;
+  checkedInGuests: AnalyticsMetricComparison;
+  walkIns: AnalyticsMetricComparison;
+  attendancePerOperatingDay: AnalyticsMetricComparison;
+}
+
+export interface AnalyticsAttendanceTrendPoint {
+  bucketStartDate: string;
+  checkedInGuests: number;
+  walkIns: number;
+  totalAttendance: number;
+  operatingDays: number;
+}
+
+export interface AnalyticsAttendanceView {
+  summary: AnalyticsAttendanceSummary;
+  trend: AnalyticsAttendanceTrendPoint[];
+}
+
 export type AnalyticsCloseoutCoverageStatus =
   | "confirmed"
   | "missing"
@@ -147,6 +181,7 @@ export interface AdminAnalyticsView {
   navigation: AnalyticsPeriodSelection["navigation"];
   coverage: AnalyticsCoverage;
   summary: AnalyticsSummary;
+  attendance: AnalyticsAttendanceView;
   trend: AnalyticsTrendPoint[];
   contributors: AnalyticsContributorRow[];
   events: AnalyticsEventRow[];
