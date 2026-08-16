@@ -473,7 +473,7 @@
     },
     "contributors": {
       "title": "DJ·기여자별 게스트",
-      "description": "명시적으로 연결된 Contributor만 합산하며, 연결되지 않은 source와 삭제된 기여자는 별도로 표시합니다.",
+      "description": "명시적으로 연결된 Contributor만 합산합니다. 미연결 계정과 링크는 출처 이름과 상태를 함께 표시하며 서로 합산하지 않습니다. 삭제된 기여자는 별도로 표시합니다.",
       "name": "DJ·기여자",
       "operatingDays": "등록 영업일",
       "sort": "정렬 기준",
@@ -483,7 +483,9 @@
       "emptyDescription": "게스트 등록에 기여자 source가 있으면 명시적 연결 상태와 함께 표시됩니다.",
       "deleted": "삭제된 기여자",
       "unmappedLink": "미연결 외부 링크",
+      "unmappedLinkWithName": "{name} · 미연결 외부 링크",
       "unmappedUser": "미연결 내부 계정",
+      "unmappedUserWithName": "{name} · 미연결 내부 계정",
       "unattributed": "귀속되지 않은 등록"
     },
     "events": {
