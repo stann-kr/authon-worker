@@ -53,8 +53,10 @@ routes = []
 
 [[env.dev.d1_databases]]
 binding = "DB"
-database_name = "authon-db-dev"
-database_id = "7a839c6c-f5ba-48e1-95f9-d1b4ed64afb1"
+# Development Worker는 실제 운영 데이터 검증을 위해 production D1을 공유한다.
+# 이 binding의 모든 application write는 production data에 즉시 반영된다.
+database_name = "authon-db"
+database_id = "b849dd4e-533e-477d-9ef8-cc2e4a00df1f"
 migrations_dir = "migrations"
 
 [[env.dev.kv_namespaces]]

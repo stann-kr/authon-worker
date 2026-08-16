@@ -4,6 +4,19 @@
 
 ## 2026-08-16
 
+### development Worker 실제 DB 검증 연결
+
+#### Changed
+
+- 고정 `authon-worker-dev`의 `DB` binding을 production D1 `authon-db`에 연결해 `dev` branch를 실제 계정과 데이터로 검증할 수 있게 했다.
+- development session KV·JWT secret·Worker URL과 route는 production에서 분리된 상태를 유지한다.
+- production D1에 synthetic data를 넣을 수 있는 remote development seed entrypoint를 제거했다.
+
+#### Security
+
+- development Worker의 Guest·Door·Admin write도 production data에 즉시 반영됨을 운영 계약과 회귀 테스트에 명시했다.
+- remote migration은 기존 production intent guard를 거치는 명령만 유지하며, `dev` deploy에 migration이나 seed를 포함하지 않는다.
+
 ### 고정 development Worker 복원
 
 #### Changed

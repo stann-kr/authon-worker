@@ -25,10 +25,10 @@ Client
 ## 배포 환경
 
 - production은 `authon-worker`, development는 Wrangler `env.dev`가 생성하는 고정 `authon-worker-dev` Worker를 사용한다.
-- `dev` push는 Cloudflare Workers Builds에서 `npm run verify:release`를 통과한 뒤 development Worker에 배포하며 `authon-db-dev`, development session KV와 전용 JWT secret만 사용한다. `routes=[]`로 production custom domain을 상속하지 않는다.
-- development D1은 production 데이터를 복제하지 않는다. 명시적 development intent를 요구하는 seed가 synthetic venue와 관리자 계정만 만들고 credential은 macOS Keychain에 저장한다.
+- `dev` push는 Cloudflare Workers Builds에서 `npm run verify:release`를 통과한 뒤 development Worker에 배포한다. 실제 데이터 기반 기능 검증을 위해 `DB`만 production D1 `authon-db`를 공유하고, session KV·JWT secret·app URL은 development 전용이며 `routes=[]`로 production custom domain을 상속하지 않는다.
+- development Worker의 Guest·Door·Admin write는 production D1에 즉시 반영된다. synthetic remote seed와 dev remote migration entrypoint는 두지 않고, migration은 production intent guard가 있는 명령으로만 수행한다.
 - `main` merge는 별도 production 승인을 거쳐 같은 gate를 통과한 뒤 production Worker에 자동 배포한다. development 승인과 migration·secret 변경을 production 권한으로 확대하지 않는다.
-- Worker code deploy와 D1 migration, secret·binding·route·data 변경은 서로 다른 운영 단계로 검증한다.
+- Worker code deploy와 D1 migration, secret·binding·route 변경은 서로 다른 운영 단계로 검증한다. 단, development application의 정상적인 product write는 공유 production D1에 기록되는 명시적 예외다.
 - 표준 개발·CI·Docker runtime은 Node 24 / npm 11이다. `npm run verify:release`가 lint, typecheck, 전체 회귀, EN/KO parity, 민감 asset 검사와 Next/OpenNext Worker build를 재현한다.
 - 기본 Compose `web` 서비스는 production Cloudflare credential을 받지 않는다. production deploy와 remote D1 migration은 별도 `ops` profile, 명시적 `:prod`/`:remote` 명령과 `AUTHON_PRODUCTION_INTENT=1`을 함께 요구한다.
 - 적용된 `migrations/`의 manual D1 SQL이 migration authority다. Drizzle generator는 `.docs/generated-migrations/`의 disposable review output만 만들고, CI는 임시 SQLite에서 manual history와 현재 schema의 table·column·foreign key·index 호환성을 검증한다.

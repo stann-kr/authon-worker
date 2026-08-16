@@ -4,12 +4,12 @@ import test from "node:test";
 
 const PRODUCTION_DATABASE_ID = "b849dd4e-533e-477d-9ef8-cc2e4a00df1f";
 const PRODUCTION_KV_ID = "c29d9d86856b41458a8112fb620ae874";
+const DETACHED_DEVELOPMENT_DATABASE_ID = "7a839c6c-f5ba-48e1-95f9-d1b4ed64afb1";
 
-test("development deploy is isolated from production resources", async () => {
-  const [packageJson, wranglerConfig, seedScript] = await Promise.all([
+test("development deploy shares only the explicitly approved production D1", async () => {
+  const [packageJson, wranglerConfig] = await Promise.all([
     readFile(new URL("../../package.json", import.meta.url), "utf8").then(JSON.parse),
     readFile(new URL("../../wrangler.toml", import.meta.url), "utf8"),
-    readFile(new URL("../dev/seed-remote-dev-data.mjs", import.meta.url), "utf8"),
   ]);
 
   assert.equal(
@@ -36,27 +36,27 @@ test("development deploy is isolated from production resources", async () => {
   assert.match(devConfig, /preview_urls = false/);
   assert.match(devConfig, /routes = \[\]/);
   assert.match(devConfig, /binding = "DB"/);
-  assert.match(devConfig, /database_name = "authon-db-dev"/);
+  assert.match(devConfig, /database_name = "authon-db"/);
+  assert.match(devConfig, new RegExp(PRODUCTION_DATABASE_ID));
+  assert.doesNotMatch(devConfig, new RegExp(DETACHED_DEVELOPMENT_DATABASE_ID));
   assert.match(devConfig, /migrations_dir = "migrations"/);
   assert.match(devConfig, /binding = "SESSIONS"/);
   assert.match(
     devConfig,
     /NEXT_PUBLIC_APP_URL = "https:\/\/authon-worker-dev\.ilsny7\.workers\.dev"/,
   );
-  assert.doesNotMatch(devConfig, new RegExp(PRODUCTION_DATABASE_ID));
   assert.doesNotMatch(devConfig, new RegExp(PRODUCTION_KV_ID));
   assert.doesNotMatch(devConfig, /guest\.faustseoul\.kr/);
 
+  assert.equal(packageJson.scripts["db:seed:dev"], undefined);
   assert.equal(
-    packageJson.scripts["db:seed:dev"],
-    "node scripts/dev/seed-remote-dev-data.mjs",
+    packageJson.scripts["db:migrate:remote"],
+    "node scripts/ops/require-production-intent.mjs && wrangler d1 migrations apply authon-db --remote",
   );
-  assert.match(seedScript, /inspectDevelopmentIntent\(\)/);
-  assert.match(seedScript, /const databaseBinding = "DB"/);
-  assert.match(seedScript, /const wranglerEnvironment = "dev"/);
-  assert.match(seedScript, /"--remote"/);
-  assert.match(seedScript, /authon-worker-dev-login/);
-  assert.doesNotMatch(seedScript, new RegExp(PRODUCTION_DATABASE_ID));
-  assert.doesNotMatch(seedScript, new RegExp(PRODUCTION_KV_ID));
-  assert.doesNotMatch(seedScript, /guest\.faustseoul\.kr/);
+
+  for (const [name, command] of Object.entries(packageJson.scripts)) {
+    if (name === "db:migrate:remote") continue;
+    assert.doesNotMatch(command, /d1 migrations apply .*--remote/);
+    assert.doesNotMatch(command, /d1 execute .*--env dev.*--remote/);
+  }
 });

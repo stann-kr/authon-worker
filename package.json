@@ -57,8 +57,7 @@
     "migration:verify:cutover": "cross-env ALLOW_RECONCILED_GUEST_COUNTS=1 node scripts/migration/verify-supabase-snapshot.mjs",
     "migration:generate:d1-import": "node scripts/migration/generate-d1-import-sql.mjs",
     "migration:generate:cutover-overlays": "node scripts/migration/generate-cutover-overlays.mjs",
-    "db:seed:local": "node scripts/dev/seed-local-test-data.mjs",
-    "db:seed:dev": "node scripts/dev/seed-remote-dev-data.mjs"
+    "db:seed:local": "node scripts/dev/seed-local-test-data.mjs"
   },
   "dependencies": {
     "@carbon/icons-react": "^11.85.0",
