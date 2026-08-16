@@ -16,6 +16,7 @@ export type ExternalLinkValidationDisposition =
 
 export const MAX_EXTERNAL_LINK_DJ_NAME_LENGTH = 100;
 export const MAX_EXTERNAL_LINK_EVENT_LENGTH = 120;
+export const MAX_EXTERNAL_LINK_CONTRIBUTOR_ID_LENGTH = 128;
 
 /** Keeps permanent credential failure separate from retryable infrastructure errors. */
 export function getExternalLinkValidationDisposition(
@@ -35,6 +36,7 @@ const DANGEROUS_FORMAT_PATTERN =
 export interface ExternalLinkCreateDraft {
   date: string;
   djName: string;
+  contributorId: string | null;
   event: string;
   maxGuests: number;
   localeMode: ExternalDJLink["localeMode"];
@@ -48,6 +50,7 @@ export type ExternalLinkCreateInputError =
   | "DJ_NAME_TOO_LONG"
   | "INVALID_EVENT"
   | "EVENT_TOO_LONG"
+  | "INVALID_CONTRIBUTOR"
   | "INVALID_MAX_GUESTS"
   | "INVALID_LOCALE_MODE"
   | "INVALID_LINK_KIND";
@@ -65,6 +68,7 @@ interface ExternalLinkRecord {
   venueId: string;
   token: string;
   djName: string;
+  contributorId: string | null;
   event: string | null;
   date: string | null;
   maxGuests: number;
@@ -164,10 +168,22 @@ export function prepareExternalLinkCreateInput(
     return invalidCreateInput("INVALID_LINK_KIND");
   }
 
+  const contributorId = candidate.contributorId ?? null;
+  if (
+    (contributorId !== null &&
+      (typeof contributorId !== "string" ||
+        contributorId.length > MAX_EXTERNAL_LINK_CONTRIBUTOR_ID_LENGTH ||
+        !/^[A-Za-z0-9:_-]+$/.test(contributorId))) ||
+    (kind === "self_rsvp" && contributorId !== null)
+  ) {
+    return invalidCreateInput("INVALID_CONTRIBUTOR");
+  }
+
   return {
     draft: {
       date: candidate.date,
       djName,
+      contributorId,
       event,
       maxGuests: candidate.maxGuests,
       localeMode,
@@ -185,13 +201,20 @@ export function prepareExternalLinkCreateInput(
 export function toExternalLinkTemplateDraft(
   source: Pick<
     ExternalDJLink,
-    "djName" | "event" | "maxGuests" | "localeMode" | "kind"
+    | "djName"
+    | "contributorId"
+    | "event"
+    | "maxGuests"
+    | "localeMode"
+    | "kind"
   >,
   targetDate: string,
 ): ExternalLinkCreateDraft {
   return {
     date: targetDate,
     djName: source.djName,
+    contributorId:
+      source.kind === "self_rsvp" ? null : source.contributorId ?? null,
     event: source.event ?? "",
     maxGuests: source.maxGuests,
     localeMode: source.localeMode,
@@ -238,6 +261,7 @@ export function toExternalDJLink(
     venueId: link.venueId,
     token: link.token,
     djName: link.djName,
+    contributorId: link.contributorId,
     event: link.event,
     date: link.date,
     maxGuests: link.maxGuests,

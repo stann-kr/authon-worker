@@ -28,14 +28,17 @@ import {
 import {
   fetchExternalLinksByDate,
   fetchRecentExternalLinks,
+  fetchExternalDjDirectory,
   createExternalLink,
   deleteExternalLink,
   deactivateExternalLink,
   activateExternalLink,
 } from "../../../lib/api/external-links";
-import type { ExternalDJLink } from "../../../lib/api/types";
+import type {
+  ExternalDJLink,
+  ExternalDjSuggestion,
+} from "../../../lib/api/types";
 import {
-  MAX_EXTERNAL_LINK_DJ_NAME_LENGTH,
   MAX_EXTERNAL_LINK_EVENT_LENGTH,
   prepareExternalLinkCreateInput,
   shareExternalLink,
@@ -54,12 +57,14 @@ import {
   type ManageFilter,
   type ManageSort,
 } from "./linkStatus";
+import ExternalDjCombobox from "./ExternalDjCombobox";
 
 const EMPTY_LINKS: ExternalDJLink[] = [];
 
 interface LinkFormData {
   date: string;
   dj: string;
+  contributorId: string | null;
   event: string;
   maxGuests: number | "";
   localeMode: ExternalDJLink["localeMode"];
@@ -124,6 +129,7 @@ export default function LinkManagement({
   const [formData, setFormData] = useState<LinkFormData>({
     date: selectedDate,
     dj: "",
+    contributorId: null,
     event: "",
     maxGuests: 5,
     localeMode: "auto" as ExternalDJLink["localeMode"],
@@ -138,6 +144,10 @@ export default function LinkManagement({
     useState(false);
   const [nativeShareAvailable, setNativeShareAvailable] = useState(false);
   const [links, setLinks] = useState<ExternalDJLink[]>([]);
+  const [djSuggestions, setDjSuggestions] = useState<ExternalDjSuggestion[]>([]);
+  const [djDirectoryVenueId, setDjDirectoryVenueId] = useState("");
+  const [isDjDirectoryLoading, setIsDjDirectoryLoading] = useState(false);
+  const [djDirectoryError, setDjDirectoryError] = useState<string | null>(null);
   const [isFetching, setIsFetching] = useState(false);
   const [loadedScopeKey, setLoadedScopeKey] = useState("");
   const [loadOutcome, setLoadOutcome] = useState<
@@ -192,13 +202,16 @@ export default function LinkManagement({
   }:${eventId ?? "general"}`;
   const credentialScopeKey = `${venueId}:create:${formData.date}:${eventId ?? "general"}`;
   const requestGuard = useLatestRequestGuard();
+  const djDirectoryRequestGuard = useLatestRequestGuard();
   const linkMutationGuard = useScopedOperationGuard();
   const createOperationGuard = useScopedOperationGuard();
   const shareOperationGuard = useScopedOperationGuard();
   const currentRequestScopeKeyRef = useRef(requestScopeKey);
   const currentCredentialScopeKeyRef = useRef(credentialScopeKey);
+  const currentVenueIdRef = useRef(venueId);
   currentRequestScopeKeyRef.current = requestScopeKey;
   currentCredentialScopeKeyRef.current = credentialScopeKey;
+  currentVenueIdRef.current = venueId;
   const scopedGeneratedLink =
     generatedLinkScopeKey === credentialScopeKey ? generatedLink : null;
   const currentMessageScopeKey =
@@ -206,6 +219,8 @@ export default function LinkManagement({
   const scopedError = errorScopeKey === currentMessageScopeKey ? error : null;
   const scopedSuccess =
     successScopeKey === currentMessageScopeKey ? success : null;
+  const currentDjSuggestions =
+    djDirectoryVenueId === venueId ? djSuggestions : [];
 
   useEffect(() => {
     requestGuard.invalidateRequests();
@@ -260,6 +275,51 @@ export default function LinkManagement({
       current?.field === "date" ? null : current,
     );
   }, [selectedDate]);
+
+  useEffect(() => {
+    djDirectoryRequestGuard.invalidateRequests();
+    setDjSuggestions([]);
+    setDjDirectoryVenueId("");
+    setDjDirectoryError(null);
+    setIsDjDirectoryLoading(false);
+    setFormData((prev) => ({ ...prev, contributorId: null }));
+  }, [djDirectoryRequestGuard, venueId]);
+
+  const loadDjDirectory = useCallback(async () => {
+    const requestedVenueId = venueId;
+    const isLatestRequest = djDirectoryRequestGuard.beginRequest();
+    if (!requestedVenueId) {
+      setDjSuggestions([]);
+      setDjDirectoryVenueId("");
+      setDjDirectoryError(null);
+      setIsDjDirectoryLoading(false);
+      return;
+    }
+
+    setIsDjDirectoryLoading(true);
+    setDjDirectoryError(null);
+    try {
+      const { data, error } = await fetchExternalDjDirectory(requestedVenueId);
+      if (!isLatestRequest() || currentVenueIdRef.current !== requestedVenueId) {
+        return;
+      }
+      setDjSuggestions(data ?? []);
+      setDjDirectoryVenueId(requestedVenueId);
+      setDjDirectoryError(error ? t("djDirectoryUnavailable") : null);
+    } catch (directoryError) {
+      if (!isLatestRequest() || currentVenueIdRef.current !== requestedVenueId) {
+        return;
+      }
+      console.error("Failed to load external DJ directory:", directoryError);
+      setDjSuggestions([]);
+      setDjDirectoryVenueId(requestedVenueId);
+      setDjDirectoryError(t("djDirectoryUnavailable"));
+    } finally {
+      if (isLatestRequest() && currentVenueIdRef.current === requestedVenueId) {
+        setIsDjDirectoryLoading(false);
+      }
+    }
+  }, [djDirectoryRequestGuard, t, venueId]);
 
   const loadLinks = useCallback(async () => {
     if (currentRequestScopeKeyRef.current !== requestScopeKey) return;
@@ -318,6 +378,12 @@ export default function LinkManagement({
   }, [activeTab, loadLinks]);
 
   useEffect(() => {
+    if (activeTab === "create") {
+      void loadDjDirectory();
+    }
+  }, [activeTab, loadDjDirectory]);
+
+  useEffect(() => {
     const intervalId = window.setInterval(() => setNow(Date.now()), 30 * 1000);
     return () => window.clearInterval(intervalId);
   }, []);
@@ -344,11 +410,19 @@ export default function LinkManagement({
     return () => window.cancelAnimationFrame(frameId);
   }, [scopedGeneratedLink]);
 
-  const clearFormFieldError = (field: LinkFormField) => {
+  const clearFormFieldError = useCallback((field: LinkFormField) => {
     setFormValidationError((current) =>
       current?.field === field ? null : current,
     );
-  };
+  }, []);
+
+  const handleDjChange = useCallback(
+    (dj: string, contributorId: string | null) => {
+      clearFormFieldError("dj");
+      setFormData((current) => ({ ...current, dj, contributorId }));
+    },
+    [clearFormFieldError],
+  );
 
   const focusFormField = (field: LinkFormField) => {
     const target = {
@@ -370,6 +444,8 @@ export default function LinkManagement({
         case "INVALID_DJ_NAME":
         case "DJ_NAME_TOO_LONG":
           return { field: "dj", message: t("invalidDjName") };
+        case "INVALID_CONTRIBUTOR":
+          return { field: "dj", message: t("invalidContributor") };
         case "INVALID_EVENT":
         case "EVENT_TOO_LONG":
           return { field: "event", message: t("invalidEvent") };
@@ -405,6 +481,7 @@ export default function LinkManagement({
     const prepared = prepareExternalLinkCreateInput({
       date: formData.date,
       djName: formData.dj,
+      contributorId: formData.contributorId,
       event: formData.event,
       maxGuests: formData.maxGuests,
       localeMode: formData.localeMode,
@@ -451,11 +528,13 @@ export default function LinkManagement({
         setFormData({
           date: operationDate,
           dj: "",
+          contributorId: null,
           event: "",
           maxGuests: 5,
           localeMode: "auto",
           kind: "contributor",
         });
+        void loadDjDirectory();
       }
     } catch (createError) {
       if (!operation.isCurrent(currentCredentialScopeKeyRef.current)) return;
@@ -553,6 +632,7 @@ export default function LinkManagement({
     setFormData({
       date: draft.date,
       dj: draft.djName,
+      contributorId: draft.contributorId,
       event: draft.event,
       maxGuests: draft.maxGuests,
       localeMode: draft.localeMode,
@@ -914,37 +994,22 @@ export default function LinkManagement({
                     <label htmlFor="link-dj-name" className="app-label">
                       {t("djName")}
                     </label>
-                    <input
-                      id="link-dj-name"
-                      name="dj-name"
+                    <ExternalDjCombobox
                       ref={linkDjInputRef}
-                      type="text"
-                      autoComplete="off"
                       value={formData.dj}
+                      contributorId={formData.contributorId}
+                      suggestions={currentDjSuggestions}
+                      isDirectoryEnabled={formData.kind === "contributor"}
+                      isDirectoryLoading={isDjDirectoryLoading}
+                      directoryError={djDirectoryError}
                       disabled={isGenerating}
-                      aria-invalid={
-                        formValidationError?.field === "dj" || undefined
-                      }
-                      aria-describedby={
+                      hasError={formValidationError?.field === "dj"}
+                      errorId={
                         formValidationError?.field === "dj"
                           ? "link-dj-name-error"
                           : undefined
                       }
-                      maxLength={MAX_EXTERNAL_LINK_DJ_NAME_LENGTH}
-                      onChange={(e) => {
-                        clearFormFieldError("dj");
-                        setFormData({
-                          ...formData,
-                          dj: e.target.value.toUpperCase(),
-                        });
-                      }}
-                      className={`app-field uppercase ${
-                        formValidationError?.field === "dj"
-                          ? "border-status-danger"
-                          : "border-border-strong"
-                      }`}
-                      placeholder={t("djName")}
-                      required
+                      onChange={handleDjChange}
                     />
                     {formValidationError?.field === "dj" && (
                       <p
@@ -1043,7 +1108,14 @@ export default function LinkManagement({
                             disabled={isGenerating}
                             onChange={() => {
                               clearFormFieldError("kind");
-                              setFormData({ ...formData, kind: option.value });
+                              setFormData({
+                                ...formData,
+                                kind: option.value,
+                                contributorId:
+                                  option.value === "self_rsvp"
+                                    ? null
+                                    : formData.contributorId,
+                              });
                             }}
                             className="mt-0.5 h-4 w-4 accent-[var(--action-primary)]"
                           />

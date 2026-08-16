@@ -65,7 +65,7 @@ Client
 | User | 운영자, 스태프, DJ 계정과 role, 개인·공용 계정 유형, scope |
 | Guest | 날짜별 단건·25명 단위 게스트 등록, 공용 계정 실제 입력자와 상태 관리 |
 | Guest Limit Request | Staff·DJ의 날짜별 추가 게스트 한도 요청과 관리자 승인 기록 |
-| External Link | 외부 DJ가 계정 없이 게스트를 등록하고 설정을 새 credential로 재사용하는 공개 링크 |
+| External Link | 외부 DJ가 계정 없이 게스트를 등록하고 설정을 새 credential로 재사용하는 공개 링크와 베뉴별 DJ 디렉터리 연결 |
 | Check-in | 도어 운영자의 입장 확인 기록 |
 | Password Reset | 사용자 관리자 요청, 관리자 결정, 기존 재설정 token의 일회성 소비 |
 | Account Setup | `pending_reset` 계정의 1회용 설정 코드 또는 요청 브라우저에 결속된 관리자 승인 기반 비밀번호 설정 |
@@ -133,6 +133,8 @@ Client
 - 계정별 한도와 승인된 추가 인원, 외부 링크 정원 예약은 D1 transaction batch 안의 조건부 쓰기로 최종 판정한다.
 - 외부 공개 등록의 KV rate limit은 반복 요청을 줄이는 보조 방어이며, 정원·중복·link 상태의 권위 있는 판정에는 사용하지 않는다.
 - 외부 링크 게스트 삭제와 사용 인원 차감은 같은 transaction batch에서 처리하며, 반복 삭제는 한 번만 차감한다.
+- 담당자형 외부 링크의 DJ 이름은 공백·대소문자·Unicode 호환 문자를 정규화한 베뉴별 key가 정확히 같을 때 같은 canonical Contributor에 연결한다. 내부 계정과 Self-RSVP는 이 자동 연결에서 제외하고 유사 문자열은 후보로만 제시한다.
+- 새 외부 DJ Contributor, 링크와 매핑 감사 기록은 같은 D1 batch에서 생성하며, 선택한 기존 Contributor도 현재 베뉴·활성 상태·정규화 이름을 서버에서 다시 확인한다.
 - 외부 token 삭제는 같은 batch 안에서 현재 token·베뉴·활성·보관·만료·운영일과 게스트의 입장 대기 상태를 다시 확인한다.
 - 삭제·상태 변경의 쓰기 조건은 사전 조회 결과의 베뉴와 소유권을 다시 확인하고, 삭제된 게스트는 `pending` 또는 `checked` 상태로 되돌릴 수 없다.
 - 공개 등록·삭제 뒤 최신 명단 재조회가 실패하면 입력은 유지하고 추가 쓰기를 잠근 뒤 명시적 재시도로만 해제한다.
@@ -154,7 +156,9 @@ Client
 | `venue_domains` | host, platform/venue scope, 베뉴별 대표 도메인과 기본 언어 |
 | `users` | 계정, role, 개인·공용 유형, Door capability, guest limit, venue scope, session/setup 상태, 최근 로그인, 삭제 처리와 선호 언어 |
 | `user_audit_events` | 사용자 계정 관리 작업의 actor, 대상, 작업 종류와 시각 |
-| `external_dj_links` | 외부 DJ 등록 링크, 정원/사용량, 생성 시각과 언어 모드 |
+| `venue_contributors` | 베뉴별 canonical DJ와 표시 이름; 외부 DJ 디렉터리 항목만 정규화된 고유 이름 key 보유 |
+| `contributor_audit_events` | Contributor 생성과 user·외부 링크 mapping 변경 감사 기록 |
+| `external_dj_links` | 외부 DJ 등록 링크, canonical Contributor 연결, 정원/사용량, 생성 시각과 언어 모드 |
 | `guests` | 게스트 등록 정보, 공용 계정 실제 입력자와 체크인 전 상태 |
 | `terminal_guest_sync_requests` | terminal 요청의 베뉴별 idempotency key, payload hash와 최초 guest 결과 |
 | `guest_limit_requests` | 사용자·날짜별 추가 한도 요청, 선택 사유, 승인 수량과 결정 기록 |
@@ -177,3 +181,5 @@ Client
 | 국제화 | locale resolver, 메시지 키 대응, 계정·도메인·External Link 우선순위 |
 
 외부 링크의 최근 목록은 `created_at` 내림차순으로 조회한다. Supabase snapshot을 D1으로 이전할 때도 원본 `created_at`을 보존하므로 컷오버 전에 생성된 링크가 최근 목록에서 누락되지 않는다.
+
+기존 외부 DJ 연결은 `db:backfill:external-djs:dry-run`의 비식별 집계와 계획 해시를 먼저 확인한다. production apply는 같은 해시, production intent와 Cloudflare credential을 모두 요구하며 Contributor 생성, 활성·삭제 보존 링크 mapping과 감사 기록을 D1의 원자적 SQL import로 처리한다.

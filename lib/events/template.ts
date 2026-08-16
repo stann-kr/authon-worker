@@ -2,6 +2,7 @@ export interface EventTemplateSourceLink {
   id: string;
   token: string;
   djName: string;
+  contributorId: string | null;
   maxGuests: number;
   localeMode: string;
   kind: string;
@@ -29,6 +30,9 @@ export function buildEventTemplateClonePlan(params: {
   expiresAt.setUTCDate(expiresAt.getUTCDate() + 1);
   const seenTokens = new Set<string>();
   const links = params.links.map((source) => {
+    if (source.kind !== "self_rsvp" && !source.contributorId) {
+      throw new Error("INVALID_TEMPLATE_CONTRIBUTOR");
+    }
     const id = params.createOpaqueId();
     const token = params.createOpaqueId();
     if (!id || !token || token === source.token || seenTokens.has(token)) {
@@ -40,6 +44,8 @@ export function buildEventTemplateClonePlan(params: {
       venueId: params.venueId,
       token,
       djName: source.djName,
+      contributorId:
+        source.kind === "self_rsvp" ? null : source.contributorId,
       event: params.eventName,
       date: params.businessDate,
       eventId: params.eventId,

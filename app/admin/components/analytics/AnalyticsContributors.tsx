@@ -23,14 +23,16 @@ export default function AnalyticsContributors({
   const contributorLabel = useCallback((row: AnalyticsContributorRow): string => {
     if (row.sourceStatus === "mapped") return row.displayName;
     if (row.sourceStatus === "deleted") return t("contributors.deleted");
+    if (
+      row.displayName &&
+      (row.source?.kind === "external_link" || row.source?.kind === "user")
+    ) {
+      return row.displayName;
+    }
     return row.source?.kind === "external_link"
-      ? row.displayName
-        ? t("contributors.unmappedLinkWithName", { name: row.displayName })
-        : t("contributors.unmappedLink")
+      ? t("contributors.unmappedLink")
       : row.source?.kind === "user"
-        ? row.displayName
-          ? t("contributors.unmappedUserWithName", { name: row.displayName })
-          : t("contributors.unmappedUser")
+        ? t("contributors.unmappedUser")
         : t("contributors.unattributed");
   }, [t]);
   const sortedRows = useMemo(() => {
