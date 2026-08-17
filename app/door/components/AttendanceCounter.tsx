@@ -42,6 +42,7 @@ import {
   isAttendanceSummaryReadCurrent,
 } from "@/lib/attendance/summary-authority";
 import type { DoorAttendanceSummary } from "@/lib/attendance/types";
+import useMobileDockInset from "./useMobileDockInset";
 
 interface AttendanceCounterProps {
   scope: AttendanceScope | null;
@@ -56,6 +57,7 @@ type CounterNotice =
   | "syncFailed"
   | "adjustmentFailed"
   | "reconciliationStale"
+  | "scopeClosed"
   | null;
 
 function scopeKey(scope: AttendanceScope | null): string {
@@ -85,6 +87,7 @@ export default function AttendanceCounter({
   const [reconciliationTarget, setReconciliationTarget] = useState("");
   const [adjustmentReason, setAdjustmentReason] = useState("");
   const [isAdjusting, setIsAdjusting] = useState(false);
+  const mobileDockRef = useRef<HTMLElement>(null);
   const currentScopeKeyRef = useRef(scopeKey(scope));
   const syncingRef = useRef(false);
   const pendingSyncScopeRef = useRef<AttendanceScope | null>(null);
@@ -121,21 +124,33 @@ export default function AttendanceCounter({
   );
   const failedMutations = useMemo(
     () => scopedMutations.filter(
-      (mutation) => mutation.state === "conflict" || mutation.state === "rejected",
+      (mutation) =>
+        mutation.state === "conflict" ||
+        mutation.state === "rejected" ||
+        mutation.state === "scope_closed",
     ),
     [scopedMutations],
   );
   const localDelta = pendingAttendanceDelta(scopedMutations);
-  const walkIns = Math.max(0, (scopedSummary?.walkIns ?? 0) + localDelta);
+  const displayedCheckedInGuests =
+    scopedSummary?.checkedInGuests ?? checkedInGuests;
+  const walkIns = scopedSummary?.isFinalized
+    ? scopedSummary.walkIns
+    : Math.max(0, (scopedSummary?.walkIns ?? 0) + localDelta);
   const serverCheckedInGuests = scopedSummary?.checkedInGuests ?? 0;
   const serverWalkIns = scopedSummary?.walkIns ?? 0;
   const serverTotalAttendance = serverCheckedInGuests + serverWalkIns;
   const parsedReconciliationTarget = reconciliationTarget === ""
     ? null
     : Number(reconciliationTarget);
+  const isReconciliationTargetInvalid =
+    reconciliationTarget !== "" &&
+    (parsedReconciliationTarget === null ||
+      !Number.isSafeInteger(parsedReconciliationTarget) ||
+      parsedReconciliationTarget < 0);
   const reconciliationDelta =
-    parsedReconciliationTarget !== null &&
-    Number.isSafeInteger(parsedReconciliationTarget)
+    !isReconciliationTargetInvalid &&
+    parsedReconciliationTarget !== null
       ? parsedReconciliationTarget - serverTotalAttendance
       : null;
   const isReconciliationBelowCheckedGuests =
@@ -428,8 +443,16 @@ export default function AttendanceCounter({
       !scope ||
       !canAdjust ||
       !scopedSummary ||
+      scopedSummary.isFinalized ||
+      !scopedSummary.canFinalize ||
+      isReconciliationTargetInvalid ||
+      isReconciliationBelowCheckedGuests ||
+      isReconciliationDeltaOutOfRange ||
+      reconciliationTarget === "" ||
+      adjustmentReason.trim() === "" ||
       hasPendingReconciliationMutations
     ) return;
+    if (!window.confirm(t("adjustment.confirm"))) return;
     const targetTotalAttendance = Number(reconciliationTarget);
     const attemptFingerprint = JSON.stringify([
       scope.venueId,
@@ -438,6 +461,7 @@ export default function AttendanceCounter({
       targetTotalAttendance,
       scopedSummary.checkedInGuests,
       scopedSummary.walkIns,
+      scopedSummary.sourceActivityCount,
       adjustmentReason.trim(),
     ]);
     const existingAttempt = reconciliationAttemptRef.current;
@@ -460,6 +484,7 @@ export default function AttendanceCounter({
         targetTotalAttendance,
         expectedCheckedInGuests: scopedSummary.checkedInGuests,
         expectedWalkIns: scopedSummary.walkIns,
+        expectedSourceActivityCount: scopedSummary.sourceActivityCount,
         reason: adjustmentReason,
         idempotencyKey,
       });
@@ -476,6 +501,10 @@ export default function AttendanceCounter({
           reconciliationAttemptRef.current = null;
           setNotice("reconciliationStale");
           await loadSummary(scope);
+        } else if (response.error === "ATTENDANCE_SCOPE_CLOSED") {
+          reconciliationAttemptRef.current = null;
+          setNotice("scopeClosed");
+          await loadSummary(scope);
         } else {
           setNotice("adjustmentFailed");
         }
@@ -486,7 +515,7 @@ export default function AttendanceCounter({
       setAdjustmentReason("");
       reconciliationAttemptRef.current = null;
       setNotice(null);
-      setAnnouncement(t("adjustedAnnouncement"));
+      setAnnouncement(t("finalizedAnnouncement"));
     } catch {
       const reconciliationClaim = currentScopeKeyRef.current === targetKey
         ? claimAttendanceSummaryMutation(
@@ -519,18 +548,25 @@ export default function AttendanceCounter({
     ? t("syncing")
     : queuedMutations.length > 0
       ? t("pending", { count: queuedMutations.length })
-      : t("confirmed");
+      : scopedSummary?.isFinalized
+        ? t("scopeClosed")
+        : t("confirmed");
   const unavailableText = !scope
     ? t("selectVenue")
     : !isCurrentDate || scopedSummary?.unavailableReason === "past_date"
       ? t("pastDate")
       : scopedSummary?.unavailableReason === "event_inactive"
         ? t("eventInactive")
-        : null;
+        : scopedSummary?.unavailableReason === "scope_closed"
+          ? t("scopeClosed")
+          : null;
+
+  useMobileDockInset(mobileDockRef);
 
   return (
     <>
       <section
+        ref={mobileDockRef}
         className="fixed inset-x-0 bottom-0 z-30 border-t border-border-strong bg-canvas pb-[env(safe-area-inset-bottom)] md:sticky md:inset-x-auto md:bottom-auto md:top-[calc(var(--app-header-height)+1rem)] md:z-auto md:border"
         aria-labelledby="attendance-counter-title"
         aria-busy={isLoading || isSyncing}
@@ -542,7 +578,7 @@ export default function AttendanceCounter({
             </h2>
             <p className="mt-0.5 text-xs text-text-muted">{statusText}</p>
             <p className="mt-0.5 text-xs text-text-dim md:hidden">
-              {t("checkedInGuests")} {checkedInGuests} · {t("walkIns")} {walkIns}
+              {t("checkedInGuests")} {displayedCheckedInGuests} · {t("walkIns")} {walkIns}
             </p>
           </div>
 
@@ -550,7 +586,7 @@ export default function AttendanceCounter({
             <div className="bg-surface-raised px-2 py-2">
               <dt className="text-text-muted">{t("checkedInGuests")}</dt>
               <dd className="mt-1 font-mono text-lg tabular-nums text-text-heading">
-                {checkedInGuests}
+                {displayedCheckedInGuests}
               </dd>
             </div>
             <div className="bg-surface-raised px-2 py-2">
@@ -615,7 +651,16 @@ export default function AttendanceCounter({
           <summary className="pressable -mx-1 flex min-h-11 cursor-pointer list-none items-center px-1 text-sm font-semibold text-text-muted marker:hidden">
             {t("adjustment.title")}
           </summary>
-          <form onSubmit={submitAdjustment} className="mt-3 space-y-3">
+          {scopedSummary?.isFinalized ? (
+            <p className="mt-3 border-l-2 border-status-checked bg-status-checked/10 px-3 py-2 text-xs leading-relaxed text-text-muted" role="status">
+              {t("adjustment.finalized")}
+            </p>
+          ) : scopedSummary && !scopedSummary.canFinalize ? (
+            <p className="mt-3 border-l-2 border-status-waiting bg-status-waiting/10 px-3 py-2 text-xs leading-relaxed text-text-muted" role="status">
+              {t("adjustment.eventMustBeClosed")}
+            </p>
+          ) : (
+            <form onSubmit={submitAdjustment} className="mt-3 space-y-3">
             <p
               id="attendance-reconciliation-help"
               className="text-xs leading-relaxed text-text-dim"
@@ -640,10 +685,13 @@ export default function AttendanceCounter({
                 min={0}
                 step={1}
                 required
+                name="manualTotalAttendance"
+                autoComplete="off"
                 inputMode="numeric"
                 value={reconciliationTarget}
                 aria-describedby="attendance-reconciliation-help attendance-reconciliation-feedback"
                 aria-invalid={
+                  isReconciliationTargetInvalid ||
                   isReconciliationBelowCheckedGuests ||
                   isReconciliationDeltaOutOfRange
                 }
@@ -666,12 +714,16 @@ export default function AttendanceCounter({
             >
               {!scopedSummary
                 ? t("adjustment.currentUnavailable")
+                : isReconciliationTargetInvalid
+                  ? t("adjustment.invalidTarget")
                 : isReconciliationBelowCheckedGuests
                   ? t("adjustment.belowCheckedGuests", {
                       checkedInGuests: serverCheckedInGuests,
                     })
                   : isReconciliationDeltaOutOfRange
                     ? t("adjustment.deltaLimit")
+                    : reconciliationDelta === 0
+                      ? t("adjustment.zeroDelta")
                     : reconciliationDelta !== null
                       ? t("adjustment.preview", {
                           delta: reconciliationDelta > 0
@@ -689,13 +741,22 @@ export default function AttendanceCounter({
                 type="text"
                 maxLength={500}
                 required
+                name="manualAdjustmentReason"
+                autoComplete="off"
                 value={adjustmentReason}
+                aria-describedby="attendance-adjustment-reason-help"
                 onChange={(event) => {
                   reconciliationAttemptRef.current = null;
                   setAdjustmentReason(event.target.value);
                 }}
                 className="app-field"
               />
+              <p
+                id="attendance-adjustment-reason-help"
+                className="mt-1 text-xs text-text-dim"
+              >
+                {t("adjustment.reasonHelp")}
+              </p>
             </div>
             {hasPendingReconciliationMutations && (
               <p className="text-xs text-status-waiting" role="status">
@@ -710,7 +771,7 @@ export default function AttendanceCounter({
                 hasPendingReconciliationMutations ||
                 reconciliationTarget === "" ||
                 reconciliationDelta === null ||
-                reconciliationDelta === 0 ||
+                isReconciliationTargetInvalid ||
                 isReconciliationDeltaOutOfRange ||
                 isReconciliationBelowCheckedGuests ||
                 adjustmentReason.trim() === ""
@@ -719,7 +780,8 @@ export default function AttendanceCounter({
             >
               {isAdjusting ? t("adjustment.saving") : t("adjustment.save")}
             </button>
-          </form>
+            </form>
+          )}
         </details>
       )}
 

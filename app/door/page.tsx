@@ -132,7 +132,7 @@ function DoorPageContent() {
   const [offlineMutations, setOfflineMutations] = useState<OfflineDoorMutation[]>([]);
   const [isOfflineSyncing, setIsOfflineSyncing] = useState(false);
   const [offlineNotice, setOfflineNotice] = useState<
-    "cached" | "queued" | "syncFailed" | null
+    "cached" | "queued" | "syncFailed" | "scopeClosed" | null
   >(null);
   const [doorCode, setDoorCode] = useState("");
   const [isDoorCodeLoading, setIsDoorCodeLoading] = useState(false);
@@ -373,7 +373,16 @@ function DoorPageContent() {
       } catch {
         // Resolved queue states remain visible until a later authoritative refresh.
       }
-      setOfflineNotice(hasSyncFailure ? "syncFailed" : null);
+      const hasScopeClosedResult = syncResults.some(
+        (result) => result.state === "scope_closed",
+      );
+      setOfflineNotice(
+        hasSyncFailure
+          ? "syncFailed"
+          : hasScopeClosedResult
+            ? "scopeClosed"
+            : null,
+      );
       await refreshOfflineMutations(offlineScope);
     } catch {
       setOfflineNotice("syncFailed");
@@ -605,7 +614,11 @@ function DoorPageContent() {
         await loadData();
       } else {
         console.error("Failed to update guest status:", error);
-        setFeedback(t("updateFailed"));
+        setFeedback(
+          error === "ATTENDANCE_SCOPE_CLOSED"
+            ? t("attendanceScopeClosed")
+            : t("updateFailed"),
+        );
       }
     } catch (error) {
       if (!operation.isCurrent(currentScopeKeyRef.current)) return;
@@ -723,12 +736,13 @@ function DoorPageContent() {
       ...counts,
       [mutation.state]: counts[mutation.state] + 1,
     }),
-    { queued: 0, confirmed: 0, conflict: 0, rejected: 0 },
+    { queued: 0, confirmed: 0, conflict: 0, rejected: 0, scope_closed: 0 },
   );
   const hasResolvedOfflineMutations =
     offlineQueueCounts.confirmed +
       offlineQueueCounts.conflict +
-      offlineQueueCounts.rejected >
+      offlineQueueCounts.rejected +
+      offlineQueueCounts.scope_closed >
     0;
 
   const pendingGuests = filteredGuests.filter(
@@ -775,7 +789,8 @@ function DoorPageContent() {
   return (
     <WorkspaceShell
       contentClassName="gap-4 md:pb-8 lg:gap-6"
-      bottomInsetClassName="pb-[calc(13rem+env(safe-area-inset-bottom))] md:pb-0"
+      bottomInsetClassName="pb-[var(--door-mobile-dock-height,calc(13rem+env(safe-area-inset-bottom)))] md:pb-0"
+      footerLayer="below-mobile-dock"
     >
       {venueLoadError && (
         <VenueLoadNotice
@@ -892,20 +907,21 @@ function DoorPageContent() {
                         )}
                       </div>
                     </div>
-                    <dl className="grid grid-cols-2 gap-2 font-mono text-xs sm:grid-cols-4">
+                    <dl className="grid grid-cols-2 gap-2 font-mono text-xs sm:grid-cols-5">
                       <div><dt className="text-text-dim">{t("offlineQueued")}</dt><dd className="mt-1 text-text-heading">{offlineQueueCounts.queued}</dd></div>
                       <div><dt className="text-text-dim">{t("offlineConfirmed")}</dt><dd className="mt-1 text-status-checked">{offlineQueueCounts.confirmed}</dd></div>
                       <div><dt className="text-text-dim">{t("offlineConflicts")}</dt><dd className="mt-1 text-status-waiting">{offlineQueueCounts.conflict}</dd></div>
                       <div><dt className="text-text-dim">{t("offlineRejected")}</dt><dd className="mt-1 text-status-danger">{offlineQueueCounts.rejected}</dd></div>
+                      <div><dt className="text-text-dim">{t("offlineScopeClosed")}</dt><dd className="mt-1 text-status-danger">{offlineQueueCounts.scope_closed}</dd></div>
                     </dl>
                     {offlineNotice && (
                       <p
                         className={`border-l-2 px-3 py-2 text-xs ${
-                          offlineNotice === "syncFailed"
+                          offlineNotice === "syncFailed" || offlineNotice === "scopeClosed"
                             ? "border-status-danger bg-status-danger/10 text-status-danger"
                             : "border-status-waiting bg-status-waiting/10 text-text-muted"
                         }`}
-                        role={offlineNotice === "syncFailed" ? "alert" : "status"}
+                        role={offlineNotice === "syncFailed" || offlineNotice === "scopeClosed" ? "alert" : "status"}
                       >
                         {t(`offlineNotice.${offlineNotice}`)}
                       </p>

@@ -109,9 +109,9 @@ Client
 
 - 로그인 후 HTTP-only cookie 기반 JWT를 발급한다.
 - KV session을 함께 확인해 로그아웃과 세션 무효화를 반영한다.
-- 기본 로그인 세션은 갱신 없는 24시간 고정 수명이다. 사용자가 `로그인 유지`를 선택한 세션만 30일 idle 수명을 사용하고 만료 7일 전부터 활동 시 갱신하되 최초 로그인 후 180일을 넘기지 않는다.
+- 기본 로그인 세션은 갱신 없는 24시간 고정 수명이다. 사용자가 `로그인 유지`를 선택한 세션만 유효한 활동마다 30일 idle 수명을 갱신하되 최초 로그인 후 180일을 넘기지 않는다.
 - remembered session은 최초 로그인 때 KV record를 180일 absolute 수명으로 한 번만 저장한다. 갱신은 KV, 사용자·베뉴 활성 상태, tenant, role과 session version 검증을 모두 통과한 뒤 같은 session ID의 JWT와 두 cookie에만 적용해 동일 KV key의 병렬 write 경쟁을 만들지 않는다. remembered metadata가 없는 기존 세션은 장기 세션으로 승격하지 않는다.
-- 로그아웃은 브라우저의 JWT와 session ID cookie를 즉시 만료하고 D1 session version을 CAS 증가시킨 뒤 KV record를 정리한다. 따라서 늦게 끝난 갱신 응답과 다른 기기의 기존 세션도 다시 사용할 수 없다. 베뉴 활성 상태가 바뀔 때도 해당 베뉴 사용자 session version을 함께 올린다.
+- 로그아웃은 현재 JWT와 KV session 결속을 확인한 뒤 D1 session version을 CAS 증가시키고 KV record와 브라우저 cookie를 정리한다. D1 무효화를 확정할 수 없거나 검증 중 KV 장애가 나면 credential을 보존한 채 재시도 가능한 `503`을 반환해 부분 로그아웃을 성공으로 보고하지 않는다. 성공한 D1 무효화는 늦게 끝난 갱신 응답과 다른 기기의 기존 세션 재사용도 막는다. 베뉴 활성 상태가 바뀔 때도 해당 베뉴 사용자 session version을 함께 올린다.
 - 비밀번호 변경/재설정 이후 기존 세션을 무효화할 수 있도록 session version을 사용한다.
 - Role, 계정 유형, 공용 계정 Door capability 변경과 비활성화·재활성화, 삭제 처리도 session version을 변경해 기존 세션의 재사용을 차단한다.
 - 신규 비밀번호 hash는 WebCrypto PBKDF2 계열을 기준으로 관리하고, 기존 hash는 점진 전환한다.
@@ -150,8 +150,9 @@ Client
 
 - 등록 게스트는 기존 Guest 체크인으로 집계하고 명단에 없는 첫 입장만 비식별 워크인 원장에 `+1`로 기록한다. Door 화면은 두 수치를 분리해 표시하며 현재 재실 인원이나 재입장 횟수로 해석하지 않는다.
 - 워크인 빠른 입력은 기기별 IndexedDB queue에 먼저 기록하고 idempotency key와 device sequence로 서버에 동기화한다. 마지막 입력 취소는 같은 operator·device·scope의 취소되지 않은 워크인만 대상으로 한다.
-- 관리자 마감 보정은 증감값을 직접 받지 않는다. 수기로 확인한 누적 입장객 목표와 화면에 표시된 Guest·워크인 기준값을 함께 보내고, 서버가 같은 D1 statement에서 현재값을 다시 계산해 둘 다 일치할 때만 차이를 `manual_adjustment`로 append한다.
-- 보정 전에 사용한 모든 Door 기기의 대기 입력을 동기화해야 한다. 입력 중 기준값이 바뀌면 stale 응답으로 거부하고 최신 합계를 다시 확인하게 하며, 반영 뒤 늦게 도착한 다른 기기의 offline 입력까지 마감 수치를 동결하지는 않는다.
+- 관리자 마감 확정은 증감값을 직접 받지 않는다. 수기로 확인한 누적 입장객 목표와 화면에 표시된 Guest·워크인·원장 행 수 기준값을 함께 보내고, 서버가 같은 D1 statement에서 현재값을 다시 계산해 모두 일치할 때만 exact venue·영업일·optional Event 범위의 변경 불가 `attendance_closeouts` snapshot을 생성한다. 차이가 있으면 같은 statement의 trigger가 `manual_adjustment`를 append하며, 차이가 0이어도 snapshot은 남는다.
+- 확정 전에 사용한 모든 Door 기기의 대기 입력을 동기화해야 한다. 입력 중 기준값이 바뀌면 stale 응답으로 거부한다. 확정 뒤에는 같은 범위의 새 Guest 체크인·취소, checked Guest 범위 이동, 워크인·취소와 다른 기기의 지연 offline 입력을 DB에서 거부하고 기존 동일 idempotency replay만 원래 결과로 반환한다.
+- Admin Attendance 통계는 venue·영업일·optional Event scope별로 live Guest와 원장을 결합한 뒤, 마감 snapshot이 있으면 그 scope의 두 수치를 통째로 대체하고 마지막에 날짜 단위로 합산한다. Guest 등록·입장률과 기존 Event closeout hash 계약은 그대로 유지한다.
 
 ## 클라이언트 비동기 상태 원칙
 
@@ -176,6 +177,7 @@ Client
 | `guest_limit_requests` | 사용자·날짜별 추가 한도 요청, 선택 사유, 승인 수량과 결정 기록 |
 | `check_ins` | 체크인 기록 |
 | `attendance_activity_ledger` | 이름·연락처를 저장하지 않는 워크인, 취소와 관리자 수기 보정 불변 원장 |
+| `attendance_closeouts` | Guest·워크인 기준값과 최종 누적 합계를 exact scope로 동결하는 변경 불가 입장 마감 snapshot |
 | `password_reset_tokens` | 비밀번호 재설정 token hash와 만료/사용 상태 |
 | `password_reset_requests` | 사용자 관리자 요청, 처리 상태·방식·결정자와 코드 없는 승인 만료 시각 |
 

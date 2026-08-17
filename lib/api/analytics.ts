@@ -13,6 +13,7 @@ import {
 import { requireAccess, type SessionUser } from "@/lib/auth/server";
 import {
   attendanceActivityLedger,
+  attendanceCloseouts,
   eventCloseoutContributorMetrics,
   eventCloseouts,
   events,
@@ -117,7 +118,20 @@ export async function fetchAdminAnalytics(
     const contributorSourceKindGroup = sql<string>`case when ${guestContributorId} is null then ${guestSourceKind} else '' end`;
     const contributorSourceIdGroup = sql<string>`case when ${guestContributorId} is null then ${guestSourceId} else ${guestContributorId} end`;
 
-    const [eventRows, guestDayRows, walkInDayRows, contributorRows] = await Promise.all([
+    const attendanceGuestScopeEventId = sql<string | null>`case
+      when ${guests.eventId} is null then null
+      when ${events.compatibilityKey} is not null then null
+      else ${guests.eventId}
+    end`;
+
+    const [
+      eventRows,
+      guestDayRows,
+      attendanceGuestScopeRows,
+      walkInDayRows,
+      attendanceCloseoutRows,
+      contributorRows,
+    ] = await Promise.all([
       db
         .select({
           eventId: events.id,
@@ -198,7 +212,43 @@ export async function fetchAdminAnalytics(
         .limit(MAX_ANALYTICS_QUERY_ROWS + 1),
       db
         .select({
+          businessDate: guests.date,
+          eventId: attendanceGuestScopeEventId,
+          checkedInCount:
+            sql<number>`coalesce(sum(case when ${guests.status} = 'checked' then 1 else 0 end), 0)`.mapWith(Number),
+        })
+        .from(guests)
+        .leftJoin(
+          events,
+          and(
+            eq(events.id, guests.eventId),
+            eq(events.venueId, guests.venueId),
+            eq(events.businessDate, guests.date),
+          ),
+        )
+        .where(
+          and(
+            eq(guests.venueId, venueId),
+            ne(guests.status, "deleted"),
+            or(
+              and(
+                gte(guests.date, selection.comparisonPeriod.startDate),
+                lt(guests.date, selection.comparisonPeriod.endDateExclusive),
+              ),
+              and(
+                gte(guests.date, selection.period.startDate),
+                lt(guests.date, selection.period.dataEndDateExclusive),
+              ),
+            ),
+          ),
+        )
+        .groupBy(guests.date, attendanceGuestScopeEventId)
+        .orderBy(desc(guests.date), desc(attendanceGuestScopeEventId))
+        .limit(MAX_ANALYTICS_QUERY_ROWS + 1),
+      db
+        .select({
           businessDate: attendanceActivityLedger.businessDate,
+          eventId: attendanceActivityLedger.eventId,
           walkInCount:
             sql<number>`coalesce(sum(${attendanceActivityLedger.delta}), 0)`.mapWith(Number),
         })
@@ -230,8 +280,52 @@ export async function fetchAdminAnalytics(
             ),
           ),
         )
-        .groupBy(attendanceActivityLedger.businessDate)
-        .orderBy(desc(attendanceActivityLedger.businessDate))
+        .groupBy(
+          attendanceActivityLedger.businessDate,
+          attendanceActivityLedger.eventId,
+        )
+        .orderBy(
+          desc(attendanceActivityLedger.businessDate),
+          desc(attendanceActivityLedger.eventId),
+        )
+        .limit(MAX_ANALYTICS_QUERY_ROWS + 1),
+      db
+        .select({
+          businessDate: attendanceCloseouts.businessDate,
+          eventId: attendanceCloseouts.eventId,
+          checkedInGuests: attendanceCloseouts.checkedInGuests,
+          finalWalkIns: attendanceCloseouts.finalWalkIns,
+          targetTotalAttendance: attendanceCloseouts.targetTotalAttendance,
+        })
+        .from(attendanceCloseouts)
+        .where(
+          and(
+            eq(attendanceCloseouts.venueId, venueId),
+            or(
+              and(
+                gte(
+                  attendanceCloseouts.businessDate,
+                  selection.comparisonPeriod.startDate,
+                ),
+                lt(
+                  attendanceCloseouts.businessDate,
+                  selection.comparisonPeriod.endDateExclusive,
+                ),
+              ),
+              and(
+                gte(attendanceCloseouts.businessDate, selection.period.startDate),
+                lt(
+                  attendanceCloseouts.businessDate,
+                  selection.period.dataEndDateExclusive,
+                ),
+              ),
+            ),
+          ),
+        )
+        .orderBy(
+          desc(attendanceCloseouts.businessDate),
+          desc(attendanceCloseouts.eventId),
+        )
         .limit(MAX_ANALYTICS_QUERY_ROWS + 1),
       db
         .select({
@@ -285,7 +379,9 @@ export async function fetchAdminAnalytics(
     if (
       eventRows.length > MAX_ANALYTICS_QUERY_ROWS ||
       guestDayRows.length > MAX_ANALYTICS_QUERY_ROWS ||
+      attendanceGuestScopeRows.length > MAX_ANALYTICS_QUERY_ROWS ||
       walkInDayRows.length > MAX_ANALYTICS_QUERY_ROWS ||
+      attendanceCloseoutRows.length > MAX_ANALYTICS_QUERY_ROWS ||
       contributorRows.length > MAX_ANALYTICS_QUERY_ROWS
     ) {
       throw new AnalyticsActionError("INVALID_ANALYTICS_QUERY");
@@ -296,7 +392,9 @@ export async function fetchAdminAnalytics(
         selection,
         eventRows,
         guestDayRows,
+        attendanceGuestScopeRows,
         walkInDayRows,
+        attendanceCloseoutRows,
         contributorRows,
       }),
       error: null,

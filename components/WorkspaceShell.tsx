@@ -7,6 +7,7 @@ interface WorkspaceShellProps {
   width?: "default" | "narrow";
   contentClassName?: string;
   bottomInsetClassName?: string;
+  footerLayer?: "chrome" | "below-mobile-dock";
 }
 
 const widthClasses = {
@@ -19,6 +20,7 @@ export default function WorkspaceShell({
   width = "default",
   contentClassName = "",
   bottomInsetClassName = "",
+  footerLayer = "chrome",
 }: WorkspaceShellProps) {
   return (
     <div className="page-shell">
@@ -31,7 +33,7 @@ export default function WorkspaceShell({
         >
           {children}
         </main>
-        <Footer />
+        <Footer layer={footerLayer} />
       </div>
     </div>
   );

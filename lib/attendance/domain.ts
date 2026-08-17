@@ -11,6 +11,7 @@ export type OfflineAttendanceMutationState =
   | "queued"
   | "confirmed"
   | "conflict"
+  | "scope_closed"
   | "rejected";
 
 export interface AttendanceScope {
@@ -260,11 +261,13 @@ export function prepareAttendanceReconciliation(params: {
   targetTotalAttendance: unknown;
   expectedCheckedInGuests: unknown;
   expectedWalkIns: unknown;
+  expectedSourceActivityCount: unknown;
   reason: unknown;
 }): {
   targetTotalAttendance: number;
   expectedCheckedInGuests: number;
   expectedWalkIns: number;
+  expectedSourceActivityCount: number;
   delta: number;
   reason: string;
 } {
@@ -272,6 +275,7 @@ export function prepareAttendanceReconciliation(params: {
   const targetTotalAttendance = params.targetTotalAttendance;
   const expectedCheckedInGuests = params.expectedCheckedInGuests;
   const expectedWalkIns = params.expectedWalkIns;
+  const expectedSourceActivityCount = params.expectedSourceActivityCount;
   const delta =
     typeof targetTotalAttendance === "number" &&
     typeof expectedCheckedInGuests === "number" &&
@@ -282,9 +286,11 @@ export function prepareAttendanceReconciliation(params: {
     !Number.isSafeInteger(targetTotalAttendance) ||
     !Number.isSafeInteger(expectedCheckedInGuests) ||
     !Number.isSafeInteger(expectedWalkIns) ||
+    !Number.isSafeInteger(expectedSourceActivityCount) ||
     (targetTotalAttendance as number) < 0 ||
     (expectedCheckedInGuests as number) < 0 ||
     (expectedWalkIns as number) < 0 ||
+    (expectedSourceActivityCount as number) < 0 ||
     (targetTotalAttendance as number) < (expectedCheckedInGuests as number) ||
     !Number.isSafeInteger(delta) ||
     Math.abs(delta) > MAX_ATTENDANCE_ADJUSTMENT ||
@@ -298,6 +304,7 @@ export function prepareAttendanceReconciliation(params: {
     targetTotalAttendance: targetTotalAttendance as number,
     expectedCheckedInGuests: expectedCheckedInGuests as number,
     expectedWalkIns: expectedWalkIns as number,
+    expectedSourceActivityCount: expectedSourceActivityCount as number,
     delta,
     reason,
   };

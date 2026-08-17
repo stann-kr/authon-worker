@@ -30,6 +30,18 @@ export type LoginResult =
       setupMethod?: FirstLoginSetupMethod;
     };
 
+export type LogoutResult =
+  | { success: true }
+  | {
+      success: false;
+      code:
+        | "SESSION_REVOCATION_PENDING"
+        | "LOGOUT_REQUEST_FAILED"
+        | "LOGOUT_NETWORK_ERROR";
+      revocationPending: boolean;
+      status?: number;
+    };
+
 export const cacheUser = (user: User | null): void => {
   if (typeof window === "undefined") return;
   if (user) localStorage.setItem("user", JSON.stringify(user));
@@ -122,22 +134,61 @@ export const claimMigratedAccount = async (
 
 /**
  * 로그아웃
- * - 서버에 로그아웃 요청하여 HTTP-Only 쿠키 삭제
- * - 클라이언트 localStorage 정리
+ * - 서버가 durable revocation과 쿠키 삭제를 확인한 경우에만 client state 정리
+ * - 실패 시 기존 credential과 client state를 유지해 안전하게 재시도
  */
-export const logout = async () => {
+export const logout = async (): Promise<LogoutResult> => {
+  let response: Response;
+  let body: unknown;
+
   try {
-    await fetch("/api/auth/logout", { method: "POST" }).catch(() => {});
-  } finally {
-    if (typeof window !== "undefined") {
+    response = await fetch("/api/auth/logout", { method: "POST" });
+    body = await response.json().catch(() => null);
+  } catch {
+    return {
+      success: false,
+      code: "LOGOUT_NETWORK_ERROR",
+      revocationPending: false,
+    };
+  }
+
+  const resultBody =
+    body && typeof body === "object"
+      ? (body as { ok?: unknown; code?: unknown; revocationPending?: unknown })
+      : null;
+  if (!response.ok || resultBody?.ok !== true) {
+    const revocationPending =
+      resultBody?.revocationPending === true ||
+      resultBody?.code === "SESSION_REVOCATION_PENDING";
+    return {
+      success: false,
+      code:
+        revocationPending
+          ? "SESSION_REVOCATION_PENDING"
+          : "LOGOUT_REQUEST_FAILED",
+      revocationPending,
+      status: response.status,
+    };
+  }
+
+  if (typeof window !== "undefined") {
+    try {
       cacheUser(null);
+    } catch {
+      // Server revocation already succeeded; stale client cache is best-effort.
+    }
+    try {
       for (let index = window.sessionStorage.length - 1; index >= 0; index -= 1) {
         const key = window.sessionStorage.key(index);
         if (key?.startsWith("shared-operator:")) window.sessionStorage.removeItem(key);
       }
-      window.location.href = "/auth/login";
+    } catch {
+      // Server revocation already succeeded; stale client cache is best-effort.
     }
+    window.location.href = "/auth/login";
   }
+
+  return { success: true };
 };
 
 /**
