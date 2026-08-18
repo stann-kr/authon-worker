@@ -16,7 +16,7 @@ export type GuestActivityMutationResult =
       activityId: string;
     }
   | {
-      outcome: "conflict" | "rejected" | "unavailable";
+      outcome: "conflict" | "rejected" | "scope_closed" | "unavailable";
       guestId: string | null;
       status: null;
       checkInTime: null;
@@ -124,8 +124,23 @@ export const APPLY_GUEST_ACTIVITY_STATUS_SQL = `
         AND request.activity_id = ?
         AND request.outcome = 'claimed'
     )
+    AND NOT EXISTS (
+      SELECT 1 FROM attendance_closeouts closeout
+      WHERE closeout.venue_id = guests.venue_id
+        AND closeout.business_date = guests.date
+        AND closeout.event_id IS ?
+    )
   RETURNING id, event_id AS eventId, status,
     check_in_time AS checkInTime
+`;
+
+export const SELECT_ATTENDANCE_SCOPE_CLOSED_SQL = `
+  SELECT 1 AS closed
+  FROM attendance_closeouts
+  WHERE venue_id = ?
+    AND business_date = ?
+    AND event_id IS ?
+  LIMIT 1
 `;
 
 export const INSERT_APPLIED_GUEST_ACTIVITY_SQL = `
@@ -288,6 +303,7 @@ export async function persistGuestStatusActivity(
   params: {
     venueId: string;
     eventId: string | null;
+    attendanceScopeEventId: string | null;
     includeLegacyDateRows?: boolean;
     businessDate: string;
     guestId: string;
@@ -305,6 +321,8 @@ export async function persistGuestStatusActivity(
     !isBoundedKey(params.guestId, 128) ||
     !isBoundedKey(params.actorUserId, 128) ||
     !isBoundedKey(params.idempotencyKey, 128) ||
+    (params.attendanceScopeEventId !== null &&
+      !isBoundedKey(params.attendanceScopeEventId, 128)) ||
     !isActivityAction(params.action) ||
     !isChannel(params.channel) ||
     Number.isNaN(new Date(params.occurredAt).getTime())
@@ -325,9 +343,10 @@ export async function persistGuestStatusActivity(
   const nextStatus = params.action === "cancel_check_in" ? "pending" : "checked";
   const checkInTime = nextStatus === "checked" ? params.occurredAt : null;
 
-  const [claim, mutation, ledger, completion, rejection, rejectionCompletion] = await db.batch<{
+  const [claim, mutation, scopeCloseout, ledger, completion, rejection, rejectionCompletion] = await db.batch<{
     activityId?: string;
     id?: string;
+    closed?: number;
     eventId?: string | null;
     status?: string;
     checkInTime?: string | null;
@@ -358,6 +377,12 @@ export async function persistGuestStatusActivity(
       params.idempotencyKey,
       payloadHash,
       activityId,
+      params.attendanceScopeEventId,
+    ),
+    db.prepare(SELECT_ATTENDANCE_SCOPE_CLOSED_SQL).bind(
+      params.venueId,
+      params.businessDate,
+      params.attendanceScopeEventId,
     ),
     db.prepare(INSERT_APPLIED_GUEST_ACTIVITY_SQL).bind(
       activityId,
@@ -417,6 +442,7 @@ export async function persistGuestStatusActivity(
 
   const claimed = claim.results?.[0]?.activityId === activityId;
   const changed = mutation.results?.[0]?.id === params.guestId;
+  const scopeClosed = scopeCloseout.results?.[0]?.closed === 1;
   const recorded = ledger.results?.[0]?.id === activityId;
   const completed = completion.results?.[0]?.activityId === activityId;
   if (claimed && changed && recorded && completed) {
@@ -436,7 +462,7 @@ export async function persistGuestStatusActivity(
       rejectionCompletion.results?.[0]?.activityId === activityId
     ) {
       return {
-        outcome: "rejected",
+        outcome: scopeClosed ? "scope_closed" : "rejected",
         guestId: null,
         status: null,
         checkInTime: null,
@@ -502,8 +528,16 @@ export async function persistGuestStatusActivity(
     };
   }
   if (existing.outcome !== "applied" || !existing.resultStatus) {
+    const closed = await db
+      .prepare(SELECT_ATTENDANCE_SCOPE_CLOSED_SQL)
+      .bind(
+        params.venueId,
+        params.businessDate,
+        params.attendanceScopeEventId,
+      )
+      .first<{ closed: number }>();
     return {
-      outcome: "rejected",
+      outcome: closed?.closed === 1 ? "scope_closed" : "rejected",
       guestId: null,
       status: null,
       checkInTime: null,

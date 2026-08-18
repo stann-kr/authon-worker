@@ -47,12 +47,13 @@ Authon UI는 베뉴 현장에서 반복적으로 사용하는 운영 도구다. 
 - desktop content 폭은 최대 `1440px`다. 홈을 포함한 모든 작업 화면은 header의 브랜드와 우측 action 사이 콘텐츠 축을 공유한다.
 - multi-column 화면은 `768px` 미만에서 단일 column으로 축소한다.
 - interactive control은 최소 `44px × 44px` touch target을 제공한다.
+- 공통 버튼은 기본적으로 `44–48px` 높이를 사용한다. Door의 모바일 즉시 입장 action만 `56px`로 두고, 되돌리기와 보조 action은 `44px`을 유지한다. 더 큰 고정 버튼 규격은 사용하지 않는다.
 - form field와 선택 control은 `border-strong`을 사용해 인접 surface와 3:1 이상의 비텍스트 대비를 확보하고, panel 구획선은 `border-default` 또는 `border-subtle`을 사용한다.
 - Guest와 Door는 모바일에서 dashboard와 list를 한 열로 쌓고, `768px` 이상에서는 좌측 운영 dashboard와 우측 guest list의 master-detail 구조를 사용한다.
 - 인증 화면은 공통 workspace shell을 사용한다. 상단 header는 기존의 brand·현재 맥락·계정 action만 유지하고 brand를 홈 진입점으로 사용한다. Admin에서는 desktop 좌측 업무 navigation을 제공하며 모바일에는 별도 고정 하단 전역 navigation을 두지 않는다.
 - Admin 업무 navigation은 desktop에서 항상 보이는 grouped sidebar를 사용한다. 모바일에서는 전체 업무를 3열 바로가기 목록으로 압축해 선택형 control 없이 항상 노출한다. 업무 전환은 선택 link와 현재 scroll 위치를 보존하고 작업 영역으로 강제 이동하지 않는다.
 - 날짜 입력은 viewport가 아니라 component container 폭을 기준으로 배치한다. 좁은 container에서는 날짜와 quick control을 두 줄로 표시한다.
-- 고정 또는 sticky 영역은 목록의 첫 행을 가리지 않아야 하며, 페이지 안에 불필요한 중첩 scroll container를 만들지 않는다.
+- 고정 또는 sticky 영역은 목록의 첫 행을 가리지 않아야 하며, 페이지 안에 불필요한 중첩 scroll container를 만들지 않는다. Door의 모바일 하단 도크는 실제 높이를 scroll 영역의 inset으로 반영하고 Footer·마지막 콘텐츠가 그 아래에 가려지지 않게 한다.
 
 ## 타이포그래피
 

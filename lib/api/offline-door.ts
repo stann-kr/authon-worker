@@ -158,26 +158,25 @@ export async function syncOfflineDoorMutations(params: {
     ) {
       return { data: null, error: "OFFLINE_DOOR_EVENT_UNAVAILABLE" };
     }
-    if (event.state !== "open") {
-      return {
-        data: batch.items.map((item) => ({
-          idempotencyKey: item.idempotencyKey,
-          guestId: item.guestId,
-          state: "rejected" as const,
-          resolution: null,
-          status: null,
-          checkInTime: null,
-        })),
-        error: null,
-      };
-    }
-
     const deviceKeyHash = await hashOpaqueIdentifier(batch.deviceId);
     const { env } = getCloudflareContext();
     const results: OfflineDoorSyncResult[] = [];
     for (const item of batch.items) {
       const desiredStatus = desiredOfflineDoorStatus(item.action);
-      if (item.expired) {
+      const [existingRequest] = await db
+        .select({
+          guestId: guestActivityRequests.guestId,
+          action: guestActivityRequests.action,
+        })
+        .from(guestActivityRequests)
+        .where(
+          and(
+            eq(guestActivityRequests.venueId, venueId),
+            eq(guestActivityRequests.idempotencyKey, item.idempotencyKey),
+          ),
+        )
+        .limit(1);
+      if (item.expired && !existingRequest) {
         results.push({
           idempotencyKey: item.idempotencyKey,
           guestId: item.guestId,
@@ -190,19 +189,6 @@ export async function syncOfflineDoorMutations(params: {
       }
       let action = item.action;
       if (desiredStatus === "checked") {
-        const [existingRequest] = await db
-          .select({
-            guestId: guestActivityRequests.guestId,
-            action: guestActivityRequests.action,
-          })
-          .from(guestActivityRequests)
-          .where(
-            and(
-              eq(guestActivityRequests.venueId, venueId),
-              eq(guestActivityRequests.idempotencyKey, item.idempotencyKey),
-            ),
-          )
-          .limit(1);
         if (
           existingRequest?.guestId === item.guestId &&
           (existingRequest.action === "check_in" ||
@@ -229,6 +215,7 @@ export async function syncOfflineDoorMutations(params: {
       const persistence = await persistGuestStatusActivity(env.DB, {
         venueId,
         eventId: event.id,
+        attendanceScopeEventId: event.id,
         includeLegacyDateRows: false,
         businessDate: event.businessDate,
         guestId: item.guestId,

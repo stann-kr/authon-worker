@@ -25,6 +25,10 @@ import { isAccountKind, isRole } from "@/lib/users/policy";
 import { isTrustedMutationOrigin } from "@/lib/auth/request-origin";
 import { hasActiveVenueAccess } from "@/lib/tenant/active-policy";
 import {
+  createLoginSessionLifetime,
+  createStoredSession,
+} from "@/lib/auth/session-policy";
+import {
   getRequestId,
   reportServerError,
   writeStructuredLog,
@@ -78,7 +82,7 @@ export async function POST(request: Request) {
       );
     }
     const { env } = getCloudflareContext();
-    const { email, password } = await request.json();
+    const { email, password, keepSignedIn } = await request.json();
 
     if (
       typeof email !== "string" ||
@@ -230,6 +234,7 @@ export async function POST(request: Request) {
       return invalidCredentialsResponse();
     }
 
+    const lifetime = createLoginSessionLifetime(keepSignedIn === true);
     const secret = new TextEncoder().encode(env.JWT_SECRET);
     const token = await new SignJWT({
       sub: user.id,
@@ -239,16 +244,15 @@ export async function POST(request: Request) {
       sv: updatedSessionVersion,
     })
       .setProtectedHeader({ alg: "HS256" })
-      .setIssuedAt()
-      .setExpirationTime("24h")
+      .setIssuedAt(lifetime.issuedAtSeconds)
+      .setExpirationTime(lifetime.expiresAtSeconds)
       .sign(secret);
 
     const sessionId = crypto.randomUUID();
-    await env.SESSIONS.put(`session:${sessionId}`, JSON.stringify({
-      userId: user.id,
-      sessionVersion: updatedSessionVersion,
-    }), {
-      expirationTtl: 60 * 60 * 24,
+    await env.SESSIONS.put(`session:${sessionId}`, JSON.stringify(
+      createStoredSession(user.id, updatedSessionVersion, lifetime),
+    ), {
+      expirationTtl: lifetime.storageTtlSeconds,
     });
 
     const response = NextResponse.json({
@@ -273,7 +277,7 @@ export async function POST(request: Request) {
       httpOnly: true,
       secure: secureCookies,
       sameSite: "lax",
-      maxAge: 60 * 60 * 24,
+      maxAge: lifetime.ttlSeconds,
       path: "/",
     });
 
@@ -283,7 +287,7 @@ export async function POST(request: Request) {
       httpOnly: true,
       secure: secureCookies,
       sameSite: "lax",
-      maxAge: 60 * 60 * 24,
+      maxAge: lifetime.ttlSeconds,
       path: "/",
     });
 

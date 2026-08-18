@@ -6,6 +6,8 @@ interface WorkspaceShellProps {
   children: ReactNode;
   width?: "default" | "narrow";
   contentClassName?: string;
+  bottomInsetClassName?: string;
+  footerLayer?: "chrome" | "below-mobile-dock";
 }
 
 const widthClasses = {
@@ -17,11 +19,13 @@ export default function WorkspaceShell({
   children,
   width = "default",
   contentClassName = "",
+  bottomInsetClassName = "",
+  footerLayer = "chrome",
 }: WorkspaceShellProps) {
   return (
     <div className="page-shell">
       <AdminHeader />
-      <div className="page-scroll">
+      <div className={`page-scroll ${bottomInsetClassName}`}>
         <main
           id="main-content"
           tabIndex={-1}
@@ -29,7 +33,7 @@ export default function WorkspaceShell({
         >
           {children}
         </main>
-        <Footer />
+        <Footer layer={footerLayer} />
       </div>
     </div>
   );

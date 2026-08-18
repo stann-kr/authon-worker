@@ -234,7 +234,11 @@ export default function GuestList({
         await loadData();
       } else {
         console.error("Failed to update guest status:", error);
-        setFeedback(doorT("updateFailed"));
+        setFeedback(
+          error === "ATTENDANCE_SCOPE_CLOSED"
+            ? doorT("attendanceScopeClosed")
+            : doorT("updateFailed"),
+        );
       }
     } catch (error) {
       if (!operation.isCurrent(currentScopeKeyRef.current)) return;

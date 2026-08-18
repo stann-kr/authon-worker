@@ -44,3 +44,24 @@ NEXT_PUBLIC_APP_URL = "https://guest.faustseoul.kr"
 # 로컬 개발 URL은 .dev.vars의 NEXT_PUBLIC_APP_URL로 오버라이드:
 #   NEXT_PUBLIC_APP_URL = "http://localhost:3000"
 #   TERMINAL_VENUE_ID   = "<실제 베뉴 UUID>"
+
+[env.dev]
+name = "authon-worker-dev"
+workers_dev = true
+preview_urls = false
+routes = []
+
+[[env.dev.d1_databases]]
+binding = "DB"
+# Development Worker는 실제 운영 데이터 검증을 위해 production D1을 공유한다.
+# 이 binding의 모든 application write는 production data에 즉시 반영된다.
+database_name = "authon-db"
+database_id = "b849dd4e-533e-477d-9ef8-cc2e4a00df1f"
+migrations_dir = "migrations"
+
+[[env.dev.kv_namespaces]]
+binding = "SESSIONS"
+id = "a30736e015524e47985bf5407ff10db3"
+
+[env.dev.vars]
+NEXT_PUBLIC_APP_URL = "https://authon-worker-dev.ilsny7.workers.dev"

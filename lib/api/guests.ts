@@ -8,6 +8,7 @@ import { eq, and, ne, desc, inArray, isNull, or } from "drizzle-orm";
 import {
   eventContributorLimits,
   guestActivityLedger,
+  guestActivityRequests,
   guests,
 } from "../db/schema";
 import {
@@ -39,6 +40,7 @@ import {
   eventIncludesLegacyDateRows,
   findCompatibilityEvent,
   loadEventById,
+  resolveEventForRosterRead,
   resolveEventForRosterWrite,
 } from "@/lib/events/server";
 import {
@@ -486,35 +488,65 @@ export async function updateGuestStatus(
     const db = getDb();
     const current = await getAccessibleGuest(db, user, guestId);
     const now = new Date().toISOString();
-    const event = await resolveEventForRosterWrite({
+    const [existingRequest] = await db
+      .select({
+        guestId: guestActivityRequests.guestId,
+        action: guestActivityRequests.action,
+      })
+      .from(guestActivityRequests)
+      .where(
+        and(
+          eq(guestActivityRequests.venueId, current.venueId),
+          eq(guestActivityRequests.idempotencyKey, idempotencyKey),
+        ),
+      )
+      .limit(1);
+    const readableEvent = await resolveEventForRosterRead({
       venueId: current.venueId,
       businessDate: current.date,
       eventId: current.eventId,
-      actorUserId: user.id,
-      purpose: "check_in",
     });
+    const event = existingRequest
+      ? readableEvent
+      : await resolveEventForRosterWrite({
+          venueId: current.venueId,
+          businessDate: current.date,
+          eventId: current.eventId,
+          actorUserId: user.id,
+          purpose: "check_in",
+        });
+    if (!event) throw new Error("EVENT_NOT_FOUND");
     let action: "check_in" | "cancel_check_in" | "re_entry" =
       status === "pending" ? "cancel_check_in" : "check_in";
     if (status === "checked") {
-      const [previousEntry] = await db
-        .select({ id: guestActivityLedger.id })
-        .from(guestActivityLedger)
-        .where(
-          and(
-            eq(guestActivityLedger.venueId, current.venueId),
-            eq(guestActivityLedger.guestId, guestId),
-            eq(guestActivityLedger.outcome, "applied"),
-            inArray(guestActivityLedger.action, ["check_in", "re_entry"]),
-          ),
-        )
-        .limit(1);
-      if (previousEntry) action = "re_entry";
+      if (
+        existingRequest?.guestId === guestId &&
+        (existingRequest.action === "check_in" ||
+          existingRequest.action === "re_entry")
+      ) {
+        action = existingRequest.action;
+      } else {
+        const [previousEntry] = await db
+          .select({ id: guestActivityLedger.id })
+          .from(guestActivityLedger)
+          .where(
+            and(
+              eq(guestActivityLedger.venueId, current.venueId),
+              eq(guestActivityLedger.guestId, guestId),
+              eq(guestActivityLedger.outcome, "applied"),
+              inArray(guestActivityLedger.action, ["check_in", "re_entry"]),
+            ),
+          )
+          .limit(1);
+        if (previousEntry) action = "re_entry";
+      }
     }
     const sessionKeyHash = await getCurrentSessionKeyHash();
     const { env } = getCloudflareContext();
     const mutation = await persistGuestStatusActivity(env.DB, {
       venueId: current.venueId,
       eventId: event.id,
+      attendanceScopeEventId: eventIncludesLegacyDateRows(event) ? null : event.id,
       includeLegacyDateRows: eventIncludesLegacyDateRows(event),
       businessDate: current.date,
       guestId,
@@ -530,6 +562,9 @@ export async function updateGuestStatus(
     }
     if (mutation.outcome === "rejected") {
       return { data: null, error: "GUEST_ACTIVITY_REJECTED" };
+    }
+    if (mutation.outcome === "scope_closed") {
+      return { data: null, error: "ATTENDANCE_SCOPE_CLOSED" };
     }
     if (mutation.outcome === "unavailable") {
       throw new Error("Guest activity unavailable");

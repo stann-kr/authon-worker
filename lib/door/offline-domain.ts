@@ -7,7 +7,8 @@ export type OfflineDoorMutationState =
   | "queued"
   | "confirmed"
   | "conflict"
-  | "rejected";
+  | "rejected"
+  | "scope_closed";
 
 export interface OfflineDoorScope {
   venueId: string;

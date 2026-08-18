@@ -1,12 +1,16 @@
 import { isBusinessDate, isEventState } from "../events/domain.ts";
 import {
+  buildAnalyticsAttendanceSummary,
   buildAnalyticsSummary,
   calculateAnalyticsCoverage,
+  summarizeAnalyticsAttendanceDays,
   summarizeAnalyticsGuestDays,
 } from "./metrics.ts";
 import { isDateInAnalyticsRange } from "./period.ts";
 import type {
   AdminAnalyticsView,
+  AnalyticsAttendanceDayInput,
+  AnalyticsAttendanceTrendPoint,
   AnalyticsContributorRow,
   AnalyticsPeriodSelection,
   AnalyticsTrendPoint,
@@ -31,6 +35,26 @@ export interface AnalyticsServiceGuestDayRow {
   businessDate: string;
   registeredCount: number;
   checkedInCount: number;
+}
+
+export interface AnalyticsServiceWalkInDayRow {
+  businessDate: string;
+  eventId: string | null;
+  walkInCount: number;
+}
+
+export interface AnalyticsServiceAttendanceGuestScopeRow {
+  businessDate: string;
+  eventId: string | null;
+  checkedInCount: number;
+}
+
+export interface AnalyticsServiceAttendanceCloseoutRow {
+  businessDate: string;
+  eventId: string | null;
+  checkedInGuests: number;
+  finalWalkIns: number;
+  targetTotalAttendance: number;
 }
 
 export interface AnalyticsServiceContributorRow {
@@ -127,6 +151,81 @@ function assertGuestDayRows(
   }
 }
 
+function attendanceScopeKey(businessDate: string, eventId: string | null): string {
+  return `${businessDate}\u0000${eventId ?? ""}`;
+}
+
+function isAttendanceScopeEventId(eventId: string | null): boolean {
+  return (
+    eventId === null ||
+    (typeof eventId === "string" &&
+      eventId.length > 0 &&
+      eventId.length <= 128 &&
+      !eventId.includes("\u0000"))
+  );
+}
+
+function assertAttendanceGuestScopeRows(
+  rows: readonly AnalyticsServiceAttendanceGuestScopeRow[],
+): void {
+  const scopeKeys = new Set<string>();
+  for (const row of rows) {
+    const scopeKey = attendanceScopeKey(row.businessDate, row.eventId);
+    if (
+      !isBusinessDate(row.businessDate) ||
+      !isAttendanceScopeEventId(row.eventId) ||
+      scopeKeys.has(scopeKey)
+    ) {
+      throw new Error("Analytics service received an invalid attendance guest scope");
+    }
+    assertCount(row.checkedInCount, "Attendance guest checked-in count");
+    scopeKeys.add(scopeKey);
+  }
+}
+
+function assertWalkInScopeRows(
+  rows: readonly AnalyticsServiceWalkInDayRow[],
+): void {
+  const scopeKeys = new Set<string>();
+  for (const row of rows) {
+    const scopeKey = attendanceScopeKey(row.businessDate, row.eventId);
+    if (
+      !isBusinessDate(row.businessDate) ||
+      !isAttendanceScopeEventId(row.eventId) ||
+      scopeKeys.has(scopeKey)
+    ) {
+      throw new Error("Analytics service received an invalid walk-in scope");
+    }
+    assertCount(row.walkInCount, "Walk-in day count");
+    scopeKeys.add(scopeKey);
+  }
+}
+
+function assertAttendanceCloseoutRows(
+  rows: readonly AnalyticsServiceAttendanceCloseoutRow[],
+): void {
+  const scopeKeys = new Set<string>();
+  for (const row of rows) {
+    const scopeKey = attendanceScopeKey(row.businessDate, row.eventId);
+    if (
+      !isBusinessDate(row.businessDate) ||
+      !isAttendanceScopeEventId(row.eventId) ||
+      scopeKeys.has(scopeKey)
+    ) {
+      throw new Error("Analytics service received an invalid attendance closeout");
+    }
+    assertCount(row.checkedInGuests, "Attendance closeout checked-in count");
+    assertCount(row.finalWalkIns, "Attendance closeout walk-in count");
+    assertCount(row.targetTotalAttendance, "Attendance closeout total");
+    if (
+      row.targetTotalAttendance !== row.checkedInGuests + row.finalWalkIns
+    ) {
+      throw new RangeError("Attendance closeout totals are inconsistent");
+    }
+    scopeKeys.add(scopeKey);
+  }
+}
+
 function hasContributorSnapshotDrift(row: AnalyticsServiceEventRow): boolean {
   return (
     row.confirmedAt !== null &&
@@ -160,6 +259,96 @@ function buildTrend(
     assertCount(point.registered, "Trend registered total");
     assertCount(point.checkedIn, "Trend checked-in total");
     assertCount(point.operatingDays, "Trend operating day count");
+    buckets.set(bucketStartDate, point);
+  }
+  return [...buckets.values()].sort((left, right) =>
+    left.bucketStartDate.localeCompare(right.bucketStartDate),
+  );
+}
+
+function buildAttendanceDays(
+  guestRows: readonly AnalyticsServiceAttendanceGuestScopeRow[],
+  walkInRows: readonly AnalyticsServiceWalkInDayRow[],
+  closeoutRows: readonly AnalyticsServiceAttendanceCloseoutRow[],
+  range: AnalyticsPeriodSelection["comparisonPeriod"],
+): AnalyticsAttendanceDayInput[] {
+  const scopes = new Map<
+    string,
+    AnalyticsAttendanceDayInput & { eventId: string | null }
+  >();
+  const days = new Map<string, AnalyticsAttendanceDayInput>();
+  for (const row of guestRows) {
+    if (!isDateInAnalyticsRange(row.businessDate, range)) continue;
+    scopes.set(attendanceScopeKey(row.businessDate, row.eventId), {
+      businessDate: row.businessDate,
+      eventId: row.eventId,
+      checkedInGuests: row.checkedInCount,
+      walkIns: 0,
+    });
+  }
+  for (const row of walkInRows) {
+    if (!isDateInAnalyticsRange(row.businessDate, range)) continue;
+    const scopeKey = attendanceScopeKey(row.businessDate, row.eventId);
+    const scope = scopes.get(scopeKey) ?? {
+      businessDate: row.businessDate,
+      eventId: row.eventId,
+      checkedInGuests: 0,
+      walkIns: 0,
+    };
+    scope.walkIns = row.walkInCount;
+    scopes.set(scopeKey, scope);
+  }
+  for (const row of closeoutRows) {
+    if (!isDateInAnalyticsRange(row.businessDate, range)) continue;
+    scopes.set(attendanceScopeKey(row.businessDate, row.eventId), {
+      businessDate: row.businessDate,
+      eventId: row.eventId,
+      checkedInGuests: row.checkedInGuests,
+      walkIns: row.finalWalkIns,
+    });
+  }
+  for (const scope of scopes.values()) {
+    const day = days.get(scope.businessDate) ?? {
+      businessDate: scope.businessDate,
+      checkedInGuests: 0,
+      walkIns: 0,
+    };
+    day.checkedInGuests += scope.checkedInGuests;
+    day.walkIns += scope.walkIns;
+    assertCount(day.checkedInGuests, "Attendance day checked-in total");
+    assertCount(day.walkIns, "Attendance day walk-in total");
+    days.set(scope.businessDate, day);
+  }
+  return [...days.values()]
+    .filter((day) => day.checkedInGuests + day.walkIns > 0)
+    .sort((left, right) => left.businessDate.localeCompare(right.businessDate));
+}
+
+function buildAttendanceTrend(
+  rows: readonly AnalyticsAttendanceDayInput[],
+  selection: AnalyticsPeriodSelection,
+): AnalyticsAttendanceTrendPoint[] {
+  const buckets = new Map<string, AnalyticsAttendanceTrendPoint>();
+  for (const row of rows) {
+    const bucketStartDate =
+      selection.period.granularity === "month"
+        ? row.businessDate
+        : `${row.businessDate.slice(0, 7)}-01`;
+    const point = buckets.get(bucketStartDate) ?? {
+      bucketStartDate,
+      checkedInGuests: 0,
+      walkIns: 0,
+      totalAttendance: 0,
+      operatingDays: 0,
+    };
+    point.checkedInGuests += row.checkedInGuests;
+    point.walkIns += row.walkIns;
+    point.totalAttendance += row.checkedInGuests + row.walkIns;
+    point.operatingDays += 1;
+    assertCount(point.checkedInGuests, "Attendance trend checked-in total");
+    assertCount(point.walkIns, "Attendance trend walk-in total");
+    assertCount(point.totalAttendance, "Attendance trend total");
+    assertCount(point.operatingDays, "Attendance trend operating day count");
     buckets.set(bucketStartDate, point);
   }
   return [...buckets.values()].sort((left, right) =>
@@ -241,15 +430,24 @@ export function buildAdminAnalyticsView({
   selection,
   eventRows,
   guestDayRows,
+  attendanceGuestScopeRows,
+  walkInDayRows,
+  attendanceCloseoutRows,
   contributorRows,
 }: {
   selection: AnalyticsPeriodSelection;
   eventRows: readonly AnalyticsServiceEventRow[];
   guestDayRows: readonly AnalyticsServiceGuestDayRow[];
+  attendanceGuestScopeRows: readonly AnalyticsServiceAttendanceGuestScopeRow[];
+  walkInDayRows: readonly AnalyticsServiceWalkInDayRow[];
+  attendanceCloseoutRows: readonly AnalyticsServiceAttendanceCloseoutRow[];
   contributorRows: readonly AnalyticsServiceContributorRow[];
 }): AdminAnalyticsView {
   assertEventRows(eventRows);
   assertGuestDayRows(guestDayRows);
+  assertAttendanceGuestScopeRows(attendanceGuestScopeRows);
+  assertWalkInScopeRows(walkInDayRows);
+  assertAttendanceCloseoutRows(attendanceCloseoutRows);
   const currentAggregate = summarizeAnalyticsGuestDays(
     guestDayRows
       .filter((row) => isDateInAnalyticsRange(row.businessDate, selection.period))
@@ -269,6 +467,24 @@ export function buildAdminAnalyticsView({
         registered: row.registeredCount,
         checkedIn: row.checkedInCount,
       })),
+  );
+  const currentAttendanceDays = buildAttendanceDays(
+    attendanceGuestScopeRows,
+    walkInDayRows,
+    attendanceCloseoutRows,
+    selection.period,
+  );
+  const comparisonAttendanceDays = buildAttendanceDays(
+    attendanceGuestScopeRows,
+    walkInDayRows,
+    attendanceCloseoutRows,
+    selection.comparisonPeriod,
+  );
+  const currentAttendanceAggregate = summarizeAnalyticsAttendanceDays(
+    currentAttendanceDays,
+  );
+  const comparisonAttendanceAggregate = summarizeAnalyticsAttendanceDays(
+    comparisonAttendanceDays,
   );
   const currentEvents = eventRows.filter((row) =>
     isDateInAnalyticsRange(row.businessDate, selection.period),
@@ -321,6 +537,13 @@ export function buildAdminAnalyticsView({
     navigation: selection.navigation,
     coverage,
     summary: buildAnalyticsSummary(currentAggregate, comparisonAggregate),
+    attendance: {
+      summary: buildAnalyticsAttendanceSummary(
+        currentAttendanceAggregate,
+        comparisonAttendanceAggregate,
+      ),
+      trend: buildAttendanceTrend(currentAttendanceDays, selection),
+    },
     trend: buildTrend(guestDayRows, selection),
     contributors: buildContributorRows(contributorRows),
     events: currentEvents

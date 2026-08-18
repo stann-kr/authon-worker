@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
-import { jwtVerify } from "jose";
+import { jwtVerify, SignJWT } from "jose";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { drizzle } from "drizzle-orm/d1";
 import { and, eq } from "drizzle-orm";
@@ -14,20 +14,16 @@ import {
 } from "@/i18n/config";
 import { hasAccess, isAccountKind, isRole } from "@/lib/users/policy";
 import { hasActiveVenueAccess } from "@/lib/tenant/active-policy";
+import { shouldUseSecureAuthCookies } from "@/lib/auth/cookie-policy";
+import {
+  getRememberedSessionRefresh,
+  parseStoredSession,
+} from "@/lib/auth/session-policy";
 import {
   getRequestId,
   reportServerError,
   writeStructuredLog,
 } from "@/lib/observability/structured-log";
-
-function parseStoredSession(raw: string): { userId?: string; sessionVersion?: number } | null {
-  try {
-    const parsed = JSON.parse(raw) as { userId?: string; sessionVersion?: number };
-    return parsed && typeof parsed === "object" ? parsed : null;
-  } catch {
-    return null;
-  }
-}
 
 export async function middleware(request: NextRequest) {
   const requestId = getRequestId(request);
@@ -147,6 +143,7 @@ export async function middleware(request: NextRequest) {
     // ─── DB 사용자 상태/현재 role 확인 ────────────────────────
     const userRows = await db
       .select({
+        email: users.email,
         role: users.role,
         accountKind: users.accountKind,
         doorAccessEnabled: users.doorAccessEnabled,
@@ -205,7 +202,35 @@ export async function middleware(request: NextRequest) {
       }
     }
 
-    return continueRequest();
+    const refresh = getRememberedSessionRefresh(session, payload.exp);
+    if (!refresh) return continueRequest();
+
+    const refreshedToken = await new SignJWT({
+      sub: userId,
+      email: user.email,
+      role: currentRole,
+      venueId: user.venueId,
+      sv: expectedSessionVersion,
+    })
+      .setProtectedHeader({ alg: "HS256" })
+      .setIssuedAt()
+      .setExpirationTime(refresh.expiresAtSeconds)
+      .sign(secret);
+
+    const response = continueRequest();
+    const secureCookies = shouldUseSecureAuthCookies(request);
+    for (const [name, value] of [["token", refreshedToken], ["sessionId", sessionId]] as const) {
+      response.cookies.set({
+        name,
+        value,
+        httpOnly: true,
+        secure: secureCookies,
+        sameSite: "lax",
+        maxAge: refresh.ttlSeconds,
+        path: "/",
+      });
+    }
+    return response;
   } catch (error) {
     await reportServerError("auth.middleware", error, { requestId });
     return NextResponse.redirect(new URL("/auth/login", request.url));

@@ -14,12 +14,12 @@ function main() {
   const result = inspectDevelopmentIntent();
   if (!result.ok) {
     console.error(
-      `Development version upload blocked. Set this explicit control: ${result.missing.join(", ")}`,
+      `Development deploy blocked. Set this explicit control: ${result.missing.join(", ")}`,
     );
     process.exitCode = 1;
     return;
   }
-  console.log("Development version upload intent verified.");
+  console.log("Development deploy intent verified.");
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) main();

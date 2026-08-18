@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { afterEach, test } from "node:test";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { NextIntlClientProvider } from "next-intl";
 import {
   cleanup,
@@ -11,6 +11,7 @@ import {
 } from "@testing-library/react";
 
 import AdminTaskSwitcher from "@/app/admin/components/AdminTaskSwitcher";
+import AnalyticsAttendance from "@/app/admin/components/analytics/AnalyticsAttendance";
 import AnalyticsContributors from "@/app/admin/components/analytics/AnalyticsContributors";
 import AnalyticsPeriodBar from "@/app/admin/components/analytics/AnalyticsPeriodBar";
 import ExternalDjCombobox from "@/app/admin/components/ExternalDjCombobox";
@@ -19,11 +20,92 @@ import ConfirmDialog from "@/components/ConfirmDialog";
 import GuestListCard from "@/components/GuestListCard";
 import OperationalSectionNav from "@/components/OperationalSectionNav";
 import GuestBulkEntry from "@/components/GuestBulkEntry";
+import useMobileDockInset from "@/app/door/components/useMobileDockInset";
 import { EMPTY_ANALYTICS_DTO_FIXTURE } from "@/lib/analytics/test-fixtures";
 
 afterEach(() => {
   cleanup();
   document.getElementById("main-content")?.removeAttribute("inert");
+});
+
+test("mobile Door dock measures its rendered height and clears the page inset", async () => {
+  const originalMatchMedia = window.matchMedia;
+  const originalResizeObserver = globalThis.ResizeObserver;
+  const observerState: { callback: ResizeObserverCallback | null } = {
+    callback: null,
+  };
+  let isDisconnected = false;
+
+  class ResizeObserverMock {
+    constructor(callback: ResizeObserverCallback) {
+      observerState.callback = callback;
+    }
+
+    observe() {}
+
+    unobserve() {}
+
+    disconnect() {
+      isDisconnected = true;
+    }
+  }
+
+  Object.defineProperty(globalThis, "ResizeObserver", {
+    configurable: true,
+    writable: true,
+    value: ResizeObserverMock,
+  });
+  window.matchMedia = () => ({
+    matches: true,
+    media: "(max-width: 767px)",
+    onchange: null,
+    addListener() {},
+    removeListener() {},
+    addEventListener() {},
+    removeEventListener() {},
+    dispatchEvent() {
+      return false;
+    },
+  });
+
+  function DockHarness() {
+    const dockRef = useRef<HTMLElement>(null);
+    useMobileDockInset(dockRef);
+    return (
+      <div className="page-scroll">
+        <section ref={dockRef} data-testid="door-dock" />
+      </div>
+    );
+  }
+
+  const { unmount } = render(<DockHarness />);
+  const dock = screen.getByTestId("door-dock");
+  Object.defineProperty(dock, "getBoundingClientRect", {
+    configurable: true,
+    value: () => ({ height: 173 }),
+  });
+  observerState.callback?.([], {} as ResizeObserver);
+
+  const pageScroll = dock.closest<HTMLElement>(".page-scroll");
+  await waitFor(() => {
+    assert.equal(
+      pageScroll?.style.getPropertyValue("--door-mobile-dock-height"),
+      "173px",
+    );
+  });
+
+  unmount();
+  assert.equal(isDisconnected, true);
+  assert.equal(
+    pageScroll?.style.getPropertyValue("--door-mobile-dock-height"),
+    "",
+  );
+  window.matchMedia = originalMatchMedia;
+  Object.defineProperty(globalThis, "ResizeObserver", {
+    configurable: true,
+    writable: true,
+    value: originalResizeObserver,
+  });
 });
 
 test("full error hides empty copy and retry success restores it", () => {
@@ -177,6 +259,44 @@ test("analytics period controls expose selection and keyboard-native navigation"
   assert.equal(nextGranularity, "quarter");
   fireEvent.click(screen.getByRole("button", { name: "Previous period" }));
   assert.equal(previousAnchor, "2026-07-01");
+});
+
+test("attendance analytics keeps KPI definitions and its empty state visible", () => {
+  render(
+    <NextIntlClientProvider
+      locale="en"
+      messages={{
+        AdminAnalytics: {
+          comparison: {
+            notCalculable: "Comparison unavailable",
+            noBaseline: "No comparison baseline",
+          },
+          attendance: {
+            title: "Total attendance",
+            description: "Checked-in guests plus net walk-ins.",
+            totalAttendance: "Total attendance",
+            checkedInGuests: "Checked-in guests",
+            walkIns: "Walk-ins",
+            attendancePerOperatingDay: "Attendance per operating day",
+            trendTitle: "Attendance trend",
+            trendDescription: "Attendance over time.",
+            tableTitle: "Attendance chart data",
+            date: "Period",
+            empty: "No attendance was recorded for this period.",
+            definition: "This is not a unique-visitor count.",
+          },
+        },
+      }}
+    >
+      <AnalyticsAttendance attendance={EMPTY_ANALYTICS_DTO_FIXTURE.attendance} />
+    </NextIntlClientProvider>,
+  );
+
+  assert.ok(screen.getByRole("heading", { name: "Total attendance" }));
+  assert.ok(screen.getByText("Checked-in guests"));
+  assert.ok(screen.getByText("Walk-ins"));
+  assert.ok(screen.getByText("Attendance per operating day"));
+  assert.ok(screen.getByText("No attendance was recorded for this period."));
 });
 
 test("named unmapped contributors show only their source name", () => {

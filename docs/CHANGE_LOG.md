@@ -2,7 +2,60 @@
 
 공개 가능한 결과 중심 변경 요약이다. 항목은 일자 단위이며 최신 항목을 위에 둔다. 파일 단위 세부 구현 이력은 공개 문서에 포함하지 않는다.
 
+## 2026-08-17
+
+### 입장 마감 확정과 세션 종료 안정성
+
+#### Changed
+
+- 관리자는 수기로 확인한 최종 누적 입장객을 한 번 입력해 Event 또는 일반 명단 범위의 마감 합계를 확정할 수 있다. 서버 기록과 차이가 0명이어도 마감 스냅샷은 남는다.
+- 마감된 범위의 통계는 이후 현재 명단 대신 변경 불가 입장 마감 스냅샷을 우선 사용한다.
+
+#### Security
+
+- 입장 마감은 Guest·워크인·원장 행 수가 모두 화면 기준값과 일치할 때만 원자적으로 생성된다. 확정 뒤 모든 Door 기기의 새 입력과 지연 동기화, 입장 완료 게스트의 범위 이동은 거부된다.
+- 로그아웃의 서버 세션 무효화를 확정할 수 없으면 로그인 credential을 보존한 채 재시도 가능한 오류를 표시하고, 성공을 잘못 보고하거나 복구 불가능한 부분 로그아웃으로 진행하지 않는다.
+
 ## 2026-08-16
+
+### Door 카운터와 로그인 유지 개선
+
+#### Changed
+
+- 모바일 Door 하단 카운터의 높이와 버튼 크기를 줄이고, Footer가 카운터 위에 겹치지 않도록 스크롤 여백과 표시 계층을 정리했다.
+- Door 카운터에서 별도 총 입장객 강조 표시를 제거하고 입장 게스트와 워크인만 간결하게 유지했다.
+- 관리자 입장객 보정은 증감값 대신 마감 때 확인한 최종 누적 입장객 수를 입력하면 현재 서버 기록과의 차이를 한 번에 반영하도록 바꿨다.
+- 로그인 화면에 선택형 로그인 유지 옵션을 추가했다. 기본 로그인은 기존 24시간을 유지하고, 선택한 세션은 30일 미사용 만료와 최대 180일 범위에서 활동 중 자동 갱신된다.
+
+#### Security
+
+- 수기 입장객 합계는 제출 시점의 게스트 체크인과 워크인 기준값이 모두 일치할 때만 원자적으로 반영하며, 다른 입력이 먼저 반영되면 최신 집계를 다시 확인하도록 거부한다.
+- 장기 세션도 JWT, KV, 계정·베뉴 활성 상태, tenant와 session version을 매 요청 확인한다. 로그아웃은 D1 session version을 올려 늦게 끝난 갱신 응답과 다른 기기의 기존 세션까지 폐기하며, 비밀번호·권한·베뉴 상태 변경도 같은 무효화 경계를 사용한다.
+
+### development Worker 실제 DB 검증 연결
+
+#### Changed
+
+- 고정 `authon-worker-dev`의 `DB` binding을 production D1 `authon-db`에 연결해 `dev` branch를 실제 계정과 데이터로 검증할 수 있게 했다.
+- development session KV·JWT secret·Worker URL과 route는 production에서 분리된 상태를 유지한다.
+- production D1에 synthetic data를 넣을 수 있는 remote development seed entrypoint를 제거했다.
+
+#### Security
+
+- development Worker의 Guest·Door·Admin write도 production data에 즉시 반영됨을 운영 계약과 회귀 테스트에 명시했다.
+- remote migration은 기존 production intent guard를 거치는 명령만 유지하며, `dev` deploy에 migration이나 seed를 포함하지 않는다.
+
+### 고정 development Worker 복원
+
+#### Changed
+
+- `dev` branch를 Cloudflare Wrangler environment가 관리하는 고정 `authon-worker-dev`에 배포하도록 복원했다.
+- development Worker는 별도 D1·KV·JWT secret과 `workers.dev` 주소를 사용하고, `main`만 기존 production Worker와 custom domain을 갱신한다.
+- production 데이터를 복제하지 않고 synthetic venue·관리자 계정만 준비하는 명시적 development seed 명령을 추가했다.
+
+#### Security
+
+- development 환경에서 production D1·KV와 custom domain을 사용하지 않으며, Worker code 배포와 migration·secret 변경 경계를 분리한다.
 
 ### 외부 DJ 디렉터리
 

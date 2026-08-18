@@ -24,10 +24,11 @@ Client
 
 ## 배포 환경
 
-- production과 development build는 하나의 `authon-worker` 및 동일한 기본 binding 구성을 사용한다.
-- `dev` push는 Cloudflare Workers Builds에서 `npm run verify:release`를 통과한 뒤 OpenNext `upload`로 `dev` tag의 새 Worker version만 만든다. 이 version에는 traffic을 배정하지 않고 preview alias도 만들지 않으므로 production URL에서 제공되지 않는다.
-- `main` merge는 별도 production 승인을 거쳐 `npm run verify:release`를 통과한 뒤 production Worker에 자동 배포한다. development 승인과 migration·secret 변경을 production 권한으로 확대하지 않는다.
-- Worker code deploy와 D1 migration, secret·binding·route·data 변경은 서로 다른 운영 단계로 검증한다.
+- production은 `authon-worker`, development는 Wrangler `env.dev`가 생성하는 고정 `authon-worker-dev` Worker를 사용한다.
+- `dev` push는 Cloudflare Workers Builds에서 `npm run verify:release`를 통과한 뒤 development Worker에 배포한다. 실제 데이터 기반 기능 검증을 위해 `DB`만 production D1 `authon-db`를 공유하고, session KV·JWT secret·app URL은 development 전용이며 `routes=[]`로 production custom domain을 상속하지 않는다.
+- development Worker의 Guest·Door·Admin write는 production D1에 즉시 반영된다. synthetic remote seed와 dev remote migration entrypoint는 두지 않고, migration은 production intent guard가 있는 명령으로만 수행한다.
+- `main` merge는 별도 production 승인을 거쳐 같은 gate를 통과한 뒤 production Worker에 자동 배포한다. development 승인과 migration·secret 변경을 production 권한으로 확대하지 않는다.
+- Worker code deploy와 D1 migration, secret·binding·route 변경은 서로 다른 운영 단계로 검증한다. 단, development application의 정상적인 product write는 공유 production D1에 기록되는 명시적 예외다.
 - 표준 개발·CI·Docker runtime은 Node 24 / npm 11이다. `npm run verify:release`가 lint, typecheck, 전체 회귀, EN/KO parity, 민감 asset 검사와 Next/OpenNext Worker build를 재현한다.
 - 기본 Compose `web` 서비스는 production Cloudflare credential을 받지 않는다. production deploy와 remote D1 migration은 별도 `ops` profile, 명시적 `:prod`/`:remote` 명령과 `AUTHON_PRODUCTION_INTENT=1`을 함께 요구한다.
 - 적용된 `migrations/`의 manual D1 SQL이 migration authority다. Drizzle generator는 `.docs/generated-migrations/`의 disposable review output만 만들고, CI는 임시 SQLite에서 manual history와 현재 schema의 table·column·foreign key·index 호환성을 검증한다.
@@ -67,6 +68,7 @@ Client
 | Guest Limit Request | Staff·DJ의 날짜별 추가 게스트 한도 요청과 관리자 승인 기록 |
 | External Link | 외부 DJ가 계정 없이 게스트를 등록하고 설정을 새 credential로 재사용하는 공개 링크와 베뉴별 DJ 디렉터리 연결 |
 | Check-in | 도어 운영자의 입장 확인 기록 |
+| Attendance | 등록 게스트 체크인과 비식별 워크인 원장을 결합한 영업일·Event 단위 누적 입장 기록 |
 | Password Reset | 사용자 관리자 요청, 관리자 결정, 기존 재설정 token의 일회성 소비 |
 | Account Setup | `pending_reset` 계정의 1회용 설정 코드 또는 요청 브라우저에 결속된 관리자 승인 기반 비밀번호 설정 |
 | User Audit | 계정 생성, Role·상태·비밀번호 설정과 삭제 작업 기록 |
@@ -99,7 +101,7 @@ Client
 | `/guest?token=...` | 공개 링크 | 외부 DJ 게스트 등록 |
 | `/` | 인증 필요 | 역할별 대시보드와 Venue Admin의 미처리 추가 게스트 요청 알림 |
 | `/guest` | 인증 필요 | 게스트 등록/관리 |
-| `/door` | 인증 필요 | 도어 체크인 |
+| `/door` | 인증 필요 | 게스트 체크인, 워크인 기록과 관리자 마감 수기 합계 반영 |
 | `/admin` | 관리자 | 게스트 목록·추가 한도 요청을 포함한 게스트 운영과 링크·사용자·베뉴 관리 |
 | `/profile` | 인증 필요 | 프로필과 비밀번호 변경 |
 
@@ -107,6 +109,9 @@ Client
 
 - 로그인 후 HTTP-only cookie 기반 JWT를 발급한다.
 - KV session을 함께 확인해 로그아웃과 세션 무효화를 반영한다.
+- 기본 로그인 세션은 갱신 없는 24시간 고정 수명이다. 사용자가 `로그인 유지`를 선택한 세션만 유효한 활동마다 30일 idle 수명을 갱신하되 최초 로그인 후 180일을 넘기지 않는다.
+- remembered session은 최초 로그인 때 KV record를 180일 absolute 수명으로 한 번만 저장한다. 갱신은 KV, 사용자·베뉴 활성 상태, tenant, role과 session version 검증을 모두 통과한 뒤 같은 session ID의 JWT와 두 cookie에만 적용해 동일 KV key의 병렬 write 경쟁을 만들지 않는다. remembered metadata가 없는 기존 세션은 장기 세션으로 승격하지 않는다.
+- 로그아웃은 현재 JWT와 KV session 결속을 확인한 뒤 D1 session version을 CAS 증가시키고 KV record와 브라우저 cookie를 정리한다. D1 무효화를 확정할 수 없거나 검증 중 KV 장애가 나면 credential을 보존한 채 재시도 가능한 `503`을 반환해 부분 로그아웃을 성공으로 보고하지 않는다. 성공한 D1 무효화는 늦게 끝난 갱신 응답과 다른 기기의 기존 세션 재사용도 막는다. 베뉴 활성 상태가 바뀔 때도 해당 베뉴 사용자 session version을 함께 올린다.
 - 비밀번호 변경/재설정 이후 기존 세션을 무효화할 수 있도록 session version을 사용한다.
 - Role, 계정 유형, 공용 계정 Door capability 변경과 비활성화·재활성화, 삭제 처리도 session version을 변경해 기존 세션의 재사용을 차단한다.
 - 신규 비밀번호 hash는 WebCrypto PBKDF2 계열을 기준으로 관리하고, 기존 hash는 점진 전환한다.
@@ -141,6 +146,14 @@ Client
 - 기존 링크를 템플릿으로 사용할 때는 DJ·이벤트·정원·언어만 복사하며, ID·token·URL·사용량·생성자·수명주기는 새로 만든다.
 - terminal 동기화는 베뉴 단위 `terminalRequestId`를 필수 idempotency key로 사용한다. 같은 key와 정규화된 payload의 retry는 최초 guest ID를 반환하고, 다른 payload 재사용은 `409`로 거부한다.
 
+## Door 입장 기록 일관성
+
+- 등록 게스트는 기존 Guest 체크인으로 집계하고 명단에 없는 첫 입장만 비식별 워크인 원장에 `+1`로 기록한다. Door 화면은 두 수치를 분리해 표시하며 현재 재실 인원이나 재입장 횟수로 해석하지 않는다.
+- 워크인 빠른 입력은 기기별 IndexedDB queue에 먼저 기록하고 idempotency key와 device sequence로 서버에 동기화한다. 마지막 입력 취소는 같은 operator·device·scope의 취소되지 않은 워크인만 대상으로 한다.
+- 관리자 마감 확정은 증감값을 직접 받지 않는다. 수기로 확인한 누적 입장객 목표와 화면에 표시된 Guest·워크인·원장 행 수 기준값을 함께 보내고, 서버가 같은 D1 statement에서 현재값을 다시 계산해 모두 일치할 때만 exact venue·영업일·optional Event 범위의 변경 불가 `attendance_closeouts` snapshot을 생성한다. 차이가 있으면 같은 statement의 trigger가 `manual_adjustment`를 append하며, 차이가 0이어도 snapshot은 남는다.
+- 확정 전에 사용한 모든 Door 기기의 대기 입력을 동기화해야 한다. 입력 중 기준값이 바뀌면 stale 응답으로 거부한다. 확정 뒤에는 같은 범위의 새 Guest 체크인·취소, checked Guest 범위 이동, 워크인·취소와 다른 기기의 지연 offline 입력을 DB에서 거부하고 기존 동일 idempotency replay만 원래 결과로 반환한다.
+- Admin Attendance 통계는 venue·영업일·optional Event scope별로 live Guest와 원장을 결합한 뒤, 마감 snapshot이 있으면 그 scope의 두 수치를 통째로 대체하고 마지막에 날짜 단위로 합산한다. Guest 등록·입장률과 기존 Event closeout hash 계약은 그대로 유지한다.
+
 ## 클라이언트 비동기 상태 원칙
 
 - 베뉴·날짜에 결속된 mutation은 시작 시 scope와 operation ID를 함께 캡처한다. 완료 시 현재 scope와 operation 소유권이 모두 일치할 때만 credential, feedback과 busy 상태를 갱신한다.
@@ -163,6 +176,8 @@ Client
 | `terminal_guest_sync_requests` | terminal 요청의 베뉴별 idempotency key, payload hash와 최초 guest 결과 |
 | `guest_limit_requests` | 사용자·날짜별 추가 한도 요청, 선택 사유, 승인 수량과 결정 기록 |
 | `check_ins` | 체크인 기록 |
+| `attendance_activity_ledger` | 이름·연락처를 저장하지 않는 워크인, 취소와 관리자 수기 보정 불변 원장 |
+| `attendance_closeouts` | Guest·워크인 기준값과 최종 누적 합계를 exact scope로 동결하는 변경 불가 입장 마감 snapshot |
 | `password_reset_tokens` | 비밀번호 재설정 token hash와 만료/사용 상태 |
 | `password_reset_requests` | 사용자 관리자 요청, 처리 상태·방식·결정자와 코드 없는 승인 만료 시각 |
 
@@ -174,6 +189,7 @@ Client
 | 권한/role | route guard, Server Action guard, 계정 유형 capability, venue scoping, session 무효화, 자기 계정·권한 상승 방지 |
 | 도메인/브랜드 | host resolver, venue domain mapping, metadata, email/link canonical URL |
 | 게스트 등록 | external link flow, 공용 계정 입력자, 기본·승인 추가 한도의 원자적 적용, date/status 계산 |
+| Door 입장 기록 | Guest 체크인 포함 범위, attendance queue·idempotency·device sequence, 관리자 target reconciliation CAS |
 | 베뉴 시간 기준 | IANA timezone 검증, 자정 통과 운영시간, Guest·Door·Admin 기본 영업일 계산 |
 | D1 schema | Drizzle schema, migration files, affected queries |
 | 배포 runtime | OpenNext compatibility, Worker build result |
