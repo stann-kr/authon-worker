@@ -12,6 +12,15 @@ import {
 import { subscribeToRouteTransitionStart } from "./route-transition-events";
 
 /**
+ * 최신 값을 유지하면서 참조 객체의 정체성은 보존합니다.
+ */
+export function useLatestRef<T>(value: T) {
+  const valueRef = useRef(value);
+  valueRef.current = value;
+  return valueRef;
+}
+
+/**
  * useState와 동일하지만 localStorage에 값을 영속화합니다.
  * SSR 환경에서도 안전하게 동작합니다.
  */

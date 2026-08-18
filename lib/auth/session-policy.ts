@@ -1,6 +1,7 @@
 export const STANDARD_SESSION_TTL_SECONDS = 60 * 60 * 24;
 export const REMEMBERED_SESSION_IDLE_TTL_SECONDS = 60 * 60 * 24 * 30;
 export const REMEMBERED_SESSION_ABSOLUTE_TTL_SECONDS = 60 * 60 * 24 * 180;
+export const REMEMBERED_SESSION_REFRESH_MIN_EXTENSION_SECONDS = 60 * 60 * 24;
 
 export type SessionMode = "standard" | "remembered";
 
@@ -133,7 +134,13 @@ export function getRememberedSessionRefresh(
     absoluteExpiresAtSeconds,
   );
   const ttlSeconds = expiresAtSeconds - nowSeconds;
-  if (expiresAtSeconds <= currentExpiresAtSeconds || ttlSeconds < 60) return null;
+  if (
+    expiresAtSeconds - currentExpiresAtSeconds <
+      REMEMBERED_SESSION_REFRESH_MIN_EXTENSION_SECONDS ||
+    ttlSeconds < 60
+  ) {
+    return null;
+  }
 
   return { expiresAtSeconds, ttlSeconds };
 }

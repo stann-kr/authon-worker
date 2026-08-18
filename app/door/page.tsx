@@ -5,6 +5,7 @@ import {
   useLocalStorage,
   useGuestPolling,
   useLatestRequestGuard,
+  useLatestRef,
   useScopedOperationGuard,
 } from "../../lib/hooks";
 import AuthGuard from "../../components/AuthGuard";
@@ -87,6 +88,7 @@ export default function DoorPage() {
 function DoorPageContent() {
   const t = useTranslations("Door");
   const commonT = useTranslations("Common");
+  const tRef = useLatestRef(t);
   const locale = useLocale() as "en" | "ko";
   const {
     venueId,
@@ -428,13 +430,13 @@ function DoorPageContent() {
           setGuests([]);
           setUsers([]);
           setExternalLinks([]);
-          setFeedback(t("loadFailed"));
+          setFeedback(tRef.current("loadFailed"));
           setLoadOutcome("error");
           setIsOfflineMode(false);
         }
       } else {
         if (error) {
-          setFeedback(t("partialLoadFailed"));
+          setFeedback(tRef.current("partialLoadFailed"));
           setLoadOutcome("partial");
         } else {
           setLoadOutcome("success");
@@ -479,7 +481,7 @@ function DoorPageContent() {
         setGuests([]);
         setUsers([]);
         setExternalLinks([]);
-        setFeedback(t("loadFailed"));
+        setFeedback(tRef.current("loadFailed"));
         setLoadOutcome("error");
         setIsOfflineMode(false);
       }
@@ -496,7 +498,7 @@ function DoorPageContent() {
     selectedDate,
     selectedEventId,
     syncOfflineQueue,
-    t,
+    tRef,
     venueId,
   ]);
 

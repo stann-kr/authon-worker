@@ -5,6 +5,7 @@ import {
   useLocalStorage,
   useGuestPolling,
   useLatestRequestGuard,
+  useLatestRef,
 } from "@/lib/hooks";
 import StatGrid from "@/components/StatGrid";
 import PanelHeader from "@/components/PanelHeader";
@@ -67,6 +68,7 @@ interface AuthenticatedGuestViewProps {
 export default function AuthenticatedGuestView({ user }: AuthenticatedGuestViewProps) {
   const t = useTranslations("GuestOperations");
   const commonT = useTranslations("Common");
+  const tRef = useLatestRef(t);
   const locale = useLocale() as "en" | "ko";
   const [selectedDate, setSelectedDate] = useState<string>(getBusinessDate());
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
@@ -193,7 +195,7 @@ export default function AuthenticatedGuestView({ user }: AuthenticatedGuestViewP
 
       if (fetchError) {
         console.error("Failed to fetch guests:", fetchError);
-        setError(t("loadFailed"));
+        setError(tRef.current("loadFailed"));
       }
       setLoadOutcome(fetchError ? (data ? "partial" : "error") : "success");
 
@@ -222,13 +224,13 @@ export default function AuthenticatedGuestView({ user }: AuthenticatedGuestViewP
       setQuota(fallbackDisplay.quota);
       setVerifiedQuotaScopeKey("");
       setLoadedScopeKey(requestScopeKey);
-      setError(t("loadFailed"));
+      setError(tRef.current("loadFailed"));
       setLoadOutcome(fallbackDisplay.guests.length > 0 ? "partial" : "error");
       return false;
     } finally {
       if (isLatestRequest()) setIsFetching(false);
     }
-  }, [effectiveVenueId, pollingGuard, requestGuard, requestScopeKey, selectedDate, selectedEventId, t]);
+  }, [effectiveVenueId, pollingGuard, requestGuard, requestScopeKey, selectedDate, selectedEventId, tRef]);
 
   useEffect(() => {
     loadGuests();
