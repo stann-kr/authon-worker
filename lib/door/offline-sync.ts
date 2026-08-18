@@ -16,7 +16,7 @@ export interface PreparedOfflineDoorSyncItem {
 export interface OfflineDoorSyncResult {
   idempotencyKey: string;
   guestId: string;
-  state: "confirmed" | "conflict" | "rejected";
+  state: "confirmed" | "conflict" | "rejected" | "scope_closed";
   resolution: "applied" | "replayed" | "already_applied" | null;
   status: "pending" | "checked" | null;
   checkInTime: string | null;
@@ -111,7 +111,7 @@ export function desiredOfflineDoorStatus(
 export function resolveOfflineDoorSyncOutcome(params: {
   idempotencyKey: string;
   guestId: string;
-  persistenceOutcome: "applied" | "replayed" | "conflict" | "rejected";
+  persistenceOutcome: "applied" | "replayed" | "conflict" | "rejected" | "scope_closed";
   persistedStatus: "pending" | "checked" | null;
   persistedCheckInTime: string | null;
   currentStatus: "pending" | "checked" | "deleted" | null;
@@ -128,6 +128,16 @@ export function resolveOfflineDoorSyncOutcome(params: {
         ? params.currentStatus
         : null,
       checkInTime: params.currentCheckInTime,
+    };
+  }
+  if (params.persistenceOutcome === "scope_closed") {
+    return {
+      idempotencyKey: params.idempotencyKey,
+      guestId: params.guestId,
+      state: "scope_closed",
+      resolution: null,
+      status: null,
+      checkInTime: null,
     };
   }
   if (

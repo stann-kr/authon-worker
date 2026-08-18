@@ -71,7 +71,12 @@ export default function Home() {
     const initializeHome = async () => {
       const isLatestRequest = requestGuard.beginRequest();
       if (!user) {
-        void logout();
+        const logoutResult = await logout();
+        if (!logoutResult.success && isLatestRequest()) {
+          // Pending logout preserves the server credential. Refreshing lets the
+          // server-authenticated user hydrate again instead of leaving Home stuck.
+          router.refresh();
+        }
         return;
       }
 
@@ -103,7 +108,7 @@ export default function Home() {
     };
 
     initializeHome();
-  }, [requestGuard, user]);
+  }, [requestGuard, router, user]);
 
   const accessibleMenus = useMemo(
     () =>

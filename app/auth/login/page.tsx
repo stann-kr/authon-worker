@@ -38,6 +38,7 @@ export default function LoginPage() {
   const [setupPassword, setSetupPassword] = useState("");
   const [setupCode, setSetupCode] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [keepSignedIn, setKeepSignedIn] = useState(false);
   const [mode, setMode] = useState<LoginMode>("login");
   const [isLoading, setIsLoading] = useState(false);
   const [authError, setAuthError] = useState<AuthErrorState | null>(null);
@@ -105,7 +106,11 @@ export default function LoginPage() {
     setAuthError(null);
 
     try {
-      const result = await login(formData.email, formData.password);
+      const result = await login(
+        formData.email,
+        formData.password,
+        keepSignedIn,
+      );
 
       if (result.success) {
         completeAuthenticatedClientSession({
@@ -163,7 +168,11 @@ export default function LoginPage() {
         return;
       }
 
-      const loginResult = await login(formData.email, setupPassword);
+      const loginResult = await login(
+        formData.email,
+        setupPassword,
+        keepSignedIn,
+      );
       if (!loginResult.success) {
         setMode("login");
         setSetupPassword("");
@@ -321,6 +330,30 @@ export default function LoginPage() {
                     aria-invalid={authError?.target === "confirmPassword"}
                   />
                 </div>
+              </div>
+            )}
+
+            {mode === "login" && (
+              <div>
+                <label
+                  htmlFor="keep-signed-in"
+                  className="pressable flex min-h-11 cursor-pointer items-center gap-3 text-sm font-medium text-text-heading"
+                >
+                  <input
+                    id="keep-signed-in"
+                    name="keep-signed-in"
+                    type="checkbox"
+                    checked={keepSignedIn}
+                    onChange={(event) => setKeepSignedIn(event.target.checked)}
+                    disabled={isLoading}
+                    aria-describedby="keep-signed-in-help"
+                    className="h-4 w-4 shrink-0 accent-action-primary"
+                  />
+                  <span>{t("keepSignedIn")}</span>
+                </label>
+                <p id="keep-signed-in-help" className="app-helper pl-7">
+                  {t("keepSignedInHelp")}
+                </p>
               </div>
             )}
 

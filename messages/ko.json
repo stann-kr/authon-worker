@@ -9,6 +9,8 @@
     "cancel": "취소",
     "close": "닫기",
     "logout": "로그아웃",
+    "logoutInProgress": "로그아웃 중…",
+    "logoutFailed": "로그아웃을 완료하지 못했습니다. 로그인 상태는 유지되며 다시 시도할 수 있습니다.",
     "profileSettings": "프로필 설정",
     "home": "홈",
     "search": "검색",
@@ -76,6 +78,8 @@
     "password": "비밀번호",
     "forgotPassword": "비밀번호를 잊으셨나요?",
     "passwordHelp": "일반 계정은 비밀번호를 입력하세요. 최초 설정 또는 관리자 재설정 계정은 발급받은 설정 코드를 입력합니다.",
+    "keepSignedIn": "이 기기에서 로그인 유지",
+    "keepSignedInHelp": "30일 동안 사용하지 않으면 만료됩니다. 계속 사용하는 동안에는 최대 180일까지 자동으로 갱신됩니다.",
     "newPassword": "새 비밀번호",
     "confirmPassword": "비밀번호 확인",
     "signIn": "로그인",
@@ -360,6 +364,7 @@
     "partialLoadFailed": "일부 운영 데이터를 불러오지 못했습니다. 새로고침 후 다시 시도해주세요.",
     "loadFailed": "운영 데이터를 불러오지 못했습니다. 네트워크 상태를 확인해주세요.",
     "updateFailed": "게스트 상태를 변경하지 못했습니다. 다시 시도해주세요.",
+    "attendanceScopeClosed": "이 범위의 입장 집계가 이미 마감되었습니다. 게스트 체크인을 변경할 수 없습니다.",
     "guestOwner": "게스트 담당자",
     "allOwners": "모든 게스트 담당자",
     "external": "외부",
@@ -379,6 +384,7 @@
     "offlineConfirmed": "확정",
     "offlineConflicts": "충돌",
     "offlineRejected": "거부",
+    "offlineScopeClosed": "마감된 범위",
     "retryOfflineSync": "동기화 재시도",
     "clearOfflineResults": "결과 지우기",
     "offlineQueueFailed": "이 변경을 오프라인 대기열에 추가하지 못했습니다.",
@@ -386,7 +392,8 @@
     "offlineNotice": {
       "cached": "캐시 모드는 현재 베뉴, 이벤트와 운영일 범위에서만 동작합니다.",
       "queued": "변경을 이 기기에 대기 중이며 동기화가 성공하기 전까지 확정되지 않습니다.",
-      "syncFailed": "대기열을 동기화하지 못했습니다. 탭을 유지하고 연결 후 다시 시도해주세요."
+      "syncFailed": "대기열을 동기화하지 못했습니다. 탭을 유지하고 연결 후 다시 시도해주세요.",
+      "scopeClosed": "이 범위의 입장 집계가 마감되어 변경을 반영하지 않았습니다. 다시 시도하지 않습니다."
     },
     "guestCode": "게스트 QR 코드",
     "guestCodePlaceholder": "AUTHON:… 코드를 스캔하거나 입력",
@@ -400,7 +407,6 @@
     },
     "attendance": {
       "title": "입장객 카운터",
-      "totalAttendance": "총 입장객",
       "checkedInGuests": "입장 게스트",
       "walkIns": "워크인",
       "addWalkIn": "워크인 입장",
@@ -412,25 +418,41 @@
       "selectVenue": "베뉴를 선택하면 카운터를 사용할 수 있습니다.",
       "pastDate": "빠른 입력은 현재 영업일에만 사용할 수 있습니다.",
       "eventInactive": "종료되었거나 열리지 않은 이벤트에는 새 입장을 기록할 수 없습니다.",
-      "recordedAnnouncement": "워크인 입장을 기록했습니다. 총 입장객 {count}명.",
-      "undoneAnnouncement": "마지막 워크인 입력을 취소했습니다. 총 입장객 {count}명.",
-      "adjustedAnnouncement": "입장객 수를 조정했습니다. 총 입장객 {count}명.",
+      "recordedAnnouncement": "워크인 입장을 기록했습니다.",
+      "undoneAnnouncement": "마지막 워크인 입력을 취소했습니다.",
+      "adjustedAnnouncement": "마감 합계를 확정했습니다.",
+      "finalizedAnnouncement": "이 입장 집계 범위가 마감되었습니다. 모든 Door 기기의 새 입력과 지연 입력이 거부됩니다.",
+      "scopeClosed": "이 입장 집계 범위가 마감되었습니다. 모든 Door 기기의 새 입력과 지연 입력이 거부됩니다.",
       "failedItems": "확인해야 할 동기화 결과 {count}건",
       "clearFailed": "결과 지우기",
       "notice": {
         "loadFailed": "서버의 최신 입장객 수를 불러오지 못했습니다. 이 기기의 대기 입력은 계속 보존됩니다.",
         "queueFailed": "이 입력을 기기에 안전하게 저장하지 못해 카운트하지 않았습니다.",
         "syncFailed": "입장 카운트를 동기화하지 못했습니다. 연결 후 자동으로 다시 시도합니다.",
-        "adjustmentFailed": "입장객 수를 조정하지 못했습니다. 수량과 현재 합계를 확인해주세요."
+        "adjustmentFailed": "마감 합계를 확정하지 못했습니다. 입력값과 현재 기록을 확인해주세요.",
+        "scopeClosed": "다른 곳에서 이 입장 집계 범위를 마감했습니다. 모든 Door 기기의 새 입력과 지연 입력이 거부됩니다.",
+        "reconciliationStale": "입력 중 서버 집계가 바뀌었습니다. 최신 기록을 불러왔으니 차이를 확인한 뒤 다시 반영해주세요."
       },
       "adjustment": {
-        "title": "입장객 수 보정",
-        "help": "누락은 양수, 중복은 음수로 입력합니다. 변경 사유와 함께 불변 운영 기록에 남으며 방문객 이름 등 개인정보는 입력하지 마세요.",
-        "delta": "보정 인원",
+        "title": "마감 합계 확정",
+        "help": "마감 때 수기로 확인한 그날의 최종 누적 입장객 수를 입력하면 현재 서버 기록과의 차이를 한 번에 반영합니다. 사용한 모든 Door 기기의 대기 입력을 먼저 동기화하세요. 확정 후에는 되돌릴 수 없고 모든 Door 기기의 새 입력과 지연 입력이 거부됩니다. 현재 재실 인원은 입력하지 마세요.",
+        "current": "현재 서버 기록: 입장 게스트 {checkedInGuests}명 · 워크인 {walkIns}명",
+        "target": "마감 수기 누적 입장객",
+        "preview": "반영 차이: {delta}명",
+        "zeroDelta": "차이가 0명이어도 마감 합계를 확정합니다.",
+        "enterTarget": "수기로 확인한 누적 입장객 수를 입력하세요.",
+        "invalidTarget": "0 이상의 정수를 입력하세요.",
+        "currentUnavailable": "최신 서버 기록을 불러온 뒤 입력할 수 있습니다.",
+        "belowCheckedGuests": "누적 입장객은 이미 입장한 게스트 {checkedInGuests}명보다 적을 수 없습니다.",
+        "deltaLimit": "한 번에 반영할 수 있는 차이는 ±500명입니다.",
         "reason": "보정 사유",
-        "syncFirst": "이 기기의 대기 입력을 먼저 동기화한 뒤 보정할 수 있습니다.",
-        "save": "보정 저장",
-        "saving": "저장 중…"
+        "reasonHelp": "운영상 사유만 적고 이름, 연락처 등 개인정보는 입력하지 마세요.",
+        "syncFirst": "사용한 모든 Door 기기의 게스트 체크인과 워크인 대기 입력을 먼저 동기화한 뒤 확정하세요.",
+        "finalized": "마감 합계가 확정되었습니다. 모든 Door 기기의 새 입력과 지연 입력은 거부되며 이 합계를 바꿀 수 없습니다.",
+        "eventMustBeClosed": "이 Event를 종료한 뒤 최종 입장 합계를 확정할 수 있습니다.",
+        "confirm": "마감 합계를 확정하면 되돌릴 수 없습니다. 모든 Door 기기의 새 입력과 지연 입력이 거부됩니다.",
+        "save": "마감 합계 확정",
+        "saving": "확정 중…"
       }
     }
   },
@@ -453,8 +475,8 @@
   },
   "AdminAnalytics": {
     "title": "운영 통계",
-    "description": "게스트 등록 결과와 전체 입장객을 함께 집계합니다. Event 생성 여부와 관계없이 이전 동급 기간과 비교할 수 있습니다.",
-    "dataBasis": "게스트 지표는 현재 명단을 기준으로 하며, 전체 입장은 입장 완료 게스트와 비식별 워크인 원장을 합산합니다.",
+    "description": "게스트 등록 결과와 전체 입장객을 함께 집계합니다. Event 생성 여부와 관계없이 이전 동급 기간과 비교할 수 있으며, 마감된 입장 집계 범위는 변경 불가 마감 스냅샷을 우선 사용합니다.",
+    "dataBasis": "게스트 지표는 현재 명단을 기준으로 하며, 전체 입장은 마감된 범위의 변경 불가 스냅샷을 우선 사용하고 그 외에는 입장 완료 게스트와 비식별 워크인 원장을 합산합니다.",
     "loading": "운영 통계를 불러오는 중",
     "refresh": "새로고침",
     "retry": "다시 시도",
@@ -489,7 +511,7 @@
     },
     "attendance": {
       "title": "전체 입장",
-      "description": "입장 완료 게스트와 Door에서 기록한 순 워크인을 합산합니다. 워크인만 있는 날짜도 포함하고, 실제 입장이 없는 등록 날짜는 입장 영업일에서 제외합니다.",
+      "description": "마감된 범위는 변경 불가 마감 스냅샷을 우선 사용하고, 그 외에는 입장 완료 게스트와 Door에서 기록한 순 워크인을 합산합니다. 워크인만 있는 날짜도 포함하며, 실제 입장이 없는 등록 날짜는 입장 영업일에서 제외합니다.",
       "totalAttendance": "총 입장객",
       "checkedInGuests": "입장 게스트",
       "walkIns": "워크인",
@@ -499,7 +521,7 @@
       "tableTitle": "전체 입장 차트 데이터",
       "date": "기간",
       "empty": "이 기간에 기록된 입장객이 없습니다.",
-      "definition": "총 입장객은 입장 완료 게스트와 순 워크인의 합계이며 고유 방문자 수가 아닙니다. 워크인은 명단에 없는 방문객의 첫 입장만 기록하는 운영 규칙을 전제로 합니다."
+      "definition": "총 입장객은 입장 완료 게스트와 순 워크인의 합계이며 고유 방문자 수가 아닙니다. 마감된 범위는 이후의 명단이나 원장 변경 대신 변경 불가 마감 스냅샷을 사용합니다. 워크인은 명단에 없는 방문객의 첫 입장만 기록하는 운영 규칙을 전제로 합니다."
     },
     "coverage": {
       "title": "데이터 범위",

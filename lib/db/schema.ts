@@ -309,6 +309,42 @@ export const attendanceActivityLedger = sqliteTable('attendance_activity_ledger'
   ),
 ]);
 
+export const attendanceCloseouts = sqliteTable('attendance_closeouts', {
+  id: text('id').primaryKey(),
+  venueId: text('venue_id').notNull().references(() => venues.id),
+  businessDate: text('business_date').notNull(),
+  eventId: text('event_id').references(() => events.id),
+  targetTotalAttendance: integer('target_total_attendance').notNull(),
+  checkedInGuests: integer('checked_in_guests').notNull(),
+  preAdjustmentWalkIns: integer('pre_adjustment_walk_ins').notNull(),
+  finalWalkIns: integer('final_walk_ins').notNull(),
+  adjustmentDelta: integer('adjustment_delta').notNull(),
+  sourceActivityCount: integer('source_activity_count').notNull(),
+  adjustmentActivityId: text('adjustment_activity_id').references(
+    () => attendanceActivityLedger.id,
+  ),
+  adjustmentReason: text('adjustment_reason').notNull(),
+  actorUserId: text('actor_user_id').notNull().references(() => users.id),
+  requestId: text('request_id').notNull(),
+  idempotencyKey: text('idempotency_key').notNull(),
+  payloadHash: text('payload_hash').notNull(),
+  reportHash: text('report_hash').notNull(),
+  finalizedAt: text('finalized_at').notNull(),
+  createdAt: text('created_at').notNull(),
+}, (t) => [
+  uniqueIndex('idx_attendance_closeouts_named_scope')
+    .on(t.venueId, t.businessDate, t.eventId)
+    .where(sql`${t.eventId} IS NOT NULL`),
+  uniqueIndex('idx_attendance_closeouts_general_scope')
+    .on(t.venueId, t.businessDate)
+    .where(sql`${t.eventId} IS NULL`),
+  uniqueIndex('idx_attendance_closeouts_venue_idempotency').on(
+    t.venueId,
+    t.idempotencyKey,
+  ),
+  index('idx_attendance_closeouts_venue_finalized').on(t.venueId, t.finalizedAt),
+]);
+
 export const eventContributorLimits = sqliteTable('event_contributor_limits', {
   eventId: text('event_id').notNull().references(() => events.id),
   venueId: text('venue_id').notNull().references(() => venues.id),

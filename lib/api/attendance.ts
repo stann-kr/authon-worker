@@ -6,10 +6,12 @@ import { requireAccess, type SessionUser } from "@/lib/auth/server";
 import { getDb } from "@/lib/db/client";
 import {
   attendanceActivityLedger,
+  attendanceCloseouts,
   guests,
   venues,
 } from "@/lib/db/schema";
 import { getBusinessDate } from "@/lib/date";
+import { getCompatibilityEventKey } from "@/lib/events/domain";
 import { loadEventById, findCompatibilityEvent } from "@/lib/events/server";
 import { requireActiveVenueId } from "@/lib/tenant/active-server";
 import { reportServerError } from "@/lib/observability/structured-log";
@@ -18,13 +20,12 @@ import {
   canApplyAttendanceEventMutation,
   isAttendanceScope,
   isAttendanceIdempotencyKey,
-  prepareAttendanceAdjustment,
+  prepareAttendanceReconciliation,
   prepareAttendanceSyncBatch,
   type AttendanceScope,
-  type PreparedAttendanceMutation,
 } from "@/lib/attendance/domain";
 import {
-  persistAttendanceAdjustment,
+  persistAttendanceReconciliation,
   persistDoorAttendanceMutation,
 } from "@/lib/attendance/persistence";
 import type {
@@ -129,9 +130,48 @@ async function buildDoorAttendanceSummary(params: {
   const eventCondition = params.scope.eventId
     ? eq(attendanceActivityLedger.eventId, params.scope.eventId)
     : isNull(attendanceActivityLedger.eventId);
+  const closeoutCondition = params.scope.eventId
+    ? eq(attendanceCloseouts.eventId, params.scope.eventId)
+    : isNull(attendanceCloseouts.eventId);
+  const [closeout] = await getDb()
+    .select({
+      checkedInGuests: attendanceCloseouts.checkedInGuests,
+      finalWalkIns: attendanceCloseouts.finalWalkIns,
+      targetTotalAttendance: attendanceCloseouts.targetTotalAttendance,
+      sourceActivityCount: attendanceCloseouts.sourceActivityCount,
+      finalizedAt: attendanceCloseouts.finalizedAt,
+    })
+    .from(attendanceCloseouts)
+    .where(and(
+      eq(attendanceCloseouts.venueId, params.scope.venueId),
+      eq(attendanceCloseouts.businessDate, params.scope.businessDate),
+      closeoutCondition,
+    ))
+    .limit(1);
+  if (closeout) {
+    return {
+      venueId: params.scope.venueId,
+      businessDate: params.scope.businessDate,
+      eventId: params.scope.eventId,
+      checkedInGuests: closeout.checkedInGuests,
+      walkIns: closeout.finalWalkIns,
+      totalAttendance: closeout.targetTotalAttendance,
+      sourceActivityCount: closeout.sourceActivityCount,
+      isFinalized: true,
+      finalizedAt: closeout.finalizedAt,
+      canFinalize: false,
+      lastUndoableIdempotencyKey: null,
+      canRecord: false,
+      unavailableReason: "scope_closed",
+      serverUpdatedAt: new Date().toISOString(),
+    };
+  }
   const [totals, checkedInGuests, lastUndoable] = await Promise.all([
     getDb()
-      .select({ walkIns: sql<number>`coalesce(sum(${attendanceActivityLedger.delta}), 0)`.mapWith(Number) })
+      .select({
+        walkIns: sql<number>`coalesce(sum(${attendanceActivityLedger.delta}), 0)`.mapWith(Number),
+        sourceActivityCount: sql<number>`count(*)`.mapWith(Number),
+      })
       .from(attendanceActivityLedger)
       .where(
         and(
@@ -174,6 +214,13 @@ async function buildDoorAttendanceSummary(params: {
     checkedInGuests,
     walkIns,
     totalAttendance: checkedInGuests + walkIns,
+    sourceActivityCount: Number(totals[0]?.sourceActivityCount ?? 0),
+    isFinalized: false,
+    finalizedAt: null,
+    canFinalize:
+      !params.event ||
+      params.event.state === "closed" ||
+      params.event.state === "archived",
     lastUndoableIdempotencyKey: lastUndoable[0]?.idempotencyKey ?? null,
     canRecord: isCurrentDate && isEventActive,
     unavailableReason: !isCurrentDate
@@ -216,14 +263,6 @@ export async function fetchDoorAttendanceSummary(params: {
   }
 }
 
-function rejectedResult(item: PreparedAttendanceMutation): AttendanceSyncResult {
-  return {
-    idempotencyKey: item.idempotencyKey,
-    state: "rejected",
-    activityId: null,
-  };
-}
-
 export async function syncDoorAttendanceMutations(params: {
   scope: AttendanceScope;
   deviceId: string;
@@ -240,14 +279,11 @@ export async function syncDoorAttendanceMutations(params: {
     const { env } = getCloudflareContext();
     const results: AttendanceSyncResult[] = [];
     for (const item of items) {
-      if (
-        item.isExpired ||
-        getBusinessDate(venue, new Date(item.occurredAt)) !== params.scope.businessDate ||
-        !canApplyAttendanceEventMutation(event, item.occurredAt)
-      ) {
-        results.push(rejectedResult(item));
-        continue;
-      }
+      const canApplyNew =
+        !item.isExpired &&
+        getBusinessDate(venue, new Date(item.occurredAt)) === params.scope.businessDate &&
+        (!event || event.state === "open") &&
+        canApplyAttendanceEventMutation(event, item.occurredAt);
       const persisted = await persistDoorAttendanceMutation({
         database: env.DB,
         scope: params.scope,
@@ -259,6 +295,7 @@ export async function syncDoorAttendanceMutations(params: {
         reversesIdempotencyKey: item.reversesIdempotencyKey,
         occurredAt: item.occurredAt,
         createdAt: new Date().toISOString(),
+        canApplyNew,
       });
       results.push({
         idempotencyKey: item.idempotencyKey,
@@ -288,38 +325,54 @@ export async function syncDoorAttendanceMutations(params: {
   }
 }
 
-export async function adjustDoorAttendance(params: {
+export async function reconcileDoorAttendance(params: {
   scope: AttendanceScope;
-  delta: number;
+  targetTotalAttendance: number;
+  expectedCheckedInGuests: number;
+  expectedWalkIns: number;
+  expectedSourceActivityCount: number;
   reason: string;
   idempotencyKey: string;
 }): Promise<ApiResponse<DoorAttendanceSummary>> {
   try {
     const actor = await requireAccess("admin");
     const { venue, event } = await loadAttendanceScope({ actor, scope: params.scope });
-    const adjustment = prepareAttendanceAdjustment(params);
+    const reconciliation = prepareAttendanceReconciliation(params);
     if (
       !isAttendanceIdempotencyKey(params.idempotencyKey) ||
       params.idempotencyKey.length < 8
     ) {
-      throw new AttendanceActionError("INVALID_ATTENDANCE_ADJUSTMENT");
+      throw new AttendanceActionError("INVALID_ATTENDANCE_RECONCILIATION");
     }
     const { env } = getCloudflareContext();
     const occurredAt = new Date().toISOString();
-    const result = await persistAttendanceAdjustment({
+    const result = await persistAttendanceReconciliation({
       database: env.DB,
       scope: params.scope,
+      compatibilityEventKey: getCompatibilityEventKey(
+        params.scope.venueId,
+        params.scope.businessDate,
+      ),
       actorUserId: actor.id,
       idempotencyKey: params.idempotencyKey,
-      delta: adjustment.delta,
-      reason: adjustment.reason,
+      targetTotalAttendance: reconciliation.targetTotalAttendance,
+      expectedCheckedInGuests: reconciliation.expectedCheckedInGuests,
+      expectedWalkIns: reconciliation.expectedWalkIns,
+      expectedSourceActivityCount: reconciliation.expectedSourceActivityCount,
+      reason: reconciliation.reason,
       occurredAt,
     });
     if (result.outcome === "conflict") {
       throw new AttendanceActionError("ATTENDANCE_IDEMPOTENCY_CONFLICT");
     }
+    if (result.outcome === "stale") {
+      throw new AttendanceActionError("ATTENDANCE_RECONCILIATION_STALE");
+    }
+    if (result.outcome === "scope_closed") {
+      throw new AttendanceActionError("ATTENDANCE_SCOPE_CLOSED");
+    }
     if (result.outcome === "rejected") {
-      throw new AttendanceActionError("ATTENDANCE_ADJUSTMENT_REJECTED");
+      throw new AttendanceActionError("ATTENDANCE_RECONCILIATION_REJECTED");
     }
     return {
       data: await buildDoorAttendanceSummary({
@@ -332,12 +385,12 @@ export async function adjustDoorAttendance(params: {
       error: null,
     };
   } catch (error: unknown) {
-    await reportServerError("attendance.adjust", error);
+    await reportServerError("attendance.reconcile", error);
     return {
       data: null,
       error: error instanceof AttendanceActionError
         ? error.code
-        : "ATTENDANCE_ADJUSTMENT_FAILED",
+        : "ATTENDANCE_RECONCILIATION_FAILED",
     };
   }
 }
