@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { afterEach, test } from "node:test";
-import { useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { NextIntlClientProvider } from "next-intl";
 import {
   cleanup,
@@ -22,10 +22,40 @@ import OperationalSectionNav from "@/components/OperationalSectionNav";
 import GuestBulkEntry from "@/components/GuestBulkEntry";
 import useMobileDockInset from "@/app/door/components/useMobileDockInset";
 import { EMPTY_ANALYTICS_DTO_FIXTURE } from "@/lib/analytics/test-fixtures";
+import { useLatestRef } from "@/lib/hooks";
 
 afterEach(() => {
   cleanup();
   document.getElementById("main-content")?.removeAttribute("inert");
+});
+
+test("latest ref keeps a loader stable while reading the latest translator", () => {
+  let loader: (() => string) | undefined;
+
+  function LoaderHarness({
+    translate,
+  }: {
+    translate: (key: string) => string;
+  }) {
+    const translateRef = useLatestRef(translate);
+    loader = useCallback(
+      () => translateRef.current("loadFailed"),
+      [translateRef],
+    );
+    return null;
+  }
+
+  const { rerender } = render(
+    <LoaderHarness translate={() => "Unable to load guests"} />,
+  );
+  const initialLoader = loader;
+
+  assert.equal(initialLoader?.(), "Unable to load guests");
+
+  rerender(<LoaderHarness translate={() => "게스트를 불러올 수 없습니다"} />);
+
+  assert.equal(loader, initialLoader);
+  assert.equal(loader?.(), "게스트를 불러올 수 없습니다");
 });
 
 test("mobile Door dock measures its rendered height and clears the page inset", async () => {

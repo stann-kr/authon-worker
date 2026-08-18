@@ -109,7 +109,7 @@ Client
 
 - 로그인 후 HTTP-only cookie 기반 JWT를 발급한다.
 - KV session을 함께 확인해 로그아웃과 세션 무효화를 반영한다.
-- 기본 로그인 세션은 갱신 없는 24시간 고정 수명이다. 사용자가 `로그인 유지`를 선택한 세션만 유효한 활동마다 30일 idle 수명을 갱신하되 최초 로그인 후 180일을 넘기지 않는다.
+- 기본 로그인 세션은 갱신 없는 24시간 고정 수명이다. 사용자가 `로그인 유지`를 선택한 세션은 활동을 계속해도 cookie 재발급을 24시간에 최대 한 번으로 합쳐 마지막 갱신 기준 30일의 idle window를 연장하며, 최초 로그인 후 180일을 넘기지 않는다.
 - remembered session은 최초 로그인 때 KV record를 180일 absolute 수명으로 한 번만 저장한다. 갱신은 KV, 사용자·베뉴 활성 상태, tenant, role과 session version 검증을 모두 통과한 뒤 같은 session ID의 JWT와 두 cookie에만 적용해 동일 KV key의 병렬 write 경쟁을 만들지 않는다. remembered metadata가 없는 기존 세션은 장기 세션으로 승격하지 않는다.
 - 로그아웃은 현재 JWT와 KV session 결속을 확인한 뒤 D1 session version을 CAS 증가시키고 KV record와 브라우저 cookie를 정리한다. D1 무효화를 확정할 수 없거나 검증 중 KV 장애가 나면 credential을 보존한 채 재시도 가능한 `503`을 반환해 부분 로그아웃을 성공으로 보고하지 않는다. 성공한 D1 무효화는 늦게 끝난 갱신 응답과 다른 기기의 기존 세션 재사용도 막는다. 베뉴 활성 상태가 바뀔 때도 해당 베뉴 사용자 session version을 함께 올린다.
 - 비밀번호 변경/재설정 이후 기존 세션을 무효화할 수 있도록 session version을 사용한다.

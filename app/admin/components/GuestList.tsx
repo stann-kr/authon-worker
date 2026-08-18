@@ -5,6 +5,7 @@ import {
   useLocalStorage,
   useGuestPolling,
   useLatestRequestGuard,
+  useLatestRef,
   useScopedOperationGuard,
 } from "../../../lib/hooks";
 import GuestListCard from "../../../components/GuestListCard";
@@ -60,6 +61,7 @@ export default function GuestList({
 }: GuestListProps) {
   const t = useTranslations("AdminGuest");
   const doorT = useTranslations("Door");
+  const doorTRef = useLatestRef(doorT);
   const locale = useLocale() as "en" | "ko";
   const [selectedDJ, setSelectedDJ] = useState<string>("all");
   const [loadingStates, setLoadingStates] = useState<{
@@ -154,11 +156,11 @@ export default function GuestList({
         setGuests([]);
         setUsers([]);
         setExternalLinks([]);
-        setFeedback(doorT("loadFailed"));
+        setFeedback(doorTRef.current("loadFailed"));
         setLoadOutcome("error");
       } else {
         if (error) {
-          setFeedback(doorT("partialLoadFailed"));
+          setFeedback(doorTRef.current("partialLoadFailed"));
           setLoadOutcome("partial");
         } else {
           setLoadOutcome("success");
@@ -175,12 +177,12 @@ export default function GuestList({
       setUsers([]);
       setExternalLinks([]);
       setLoadedScopeKey(requestScopeKey);
-      setFeedback(doorT("loadFailed"));
+      setFeedback(doorTRef.current("loadFailed"));
       setLoadOutcome("error");
     } finally {
       if (isLatestRequest()) setIsFetching(false);
     }
-  }, [doorT, eventId, pollingGuard, requestGuard, requestScopeKey, selectedDate, venueId]);
+  }, [doorTRef, eventId, pollingGuard, requestGuard, requestScopeKey, selectedDate, venueId]);
 
   useEffect(() => {
     loadData();
