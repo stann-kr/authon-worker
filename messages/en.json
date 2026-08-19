@@ -392,7 +392,6 @@
       "walkIns": "Walk-ins",
       "addWalkIn": "Walk-in entry",
       "undoLast": "Undo last walk-in",
-      "helper": "Record only the first entry for visitors who are not on the guest list.",
       "pending": "{count} pending",
       "syncing": "Syncing…",
       "selectVenue": "Select a venue.",
@@ -500,7 +499,7 @@
       "tableTitle": "Attendance chart data",
       "date": "Period",
       "empty": "No attendance was recorded for this period.",
-      "definition": "Total attendance is checked-in guests plus net walk-ins, not a unique-visitor count. A finalized scope uses its immutable close snapshot instead of later live roster or ledger changes. The operating rule is to count only the first entry of visitors who are not on the guest list."
+      "definition": "Total attendance is checked-in guests plus net walk-ins, not a unique-visitor count. A finalized scope uses its immutable close snapshot instead of later live roster or ledger changes."
     },
     "coverage": {
       "title": "Data coverage",

@@ -790,7 +790,7 @@ function DoorPageContent() {
   return (
     <WorkspaceShell
       contentClassName="gap-4 md:pb-8 lg:gap-6"
-      bottomInsetClassName="pb-[var(--door-mobile-dock-height,calc(13rem+env(safe-area-inset-bottom)))] md:pb-0"
+      bottomInsetClassName="pb-[var(--door-mobile-dock-height,calc(6rem+env(safe-area-inset-bottom)))] md:pb-0"
       footerLayer="below-mobile-dock"
     >
       {venueLoadError && (
