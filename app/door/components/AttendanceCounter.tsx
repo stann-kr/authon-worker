@@ -227,7 +227,8 @@ export default function AttendanceCounter({
       if (response.error || !response.data) {
         setNotice("loadFailed");
       } else {
-        setSummary(response.data);
+        const nextSummary = response.data;
+        setSummary(nextSummary);
         setNotice((current) => current === "loadFailed" ? null : current);
       }
     } catch {
@@ -515,7 +516,7 @@ export default function AttendanceCounter({
       setAdjustmentReason("");
       reconciliationAttemptRef.current = null;
       setNotice(null);
-      setAnnouncement(t("finalizedAnnouncement"));
+      setAnnouncement(t("scopeClosed"));
     } catch {
       const reconciliationClaim = currentScopeKeyRef.current === targetKey
         ? claimAttendanceSummaryMutation(
@@ -549,8 +550,8 @@ export default function AttendanceCounter({
     : queuedMutations.length > 0
       ? t("pending", { count: queuedMutations.length })
       : scopedSummary?.isFinalized
-        ? t("scopeClosed")
-        : t("confirmed");
+        ? t("finalized")
+        : null;
   const unavailableText = !scope
     ? t("selectVenue")
     : !isCurrentDate || scopedSummary?.unavailableReason === "past_date"
@@ -576,7 +577,9 @@ export default function AttendanceCounter({
             <h2 id="attendance-counter-title" className="text-sm font-semibold text-text-heading">
               {t("title")}
             </h2>
-            <p className="mt-0.5 text-xs text-text-muted">{statusText}</p>
+            {statusText && (
+              <p className="mt-0.5 text-xs text-text-muted">{statusText}</p>
+            )}
             <p className="mt-0.5 text-xs text-text-dim md:hidden">
               {t("checkedInGuests")} {displayedCheckedInGuests} · {t("walkIns")} {walkIns}
             </p>
