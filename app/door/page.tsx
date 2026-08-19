@@ -134,7 +134,7 @@ function DoorPageContent() {
   const [offlineMutations, setOfflineMutations] = useState<OfflineDoorMutation[]>([]);
   const [isOfflineSyncing, setIsOfflineSyncing] = useState(false);
   const [offlineNotice, setOfflineNotice] = useState<
-    "cached" | "queued" | "syncFailed" | "scopeClosed" | null
+    "queued" | "syncFailed" | "scopeClosed" | null
   >(null);
   const [doorCode, setDoorCode] = useState("");
   const [isDoorCodeLoading, setIsDoorCodeLoading] = useState(false);
@@ -267,7 +267,6 @@ function DoorPageContent() {
       setExternalLinks([]);
       setOfflineMutations(mutations);
       setIsOfflineMode(true);
-      setOfflineNotice("cached");
       setLoadOutcome("success");
       return true;
     } catch {
@@ -877,17 +876,17 @@ function DoorPageContent() {
                         <h2 className="text-sm font-semibold text-text-heading">
                           {t("offlineOperations")}
                         </h2>
-                        <p
-                          className="mt-1 text-xs leading-relaxed text-text-muted"
-                          role="status"
-                          aria-live="polite"
-                        >
-                          {isOfflineMode
-                            ? t("offlineCachedRoster")
-                            : isOfflineSyncing
-                              ? t("offlineSyncing")
-                              : t("offlineReady")}
-                        </p>
+                        {(isOfflineMode || isOfflineSyncing) && (
+                          <p
+                            className="mt-1 text-xs leading-relaxed text-text-muted"
+                            role="status"
+                            aria-live="polite"
+                          >
+                            {isOfflineMode
+                              ? t("offlineCachedRoster")
+                              : t("offlineSyncing")}
+                          </p>
+                        )}
                       </div>
                       <div className="flex flex-wrap gap-2">
                         <button
@@ -956,7 +955,6 @@ function DoorPageContent() {
                   <button
                     type="button"
                     aria-pressed={prioritizeWaiting}
-                    title={t("prioritizeWaitingHelp")}
                     onClick={() => setPrioritizeWaiting((current) => !current)}
                     className={`pressable min-h-11 whitespace-nowrap border px-3 py-2 text-xs font-medium ${
                       prioritizeWaiting
@@ -1003,7 +1001,6 @@ function DoorPageContent() {
                       {isDoorCodeLoading ? t("guestCodeLookingUp") : t("guestCodeLookup")}
                     </button>
                   </div>
-                  <p className="app-helper">{t("guestCodeHelp")}</p>
                   {doorCodeFeedback && (
                     <p
                       className={`mt-2 text-xs ${

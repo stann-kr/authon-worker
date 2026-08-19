@@ -226,7 +226,7 @@ function ResetPasswordContent() {
 
       setMessage({
         type: "success",
-        text: t("adminRequestSuccess"),
+        text: t("adminRequestSent"),
         target: "form",
       });
       setRequestChallenge(
@@ -418,16 +418,18 @@ function ResetPasswordContent() {
             })}
           />
 
-          <div className="mb-6 rounded-control border border-border-default bg-canvas p-4">
-            <p className="mb-2 text-sm font-semibold text-text-heading">
-              {token ? t("secureFlow") : t("adminFlow")}
-            </p>
-            <p className="text-xs leading-relaxed text-text-muted">
-              {token
-                ? t("secureFlowDescription")
-                : t("adminFlowDescription")}
-            </p>
-          </div>
+          {(step === "request" || (step === "reset" && token)) && (
+            <div className="mb-6 rounded-control border border-border-default bg-canvas p-4">
+              <p className="mb-2 text-sm font-semibold text-text-heading">
+                {token ? t("secureFlow") : t("adminFlow")}
+              </p>
+              <p className="text-xs leading-relaxed text-text-muted">
+                {token
+                  ? t("secureFlowDescription")
+                  : t("adminFlowDescription")}
+              </p>
+            </div>
+          )}
 
           {message && (
             <div id="reset-message" className="mb-6">
@@ -453,7 +455,7 @@ function ResetPasswordContent() {
                   spellCheck={false}
                   className="app-field"
                   placeholder="name@example.com"
-                  aria-describedby={`email-helper request-helper${
+                  aria-describedby={`request-helper${
                     message?.type === "error" && message.target === "email"
                       ? " reset-message"
                       : ""
@@ -462,9 +464,6 @@ function ResetPasswordContent() {
                     message?.type === "error" && message.target === "email"
                   }
                 />
-                <p id="email-helper" className="app-helper">
-                  {t("emailHelp")}
-                </p>
               </div>
 
               <p id="request-helper" className="text-xs leading-relaxed text-text-dim">
@@ -485,16 +484,6 @@ function ResetPasswordContent() {
 
           {step === "reset" && (
             <form onSubmit={handleReset} className="space-y-6" aria-busy={loading}>
-              {resetKind === "admin_approved" && (
-                <div className="rounded-control border border-status-waiting/70 bg-status-waiting/10 p-4" role="note">
-                  <p className="text-sm font-semibold text-text-heading">
-                    {t("adminApprovedResetTitle")}
-                  </p>
-                  <p className="mt-2 break-words text-xs leading-relaxed text-text-muted">
-                    {t("adminApprovedResetHelp")}
-                  </p>
-                </div>
-              )}
               <div>
                 <label htmlFor="new-password" className="app-label">
                   {t("newPassword")}
@@ -539,20 +528,17 @@ function ResetPasswordContent() {
                   disabled={loading}
                   inputClassName="app-field pr-12"
                   placeholder={t("confirmPasswordPlaceholder")}
-                  aria-describedby={`confirm-helper${
+                  aria-describedby={
                     message?.type === "error" &&
                     message.target === "confirmPassword"
-                      ? " reset-message"
-                      : ""
-                  }`}
+                      ? "reset-message"
+                      : undefined
+                  }
                   aria-invalid={
                     message?.type === "error" &&
                     message.target === "confirmPassword"
                   }
                 />
-                <p id="confirm-helper" className="app-helper">
-                  {t("confirmHelp")}
-                </p>
               </div>
 
               <Button type="submit" isLoading={loading} fullWidth size="lg">
@@ -570,9 +556,11 @@ function ResetPasswordContent() {
               </div>
 
               <div className="space-y-3">
-                <p className="text-base font-semibold text-text-heading">
-                  {t("adminRequestSent")}
-                </p>
+                {message?.type !== "success" && (
+                  <p className="text-base font-semibold text-text-heading">
+                    {t("adminRequestSent")}
+                  </p>
+                )}
                 <ol className="space-y-2 text-left text-sm leading-relaxed text-text-muted">
                   <li className="flex gap-3">
                     <span className="font-mono text-text-heading">1</span>
@@ -648,10 +636,7 @@ function ResetPasswordContent() {
                 <Icon name="check" size={24} />
               </div>
 
-              <div className="space-y-3">
-                <p className="text-sm leading-relaxed text-text-body">
-                  {t("resetSuccess")}
-                </p>
+              <div>
                 <p className="text-xs leading-relaxed text-text-dim">
                   {t("resetSuccessHelp")}
                 </p>
