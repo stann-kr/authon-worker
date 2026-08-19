@@ -13,7 +13,7 @@ import {
 } from "react";
 import { useLocalStorage } from "@/lib/hooks";
 import { fetchVenues } from "@/lib/api/venues";
-import type { Venue } from "@/lib/api/types";
+import type { Venue } from "@/lib/venues/types";
 import Icon from "./Icon";
 import { useAuthSession } from "./AuthSessionProvider";
 import { useTranslations } from "next-intl";

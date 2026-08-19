@@ -1,8 +1,6 @@
-import type {
-  Guest,
-  GuestQuota,
-  GuestWorkspaceSnapshot,
-} from "@/lib/api/types";
+import type { GuestQuota } from "@/lib/guest-limits/types";
+import type { GuestWorkspaceSnapshot } from "@/lib/guest-snapshots/types";
+import type { Guest } from "@/lib/guests/types";
 
 export interface GuestWorkspaceDisplay {
   guests: Guest[];

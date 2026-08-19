@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
 import Icon from "@/components/Icon";
 import { fetchEvents } from "@/lib/api/events";
-import type { Event } from "@/lib/api/types";
+import type { Event } from "@/lib/events/types";
 import { useLatestRequestGuard } from "@/lib/hooks";
 
 interface EventScopeSelectorProps {

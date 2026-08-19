@@ -24,16 +24,16 @@ import {
   guests,
   venueContributors,
 } from "../db/schema";
-import {
-  type ApiResponse,
-  type BulkGuestCreateInput,
-  type BulkGuestCreateItemResult,
-  type BulkGuestCreateResult,
-  type ExternalDJLink,
-  type ExternalDjSuggestion,
-  type Guest,
-  type Venue,
-} from "./types";
+import type { ApiResponse } from "./response";
+import type {
+  BulkGuestCreateInput,
+  BulkGuestCreateItemResult,
+  BulkGuestCreateResult,
+  Guest,
+} from "@/lib/guests/types";
+import type { ExternalDjSuggestion } from "@/lib/contributors/types";
+import type { ExternalDJLink } from "@/lib/external-links/types";
+import type { Venue } from "@/lib/venues/types";
 import { requireRole, type SessionUser } from "../auth/server";
 import {
   consumeRateLimit,

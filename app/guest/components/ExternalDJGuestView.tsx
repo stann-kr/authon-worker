@@ -32,12 +32,9 @@ import {
   deleteGuestViaExternalLink,
   updateGuestViaExternalLink,
 } from "@/lib/api/external-links";
-import type {
-  BulkGuestCreateInput,
-  Guest,
-  ExternalDJLink,
-  Venue,
-} from "@/lib/api/types";
+import type { BulkGuestCreateInput, Guest } from "@/lib/guests/types";
+import type { ExternalDJLink } from "@/lib/external-links/types";
+import type { Venue } from "@/lib/venues/types";
 
 interface ExternalDJGuestViewProps {
   token: string;

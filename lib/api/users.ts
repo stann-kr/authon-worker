@@ -14,8 +14,8 @@ import {
   type User,
   type UserAuditEvent,
   type UserDirectoryEntry,
-  type ApiResponse,
-} from "./types";
+} from "@/lib/users/types";
+import type { ApiResponse } from "./response";
 import { hashPassword } from "../auth/password";
 import { requireAuth, requireRole, type Role } from "../auth/server";
 import { getDb } from "../db/client";

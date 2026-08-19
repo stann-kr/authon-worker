@@ -48,10 +48,10 @@ import {
   SET_USER_SETUP_CODE_FOR_REQUEST_SQL,
 } from "../auth/password-reset-lifecycle-sql";
 import {
-  type ApiResponse,
   type PasswordResetRequest,
   type PasswordResetRequestView,
-} from "./types";
+} from "@/lib/auth/password-reset-request-types";
+import type { ApiResponse } from "./response";
 import {
   canManageTargetAccount,
   isAccountKind,

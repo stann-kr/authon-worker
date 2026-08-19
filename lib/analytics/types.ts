@@ -1,4 +1,4 @@
-import type { EventState } from "../api/types.ts";
+import type { EventState } from "../events/types.ts";
 
 export const ANALYTICS_GRANULARITIES = ["month", "quarter", "year"] as const;
 

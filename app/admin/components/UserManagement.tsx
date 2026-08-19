@@ -28,10 +28,7 @@ import {
   deleteUserViaEdge,
   issueManagedPasswordLinkViaEdge,
 } from "../../../lib/api/users";
-import type {
-  User,
-  UserAuditEvent,
-} from "../../../lib/api/types";
+import type { User, UserAuditEvent } from "@/lib/users/types";
 import { useLocale, useTranslations } from "next-intl";
 import { isVenueManagedRole } from "@/lib/users/policy";
 import { formatVenueDateTime } from "@/lib/date";

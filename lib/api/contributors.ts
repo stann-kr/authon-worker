@@ -15,11 +15,11 @@ import {
   isContributorKind,
   prepareContributorInput,
 } from "@/lib/contributors/domain";
+import type { ApiResponse } from "@/lib/api/response";
 import type {
-  ApiResponse,
   ContributorSourceMapping,
   VenueContributor,
-} from "@/lib/api/types";
+} from "@/lib/contributors/types";
 
 type ContributorActionErrorCode =
   | "CONTRIBUTOR_NOT_FOUND"

@@ -33,7 +33,8 @@ import type {
   AttendanceSyncResult,
   DoorAttendanceSummary,
 } from "@/lib/attendance/types";
-import type { ApiResponse, Event } from "@/lib/api/types";
+import type { ApiResponse } from "@/lib/api/response";
+import type { Event } from "@/lib/events/types";
 
 type VenueSettings = {
   id: string;

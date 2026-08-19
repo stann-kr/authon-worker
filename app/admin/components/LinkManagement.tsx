@@ -34,10 +34,8 @@ import {
   deactivateExternalLink,
   activateExternalLink,
 } from "../../../lib/api/external-links";
-import type {
-  ExternalDJLink,
-  ExternalDjSuggestion,
-} from "../../../lib/api/types";
+import type { ExternalDJLink } from "@/lib/external-links/types";
+import type { ExternalDjSuggestion } from "@/lib/contributors/types";
 import {
   MAX_EXTERNAL_LINK_EVENT_LENGTH,
   prepareExternalLinkCreateInput,

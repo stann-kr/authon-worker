@@ -4,7 +4,7 @@ import { and, eq } from "drizzle-orm";
 import { getDb } from "@/lib/db/client";
 import { events } from "@/lib/db/schema";
 import { requireActiveVenueId } from "@/lib/tenant/active-server";
-import type { Event } from "@/lib/api/types";
+import type { Event } from "@/lib/events/types";
 import {
   canCheckInToEvent,
   canRegisterForEvent,

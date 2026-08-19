@@ -22,7 +22,7 @@ import {
 } from "@/lib/door/offline-sync";
 import { requireActiveVenueId } from "@/lib/tenant/active-server";
 import { reportServerError } from "@/lib/observability/structured-log";
-import type { ApiResponse } from "@/lib/api/types";
+import type { ApiResponse } from "@/lib/api/response";
 import {
   parseDoorGuestCode,
   type OfflineDoorGuest,

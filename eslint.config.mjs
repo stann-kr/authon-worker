@@ -1,5 +1,112 @@
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import nextVitals from "eslint-config-next/core-web-vitals";
 import nextTypescript from "eslint-config-next/typescript";
+import ts from "typescript";
+
+const projectRoot = path.dirname(fileURLToPath(import.meta.url));
+const tsconfigPath = path.join(projectRoot, "tsconfig.json");
+const tsconfig = ts.readConfigFile(tsconfigPath, ts.sys.readFile);
+
+if (tsconfig.error) {
+  throw new Error(ts.flattenDiagnosticMessageText(tsconfig.error.messageText, "\n"));
+}
+
+const parsedTsconfig = ts.parseJsonConfigFileContent(
+  tsconfig.config,
+  ts.sys,
+  projectRoot,
+);
+const apiTypesPath = path.join(projectRoot, "lib/api/types.ts");
+const moduleResolutionCache = ts.createModuleResolutionCache(
+  projectRoot,
+  (fileName) => fileName,
+  parsedTsconfig.options,
+);
+
+function resolvesToApiTypes(specifier, containingFile) {
+  const resolvedFileName = ts.resolveModuleName(
+    specifier,
+    containingFile,
+    parsedTsconfig.options,
+    ts.sys,
+    moduleResolutionCache,
+  ).resolvedModule?.resolvedFileName;
+
+  return resolvedFileName
+    ? path.resolve(resolvedFileName) === apiTypesPath
+    : false;
+}
+
+function getModuleSpecifier(node) {
+  if (!node) return null;
+  if (typeof node.value === "string") return node.value;
+  if (node.type === "TSLiteralType") {
+    return getModuleSpecifier(node.literal);
+  }
+  if (node.type === "TemplateLiteral" && node.expressions.length === 0) {
+    return node.quasis[0]?.value.cooked ?? null;
+  }
+  return null;
+}
+
+const capabilityBoundaryPlugin = {
+  rules: {
+    "no-api-types-facade": {
+      meta: {
+        type: "problem",
+        schema: [],
+        messages: {
+          useCapabilityOwner:
+            "Import public contracts from their capability owner instead of lib/api/types.",
+        },
+      },
+      create(context) {
+        function checkModuleSource(node, source) {
+          const specifier = getModuleSpecifier(source);
+          if (
+            specifier &&
+            resolvesToApiTypes(specifier, context.filename)
+          ) {
+            context.report({ node, messageId: "useCapabilityOwner" });
+          }
+        }
+
+        return {
+          ImportDeclaration(node) {
+            checkModuleSource(node, node.source);
+          },
+          ExportNamedDeclaration(node) {
+            checkModuleSource(node, node.source);
+          },
+          ExportAllDeclaration(node) {
+            checkModuleSource(node, node.source);
+          },
+          ImportExpression(node) {
+            checkModuleSource(node, node.source);
+          },
+          TSImportType(node) {
+            checkModuleSource(node, node.source ?? node.argument);
+          },
+          TSImportEqualsDeclaration(node) {
+            const moduleReference = node.moduleReference;
+            if (moduleReference.type === "TSExternalModuleReference") {
+              checkModuleSource(node, moduleReference.expression);
+            }
+          },
+          CallExpression(node) {
+            if (
+              node.callee.type === "Identifier" &&
+              node.callee.name === "require"
+            ) {
+              checkModuleSource(node, node.arguments[0]);
+            }
+          },
+        };
+      },
+    },
+  },
+};
 
 const eslintConfig = [
   {
@@ -21,6 +128,34 @@ const eslintConfig = [
       "react-hooks/refs": "off",
       "react-hooks/set-state-in-effect": "off",
       "react-hooks/immutability": "off",
+    },
+  },
+  {
+    files: ["lib/**/*.{ts,tsx}"],
+    ignores: ["lib/api/**/*.{ts,tsx}"],
+    plugins: {
+      "authon-boundaries": capabilityBoundaryPlugin,
+    },
+    rules: {
+      "authon-boundaries/no-api-types-facade": "error",
+    },
+  },
+  {
+    files: ["lib/api/types.ts"],
+    rules: {
+      "no-restricted-syntax": [
+        "error",
+        {
+          selector: "Program > :not(ExportNamedDeclaration[source])",
+          message:
+            "The compatibility facade may contain only explicit type-only re-exports.",
+        },
+        {
+          selector:
+            'Program > ExportNamedDeclaration[source]:not([exportKind="type"]) > ExportSpecifier:not([exportKind="type"])',
+          message: "The compatibility facade must not re-export runtime values.",
+        },
+      ],
     },
   },
 ];

@@ -64,11 +64,9 @@ import {
   groupOfflineDoorMutationsByDevice,
   type OfflineDoorSyncResult,
 } from "../../lib/door/offline-sync";
-import type {
-  ExternalLinkDirectoryEntry,
-  Guest,
-  UserDirectoryEntry,
-} from "../../lib/api/types";
+import type { ExternalLinkDirectoryEntry } from "@/lib/external-links/types";
+import type { Guest } from "@/lib/guests/types";
+import type { UserDirectoryEntry } from "@/lib/users/types";
 import { useLocale, useTranslations } from "next-intl";
 
 const EMPTY_DISPLAY_DATA = {

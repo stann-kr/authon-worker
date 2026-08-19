@@ -6,7 +6,7 @@ import {
   createVenue,
   updateVenue,
 } from "../../../lib/api/venues";
-import type { Venue } from "../../../lib/api/types";
+import type { Venue } from "@/lib/venues/types";
 import StatGrid from "../../../components/StatGrid";
 import PanelHeader from "../../../components/PanelHeader";
 import Alert from "../../../components/Alert";

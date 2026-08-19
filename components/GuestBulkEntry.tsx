@@ -4,12 +4,12 @@ import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import Button from "./Button";
 import DisclosureSection from "./DisclosureSection";
+import type { ApiResponse } from "@/lib/api/response";
 import type {
-  ApiResponse,
   BulkGuestCreateInput,
   BulkGuestCreateResult,
   BulkGuestCreateStatus,
-} from "@/lib/api/types";
+} from "@/lib/guests/types";
 import {
   MAX_BULK_INPUT_CHARACTERS,
   parseBulkGuestInput,

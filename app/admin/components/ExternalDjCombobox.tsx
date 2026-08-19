@@ -9,7 +9,7 @@ import {
   type KeyboardEvent,
 } from "react";
 import { useTranslations } from "next-intl";
-import type { ExternalDjSuggestion } from "@/lib/api/types";
+import type { ExternalDjSuggestion } from "@/lib/contributors/types";
 import { getContributorNameKey } from "@/lib/contributors/domain";
 import { filterExternalDjSuggestions } from "@/lib/contributors/external-dj";
 import { MAX_EXTERNAL_LINK_DJ_NAME_LENGTH } from "@/lib/external-links/domain";

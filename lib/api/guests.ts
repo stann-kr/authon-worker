@@ -12,12 +12,12 @@ import {
   guests,
 } from "../db/schema";
 import {
-  type ApiResponse,
   type BulkGuestCreateInput,
   type BulkGuestCreateItemResult,
   type BulkGuestCreateResult,
   type Guest,
-} from "./types";
+} from "@/lib/guests/types";
+import type { ApiResponse } from "./response";
 import { requireAccess, requireAuth, requireRole, type SessionUser } from "../auth/server";
 import { getDb } from "../db/client";
 import { requireActiveVenueId } from "../tenant/active-server";

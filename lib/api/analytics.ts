@@ -31,7 +31,7 @@ import type {
   AdminAnalyticsQuery,
   AdminAnalyticsView,
 } from "@/lib/analytics/types";
-import type { ApiResponse } from "@/lib/api/types";
+import type { ApiResponse } from "@/lib/api/response";
 
 const MAX_ANALYTICS_QUERY_ROWS = 2_000;
 

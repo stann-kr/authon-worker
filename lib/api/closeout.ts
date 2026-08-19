@@ -29,7 +29,8 @@ import {
   type ContributorSnapshotIntegrity,
 } from "@/lib/closeout/contributor-snapshot";
 import { persistEventCloseoutConfirmation } from "@/lib/closeout/persistence";
-import type { ApiResponse, Event } from "@/lib/api/types";
+import type { ApiResponse } from "@/lib/api/response";
+import type { Event } from "@/lib/events/types";
 
 type Db = ReturnType<typeof getDb>;
 

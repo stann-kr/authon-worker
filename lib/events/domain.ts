@@ -1,4 +1,4 @@
-import type { EventState } from "../api/types.ts";
+import type { EventState } from "./types.ts";
 
 export const EVENT_STATES = ["draft", "open", "closed", "archived"] as const;
 export const MAX_EVENT_NAME_LENGTH = 120;

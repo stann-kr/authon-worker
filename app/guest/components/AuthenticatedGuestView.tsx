@@ -31,8 +31,8 @@ import {
   createGuests,
   deleteGuest,
 } from "@/lib/api/guests";
-import type { BulkGuestCreateInput, Guest } from "@/lib/api/types";
-import type { GuestQuota } from "@/lib/api/types";
+import type { BulkGuestCreateInput, Guest } from "@/lib/guests/types";
+import type { GuestQuota } from "@/lib/guest-limits/types";
 import {
   createGuestLimitRequest,
 } from "@/lib/api/guest-limits";

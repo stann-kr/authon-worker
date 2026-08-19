@@ -11,7 +11,7 @@ import {
   decideGuestLimitRequest,
   fetchGuestLimitRequests,
 } from "@/lib/api/guest-limits";
-import type { GuestLimitRequestView } from "@/lib/api/types";
+import type { GuestLimitRequestView } from "@/lib/guest-limits/types";
 import { useLatestRequestGuard } from "@/lib/hooks";
 import { useTranslations } from "next-intl";
 import { useSectionLoadingTask } from "@/components/RouteTransitionProvider";

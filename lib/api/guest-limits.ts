@@ -11,12 +11,12 @@ import {
   users,
 } from "../db/schema";
 import {
-  type ApiResponse,
   type GuestLimitRequest,
   type GuestLimitRequestStatus,
   type GuestLimitRequestView,
   type GuestQuota,
-} from "./types";
+} from "@/lib/guest-limits/types";
+import type { ApiResponse } from "./response";
 import { requireAccess, requireAuth, requireRole } from "../auth/server";
 import { getDb } from "../db/client";
 import { requireActiveVenueId } from "../tenant/active-server";
@@ -27,7 +27,7 @@ import {
   loadEventById,
   resolveEventForRosterWrite,
 } from "@/lib/events/server";
-import type { Event } from "./types";
+import type { Event } from "@/lib/events/types";
 
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
