@@ -572,15 +572,19 @@ export default function AttendanceCounter({
         aria-labelledby="attendance-counter-title"
         aria-busy={isLoading || isSyncing}
       >
-        <div className="mx-auto max-w-[1440px] px-4 py-2 sm:px-6 md:px-4 md:py-3">
-          <div>
-            <h2 id="attendance-counter-title" className="text-sm font-semibold text-text-heading">
-              {t("title")}
-            </h2>
-            {statusText && (
-              <p className="mt-0.5 text-xs text-text-muted">{statusText}</p>
-            )}
-            <p className="mt-0.5 text-xs text-text-dim md:hidden">
+        <div className="mx-auto max-w-[1440px] px-3 py-1 sm:px-4 md:px-4 md:py-3">
+          <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3">
+            <div className="min-w-0">
+              <h2 id="attendance-counter-title" className="truncate text-xs font-semibold text-text-heading md:text-sm">
+                {t("title")}
+              </h2>
+              {statusText && (
+                <p className="mt-0.5 truncate text-[11px] leading-4 text-text-muted md:text-xs">
+                  {statusText}
+                </p>
+              )}
+            </div>
+            <p className="shrink-0 text-[11px] leading-4 text-text-dim sm:text-xs md:hidden">
               {t("checkedInGuests")} {displayedCheckedInGuests} · {t("walkIns")} {walkIns}
             </p>
           </div>
@@ -600,37 +604,42 @@ export default function AttendanceCounter({
             </div>
           </dl>
 
-          <div className="mt-2 grid grid-cols-[minmax(0,1fr)_auto] gap-2">
+          <div className="mt-1 grid grid-cols-[minmax(0,1fr)_auto] gap-1.5 md:mt-2 md:gap-2">
             <button
               type="button"
               onClick={() => void queueWalkIn()}
               disabled={!canRecord}
-              aria-describedby="attendance-counter-help"
-              className="pressable flex min-h-14 items-center justify-center gap-2 border border-action-primary bg-action-primary px-3 py-2 text-sm font-semibold text-action-text disabled:cursor-not-allowed disabled:opacity-50"
+              aria-describedby={unavailableText ? "attendance-counter-unavailable" : undefined}
+              className="pressable flex min-h-11 items-center justify-center gap-1.5 border border-action-primary bg-action-primary px-2 py-1 text-xs font-semibold text-action-text disabled:cursor-not-allowed disabled:opacity-50 md:min-h-14 md:gap-2 md:px-3 md:py-2 md:text-sm"
             >
               <span>{t("addWalkIn")}</span>
-              <span className="font-mono text-2xl leading-none" aria-hidden="true">+1</span>
+              <span className="font-mono text-xl leading-none md:text-2xl" aria-hidden="true">+1</span>
             </button>
             <button
               type="button"
               onClick={() => void queueUndo()}
               disabled={!canRecord || !undoableKey || isUndoing}
-              className="pressable min-h-11 min-w-20 border border-border-default bg-surface-raised px-2 py-2 text-xs font-medium text-text-heading disabled:cursor-not-allowed disabled:opacity-40"
+              className="pressable min-h-11 min-w-20 border border-border-default bg-surface-raised px-2 py-1 text-[11px] font-medium leading-tight text-text-heading disabled:cursor-not-allowed disabled:opacity-40 md:py-2 md:text-xs"
             >
               {t("undoLast")}
             </button>
           </div>
-          <p id="attendance-counter-help" className="mt-1 text-xs leading-snug text-text-dim">
-            {unavailableText ?? t("helper")}
-          </p>
+          {unavailableText && (
+            <p
+              id="attendance-counter-unavailable"
+              className="mt-1 text-[11px] leading-4 text-text-dim md:text-xs md:leading-snug"
+            >
+              {unavailableText}
+            </p>
+          )}
 
           {notice && (
-            <p className="mt-1.5 border-l-2 border-status-danger bg-status-danger/10 px-3 py-2 text-xs text-status-danger" role="alert">
+            <p className="mt-1 border-l-2 border-status-danger bg-status-danger/10 px-2 py-1.5 text-xs text-status-danger md:mt-1.5 md:px-3 md:py-2" role="alert">
               {t(`notice.${notice}`)}
             </p>
           )}
           {failedMutations.length > 0 && (
-            <div className="mt-1.5 flex items-center justify-between gap-3 border-l-2 border-status-waiting bg-status-waiting/10 px-3 py-2 text-xs text-text-muted">
+            <div className="mt-1 flex items-center justify-between gap-2 border-l-2 border-status-waiting bg-status-waiting/10 px-2 py-1.5 text-xs text-text-muted md:mt-1.5 md:gap-3 md:px-3 md:py-2">
               <span>{t("failedItems", { count: failedMutations.length })}</span>
               <button
                 type="button"
