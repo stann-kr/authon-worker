@@ -216,14 +216,9 @@ export default function LoginPage() {
             aria-busy={isLoading}
           >
             {mode === "setup" && (
-              <div className="rounded-control border border-border-default bg-surface-raised p-4" role="note">
-                <p className="mb-2 text-sm font-semibold text-text-heading">
-                  {t("oneTimeSetup")}
-                </p>
-                <p className="text-sm leading-relaxed text-text-muted">
-                  {t("oneTimeSetupDescription")}
-                </p>
-              </div>
+              <p className="text-sm text-text-muted" role="note">
+                {t("oneTimeSetupDescription")}
+              </p>
             )}
 
             <div>
@@ -247,14 +242,20 @@ export default function LoginPage() {
                 disabled={isLoading}
                 readOnly={mode === "setup"}
                 aria-readonly={mode === "setup"}
-                aria-describedby={`email-helper${authError?.target === "email" ? " auth-error" : ""}`}
+                aria-describedby={
+                  mode === "setup"
+                    ? `email-helper${authError?.target === "email" ? " auth-error" : ""}`
+                    : authError?.target === "email"
+                      ? "auth-error"
+                      : undefined
+                }
                 aria-invalid={authError?.target === "email"}
               />
-              <p id="email-helper" className="app-helper">
-                {mode === "login"
-                  ? t("emailLoginHelp")
-                  : t("emailSetupHelp")}
-              </p>
+              {mode === "setup" && (
+                <p id="email-helper" className="app-helper">
+                  {t("emailSetupHelp")}
+                </p>
+              )}
             </div>
 
             {mode === "login" ? (
@@ -275,7 +276,7 @@ export default function LoginPage() {
                   autoComplete="current-password"
                   required
                   disabled={isLoading}
-                  aria-describedby={`password-helper password-support${authError?.target === "password" ? " auth-error" : ""}`}
+                  aria-describedby={`password-helper${authError?.target === "password" ? " auth-error" : ""}`}
                   aria-invalid={authError?.target === "password"}
                 />
                 <p id="password-helper" className="app-helper">
@@ -346,14 +347,10 @@ export default function LoginPage() {
                     checked={keepSignedIn}
                     onChange={(event) => setKeepSignedIn(event.target.checked)}
                     disabled={isLoading}
-                    aria-describedby="keep-signed-in-help"
                     className="h-4 w-4 shrink-0 accent-action-primary"
                   />
                   <span>{t("keepSignedIn")}</span>
                 </label>
-                <p id="keep-signed-in-help" className="app-helper pl-7">
-                  {t("keepSignedInHelp")}
-                </p>
               </div>
             )}
 
@@ -383,24 +380,14 @@ export default function LoginPage() {
               </button>
             )}
 
-            <div className="space-y-1.5 rounded-control border border-border-default bg-canvas px-4 py-3">
-              <p className="text-sm font-semibold text-text-heading">
-                {mode === "login" ? t("migratedAccount") : t("internalSetupWindow")}
-              </p>
-              <p id="password-support" className="text-xs leading-relaxed text-text-dim">
-                {mode === "login"
-                  ? t("migratedHelp")
-                  : t("setupHelp")}
-              </p>
-              {mode === "login" && (
-                <Link
-                  href="/auth/setup-password"
-                  className="mt-2 inline-flex min-h-11 items-center text-sm font-medium text-text-body underline decoration-border-strong underline-offset-4 hover:text-text-heading"
-                >
-                  {t("openSetupCodePage")}
-                </Link>
-              )}
-            </div>
+            {mode === "login" && (
+              <Link
+                href="/auth/setup-password"
+                className="inline-flex min-h-11 w-full items-center justify-center text-sm font-medium text-text-body underline decoration-border-strong underline-offset-4 hover:text-text-heading"
+              >
+                {t("openSetupCodePage")}
+              </Link>
+            )}
           </form>
 
           <Footer compact />

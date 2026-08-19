@@ -140,9 +140,6 @@ export default function SetupPasswordPage() {
             <h1 className="mb-2 break-words text-2xl font-semibold tracking-[-0.03em] text-text-heading sm:text-3xl">
               {t("setupCodePageTitle")}
             </h1>
-            <p className="text-sm leading-relaxed text-text-muted">
-              {t("setupCodePageDescription")}
-            </p>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-5" aria-busy={isLoading}>
