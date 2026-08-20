@@ -28,6 +28,24 @@ export async function loadEventById(
   return row ? toEvent(row) : null;
 }
 
+export async function loadEventForRosterReadById(input: {
+  eventId: string;
+  businessDate: string;
+  venueId?: string | null;
+}): Promise<Event> {
+  const db = getDb();
+  const event = await loadEventById(db, input.eventId);
+  if (
+    !event ||
+    event.businessDate !== input.businessDate ||
+    (input.venueId && event.venueId !== input.venueId)
+  ) {
+    throw new Error("EVENT_NOT_FOUND");
+  }
+  await requireActiveVenueId(event.venueId);
+  return event;
+}
+
 export function eventIncludesLegacyDateRows(event: Event): boolean {
   return event.compatibilityKey === getCompatibilityEventKey(
     event.venueId,
