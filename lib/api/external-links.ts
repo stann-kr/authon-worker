@@ -9,20 +9,15 @@ import {
   and,
   ne,
   desc,
-  asc,
   inArray,
   isNull,
-  isNotNull,
   or,
-  sql,
 } from "drizzle-orm";
 import {
-  contributorAuditEvents,
   externalDjLinks,
   externalGuestOwners,
   venues,
   guests,
-  venueContributors,
 } from "../db/schema";
 import type { ApiResponse } from "./response";
 import type {
@@ -62,11 +57,17 @@ import {
   prepareExternalLinkCreateInput,
   toExternalDJLink,
 } from "../external-links/domain";
-import { createExternalLinkLifecyclePersistence } from "@/lib/external-links/persistence";
+import {
+  createExternalLinkAdminPersistence,
+  createExternalLinkLifecyclePersistence,
+} from "@/lib/external-links/persistence";
 import {
   activateAdminExternalLink,
+  createAdminExternalLink,
   deactivateAdminExternalLink,
   deleteAdminExternalLink,
+  ExternalLinkAdminError,
+  fetchAdminExternalDjDirectory,
   type ExternalLinkLifecycleActor,
 } from "@/lib/external-links/service";
 import {
@@ -78,26 +79,13 @@ import {
 import { prepareGuestActivityAfterChange } from "@/lib/guests/activity-ledger";
 import { hashOpaqueIdentifier } from "@/lib/guests/activity-ledger";
 import { isValidExternalOwnerKey } from "@/lib/external-links/ownership";
-import { getContributorNameKey } from "@/lib/contributors/domain";
-import {
-  getExternalDjContributorId,
-  getExternalDjCreatedAuditId,
-} from "@/lib/contributors/external-dj";
 
 type Db = ReturnType<typeof getDb>;
 
-const DEFAULT_EXTERNAL_LINK_TTL_DAYS = 7;
 const EXTERNAL_GUEST_RATE_LIMIT_NAMES = 100;
 const EXTERNAL_GUEST_RATE_LIMIT_WINDOW_SECONDS = 60;
 const INVALID_EXTERNAL_LINK_ERROR = "INVALID_EXTERNAL_LINK";
 const EXTERNAL_LINK_UNAVAILABLE_ERROR = "EXTERNAL_LINK_UNAVAILABLE";
-const MAX_EXTERNAL_DJ_DIRECTORY_ROWS = 500;
-
-class ExternalDjContributorError extends Error {
-  constructor(readonly code: "INVALID_CONTRIBUTOR" | "DJ_DIRECTORY_TOO_LARGE") {
-    super(code);
-  }
-}
 
 function parseBulkGuestCreateInput(value: unknown): {
   name: string;
@@ -116,18 +104,6 @@ function parseBulkGuestCreateInput(value: unknown): {
     name: candidate.name,
     allowDuplicate: candidate.allowDuplicate === true,
   };
-}
-
-function defaultExternalLinkExpiresAt(date?: string | null): string {
-  if (date) {
-    const eventDay = new Date(`${date}T23:59:59.999Z`);
-    if (!Number.isNaN(eventDay.getTime())) {
-      eventDay.setUTCDate(eventDay.getUTCDate() + 1);
-      return eventDay.toISOString();
-    }
-  }
-
-  return new Date(Date.now() + DEFAULT_EXTERNAL_LINK_TTL_DAYS * 24 * 60 * 60 * 1000).toISOString();
 }
 
 async function scopedVenueId(user: SessionUser, requestedVenueId: string): Promise<string> {
@@ -154,6 +130,11 @@ function toExternalLinkLifecycleActor(
 function getExternalLinkLifecyclePersistence() {
   const { env } = getCloudflareContext();
   return createExternalLinkLifecyclePersistence(env.DB);
+}
+
+function getExternalLinkAdminPersistence() {
+  const { env } = getCloudflareContext();
+  return createExternalLinkAdminPersistence(env.DB);
 }
 
 async function addGuestUrls(
@@ -280,89 +261,25 @@ export async function fetchExternalDjDirectory(
 ): Promise<ApiResponse<ExternalDjSuggestion[]>> {
   try {
     const user = await requireRole(["super_admin", "venue_admin"]);
-    const db = getDb();
-    const effectiveVenueId = await scopedVenueId(user, venueId);
-    const rows = await db
-      .select({
-        contributorId: venueContributors.id,
-        displayName: venueContributors.displayName,
-        linkCount: sql<number>`count(${externalDjLinks.id})`.mapWith(Number),
-        lastUsedDate: sql<string | null>`max(${externalDjLinks.date})`,
-      })
-      .from(venueContributors)
-      .leftJoin(
-        externalDjLinks,
-        and(
-          eq(externalDjLinks.contributorId, venueContributors.id),
-          eq(externalDjLinks.kind, "contributor"),
-        ),
-      )
-      .where(
-        and(
-          eq(venueContributors.venueId, effectiveVenueId),
-          eq(venueContributors.active, true),
-          isNotNull(venueContributors.nameKey),
-        ),
-      )
-      .groupBy(venueContributors.id, venueContributors.displayName)
-      .orderBy(desc(sql`max(${externalDjLinks.date})`), asc(venueContributors.displayName))
-      .limit(MAX_EXTERNAL_DJ_DIRECTORY_ROWS + 1);
-    if (rows.length > MAX_EXTERNAL_DJ_DIRECTORY_ROWS) {
-      throw new ExternalDjContributorError("DJ_DIRECTORY_TOO_LARGE");
-    }
+    const rows = await fetchAdminExternalDjDirectory(
+      {
+        actor: toExternalLinkLifecycleActor(user),
+        requestedVenueId: venueId,
+      },
+      { persistence: getExternalLinkAdminPersistence() },
+    );
     return { data: rows, error: null };
   } catch (error: unknown) {
     await reportServerError("external_dj.directory", error);
     return {
       data: null,
       error:
-        error instanceof ExternalDjContributorError
+        error instanceof ExternalLinkAdminError &&
+        error.code === "DJ_DIRECTORY_TOO_LARGE"
           ? error.code
           : "DJ_DIRECTORY_UNAVAILABLE",
     };
   }
-}
-
-async function resolveExternalDjContributor(params: {
-  db: Db;
-  venueId: string;
-  displayName: string;
-  requestedContributorId: string | null;
-}) {
-  const nameKey = getContributorNameKey(params.displayName);
-  if (!nameKey) throw new ExternalDjContributorError("INVALID_CONTRIBUTOR");
-
-  const conditions = [
-    eq(venueContributors.venueId, params.venueId),
-    params.requestedContributorId
-      ? eq(venueContributors.id, params.requestedContributorId)
-      : eq(venueContributors.nameKey, nameKey),
-  ];
-  const [existing] = await params.db
-    .select()
-    .from(venueContributors)
-    .where(and(...conditions))
-    .limit(1);
-  if (existing) {
-    if (!existing.active || existing.nameKey !== nameKey) {
-      throw new ExternalDjContributorError("INVALID_CONTRIBUTOR");
-    }
-    return {
-      id: existing.id,
-      displayName: existing.displayName,
-      nameKey,
-      shouldCreate: false,
-    };
-  }
-  if (params.requestedContributorId) {
-    throw new ExternalDjContributorError("INVALID_CONTRIBUTOR");
-  }
-  return {
-    id: await getExternalDjContributorId(params.venueId, nameKey),
-    displayName: params.displayName,
-    nameKey,
-    shouldCreate: true,
-  };
 }
 
 export async function createExternalLink(link: {
@@ -378,104 +295,27 @@ export async function createExternalLink(link: {
 }): Promise<ApiResponse<ExternalDJLink>> {
   try {
     const user = await requireRole(["super_admin", "venue_admin"]);
-    const db = getDb();
-    const effectiveVenueId = await scopedVenueId(user, link.venueId);
+    // Preserve the legacy authorization/error precedence before input parsing;
+    // the capability service repeats this boundary for direct internal calls.
+    await scopedVenueId(user, link.venueId);
     const prepared = prepareExternalLinkCreateInput(link);
     if (prepared.error || !prepared.draft) {
       return { data: null, error: prepared.error ?? "INVALID_EXTERNAL_LINK_INPUT" };
     }
-    const draft = prepared.draft;
-    const event = await resolveEventForRosterWrite({
-      venueId: effectiveVenueId,
-      businessDate: draft.date,
-      eventId: link.eventId,
-      actorUserId: user.id,
-      purpose: "register",
-    });
-    const expiresAt = defaultExternalLinkExpiresAt(draft.date);
-    const id = crypto.randomUUID();
-    const token = crypto.randomUUID();
-    const createdAt = new Date().toISOString();
-    const contributor =
-      draft.kind === "contributor"
-        ? await resolveExternalDjContributor({
-            db,
-            venueId: effectiveVenueId,
-            displayName: draft.djName,
-            requestedContributorId: draft.contributorId,
-          })
-        : null;
-    const linkInsert = db.insert(externalDjLinks).values({
-      id,
-      venueId: effectiveVenueId,
-      token,
-      djName: contributor?.displayName ?? draft.djName,
-      contributorId: contributor?.id ?? null,
-      event: draft.event,
-      date: draft.date,
-      eventId: event.id,
-      maxGuests: draft.maxGuests,
-      localeMode: draft.localeMode,
-      kind: draft.kind,
-      usedGuests: 0,
-      active: true,
-      expiresAt,
-      createdBy: user.id,
-      createdAt,
-    });
-    if (contributor) {
-      const mappingAudit = db.insert(contributorAuditEvents).values({
-        id: crypto.randomUUID(),
-        venueId: effectiveVenueId,
-        contributorId: contributor.id,
-        actorUserId: user.id,
-        sourceKind: "external_link",
-        sourceId: id,
-        action: "mapped",
-        details: JSON.stringify({ reason: "external_link_create" }),
-        createdAt,
-      });
-      if (contributor.shouldCreate) {
-        await db.batch([
-          db
-            .insert(venueContributors)
-            .values({
-              id: contributor.id,
-              venueId: effectiveVenueId,
-              displayName: contributor.displayName,
-              nameKey: contributor.nameKey,
-              kind: "dj",
-              active: true,
-              createdAt,
-              updatedAt: createdAt,
-            })
-            .onConflictDoNothing(),
-          db
-            .insert(contributorAuditEvents)
-            .values({
-              id: getExternalDjCreatedAuditId(contributor.id),
-              venueId: effectiveVenueId,
-              contributorId: contributor.id,
-              actorUserId: user.id,
-              sourceKind: "contributor",
-              sourceId: contributor.id,
-              action: "created",
-              details: JSON.stringify({ kind: "dj", source: "external_link_create" }),
-              createdAt,
-            })
-            .onConflictDoNothing(),
-          linkInsert,
-          mappingAudit,
-        ]);
-      } else {
-        await db.batch([linkInsert, mappingAudit]);
-      }
-    } else {
-      await linkInsert;
-    }
-    const result = await db.select().from(externalDjLinks).where(eq(externalDjLinks.id, id));
-    const withGuestUrl = result[0]
-      ? (await addGuestUrls(effectiveVenueId, [result[0]]))[0]
+    const created = await createAdminExternalLink(
+      {
+        actor: toExternalLinkLifecycleActor(user),
+        requestedVenueId: link.venueId,
+        eventId: link.eventId,
+        draft: prepared.draft,
+      },
+      {
+        persistence: getExternalLinkAdminPersistence(),
+        resolveEventForRosterWrite,
+      },
+    );
+    const withGuestUrl = created
+      ? (await addGuestUrls(created.venueId, [created]))[0]
       : null;
     return { data: withGuestUrl, error: null };
   } catch (error: unknown) {
@@ -483,7 +323,8 @@ export async function createExternalLink(link: {
     return {
       data: null,
       error:
-        error instanceof ExternalDjContributorError
+        error instanceof ExternalLinkAdminError &&
+        error.code === "INVALID_CONTRIBUTOR"
           ? error.code
           : "Unable to create external link right now.",
     };
