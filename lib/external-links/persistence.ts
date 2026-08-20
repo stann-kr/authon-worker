@@ -6,6 +6,7 @@ export interface ExternalLinkLifecycleTarget {
   venueId: string;
   date: string | null;
   expiresAt: string | null;
+  active: boolean;
 }
 
 export type ExternalLinkLifecycleVenueScope =
@@ -26,7 +27,19 @@ export interface ExternalLinkLifecyclePersistence {
     deletedAt: string;
   }): Promise<void>;
   hardDeleteUndeleted(linkId: string): Promise<void>;
-  setActiveById(linkId: string, active: boolean): Promise<void>;
+  deactivateManaged(input: {
+    linkId: string;
+    venueId: string;
+    expectedActive: boolean;
+  }): Promise<boolean>;
+  activateManaged(input: {
+    linkId: string;
+    venueId: string;
+    expectedActive: boolean;
+    date: string;
+    expiresAt: string | null;
+    now: string;
+  }): Promise<boolean>;
 }
 
 export interface ExternalLinkAdminContributor {
@@ -107,7 +120,8 @@ const SELECT_GLOBAL_TARGET_SQL = `
     id,
     venue_id AS venueId,
     date,
-    expires_at AS expiresAt
+    expires_at AS expiresAt,
+    active
   FROM external_dj_links
   WHERE id = ? AND deleted_at IS NULL
   LIMIT 1
@@ -118,7 +132,8 @@ const SELECT_VENUE_TARGET_SQL = `
     id,
     venue_id AS venueId,
     date,
-    expires_at AS expiresAt
+    expires_at AS expiresAt,
+    active
   FROM external_dj_links
   WHERE id = ? AND venue_id = ? AND deleted_at IS NULL
   LIMIT 1
@@ -155,10 +170,43 @@ const HARD_DELETE_UNDELETED_SQL = `
   WHERE id = ? AND deleted_at IS NULL
 `;
 
-const SET_ACTIVE_BY_ID_SQL = `
+const DEACTIVATE_MANAGED_SQL = `
   UPDATE external_dj_links
-  SET active = ?
-  WHERE id = ?
+  SET active = 0
+  WHERE
+    id = ?
+    AND venue_id = ?
+    AND deleted_at IS NULL
+    AND active IN (?, 0)
+    AND EXISTS (
+      SELECT 1
+      FROM venues
+      WHERE venues.id = external_dj_links.venue_id AND venues.active = 1
+    )
+  RETURNING id
+`;
+
+const ACTIVATE_MANAGED_SQL = `
+  UPDATE external_dj_links
+  SET active = 1
+  WHERE
+    id = ?
+    AND venue_id = ?
+    AND deleted_at IS NULL
+    AND active IN (?, 1)
+    AND date IS ?
+    AND expires_at IS ?
+    AND (
+      expires_at IS NULL
+      OR julianday(expires_at) IS NULL
+      OR julianday(expires_at) > julianday(?)
+    )
+    AND EXISTS (
+      SELECT 1
+      FROM venues
+      WHERE venues.id = external_dj_links.venue_id AND venues.active = 1
+    )
+  RETURNING id
 `;
 
 const SELECT_CONTRIBUTOR_DIRECTORY_SQL = `
@@ -286,7 +334,10 @@ export function createExternalLinkLifecyclePersistence(
           : database
               .prepare(SELECT_VENUE_TARGET_SQL)
               .bind(linkId, venueScope.venueId);
-      return statement.first<ExternalLinkLifecycleTarget>();
+      const row = await statement.first<
+        Omit<ExternalLinkLifecycleTarget, "active"> & { active: unknown }
+      >();
+      return row ? { ...row, active: toBoolean(row.active) } : null;
     },
 
     async isVenueActive(venueId) {
@@ -326,12 +377,34 @@ export function createExternalLinkLifecyclePersistence(
         .run();
     },
 
-    async setActiveById(linkId, active) {
-      // Preserve the legacy id-only final mutation until the integrity slice.
-      await database
-        .prepare(SET_ACTIVE_BY_ID_SQL)
-        .bind(active ? 1 : 0, linkId)
-        .run();
+    async deactivateManaged({ linkId, venueId, expectedActive }) {
+      const updated = await database
+        .prepare(DEACTIVATE_MANAGED_SQL)
+        .bind(linkId, venueId, expectedActive ? 1 : 0)
+        .first<{ id: string }>();
+      return Boolean(updated);
+    },
+
+    async activateManaged({
+      linkId,
+      venueId,
+      expectedActive,
+      date,
+      expiresAt,
+      now,
+    }) {
+      const updated = await database
+        .prepare(ACTIVATE_MANAGED_SQL)
+        .bind(
+          linkId,
+          venueId,
+          expectedActive ? 1 : 0,
+          date,
+          expiresAt,
+          now,
+        )
+        .first<{ id: string }>();
+      return Boolean(updated);
     },
   };
 }

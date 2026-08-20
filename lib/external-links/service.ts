@@ -315,6 +315,19 @@ function isExpired(expiresAt: string | null, getNow: () => Date): boolean {
   );
 }
 
+function requireActivatableTarget(
+  target: ExternalLinkLifecycleTarget,
+  getNow: () => Date,
+): asserts target is ExternalLinkLifecycleTarget & { date: string } {
+  if (
+    isExpired(target.expiresAt, getNow) ||
+    !target.date ||
+    !isValidExternalLinkDate(target.date)
+  ) {
+    throw new ExternalLinkLifecycleError("CANNOT_ACTIVATE");
+  }
+}
+
 export async function deleteAdminExternalLink(
   input: ExternalLinkLifecycleInput,
   dependencies: ExternalLinkLifecycleServiceDependencies,
@@ -342,8 +355,16 @@ export async function deactivateAdminExternalLink(
   input: ExternalLinkLifecycleInput,
   dependencies: ExternalLinkLifecycleServiceDependencies,
 ): Promise<void> {
+  const target = await requireManagedTarget(input, dependencies.persistence);
+  const updated = await dependencies.persistence.deactivateManaged({
+    linkId: target.id,
+    venueId: target.venueId,
+    expectedActive: target.active,
+  });
+  if (updated) return;
+
   await requireManagedTarget(input, dependencies.persistence);
-  await dependencies.persistence.setActiveById(input.linkId, false);
+  throw new ExternalLinkLifecycleError("NOT_FOUND");
 }
 
 export async function activateAdminExternalLink(
@@ -352,12 +373,21 @@ export async function activateAdminExternalLink(
 ): Promise<void> {
   const target = await requireManagedTarget(input, dependencies.persistence);
   const getNow = dependencies.now ?? (() => new Date());
-  if (
-    isExpired(target.expiresAt, getNow) ||
-    !target.date ||
-    !isValidExternalLinkDate(target.date)
-  ) {
-    throw new ExternalLinkLifecycleError("CANNOT_ACTIVATE");
-  }
-  await dependencies.persistence.setActiveById(input.linkId, true);
+  requireActivatableTarget(target, getNow);
+  const updated = await dependencies.persistence.activateManaged({
+    linkId: target.id,
+    venueId: target.venueId,
+    expectedActive: target.active,
+    date: target.date,
+    expiresAt: target.expiresAt,
+    now: getNow().toISOString(),
+  });
+  if (updated) return;
+
+  const currentTarget = await requireManagedTarget(
+    input,
+    dependencies.persistence,
+  );
+  requireActivatableTarget(currentTarget, getNow);
+  throw new ExternalLinkLifecycleError("CANNOT_ACTIVATE");
 }
