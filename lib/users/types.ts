@@ -33,3 +33,35 @@ export interface UserAuditEvent {
   details: Record<string, unknown> | null;
   createdAt: string;
 }
+
+export interface UserProfileUpdateInput {
+  name?: string;
+  guestLimit?: number | null;
+  active?: boolean;
+  role?: User["role"];
+  accountKind?: User["accountKind"];
+  doorAccessEnabled?: boolean;
+}
+
+export interface ManagedUserCreateInput {
+  email: string;
+  name: string;
+  role: User["role"];
+  venueId?: string | null;
+  guestLimit?: number | null;
+  preferredLocale?: User["preferredLocale"];
+  accountKind?: User["accountKind"];
+  doorAccessEnabled?: boolean;
+}
+
+export interface ManagedUserCreateResult {
+  id: string;
+  invitationUrl: string;
+  expiresAt: string;
+}
+
+export interface ManagedPasswordLinkResult {
+  linkKind: "invitation" | "password_reset";
+  passwordUrl: string;
+  expiresAt: string;
+}
