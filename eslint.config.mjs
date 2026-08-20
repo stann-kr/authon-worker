@@ -17,6 +17,7 @@ const parsedTsconfig = ts.parseJsonConfigFileContent(
   ts.sys,
   projectRoot,
 );
+const appPath = path.join(projectRoot, "app");
 const apiTypesPath = path.join(projectRoot, "lib/api/types.ts");
 const moduleResolutionCache = ts.createModuleResolutionCache(
   projectRoot,
@@ -24,18 +25,35 @@ const moduleResolutionCache = ts.createModuleResolutionCache(
   parsedTsconfig.options,
 );
 
-function resolvesToApiTypes(specifier, containingFile) {
-  const resolvedFileName = ts.resolveModuleName(
+function resolveModulePath(specifier, containingFile) {
+  return ts.resolveModuleName(
     specifier,
     containingFile,
     parsedTsconfig.options,
     ts.sys,
     moduleResolutionCache,
   ).resolvedModule?.resolvedFileName;
+}
+
+function resolvesToApiTypes(specifier, containingFile) {
+  const resolvedFileName = resolveModulePath(specifier, containingFile);
 
   return resolvedFileName
     ? path.resolve(resolvedFileName) === apiTypesPath
     : false;
+}
+
+function resolvesInsideApp(specifier, containingFile) {
+  const resolvedFileName = resolveModulePath(specifier, containingFile);
+  if (!resolvedFileName) return false;
+
+  const relativePath = path.relative(appPath, path.resolve(resolvedFileName));
+  return (
+    relativePath === "" ||
+    (relativePath !== ".." &&
+      !relativePath.startsWith(`..${path.sep}`) &&
+      !path.isAbsolute(relativePath))
+  );
 }
 
 function getModuleSpecifier(node) {
@@ -48,6 +66,40 @@ function getModuleSpecifier(node) {
     return node.quasis[0]?.value.cooked ?? null;
   }
   return null;
+}
+
+function createModuleSourceVisitors(checkModuleSource) {
+  return {
+    ImportDeclaration(node) {
+      checkModuleSource(node, node.source);
+    },
+    ExportNamedDeclaration(node) {
+      checkModuleSource(node, node.source);
+    },
+    ExportAllDeclaration(node) {
+      checkModuleSource(node, node.source);
+    },
+    ImportExpression(node) {
+      checkModuleSource(node, node.source);
+    },
+    TSImportType(node) {
+      checkModuleSource(node, node.source ?? node.argument);
+    },
+    TSImportEqualsDeclaration(node) {
+      const moduleReference = node.moduleReference;
+      if (moduleReference.type === "TSExternalModuleReference") {
+        checkModuleSource(node, moduleReference.expression);
+      }
+    },
+    CallExpression(node) {
+      if (
+        node.callee.type === "Identifier" &&
+        node.callee.name === "require"
+      ) {
+        checkModuleSource(node, node.arguments[0]);
+      }
+    },
+  };
 }
 
 const capabilityBoundaryPlugin = {
@@ -72,37 +124,27 @@ const capabilityBoundaryPlugin = {
           }
         }
 
-        return {
-          ImportDeclaration(node) {
-            checkModuleSource(node, node.source);
-          },
-          ExportNamedDeclaration(node) {
-            checkModuleSource(node, node.source);
-          },
-          ExportAllDeclaration(node) {
-            checkModuleSource(node, node.source);
-          },
-          ImportExpression(node) {
-            checkModuleSource(node, node.source);
-          },
-          TSImportType(node) {
-            checkModuleSource(node, node.source ?? node.argument);
-          },
-          TSImportEqualsDeclaration(node) {
-            const moduleReference = node.moduleReference;
-            if (moduleReference.type === "TSExternalModuleReference") {
-              checkModuleSource(node, moduleReference.expression);
-            }
-          },
-          CallExpression(node) {
-            if (
-              node.callee.type === "Identifier" &&
-              node.callee.name === "require"
-            ) {
-              checkModuleSource(node, node.arguments[0]);
-            }
-          },
-        };
+        return createModuleSourceVisitors(checkModuleSource);
+      },
+    },
+    "no-app-imports-from-components": {
+      meta: {
+        type: "problem",
+        schema: [],
+        messages: {
+          useNeutralOwner:
+            "Shared components must not import from app routes. Move the dependency to a neutral owner.",
+        },
+      },
+      create(context) {
+        function checkModuleSource(node, source) {
+          const specifier = getModuleSpecifier(source);
+          if (specifier && resolvesInsideApp(specifier, context.filename)) {
+            context.report({ node, messageId: "useNeutralOwner" });
+          }
+        }
+
+        return createModuleSourceVisitors(checkModuleSource);
       },
     },
   },
@@ -156,6 +198,15 @@ const eslintConfig = [
           message: "The compatibility facade must not re-export runtime values.",
         },
       ],
+    },
+  },
+  {
+    files: ["components/**/*.{ts,tsx}"],
+    plugins: {
+      "authon-boundaries": capabilityBoundaryPlugin,
+    },
+    rules: {
+      "authon-boundaries/no-app-imports-from-components": "error",
     },
   },
 ];

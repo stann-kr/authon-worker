@@ -1,4 +1,4 @@
-import AdminHeader from "@/app/admin/components/AdminHeader";
+import AuthenticatedHeader from "@/components/AuthenticatedHeader";
 import Footer from "./Footer";
 
 /**
@@ -8,7 +8,7 @@ import Footer from "./Footer";
 export default function RouteLoadingShell() {
   return (
     <div className="flex min-h-[100dvh] flex-col bg-canvas">
-      <AdminHeader />
+      <AuthenticatedHeader />
       <main
         id="main-content"
         tabIndex={-1}
