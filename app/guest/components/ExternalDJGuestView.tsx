@@ -32,8 +32,11 @@ import {
   deleteGuestViaExternalLink,
   updateGuestViaExternalLink,
 } from "@/lib/api/external-links";
-import type { BulkGuestCreateInput, Guest } from "@/lib/guests/types";
-import type { ExternalDJLink } from "@/lib/external-links/types";
+import type { BulkGuestCreateInput } from "@/lib/guests/types";
+import type {
+  ExternalDJLink,
+  ExternalLinkPublicGuest,
+} from "@/lib/external-links/types";
 import type { Venue } from "@/lib/venues/types";
 
 interface ExternalDJGuestViewProps {
@@ -67,7 +70,7 @@ export default function ExternalDJGuestView({ token }: ExternalDJGuestViewProps)
   const [error, setError] = useState<ExternalGuestFeedbackKey | null>(null);
   const [requiresReconciliation, setRequiresReconciliation] = useState(false);
   const [isReconciling, setIsReconciling] = useState(false);
-  const [guests, setGuests] = useState<Guest[]>([]);
+  const [guests, setGuests] = useState<ExternalLinkPublicGuest[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [sortMode, setSortMode] = useLocalStorage<"default" | "alpha">(
     "guest:sortMode",
@@ -342,7 +345,7 @@ export default function ExternalDJGuestView({ token }: ExternalDJGuestViewProps)
     return response;
   };
 
-  const sortGuestsByName = (list: Guest[]) => {
+  const sortGuestsByName = (list: ExternalLinkPublicGuest[]) => {
     return [...list].sort((a, b) =>
       (a.name || "").localeCompare(b.name || "", locale === "ko" ? "ko-KR" : "en-US", {
         sensitivity: "base",
@@ -350,7 +353,7 @@ export default function ExternalDJGuestView({ token }: ExternalDJGuestViewProps)
     );
   };
 
-  const sortGuestsByCreatedAt = (list: Guest[]) => {
+  const sortGuestsByCreatedAt = (list: ExternalLinkPublicGuest[]) => {
     return [...list].sort((a, b) => {
       const timeA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
       const timeB = b.createdAt ? new Date(b.createdAt).getTime() : 0;

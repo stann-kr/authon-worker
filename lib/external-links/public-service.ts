@@ -1,11 +1,13 @@
 import type {
   BulkGuestCreateInput,
-  BulkGuestCreateItemResult,
-  BulkGuestCreateResult,
   Guest,
 } from "../guests/types.ts";
-import type { ExternalDJLink } from "./types.ts";
-import type { Venue } from "../venues/types.ts";
+import type {
+  ExternalLinkPublicGuest,
+  ExternalLinkPublicGuestCreateItemResult,
+  ExternalLinkPublicGuestCreateResult,
+  ExternalLinkPublicValidationData,
+} from "./types.ts";
 import {
   MAX_BULK_WRITE_NAMES,
   prepareGuestName,
@@ -74,6 +76,18 @@ interface PendingExternalBulkGuest {
 
 function resultError<T>(error: string): ExternalLinkPublicResult<T> {
   return { data: null, error };
+}
+
+function toExternalLinkPublicGuest(
+  guest: ExternalLinkPublicGuestRecord,
+): ExternalLinkPublicGuest {
+  return {
+    id: guest.id,
+    name: guest.name,
+    status: guest.status,
+    checkInTime: guest.checkInTime ?? null,
+    createdAt: guest.createdAt,
+  };
 }
 
 function isExpired(expiresAt: string | null, now: () => Date): boolean {
@@ -172,11 +186,7 @@ export async function validatePublicExternalToken(
     "persistence" | "getTenantContext" | "hashOwnerKey" | "now"
   >,
 ): Promise<
-  ExternalLinkPublicResult<{
-    link: ExternalDJLink;
-    venue: Venue;
-    guests: Guest[];
-  }>
+  ExternalLinkPublicResult<ExternalLinkPublicValidationData>
 > {
   const now = dependencies.now ?? (() => new Date());
   const link = await dependencies.persistence.loadLinkByToken(input.token);
@@ -222,7 +232,7 @@ export async function validatePublicExternalToken(
           link.kind === "self_rsvp" ? guestRows.length : link.usedGuests,
       },
       venue,
-      guests: guestRows,
+      guests: guestRows.map(toExternalLinkPublicGuest),
     },
     error: null,
   };
@@ -235,7 +245,7 @@ export async function createPublicGuestsViaExternalLink(
     items: BulkGuestCreateInput[];
   },
   dependencies: ExternalLinkPublicServiceDependencies,
-): Promise<ExternalLinkPublicResult<BulkGuestCreateResult>> {
+): Promise<ExternalLinkPublicResult<ExternalLinkPublicGuestCreateResult>> {
   if (!isValidExternalLinkDate(input.date)) {
     return resultError("INVALID_DATE");
   }
@@ -291,7 +301,7 @@ export async function createPublicGuestsViaExternalLink(
     if (prepared.error === null) seenKeys.add(prepared.key);
   }
 
-  const itemResults: BulkGuestCreateItemResult[] = input.items.map(
+  const itemResults: ExternalLinkPublicGuestCreateItemResult[] = input.items.map(
     (_, index) => ({ index, status: "invalid_name", guest: null }),
   );
   const pendingGuests: PendingExternalBulkGuest[] = [];
@@ -405,7 +415,7 @@ export async function createPublicGuestsViaExternalLink(
     itemResults[pendingGuest.index] = {
       index: pendingGuest.index,
       status: "created",
-      guest,
+      guest: toExternalLinkPublicGuest(guest),
     };
   }
   return { data: { items: itemResults }, error: null };
@@ -419,7 +429,7 @@ export async function createPublicSelfRsvpGuest(
     date: string;
   },
   dependencies: ExternalLinkPublicServiceDependencies,
-): Promise<ExternalLinkPublicResult<Guest>> {
+): Promise<ExternalLinkPublicResult<ExternalLinkPublicGuest>> {
   if (!isValidExternalOwnerKey(input.ownerKey)) {
     return resultError("INVALID_SELF_RSVP_OWNER");
   }
@@ -454,7 +464,9 @@ export async function createPublicSelfRsvpGuest(
     linkId: link.id,
     ownerKeyHash,
   });
-  if (existing) return { data: existing, error: null };
+  if (existing) {
+    return { data: toExternalLinkPublicGuest(existing), error: null };
+  }
 
   if (
     !(await isRateLimitAllowed(
@@ -492,7 +504,7 @@ export async function createPublicSelfRsvpGuest(
       ownerKeyHash,
     });
     return concurrent
-      ? { data: concurrent, error: null }
+      ? { data: toExternalLinkPublicGuest(concurrent), error: null }
       : resultError("Guest limit reached for this link.");
   }
   if (
@@ -507,7 +519,7 @@ export async function createPublicSelfRsvpGuest(
     linkId: link.id,
   });
   if (!created) throw new Error("Self RSVP guest could not be read back");
-  return { data: created, error: null };
+  return { data: toExternalLinkPublicGuest(created), error: null };
 }
 
 export async function updatePublicGuestViaExternalLink(
@@ -518,7 +530,7 @@ export async function updatePublicGuestViaExternalLink(
     guestName: string;
   },
   dependencies: ExternalLinkPublicServiceDependencies,
-): Promise<ExternalLinkPublicResult<Guest>> {
+): Promise<ExternalLinkPublicResult<ExternalLinkPublicGuest>> {
   if (!isValidExternalOwnerKey(input.ownerKey)) {
     return resultError("INVALID_SELF_RSVP_OWNER");
   }
@@ -568,7 +580,7 @@ export async function updatePublicGuestViaExternalLink(
     ownerKeyHash,
   });
   return updatedGuest
-    ? { data: updatedGuest, error: null }
+    ? { data: toExternalLinkPublicGuest(updatedGuest), error: null }
     : resultError("Unable to update this RSVP.");
 }
 

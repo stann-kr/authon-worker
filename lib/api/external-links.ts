@@ -15,12 +15,14 @@ import { externalDjLinks } from "../db/schema";
 import type { ApiResponse } from "./response";
 import type {
   BulkGuestCreateInput,
-  BulkGuestCreateResult,
-  Guest,
 } from "@/lib/guests/types";
 import type { ExternalDjSuggestion } from "@/lib/contributors/types";
-import type { ExternalDJLink } from "@/lib/external-links/types";
-import type { Venue } from "@/lib/venues/types";
+import type {
+  ExternalDJLink,
+  ExternalLinkPublicGuest,
+  ExternalLinkPublicGuestCreateResult,
+  ExternalLinkPublicValidationData,
+} from "@/lib/external-links/types";
 import { requireRole, type SessionUser } from "../auth/server";
 import {
   consumeRateLimit,
@@ -353,7 +355,7 @@ export async function activateExternalLink(linkId: string): Promise<{ error: str
 export async function validateExternalToken(
   token: string,
   ownerKey?: string | null,
-): Promise<ApiResponse<{ link: ExternalDJLink; venue: Venue; guests: Guest[] }>> {
+): Promise<ApiResponse<ExternalLinkPublicValidationData>> {
   try {
     return await validatePublicExternalToken(
       { token, ownerKey },
@@ -369,7 +371,7 @@ export async function createGuestsViaExternalLink(params: {
   token: string;
   date: string;
   items: BulkGuestCreateInput[];
-}): Promise<ApiResponse<BulkGuestCreateResult>> {
+}): Promise<ApiResponse<ExternalLinkPublicGuestCreateResult>> {
   try {
     return await createPublicGuestsViaExternalLink(
       params,
@@ -393,7 +395,7 @@ export async function createGuestViaExternalLink(params: {
   guestName: string;
   date: string;
   ownerKey?: string | null;
-}): Promise<ApiResponse<Guest>> {
+}): Promise<ApiResponse<ExternalLinkPublicGuest>> {
   try {
     const dependencies = getExternalLinkPublicDependencies();
     const kind = await loadPublicExternalLinkKind(params.token, dependencies);
@@ -447,7 +449,7 @@ export async function updateGuestViaExternalLink(params: {
   ownerKey: string;
   guestId: string;
   guestName: string;
-}): Promise<ApiResponse<Guest>> {
+}): Promise<ApiResponse<ExternalLinkPublicGuest>> {
   try {
     return await updatePublicGuestViaExternalLink(
       params,

@@ -1,3 +1,6 @@
+import type { BulkGuestCreateStatus } from "../guests/types";
+import type { Venue } from "../venues/types";
+
 export interface ExternalDJLink {
   id: string;
   venueId: string;
@@ -22,4 +25,35 @@ export interface ExternalDJLink {
 export interface ExternalLinkDirectoryEntry {
   id: string;
   djName: string;
+}
+
+/** Public token response shape; internal ownership and audit fields stay server-side. */
+export interface ExternalLinkPublicGuest {
+  id: string;
+  name: string;
+  status: "pending" | "checked" | "deleted";
+  checkInTime: string | null;
+  createdAt: string;
+}
+
+export type ExternalLinkPublicGuestCreateItemResult =
+  | {
+    index: number;
+    status: "created";
+    guest: ExternalLinkPublicGuest;
+  }
+  | {
+    index: number;
+    status: Exclude<BulkGuestCreateStatus, "created">;
+    guest: null;
+  };
+
+export interface ExternalLinkPublicGuestCreateResult {
+  items: ExternalLinkPublicGuestCreateItemResult[];
+}
+
+export interface ExternalLinkPublicValidationData {
+  link: ExternalDJLink;
+  venue: Venue;
+  guests: ExternalLinkPublicGuest[];
 }

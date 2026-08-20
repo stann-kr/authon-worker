@@ -7,7 +7,6 @@ import DisclosureSection from "./DisclosureSection";
 import type { ApiResponse } from "@/lib/api/response";
 import type {
   BulkGuestCreateInput,
-  BulkGuestCreateResult,
   BulkGuestCreateStatus,
 } from "@/lib/guests/types";
 import {
@@ -29,9 +28,17 @@ interface GuestBulkEntryProps {
   disabled?: boolean;
   onSubmitChunk: (
     guests: BulkGuestCreateInput[],
-  ) => Promise<ApiResponse<BulkGuestCreateResult>>;
+  ) => Promise<ApiResponse<GuestBulkSubmissionResult>>;
   onSubmissionComplete?: () => Promise<void> | void;
   onSubmittingChange?: (isSubmitting: boolean) => void;
+}
+
+interface GuestBulkSubmissionResult {
+  items: Array<{
+    index: number;
+    status: BulkGuestCreateStatus;
+    guest: unknown | null;
+  }>;
 }
 
 type FeedbackTone = "success" | "warning" | "error";
