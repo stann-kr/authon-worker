@@ -58,11 +58,17 @@ import {
   UPDATE_SELF_RSVP_GUEST_SQL,
 } from "@/lib/guests/atomic-sql";
 import {
-  getExternalLinkDeletionDisposition,
   isValidExternalLinkDate,
   prepareExternalLinkCreateInput,
   toExternalDJLink,
 } from "../external-links/domain";
+import { createExternalLinkLifecyclePersistence } from "@/lib/external-links/persistence";
+import {
+  activateAdminExternalLink,
+  deactivateAdminExternalLink,
+  deleteAdminExternalLink,
+  type ExternalLinkLifecycleActor,
+} from "@/lib/external-links/service";
 import {
   eventIncludesLegacyDateRows,
   findCompatibilityEvent,
@@ -131,26 +137,23 @@ async function scopedVenueId(user: SessionUser, requestedVenueId: string): Promi
   return requireActiveVenueId(venueId);
 }
 
-async function getAccessibleLink(db: Db, user: SessionUser, linkId: string) {
-  const rows = await db
-    .select()
-    .from(externalDjLinks)
-    .where(
-      and(
-        eq(externalDjLinks.id, linkId),
-        isNull(externalDjLinks.deletedAt),
-      ),
-    )
-    .limit(1);
-  const link = rows[0];
-  if (!link) throw new Error("External link not found");
-  if (user.role !== "super_admin" && link.venueId !== user.venueId) throw new Error("Forbidden");
-  await requireActiveVenueId(link.venueId);
-  return link;
-}
-
 function isExpired(expiresAt?: string | null): boolean {
   return !!expiresAt && new Date(expiresAt).getTime() <= Date.now();
+}
+
+function toExternalLinkLifecycleActor(
+  user: SessionUser,
+): ExternalLinkLifecycleActor {
+  return {
+    userId: user.id,
+    role: user.role,
+    venueId: user.venueId,
+  };
+}
+
+function getExternalLinkLifecyclePersistence() {
+  const { env } = getCloudflareContext();
+  return createExternalLinkLifecyclePersistence(env.DB);
 }
 
 async function addGuestUrls(
@@ -490,50 +493,10 @@ export async function createExternalLink(link: {
 export async function deleteExternalLink(linkId: string): Promise<{ error: string | null }> {
   try {
     const user = await requireRole(["super_admin", "venue_admin"]);
-    const db = getDb();
-    await getAccessibleLink(db, user, linkId);
-
-    await db
-      .update(externalDjLinks)
-      .set({ active: false })
-      .where(
-        and(
-          eq(externalDjLinks.id, linkId),
-          isNull(externalDjLinks.deletedAt),
-        ),
-      );
-
-    const [guestReference] = await db
-      .select({ id: guests.id })
-      .from(guests)
-      .where(eq(guests.externalLinkId, linkId))
-      .limit(1);
-    const disposition = getExternalLinkDeletionDisposition(Boolean(guestReference));
-
-    if (disposition === "archive") {
-      await db
-        .update(externalDjLinks)
-        .set({
-          active: false,
-          deletedAt: new Date().toISOString(),
-          deletedBy: user.id,
-        })
-        .where(
-          and(
-            eq(externalDjLinks.id, linkId),
-            isNull(externalDjLinks.deletedAt),
-          ),
-        );
-    } else {
-      await db
-        .delete(externalDjLinks)
-        .where(
-          and(
-            eq(externalDjLinks.id, linkId),
-            isNull(externalDjLinks.deletedAt),
-          ),
-        );
-    }
+    await deleteAdminExternalLink(
+      { linkId, actor: toExternalLinkLifecycleActor(user) },
+      { persistence: getExternalLinkLifecyclePersistence() },
+    );
 
     return { error: null };
   } catch (error: unknown) {
@@ -545,9 +508,10 @@ export async function deleteExternalLink(linkId: string): Promise<{ error: strin
 export async function deactivateExternalLink(linkId: string): Promise<{ error: string | null }> {
   try {
     const user = await requireRole(["super_admin", "venue_admin"]);
-    const db = getDb();
-    await getAccessibleLink(db, user, linkId);
-    await db.update(externalDjLinks).set({ active: false }).where(eq(externalDjLinks.id, linkId));
+    await deactivateAdminExternalLink(
+      { linkId, actor: toExternalLinkLifecycleActor(user) },
+      { persistence: getExternalLinkLifecyclePersistence() },
+    );
     return { error: null };
   } catch (error: unknown) {
     await reportServerError("external_link.deactivate", error);
@@ -558,16 +522,10 @@ export async function deactivateExternalLink(linkId: string): Promise<{ error: s
 export async function activateExternalLink(linkId: string): Promise<{ error: string | null }> {
   try {
     const user = await requireRole(["super_admin", "venue_admin"]);
-    const db = getDb();
-    const link = await getAccessibleLink(db, user, linkId);
-    if (
-      isExpired(link.expiresAt) ||
-      !link.date ||
-      !isValidExternalLinkDate(link.date)
-    ) {
-      throw new Error("Link cannot be activated");
-    }
-    await db.update(externalDjLinks).set({ active: true }).where(eq(externalDjLinks.id, linkId));
+    await activateAdminExternalLink(
+      { linkId, actor: toExternalLinkLifecycleActor(user) },
+      { persistence: getExternalLinkLifecyclePersistence() },
+    );
     return { error: null };
   } catch (error: unknown) {
     await reportServerError("external_link.activate", error);
