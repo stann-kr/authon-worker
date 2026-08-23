@@ -112,6 +112,10 @@ function scopeKey(scope: AttendanceScope | null): string {
     : "none";
 }
 
+interface AttendanceScopeOwnerToken {
+  scopeKey: string;
+}
+
 export default function useAttendanceCounterController({
   scope,
   currentBusinessDate,
@@ -134,30 +138,49 @@ export default function useAttendanceCounterController({
   const [reconciliationTarget, setReconciliationTarget] = useState("");
   const [adjustmentReason, setAdjustmentReason] = useState("");
   const [isAdjusting, setIsAdjusting] = useState(false);
-  const currentScopeKeyRef = useRef(scopeKey(scope));
+  const renderedScopeKey = scopeKey(scope);
+  const currentScopeKeyRef = useRef(renderedScopeKey);
+  const scopeOwnerRef = useRef<AttendanceScopeOwnerToken>({
+    scopeKey: renderedScopeKey,
+  });
+  const [scopeStateOwner, setScopeStateOwner] = useState(
+    scopeOwnerRef.current,
+  );
   const syncingRef = useRef(false);
-  const pendingSyncScopeRef = useRef<AttendanceScope | null>(null);
+  const pendingSyncScopeRef = useRef<{
+    targetScope: AttendanceScope;
+    scopeOwner: AttendanceScopeOwnerToken;
+  } | null>(null);
   const summaryAuthorityRef = useRef(createAttendanceSummaryAuthority());
-  const syncQueueRef = useRef<(
-    targetScope: AttendanceScope,
-  ) => Promise<void>>(async () => {});
   const undoingRef = useRef(false);
+  const nextUndoOperationIdRef = useRef(0);
+  const activeUndoOperationsRef = useRef(new Map<string, number>());
+  const nextAdjustmentOperationIdRef = useRef(0);
+  const activeAdjustmentOperationsRef = useRef(new Map<string, number>());
   const reconciliationAttemptRef = useRef<{
     fingerprint: string;
     idempotencyKey: string;
   } | null>(null);
-  currentScopeKeyRef.current = scopeKey(scope);
+  if (scopeOwnerRef.current.scopeKey !== renderedScopeKey) {
+    scopeOwnerRef.current = { scopeKey: renderedScopeKey };
+  }
+  currentScopeKeyRef.current = renderedScopeKey;
+  const isScopeStateCurrent = scopeStateOwner === scopeOwnerRef.current;
 
-  const scopedSummary = summary && scope && isAttendanceScopeEqual(summary, scope)
-    ? summary
-    : null;
+  const scopedSummary =
+    isScopeStateCurrent &&
+    summary &&
+    scope &&
+    isAttendanceScopeEqual(summary, scope)
+      ? summary
+      : null;
   const scopedMutations = useMemo(
-    () => scope
+    () => isScopeStateCurrent && scope
       ? mutations.filter((mutation) =>
           isAttendanceScopeEqual(mutation.scope, scope),
         )
       : [],
-    [mutations, scope],
+    [isScopeStateCurrent, mutations, scope],
   );
   const queuedMutations = useMemo(
     () => scopedMutations.filter((mutation) => mutation.state === "queued"),
@@ -224,6 +247,7 @@ export default function useAttendanceCounterController({
   );
   const isCurrentDate = scope?.businessDate === currentBusinessDate;
   const canRecord = Boolean(
+    isScopeStateCurrent &&
     scope &&
     isCurrentDate &&
     isStorageAvailable !== false &&
@@ -232,21 +256,26 @@ export default function useAttendanceCounterController({
 
   const refreshLocalMutations = useCallback(async (
     targetScope: AttendanceScope,
+    scopeOwner: AttendanceScopeOwnerToken,
   ) => {
     const next = await dependencies.listAttendanceMutations(targetScope);
-    if (currentScopeKeyRef.current === scopeKey(targetScope)) {
+    if (scopeOwnerRef.current === scopeOwner) {
       setMutations(next);
       setIsStorageAvailable(true);
     }
     return next;
   }, [dependencies]);
 
-  const loadSummary = useCallback(async (targetScope: AttendanceScope) => {
+  const loadSummaryForOwner = useCallback(async (
+    targetScope: AttendanceScope,
+    scopeOwner: AttendanceScopeOwnerToken,
+  ) => {
     const targetKey = scopeKey(targetScope);
     if (currentScopeKeyRef.current !== targetKey) return;
+    if (scopeOwnerRef.current !== scopeOwner) return;
     const requestToken = beginAttendanceSummaryRead(summaryAuthorityRef.current);
     const isCurrentRequest = () =>
-      currentScopeKeyRef.current === targetKey &&
+      scopeOwnerRef.current === scopeOwner &&
       isAttendanceSummaryReadCurrent(
         summaryAuthorityRef.current,
         requestToken,
@@ -256,11 +285,11 @@ export default function useAttendanceCounterController({
       let deviceId: string | null = null;
       try {
         deviceId = await dependencies.getAttendanceDeviceId();
-        if (currentScopeKeyRef.current === targetKey) {
+        if (scopeOwnerRef.current === scopeOwner) {
           setIsStorageAvailable(true);
         }
       } catch {
-        if (currentScopeKeyRef.current === targetKey) {
+        if (scopeOwnerRef.current === scopeOwner) {
           setIsStorageAvailable(false);
         }
       }
@@ -283,20 +312,40 @@ export default function useAttendanceCounterController({
     }
   }, [dependencies]);
 
-  const syncQueue = useCallback(async (targetScope: AttendanceScope) => {
-    if (syncingRef.current) {
-      pendingSyncScopeRef.current = targetScope;
+  const loadSummary = useCallback(async (targetScope: AttendanceScope) => {
+    await loadSummaryForOwner(targetScope, scopeOwnerRef.current);
+  }, [loadSummaryForOwner]);
+
+  const syncQueue = useCallback(async function coordinateAttendanceSync(
+    targetScope: AttendanceScope,
+    inheritedVisibleSync = false,
+  ) {
+    const requestedScopeKey = scopeKey(targetScope);
+    if (currentScopeKeyRef.current !== requestedScopeKey) {
+      if (inheritedVisibleSync) setIsSyncing(false);
       return;
     }
-    if (typeof navigator !== "undefined" && !navigator.onLine) return;
+    const requestedSync = {
+      targetScope,
+      scopeOwner: scopeOwnerRef.current,
+    };
+    if (syncingRef.current) {
+      pendingSyncScopeRef.current = requestedSync;
+      return;
+    }
+    if (typeof navigator !== "undefined" && !navigator.onLine) {
+      if (inheritedVisibleSync) setIsSyncing(false);
+      return;
+    }
     syncingRef.current = true;
-    let hasVisibleSync = false;
-    const targetKey = scopeKey(targetScope);
+    let hasVisibleSync = inheritedVisibleSync;
+    let hasScopeVisibleSync = false;
     try {
       const pending = (
         await dependencies.listAttendanceMutations(targetScope)
       ).filter((mutation) => mutation.state === "queued");
       if (pending.length === 0) return;
+      hasScopeVisibleSync = true;
       hasVisibleSync = true;
       setIsSyncing(true);
       for (const group of dependencies.groupAttendanceMutationsByDevice(pending)) {
@@ -310,7 +359,7 @@ export default function useAttendanceCounterController({
             offset + MAX_ATTENDANCE_SYNC_BATCH,
           );
           const summaryMutationToken =
-            currentScopeKeyRef.current === targetKey
+            scopeOwnerRef.current === requestedSync.scopeOwner
               ? beginAttendanceSummaryMutation(summaryAuthorityRef.current)
               : null;
           if (summaryMutationToken) setIsLoading(false);
@@ -326,7 +375,8 @@ export default function useAttendanceCounterController({
             })),
           });
           const summaryMutationClaim =
-            summaryMutationToken && currentScopeKeyRef.current === targetKey
+            summaryMutationToken &&
+            scopeOwnerRef.current === requestedSync.scopeOwner
               ? claimAttendanceSummaryMutation(
                   summaryAuthorityRef.current,
                   summaryMutationToken,
@@ -348,10 +398,13 @@ export default function useAttendanceCounterController({
             }
           }
           await dependencies.removeAttendanceMutations(removable);
-          await refreshLocalMutations(targetScope);
+          await refreshLocalMutations(
+            targetScope,
+            requestedSync.scopeOwner,
+          );
           if (
             summaryMutationClaim &&
-            currentScopeKeyRef.current === targetKey &&
+            scopeOwnerRef.current === requestedSync.scopeOwner &&
             isAttendanceSummaryMutationClaimCurrent(
               summaryAuthorityRef.current,
               summaryMutationClaim,
@@ -361,12 +414,12 @@ export default function useAttendanceCounterController({
           }
         }
       }
-      if (currentScopeKeyRef.current === targetKey) {
+      if (scopeOwnerRef.current === requestedSync.scopeOwner) {
         setNotice((current) => current === "syncFailed" ? null : current);
       }
     } catch {
-      if (currentScopeKeyRef.current === targetKey) {
-        if (hasVisibleSync) {
+      if (scopeOwnerRef.current === requestedSync.scopeOwner) {
+        if (hasScopeVisibleSync) {
           setNotice("syncFailed");
         } else {
           setIsStorageAvailable(false);
@@ -374,30 +427,41 @@ export default function useAttendanceCounterController({
         }
       }
     } finally {
-      syncingRef.current = false;
-      if (hasVisibleSync) setIsSyncing(false);
-      const pendingScope = pendingSyncScopeRef.current;
+      const pendingSync = pendingSyncScopeRef.current;
       pendingSyncScopeRef.current = null;
       if (
-        pendingScope &&
-        currentScopeKeyRef.current === scopeKey(pendingScope)
+        pendingSync &&
+        scopeOwnerRef.current === pendingSync.scopeOwner
       ) {
-        queueMicrotask(() => void syncQueueRef.current(pendingScope));
+        syncingRef.current = false;
+        await coordinateAttendanceSync(
+          pendingSync.targetScope,
+          hasVisibleSync,
+        );
+        return;
       }
+      syncingRef.current = false;
+      if (hasVisibleSync) setIsSyncing(false);
     }
   }, [dependencies, refreshLocalMutations]);
 
   useEffect(() => {
-    syncQueueRef.current = syncQueue;
-  }, [syncQueue]);
-
-  useEffect(() => {
+    const scopeOwner = scopeOwnerRef.current;
+    setScopeStateOwner(scopeOwner);
     invalidateAttendanceSummaries(summaryAuthorityRef.current);
     setSummary(null);
     setMutations([]);
     setNotice(null);
     setAnnouncement("");
     setIsStorageAvailable(null);
+    const hasActiveUndo = Boolean(
+      scope && activeUndoOperationsRef.current.has(renderedScopeKey),
+    );
+    undoingRef.current = hasActiveUndo;
+    setIsUndoing(hasActiveUndo);
+    setIsAdjusting(Boolean(
+      scope && activeAdjustmentOperationsRef.current.has(renderedScopeKey),
+    ));
     setReconciliationTarget("");
     setAdjustmentReason("");
     reconciliationAttemptRef.current = null;
@@ -407,15 +471,15 @@ export default function useAttendanceCounterController({
     }
     const targetScope = scope;
     void Promise.all([
-      refreshLocalMutations(targetScope).catch(() => {
-        if (currentScopeKeyRef.current === scopeKey(targetScope)) {
+      refreshLocalMutations(targetScope, scopeOwner).catch(() => {
+        if (scopeOwnerRef.current === scopeOwner) {
           setIsStorageAvailable(false);
           setNotice("queueFailed");
         }
       }),
-      loadSummary(targetScope),
+      loadSummaryForOwner(targetScope, scopeOwner),
     ]);
-  }, [loadSummary, refreshLocalMutations, scope]);
+  }, [loadSummaryForOwner, refreshLocalMutations, renderedScopeKey, scope]);
 
   useEffect(() => {
     if (!scope || queuedMutations.length === 0) return;
@@ -444,26 +508,35 @@ export default function useAttendanceCounterController({
 
   const queueWalkIn = async () => {
     if (!scope || !canRecord) return;
-    const targetKey = scopeKey(scope);
+    const scopeOwner = scopeOwnerRef.current;
     try {
       await dependencies.enqueueAttendanceMutation({
         scope,
         action: "walk_in",
       });
-      await refreshLocalMutations(scope);
-      if (currentScopeKeyRef.current === targetKey) {
+      await refreshLocalMutations(scope, scopeOwner);
+      if (scopeOwnerRef.current === scopeOwner) {
         setNotice(null);
         setAnnouncement(translate("recordedAnnouncement"));
       }
     } catch {
-      setIsStorageAvailable(false);
-      setNotice("queueFailed");
+      if (scopeOwnerRef.current === scopeOwner) {
+        setIsStorageAvailable(false);
+        setNotice("queueFailed");
+      }
     }
   };
 
   const queueUndo = async () => {
-    if (!scope || !canRecord || !undoableKey || undoingRef.current) return;
+    if (!scope || !canRecord || !undoableKey) return;
     const targetKey = scopeKey(scope);
+    if (
+      undoingRef.current ||
+      activeUndoOperationsRef.current.has(targetKey)
+    ) return;
+    const scopeOwner = scopeOwnerRef.current;
+    const undoOperationId = ++nextUndoOperationIdRef.current;
+    activeUndoOperationsRef.current.set(targetKey, undoOperationId);
     undoingRef.current = true;
     setIsUndoing(true);
     try {
@@ -472,23 +545,33 @@ export default function useAttendanceCounterController({
         action: "reversal",
         reversesIdempotencyKey: undoableKey,
       });
-      await refreshLocalMutations(scope);
-      if (currentScopeKeyRef.current === targetKey) {
+      await refreshLocalMutations(scope, scopeOwner);
+      if (scopeOwnerRef.current === scopeOwner) {
         setNotice(null);
         setAnnouncement(translate("undoneAnnouncement"));
       }
     } catch {
-      setIsStorageAvailable(false);
-      setNotice("queueFailed");
+      if (scopeOwnerRef.current === scopeOwner) {
+        setIsStorageAvailable(false);
+        setNotice("queueFailed");
+      }
     } finally {
-      undoingRef.current = false;
-      setIsUndoing(false);
+      if (
+        activeUndoOperationsRef.current.get(targetKey) === undoOperationId
+      ) {
+        activeUndoOperationsRef.current.delete(targetKey);
+        if (currentScopeKeyRef.current === targetKey) {
+          undoingRef.current = false;
+          setIsUndoing(false);
+        }
+      }
     }
   };
 
   const submitAdjustment = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (
+      !isScopeStateCurrent ||
       !scope ||
       !canAdjust ||
       !scopedSummary ||
@@ -501,7 +584,15 @@ export default function useAttendanceCounterController({
       adjustmentReason.trim() === "" ||
       hasPendingReconciliationMutations
     ) return;
+    const targetKey = scopeKey(scope);
+    if (activeAdjustmentOperationsRef.current.has(targetKey)) return;
     if (!dependencies.confirm(translate("adjustment.confirm"))) return;
+    const scopeOwner = scopeOwnerRef.current;
+    const adjustmentOperationId = ++nextAdjustmentOperationIdRef.current;
+    activeAdjustmentOperationsRef.current.set(
+      targetKey,
+      adjustmentOperationId,
+    );
     const targetTotalAttendance = Number(reconciliationTarget);
     const attemptFingerprint = JSON.stringify([
       scope.venueId,
@@ -521,7 +612,6 @@ export default function useAttendanceCounterController({
       fingerprint: attemptFingerprint,
       idempotencyKey,
     };
-    const targetKey = scopeKey(scope);
     setIsAdjusting(true);
     const reconciliationToken = beginAttendanceSummaryMutation(
       summaryAuthorityRef.current,
@@ -537,7 +627,7 @@ export default function useAttendanceCounterController({
         reason: adjustmentReason,
         idempotencyKey,
       });
-      const reconciliationClaim = currentScopeKeyRef.current === targetKey
+      const reconciliationClaim = scopeOwnerRef.current === scopeOwner
         ? claimAttendanceSummaryMutation(
             summaryAuthorityRef.current,
             reconciliationToken,
@@ -549,11 +639,11 @@ export default function useAttendanceCounterController({
         if (response.error === "ATTENDANCE_RECONCILIATION_STALE") {
           reconciliationAttemptRef.current = null;
           setNotice("reconciliationStale");
-          await loadSummary(scope);
+          await loadSummaryForOwner(scope, scopeOwner);
         } else if (response.error === "ATTENDANCE_SCOPE_CLOSED") {
           reconciliationAttemptRef.current = null;
           setNotice("scopeClosed");
-          await loadSummary(scope);
+          await loadSummaryForOwner(scope, scopeOwner);
         } else {
           setNotice("adjustmentFailed");
         }
@@ -566,7 +656,7 @@ export default function useAttendanceCounterController({
       setNotice(null);
       setAnnouncement(translate("scopeClosed"));
     } catch {
-      const reconciliationClaim = currentScopeKeyRef.current === targetKey
+      const reconciliationClaim = scopeOwnerRef.current === scopeOwner
         ? claimAttendanceSummaryMutation(
             summaryAuthorityRef.current,
             reconciliationToken,
@@ -577,33 +667,44 @@ export default function useAttendanceCounterController({
         setNotice("adjustmentFailed");
       }
     } finally {
-      setIsAdjusting(false);
+      if (
+        activeAdjustmentOperationsRef.current.get(targetKey) ===
+          adjustmentOperationId
+      ) {
+        activeAdjustmentOperationsRef.current.delete(targetKey);
+        if (currentScopeKeyRef.current === targetKey) {
+          setIsAdjusting(false);
+        }
+      }
     }
   };
 
   const clearFailedResults = async () => {
-    if (!scope) return;
-    const targetKey = scopeKey(scope);
+    if (!scope || !isScopeStateCurrent) return;
+    const scopeOwner = scopeOwnerRef.current;
     try {
       await dependencies.clearResolvedAttendanceMutations(scope);
-      await refreshLocalMutations(scope);
-      if (currentScopeKeyRef.current === targetKey) setNotice(null);
+      await refreshLocalMutations(scope, scopeOwner);
+      if (scopeOwnerRef.current === scopeOwner) setNotice(null);
     } catch {
-      setNotice("queueFailed");
+      if (scopeOwnerRef.current === scopeOwner) setNotice("queueFailed");
     }
   };
 
   const changeReconciliationTarget = (value: string) => {
+    if (!isScopeStateCurrent) return;
     reconciliationAttemptRef.current = null;
     setReconciliationTarget(value);
   };
 
   const changeAdjustmentReason = (value: string) => {
+    if (!isScopeStateCurrent) return;
     reconciliationAttemptRef.current = null;
     setAdjustmentReason(value);
   };
 
-  const statusText = isSyncing
+  const visibleIsSyncing = isScopeStateCurrent && isSyncing;
+  const statusText = visibleIsSyncing
     ? translate("syncing")
     : queuedMutations.length > 0
       ? translate("pending", { count: queuedMutations.length })
@@ -619,10 +720,16 @@ export default function useAttendanceCounterController({
         : scopedSummary?.unavailableReason === "scope_closed"
           ? translate("scopeClosed")
           : null;
+  const visibleAdjustmentReason = isScopeStateCurrent ? adjustmentReason : "";
+  const visibleAnnouncement = isScopeStateCurrent ? announcement : "";
+  const visibleNotice = isScopeStateCurrent ? notice : null;
+  const visibleReconciliationTarget = isScopeStateCurrent
+    ? reconciliationTarget
+    : "";
 
   return {
-    adjustmentReason,
-    announcement,
+    adjustmentReason: visibleAdjustmentReason,
+    announcement: visibleAnnouncement,
     canRecord,
     changeAdjustmentReason,
     changeReconciliationTarget,
@@ -630,19 +737,22 @@ export default function useAttendanceCounterController({
     displayedCheckedInGuests,
     failedMutations,
     hasPendingReconciliationMutations,
-    isAdjusting,
-    isLoading,
-    isReconciliationBelowCheckedGuests,
-    isReconciliationDeltaOutOfRange,
-    isReconciliationTargetInvalid,
-    isSyncing,
-    isUndoing,
+    isAdjusting: isScopeStateCurrent && isAdjusting,
+    isLoading: isScopeStateCurrent && isLoading,
+    isReconciliationBelowCheckedGuests:
+      isScopeStateCurrent && isReconciliationBelowCheckedGuests,
+    isReconciliationDeltaOutOfRange:
+      isScopeStateCurrent && isReconciliationDeltaOutOfRange,
+    isReconciliationTargetInvalid:
+      isScopeStateCurrent && isReconciliationTargetInvalid,
+    isSyncing: visibleIsSyncing,
+    isUndoing: isScopeStateCurrent && isUndoing,
     loadSummary,
-    notice,
+    notice: visibleNotice,
     queueUndo,
     queueWalkIn,
-    reconciliationDelta,
-    reconciliationTarget,
+    reconciliationDelta: isScopeStateCurrent ? reconciliationDelta : null,
+    reconciliationTarget: visibleReconciliationTarget,
     scopedSummary,
     serverCheckedInGuests,
     serverWalkIns,

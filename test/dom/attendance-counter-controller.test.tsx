@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { afterEach, test } from "node:test";
+import { useLayoutEffect } from "react";
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 
 import useAttendanceCounterController, {
@@ -60,6 +61,7 @@ function createMutation(params: {
   idempotencyKey: string;
   sequence: number;
   action: DoorAttendanceAction;
+  scope?: AttendanceScope;
   reversesIdempotencyKey?: string | null;
   state?: OfflineAttendanceMutation["state"];
 }): OfflineAttendanceMutation {
@@ -67,7 +69,7 @@ function createMutation(params: {
     idempotencyKey: params.idempotencyKey,
     deviceId: "device-0001",
     sequence: params.sequence,
-    scope: SCOPE_A,
+    scope: params.scope ?? SCOPE_A,
     action: params.action,
     reversesIdempotencyKey: params.reversesIdempotencyKey ?? null,
     queuedAt: `2026-08-23T10:00:0${params.sequence}.000Z`,
@@ -135,14 +137,44 @@ function setOnline(value: boolean) {
   });
 }
 
+interface AttendanceCounterCommit {
+  scopeEventId: string | null;
+  notice: string;
+  canRecord: boolean;
+  reconciliationTarget: string;
+  adjustmentReason: string;
+  isUndoing: boolean;
+  isAdjusting: boolean;
+  isSyncing: boolean;
+  statusText: string | null;
+  walkIns: number;
+  failedCount: number;
+  undoableKey: string | null;
+}
+
+function AttendanceCounterCommitProbe({
+  commit,
+  onCommit,
+}: {
+  commit: AttendanceCounterCommit;
+  onCommit: (commit: AttendanceCounterCommit) => void;
+}) {
+  useLayoutEffect(() => {
+    onCommit(commit);
+  });
+  return null;
+}
+
 function AttendanceCounterHarness({
   scope = SCOPE_A,
   dependencies,
   checkedInGuests = 0,
+  onLayoutCommit,
 }: {
   scope?: AttendanceScope | null;
   dependencies: AttendanceCounterDependencies;
   checkedInGuests?: number;
+  onLayoutCommit?: (commit: AttendanceCounterCommit) => void;
 }) {
   const controller = useAttendanceCounterController({
     scope,
@@ -157,6 +189,25 @@ function AttendanceCounterHarness({
 
   return (
     <>
+      {onLayoutCommit ? (
+        <AttendanceCounterCommitProbe
+          commit={{
+            scopeEventId: scope?.eventId ?? null,
+            notice: controller.notice ?? "",
+            canRecord: controller.canRecord,
+            reconciliationTarget: controller.reconciliationTarget,
+            adjustmentReason: controller.adjustmentReason,
+            isUndoing: controller.isUndoing,
+            isAdjusting: controller.isAdjusting,
+            isSyncing: controller.isSyncing,
+            statusText: controller.statusText,
+            walkIns: controller.walkIns,
+            failedCount: controller.failedMutations.length,
+            undoableKey: controller.undoableKey,
+          }}
+          onCommit={onLayoutCommit}
+        />
+      ) : null}
       <output data-testid="checked-in">
         {controller.displayedCheckedInGuests}
       </output>
@@ -170,6 +221,8 @@ function AttendanceCounterHarness({
         {controller.failedMutations.length}
       </output>
       <output data-testid="adjusting">{String(controller.isAdjusting)}</output>
+      <output data-testid="syncing">{String(controller.isSyncing)}</output>
+      <output data-testid="undoing">{String(controller.isUndoing)}</output>
       <output data-testid="target">{controller.reconciliationTarget}</output>
       <output data-testid="reason">{controller.adjustmentReason}</output>
       <button
@@ -189,6 +242,9 @@ function AttendanceCounterHarness({
         onClick={() => void controller.queueUndo()}
       >
         Undo
+      </button>
+      <button type="button" onClick={() => void controller.clearFailedResults()}>
+        Clear failed
       </button>
       <form onSubmit={controller.submitAdjustment}>
         <label htmlFor="test-target">Target</label>
@@ -529,4 +585,683 @@ test("reconciliation retries the exact payload with one idempotency key", async 
   assert.deepEqual(calls, [expectedPayload, expectedPayload]);
   assert.deepEqual(confirmations, ["adjustment.confirm", "adjustment.confirm"]);
   assert.equal(uuidCalls, 1);
+});
+
+test("same-tick duplicate reconciliation submits only once", async () => {
+  const reconciliation = createDeferred<{
+    data: DoorAttendanceSummary;
+    error: null;
+  }>();
+  const calls: Parameters<
+    AttendanceCounterDependencies["reconcileDoorAttendance"]
+  >[0][] = [];
+  let confirmationCalls = 0;
+  let uuidCalls = 0;
+  const dependencies = createDependencies({
+    reconcileDoorAttendance: async (params) => {
+      calls.push(params);
+      return reconciliation.promise;
+    },
+    confirm: () => {
+      confirmationCalls += 1;
+      return true;
+    },
+    randomUUID: () => {
+      uuidCalls += 1;
+      return "uuid-duplicate";
+    },
+  });
+  render(<AttendanceCounterHarness dependencies={dependencies} />);
+  await waitFor(() =>
+    assert.equal(screen.getByTestId("checked-in").textContent, "5"),
+  );
+  fireEvent.change(screen.getByRole("textbox", { name: "Target" }), {
+    target: { value: "10" },
+  });
+  fireEvent.change(screen.getByRole("textbox", { name: "Reason" }), {
+    target: { value: "counted at door" },
+  });
+  const form = screen.getByRole("button", { name: "Reconcile" }).closest("form")!;
+
+  await act(async () => {
+    form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+    form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+    await Promise.resolve();
+  });
+
+  assert.equal(confirmationCalls, 1);
+  assert.equal(uuidCalls, 1);
+  assert.equal(calls.length, 1);
+
+  await act(async () => {
+    reconciliation.resolve({
+      data: createSummary(SCOPE_A, {
+        walkIns: 5,
+        totalAttendance: 10,
+      }),
+      error: null,
+    });
+    await reconciliation.promise;
+  });
+});
+
+test("scope adjustment ownership survives A to B to A navigation", async () => {
+  const reconciliationA = createDeferred<{
+    data: DoorAttendanceSummary;
+    error: null;
+  }>();
+  const reconciliationB = createDeferred<{
+    data: DoorAttendanceSummary;
+    error: null;
+  }>();
+  const requestedEvents: Array<string | null> = [];
+  const dependencies = createDependencies({
+    reconcileDoorAttendance: async ({ scope }) => {
+      requestedEvents.push(scope.eventId);
+      return scope.eventId === SCOPE_A.eventId
+        ? reconciliationA.promise
+        : reconciliationB.promise;
+    },
+  });
+  const view = render(
+    <AttendanceCounterHarness scope={SCOPE_A} dependencies={dependencies} />,
+  );
+  await waitFor(() =>
+    assert.equal(screen.getByTestId("checked-in").textContent, "5"),
+  );
+  fireEvent.change(screen.getByRole("textbox", { name: "Target" }), {
+    target: { value: "10" },
+  });
+  fireEvent.change(screen.getByRole("textbox", { name: "Reason" }), {
+    target: { value: "scope A count" },
+  });
+  fireEvent.submit(screen.getByRole("button", { name: "Reconcile" }).closest("form")!);
+  await waitFor(() => {
+    assert.deepEqual(requestedEvents, [SCOPE_A.eventId]);
+    assert.equal(screen.getByTestId("adjusting").textContent, "true");
+  });
+
+  view.rerender(
+    <AttendanceCounterHarness scope={SCOPE_B} dependencies={dependencies} />,
+  );
+  await waitFor(() => {
+    assert.equal(screen.getByTestId("scope-event").textContent, SCOPE_B.eventId);
+    assert.equal(screen.getByTestId("target").textContent, "");
+    assert.equal(screen.getByTestId("reason").textContent, "");
+  });
+  fireEvent.change(screen.getByRole("textbox", { name: "Target" }), {
+    target: { value: "11" },
+  });
+  fireEvent.change(screen.getByRole("textbox", { name: "Reason" }), {
+    target: { value: "scope B count" },
+  });
+  fireEvent.submit(screen.getByRole("button", { name: "Reconcile" }).closest("form")!);
+  await waitFor(() => {
+    assert.deepEqual(requestedEvents, [SCOPE_A.eventId, SCOPE_B.eventId]);
+    assert.equal(screen.getByTestId("adjusting").textContent, "true");
+  });
+
+  view.rerender(
+    <AttendanceCounterHarness scope={SCOPE_A} dependencies={dependencies} />,
+  );
+  await waitFor(() => {
+    assert.equal(screen.getByTestId("scope-event").textContent, SCOPE_A.eventId);
+    assert.equal(screen.getByTestId("adjusting").textContent, "true");
+  });
+  fireEvent.change(screen.getByRole("textbox", { name: "Target" }), {
+    target: { value: "12" },
+  });
+  fireEvent.change(screen.getByRole("textbox", { name: "Reason" }), {
+    target: { value: "duplicate scope A count" },
+  });
+  fireEvent.submit(screen.getByRole("button", { name: "Reconcile" }).closest("form")!);
+  await act(async () => {
+    await Promise.resolve();
+  });
+  assert.deepEqual(requestedEvents, [SCOPE_A.eventId, SCOPE_B.eventId]);
+
+  await act(async () => {
+    reconciliationB.resolve({
+      data: createSummary(SCOPE_B, { totalAttendance: 11, walkIns: 6 }),
+      error: null,
+    });
+    await reconciliationB.promise;
+  });
+  assert.equal(screen.getByTestId("adjusting").textContent, "true");
+
+  await act(async () => {
+    reconciliationA.resolve({
+      data: createSummary(SCOPE_A, { totalAttendance: 10, walkIns: 5 }),
+      error: null,
+    });
+    await reconciliationA.promise;
+  });
+  await waitFor(() =>
+    assert.equal(screen.getByTestId("adjusting").textContent, "false"),
+  );
+});
+
+for (const action of ["walk_in", "reversal"] as const) {
+  test(`a stale ${action} queue failure cannot disable the active scope`, async () => {
+    setOnline(false);
+    const queueWrite = createDeferred<OfflineAttendanceMutation>();
+    const dependencies = createDependencies({
+      fetchDoorAttendanceSummary: async ({ scope }) => ({
+        data: createSummary(scope, {
+          lastUndoableIdempotencyKey: `undoable:${scope.eventId}`,
+        }),
+        error: null,
+      }),
+      enqueueAttendanceMutation: async () => queueWrite.promise,
+    });
+    const view = render(
+      <AttendanceCounterHarness scope={SCOPE_A} dependencies={dependencies} />,
+    );
+    const actionButton = await screen.findByRole("button", {
+      name: action === "walk_in" ? "Walk in" : "Undo",
+    });
+    await waitFor(() => assert.equal(actionButton.hasAttribute("disabled"), false));
+
+    fireEvent.click(actionButton);
+    view.rerender(
+      <AttendanceCounterHarness scope={SCOPE_B} dependencies={dependencies} />,
+    );
+    await waitFor(() => {
+      assert.equal(screen.getByTestId("scope-event").textContent, SCOPE_B.eventId);
+      assert.equal(actionButton.hasAttribute("disabled"), false);
+    });
+
+    await act(async () => {
+      queueWrite.reject(new Error("ATTENDANCE_STORAGE_UNAVAILABLE"));
+      await queueWrite.promise.catch(() => {});
+    });
+
+    assert.equal(screen.getByTestId("notice").textContent, "");
+    assert.equal(
+      screen.getByRole("button", { name: "Walk in" }).hasAttribute("disabled"),
+      false,
+    );
+  });
+}
+
+test("an old scope epoch cannot overwrite new same-scope local mutations", async () => {
+  setOnline(false);
+  const staleScopeAList = createDeferred<OfflineAttendanceMutation[]>();
+  const freshScopeAMutation = createMutation({
+    idempotencyKey: "fresh-scope-a",
+    sequence: 2,
+    action: "walk_in",
+    scope: SCOPE_A,
+  });
+  const staleScopeAMutation = createMutation({
+    idempotencyKey: "stale-scope-a",
+    sequence: 1,
+    action: "walk_in",
+    scope: SCOPE_A,
+    state: "conflict",
+  });
+  let scopeAListCalls = 0;
+  const dependencies = createDependencies({
+    listAttendanceMutations: async (scope) => {
+      if (scope.eventId !== SCOPE_A.eventId) return [];
+      scopeAListCalls += 1;
+      return scopeAListCalls === 1
+        ? staleScopeAList.promise
+        : [freshScopeAMutation];
+    },
+  });
+  const view = render(
+    <AttendanceCounterHarness scope={SCOPE_A} dependencies={dependencies} />,
+  );
+  await waitFor(() => assert.equal(scopeAListCalls, 1));
+
+  view.rerender(
+    <AttendanceCounterHarness scope={SCOPE_B} dependencies={dependencies} />,
+  );
+  await waitFor(() =>
+    assert.equal(screen.getByTestId("scope-event").textContent, SCOPE_B.eventId),
+  );
+  view.rerender(
+    <AttendanceCounterHarness scope={SCOPE_A} dependencies={dependencies} />,
+  );
+  await waitFor(() => {
+    assert.equal(scopeAListCalls, 2);
+    assert.equal(screen.getByTestId("scope-event").textContent, SCOPE_A.eventId);
+    assert.equal(screen.getByTestId("walk-ins").textContent, "3");
+    assert.equal(screen.getByTestId("failed-count").textContent, "0");
+  });
+
+  await act(async () => {
+    staleScopeAList.resolve([staleScopeAMutation]);
+    await staleScopeAList.promise;
+  });
+  assert.equal(screen.getByTestId("walk-ins").textContent, "3");
+  assert.equal(screen.getByTestId("failed-count").textContent, "0");
+});
+
+test("an old scope epoch cannot disable or notify the new same scope", async () => {
+  setOnline(false);
+  const staleScopeAList = createDeferred<OfflineAttendanceMutation[]>();
+  const staleScopeADevice = createDeferred<string>();
+  const freshScopeAMutation = createMutation({
+    idempotencyKey: "fresh-scope-a",
+    sequence: 2,
+    action: "walk_in",
+    scope: SCOPE_A,
+  });
+  let scopeAListCalls = 0;
+  let deviceCalls = 0;
+  const dependencies = createDependencies({
+    listAttendanceMutations: async (scope) => {
+      if (scope.eventId !== SCOPE_A.eventId) return [];
+      scopeAListCalls += 1;
+      return scopeAListCalls === 1
+        ? staleScopeAList.promise
+        : [freshScopeAMutation];
+    },
+    getAttendanceDeviceId: async () => {
+      deviceCalls += 1;
+      return deviceCalls === 1 ? staleScopeADevice.promise : "device-0001";
+    },
+  });
+  const view = render(
+    <AttendanceCounterHarness scope={SCOPE_A} dependencies={dependencies} />,
+  );
+  await waitFor(() => {
+    assert.equal(scopeAListCalls, 1);
+    assert.equal(deviceCalls, 1);
+  });
+
+  view.rerender(
+    <AttendanceCounterHarness scope={SCOPE_B} dependencies={dependencies} />,
+  );
+  await waitFor(() =>
+    assert.equal(screen.getByTestId("scope-event").textContent, SCOPE_B.eventId),
+  );
+  view.rerender(
+    <AttendanceCounterHarness scope={SCOPE_A} dependencies={dependencies} />,
+  );
+  const walkInButton = screen.getByRole("button", { name: "Walk in" });
+  await waitFor(() => {
+    assert.equal(scopeAListCalls, 2);
+    assert.equal(deviceCalls, 3);
+    assert.equal(screen.getByTestId("scope-event").textContent, SCOPE_A.eventId);
+    assert.equal(screen.getByTestId("walk-ins").textContent, "3");
+    assert.equal(walkInButton.hasAttribute("disabled"), false);
+  });
+
+  await act(async () => {
+    staleScopeAList.reject(new Error("ATTENDANCE_STORAGE_UNAVAILABLE"));
+    staleScopeADevice.reject(new Error("ATTENDANCE_STORAGE_UNAVAILABLE"));
+    await Promise.all([
+      staleScopeAList.promise.catch(() => {}),
+      staleScopeADevice.promise.catch(() => {}),
+    ]);
+  });
+  assert.equal(screen.getByTestId("walk-ins").textContent, "3");
+  assert.equal(screen.getByTestId("notice").textContent, "");
+  assert.equal(walkInButton.hasAttribute("disabled"), false);
+});
+
+test("scope undo ownership survives A to B to A navigation", async () => {
+  setOnline(false);
+  const undoA = createDeferred<OfflineAttendanceMutation>();
+  const undoB = createDeferred<OfflineAttendanceMutation>();
+  const requestedEvents: Array<string | null> = [];
+  const dependencies = createDependencies({
+    fetchDoorAttendanceSummary: async ({ scope }) => ({
+      data: createSummary(scope, {
+        lastUndoableIdempotencyKey: `undoable:${scope.eventId}`,
+      }),
+      error: null,
+    }),
+    enqueueAttendanceMutation: async ({ scope, action }) => {
+      requestedEvents.push(scope.eventId);
+      assert.equal(action, "reversal");
+      return scope.eventId === SCOPE_A.eventId
+        ? undoA.promise
+        : undoB.promise;
+    },
+  });
+  const view = render(
+    <AttendanceCounterHarness scope={SCOPE_A} dependencies={dependencies} />,
+  );
+  const undoButton = await screen.findByRole("button", { name: "Undo" });
+  await waitFor(() => assert.equal(undoButton.hasAttribute("disabled"), false));
+
+  fireEvent.click(undoButton);
+  await waitFor(() => {
+    assert.deepEqual(requestedEvents, [SCOPE_A.eventId]);
+    assert.equal(screen.getByTestId("undoing").textContent, "true");
+  });
+
+  view.rerender(
+    <AttendanceCounterHarness scope={SCOPE_B} dependencies={dependencies} />,
+  );
+  await waitFor(() => {
+    assert.equal(screen.getByTestId("scope-event").textContent, SCOPE_B.eventId);
+    assert.equal(undoButton.hasAttribute("disabled"), false);
+  });
+  fireEvent.click(undoButton);
+  await waitFor(() => {
+    assert.deepEqual(requestedEvents, [SCOPE_A.eventId, SCOPE_B.eventId]);
+    assert.equal(screen.getByTestId("undoing").textContent, "true");
+  });
+
+  view.rerender(
+    <AttendanceCounterHarness scope={SCOPE_A} dependencies={dependencies} />,
+  );
+  await waitFor(() => {
+    assert.equal(screen.getByTestId("scope-event").textContent, SCOPE_A.eventId);
+    assert.equal(screen.getByTestId("undoing").textContent, "true");
+    assert.equal(undoButton.hasAttribute("disabled"), true);
+  });
+  fireEvent.click(undoButton);
+  assert.deepEqual(requestedEvents, [SCOPE_A.eventId, SCOPE_B.eventId]);
+
+  await act(async () => {
+    undoB.resolve(createMutation({
+      idempotencyKey: "undo:b",
+      sequence: 1,
+      action: "reversal",
+      scope: SCOPE_B,
+      reversesIdempotencyKey: `undoable:${SCOPE_B.eventId}`,
+    }));
+    await undoB.promise;
+    await Promise.resolve();
+  });
+  assert.equal(screen.getByTestId("undoing").textContent, "true");
+  assert.equal(undoButton.hasAttribute("disabled"), true);
+
+  await act(async () => {
+    undoA.resolve(createMutation({
+      idempotencyKey: "undo:a",
+      sequence: 1,
+      action: "reversal",
+      scope: SCOPE_A,
+      reversesIdempotencyKey: `undoable:${SCOPE_A.eventId}`,
+    }));
+    await undoA.promise;
+    await Promise.resolve();
+  });
+  await waitFor(() =>
+    assert.equal(screen.getByTestId("undoing").textContent, "false"),
+  );
+});
+
+test("a pending scope sync runs once without clearing the active sync state", async () => {
+  setOnline(true);
+  const commits: AttendanceCounterCommit[] = [];
+  const syncA = createDeferred<{
+    data: { items: never[]; summary: DoorAttendanceSummary };
+    error: null;
+  }>();
+  const pendingBList = createDeferred<OfflineAttendanceMutation[]>();
+  const syncB = createDeferred<{
+    data: { items: never[]; summary: DoorAttendanceSummary };
+    error: null;
+  }>();
+  const mutationA = createMutation({
+    idempotencyKey: "sync:a",
+    sequence: 1,
+    action: "walk_in",
+    scope: SCOPE_A,
+  });
+  const mutationB = createMutation({
+    idempotencyKey: "sync:b",
+    sequence: 1,
+    action: "walk_in",
+    scope: SCOPE_B,
+  });
+  const queuedByScope = new Map([
+    [SCOPE_A.eventId, [mutationA]],
+    [SCOPE_B.eventId, [mutationB]],
+  ]);
+  const listCalls = new Map<string | null, number>();
+  const syncEvents: Array<string | null> = [];
+  const dependencies = createDependencies({
+    listAttendanceMutations: async (scope) => {
+      const calls = (listCalls.get(scope.eventId) ?? 0) + 1;
+      listCalls.set(scope.eventId, calls);
+      if (scope.eventId === SCOPE_B.eventId && calls === 2) {
+        return pendingBList.promise;
+      }
+      return [...(queuedByScope.get(scope.eventId) ?? [])];
+    },
+    syncDoorAttendanceMutations: async ({ scope }) => {
+      syncEvents.push(scope.eventId);
+      return scope.eventId === SCOPE_A.eventId ? syncA.promise : syncB.promise;
+    },
+    removeAttendanceMutations: async (keys) => {
+      for (const [eventId, mutations] of queuedByScope) {
+        queuedByScope.set(
+          eventId,
+          mutations.filter((mutation) => !keys.includes(mutation.idempotencyKey)),
+        );
+      }
+    },
+  });
+  const view = render(
+    <AttendanceCounterHarness
+      scope={SCOPE_A}
+      dependencies={dependencies}
+      onLayoutCommit={(commit) => commits.push(commit)}
+    />,
+  );
+  await waitFor(() => {
+    assert.deepEqual(syncEvents, [SCOPE_A.eventId]);
+    assert.equal(screen.getByTestId("syncing").textContent, "true");
+  });
+
+  commits.length = 0;
+  view.rerender(
+    <AttendanceCounterHarness
+      scope={SCOPE_B}
+      dependencies={dependencies}
+      onLayoutCommit={(commit) => commits.push(commit)}
+    />,
+  );
+  const firstScopeBCommit = commits.find(
+    (commit) => commit.scopeEventId === SCOPE_B.eventId,
+  );
+  await waitFor(() => {
+    assert.equal(listCalls.get(SCOPE_B.eventId), 1);
+    assert.equal(screen.getByTestId("walk-ins").textContent, "3");
+    assert.equal(screen.getByTestId("syncing").textContent, "true");
+  });
+  await act(async () => {
+    await Promise.resolve();
+  });
+
+  await act(async () => {
+    syncA.resolve({
+      data: { items: [], summary: createSummary(SCOPE_A) },
+      error: null,
+    });
+    await syncA.promise;
+    await Promise.resolve();
+  });
+  await waitFor(() =>
+    assert.equal(listCalls.get(SCOPE_B.eventId), 2),
+  );
+  assert.equal(screen.getByTestId("syncing").textContent, "true");
+
+  await act(async () => {
+    pendingBList.resolve([mutationB]);
+    await pendingBList.promise;
+  });
+  await waitFor(() => {
+    assert.deepEqual(syncEvents, [SCOPE_A.eventId, SCOPE_B.eventId]);
+    assert.equal(screen.getByTestId("syncing").textContent, "true");
+  });
+
+  await act(async () => {
+    syncB.resolve({
+      data: { items: [], summary: createSummary(SCOPE_B) },
+      error: null,
+    });
+    await syncB.promise;
+    await Promise.resolve();
+  });
+  await waitFor(() =>
+    assert.equal(screen.getByTestId("syncing").textContent, "false"),
+  );
+  assert.deepEqual(syncEvents, [SCOPE_A.eventId, SCOPE_B.eventId]);
+  assert.equal(firstScopeBCommit?.isSyncing, false);
+  assert.equal(firstScopeBCommit?.statusText, null);
+});
+
+test("a stale clear-failed rejection cannot publish into the active scope", async () => {
+  setOnline(false);
+  const clearFailed = createDeferred<void>();
+  const dependencies = createDependencies({
+    clearResolvedAttendanceMutations: async () => clearFailed.promise,
+  });
+  const view = render(
+    <AttendanceCounterHarness scope={SCOPE_A} dependencies={dependencies} />,
+  );
+  await waitFor(() =>
+    assert.equal(screen.getByTestId("scope-event").textContent, SCOPE_A.eventId),
+  );
+
+  fireEvent.click(screen.getByRole("button", { name: "Clear failed" }));
+  view.rerender(
+    <AttendanceCounterHarness scope={SCOPE_B} dependencies={dependencies} />,
+  );
+  await waitFor(() =>
+    assert.equal(screen.getByTestId("scope-event").textContent, SCOPE_B.eventId),
+  );
+
+  await act(async () => {
+    clearFailed.reject(new Error("ATTENDANCE_STORAGE_UNAVAILABLE"));
+    await clearFailed.promise.catch(() => {});
+  });
+  assert.equal(screen.getByTestId("notice").textContent, "");
+});
+
+test("the first committed scope frame never exposes the previous scope state", async () => {
+  setOnline(false);
+  const reconciliationA = createDeferred<{
+    data: DoorAttendanceSummary;
+    error: null;
+  }>();
+  const undoA = createDeferred<OfflineAttendanceMutation>();
+  const commits: AttendanceCounterCommit[] = [];
+  const dependencies = createDependencies({
+    fetchDoorAttendanceSummary: async ({ scope }) => ({
+      data: createSummary(scope, {
+        lastUndoableIdempotencyKey: `undoable:${scope.eventId}`,
+      }),
+      error: null,
+    }),
+    reconcileDoorAttendance: async ({ scope }) => {
+      assert.equal(scope.eventId, SCOPE_A.eventId);
+      return reconciliationA.promise;
+    },
+    enqueueAttendanceMutation: async ({ scope, action }) => {
+      assert.equal(scope.eventId, SCOPE_A.eventId);
+      assert.equal(action, "reversal");
+      return undoA.promise;
+    },
+    clearResolvedAttendanceMutations: async () => {
+      throw new Error("ATTENDANCE_STORAGE_UNAVAILABLE");
+    },
+  });
+  const view = render(
+    <AttendanceCounterHarness
+      scope={SCOPE_A}
+      dependencies={dependencies}
+      onLayoutCommit={(commit) => commits.push(commit)}
+    />,
+  );
+  await waitFor(() =>
+    assert.equal(screen.getByTestId("scope-event").textContent, SCOPE_A.eventId),
+  );
+  fireEvent.change(screen.getByRole("textbox", { name: "Target" }), {
+    target: { value: "10" },
+  });
+  fireEvent.change(screen.getByRole("textbox", { name: "Reason" }), {
+    target: { value: "scope A draft" },
+  });
+  fireEvent.submit(screen.getByRole("button", { name: "Reconcile" }).closest("form")!);
+  fireEvent.click(screen.getByRole("button", { name: "Undo" }));
+  fireEvent.click(screen.getByRole("button", { name: "Clear failed" }));
+  await waitFor(() => {
+    assert.equal(screen.getByTestId("notice").textContent, "queueFailed");
+    assert.equal(screen.getByTestId("target").textContent, "10");
+    assert.equal(screen.getByTestId("reason").textContent, "scope A draft");
+    assert.equal(screen.getByTestId("undoing").textContent, "true");
+    assert.equal(screen.getByTestId("adjusting").textContent, "true");
+    assert.equal(
+      screen.getByRole("button", { name: "Walk in" }).hasAttribute("disabled"),
+      false,
+    );
+  });
+
+  commits.length = 0;
+  view.rerender(
+    <AttendanceCounterHarness
+      scope={SCOPE_B}
+      dependencies={dependencies}
+      onLayoutCommit={(commit) => commits.push(commit)}
+    />,
+  );
+  const firstScopeBCommit = commits.find(
+    (commit) => commit.scopeEventId === SCOPE_B.eventId,
+  );
+  commits.length = 0;
+  view.rerender(
+    <AttendanceCounterHarness
+      scope={SCOPE_A}
+      dependencies={dependencies}
+      onLayoutCommit={(commit) => commits.push(commit)}
+    />,
+  );
+  const firstReturnedScopeACommit = commits.find(
+    (commit) => commit.scopeEventId === SCOPE_A.eventId,
+  );
+  await waitFor(() => {
+    assert.equal(screen.getByTestId("scope-event").textContent, SCOPE_A.eventId);
+    assert.equal(screen.getByTestId("notice").textContent, "");
+    assert.equal(screen.getByTestId("target").textContent, "");
+    assert.equal(screen.getByTestId("reason").textContent, "");
+    assert.equal(screen.getByTestId("undoing").textContent, "true");
+    assert.equal(screen.getByTestId("adjusting").textContent, "true");
+  });
+
+  await act(async () => {
+    reconciliationA.resolve({ data: createSummary(SCOPE_A), error: null });
+    undoA.resolve(createMutation({
+      idempotencyKey: "undo:scope-a",
+      sequence: 1,
+      action: "reversal",
+      scope: SCOPE_A,
+      reversesIdempotencyKey: `undoable:${SCOPE_A.eventId}`,
+    }));
+    await Promise.all([reconciliationA.promise, undoA.promise]);
+  });
+  await waitFor(() => {
+    assert.equal(screen.getByTestId("undoing").textContent, "false");
+    assert.equal(screen.getByTestId("adjusting").textContent, "false");
+  });
+
+  const neutralScopeCommit = (scopeEventId: string | null) => ({
+    scopeEventId,
+    notice: "",
+    canRecord: false,
+    reconciliationTarget: "",
+    adjustmentReason: "",
+    isUndoing: false,
+    isAdjusting: false,
+    isSyncing: false,
+    statusText: null,
+    walkIns: 0,
+    failedCount: 0,
+    undoableKey: null,
+  });
+  assert.deepEqual(firstScopeBCommit, neutralScopeCommit(SCOPE_B.eventId));
+  assert.deepEqual(
+    firstReturnedScopeACommit,
+    neutralScopeCommit(SCOPE_A.eventId),
+  );
 });
