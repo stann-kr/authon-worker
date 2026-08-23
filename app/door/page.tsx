@@ -1,13 +1,7 @@
 "use client";
 
-import { useState, useRef, useEffect, useCallback, useMemo } from "react";
-import {
-  useLocalStorage,
-  useGuestPolling,
-  useLatestRequestGuard,
-  useLatestRef,
-  useScopedOperationGuard,
-} from "../../lib/hooks";
+import { useState, useEffect, useMemo } from "react";
+import { useLocalStorage } from "../../lib/hooks";
 import AuthGuard from "../../components/AuthGuard";
 import GuestListCard from "../../components/GuestListCard";
 import GuestSearchInput from "../../components/GuestSearchInput";
@@ -26,6 +20,9 @@ import Skeleton from "../../components/Skeleton";
 import OperationsLayout from "../../components/OperationsLayout";
 import EventScopeSelector from "../../components/EventScopeSelector";
 import AttendanceCounter from "./components/AttendanceCounter";
+import useDoorRosterController, {
+  type DoorRosterDependencies,
+} from "./useDoorRosterController";
 import { useSectionLoadingTask } from "../../components/RouteTransitionProvider";
 import { getBusinessDate } from "../../lib/date";
 import { orderGuestDisplayList } from "../../lib/guests/display-order";
@@ -44,13 +41,7 @@ import {
   findDoorGuestByCode,
   syncOfflineDoorMutations,
 } from "../../lib/api/offline-door";
-import {
-  applyQueuedDoorMutation,
-  createOfflineDoorRosterSnapshot,
-  parseDoorGuestCode,
-  type OfflineDoorMutation,
-  type OfflineDoorScope,
-} from "../../lib/door/offline-domain";
+import { parseDoorGuestCode } from "../../lib/door/offline-domain";
 import {
   clearResolvedOfflineDoorMutations,
   enqueueOfflineDoorMutation,
@@ -60,20 +51,25 @@ import {
   resolveOfflineDoorMutation,
   saveOfflineDoorRoster,
 } from "../../lib/door/offline-store";
-import {
-  groupOfflineDoorMutationsByDevice,
-  type OfflineDoorSyncResult,
-} from "../../lib/door/offline-sync";
-import type { ExternalLinkDirectoryEntry } from "@/lib/external-links/types";
 import type { Guest } from "@/lib/guests/types";
-import type { UserDirectoryEntry } from "@/lib/users/types";
 import { useLocale, useTranslations } from "next-intl";
 
-const EMPTY_DISPLAY_DATA = {
-  guests: [] as Guest[],
-  users: [] as UserDirectoryEntry[],
-  externalLinks: [] as ExternalLinkDirectoryEntry[],
-};
+const DOOR_ROSTER_DEPENDENCIES: DoorRosterDependencies = Object.freeze({
+  fetchGuestsByDate,
+  updateGuestStatus,
+  deleteGuest,
+  fetchGuestOperationsSnapshot,
+  fetchOfflineDoorRoster,
+  syncOfflineDoorMutations,
+  clearResolvedOfflineDoorMutations,
+  enqueueOfflineDoorMutation,
+  listOfflineDoorMutations,
+  loadOfflineDoorRoster,
+  removeOfflineDoorRoster,
+  resolveOfflineDoorMutation,
+  saveOfflineDoorRoster,
+  randomUUID: () => crypto.randomUUID(),
+});
 
 export default function DoorPage() {
   return (
@@ -86,7 +82,6 @@ export default function DoorPage() {
 function DoorPageContent() {
   const t = useTranslations("Door");
   const commonT = useTranslations("Common");
-  const tRef = useLatestRef(t);
   const locale = useLocale() as "en" | "ko";
   const {
     venueId,
@@ -106,19 +101,6 @@ function DoorPageContent() {
   );
   const [selectedDJ, setSelectedDJ] = useState<string>("all");
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
-  const [loadingStates, setLoadingStates] = useState<{
-    [key: string]: boolean;
-  }>({});
-  const [users, setUsers] = useState<UserDirectoryEntry[]>([]);
-  const [externalLinks, setExternalLinks] =
-    useState<ExternalLinkDirectoryEntry[]>([]);
-  const [guests, setGuests] = useState<Guest[]>([]);
-  const [isFetching, setIsFetching] = useState(true);
-  const [loadedScopeKey, setLoadedScopeKey] = useState("");
-  const [loadOutcome, setLoadOutcome] = useState<
-    "idle" | "success" | "partial" | "error"
-  >("idle");
-  const [feedback, setFeedback] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [sortMode, setSortMode] = useLocalStorage<"default" | "alpha">(
     "door:sortMode",
@@ -128,44 +110,38 @@ function DoorPageContent() {
     "door:prioritizeWaiting",
     true,
   );
-  const [isOfflineMode, setIsOfflineMode] = useState(false);
-  const [offlineMutations, setOfflineMutations] = useState<OfflineDoorMutation[]>([]);
-  const [isOfflineSyncing, setIsOfflineSyncing] = useState(false);
-  const [offlineNotice, setOfflineNotice] = useState<
-    "queued" | "syncFailed" | "scopeClosed" | null
-  >(null);
   const [doorCode, setDoorCode] = useState("");
   const [isDoorCodeLoading, setIsDoorCodeLoading] = useState(false);
   const [doorCodeFeedback, setDoorCodeFeedback] = useState<
     "found" | "notFound" | "unavailable" | null
   >(null);
-  const offlineSyncingRef = useRef(false);
-
-  // 로딩 중 이전 데이터를 유지하여 화면 깜빡임 방지
-  const displayCacheRef = useRef<{
-    scopeKey: string;
-    guests: Guest[];
-    users: UserDirectoryEntry[];
-    externalLinks: ExternalLinkDirectoryEntry[];
-  }>({
-    scopeKey: "",
-    guests: [],
-    users: [],
-    externalLinks: [],
+  const {
+    displayData,
+    feedback,
+    guests,
+    handleClearResolvedOfflineMutations,
+    handleStatusChange,
+    hasCurrentScopeData,
+    hasResolvedOfflineMutations,
+    isCurrentScopeFetching,
+    isFetching,
+    isOfflineMode,
+    isOfflineSyncing,
+    loadData,
+    loadOutcome,
+    loadingStates,
+    offlineNotice,
+    offlineQueueCounts,
+    offlineScope,
+    requestScopeKey,
+    syncOfflineQueue,
+  } = useDoorRosterController({
+    venueId,
+    selectedDate,
+    selectedEventId,
+    translate: t,
+    dependencies: DOOR_ROSTER_DEPENDENCIES,
   });
-
-  const requestScopeKey = `${venueId}:${selectedDate}:${selectedEventId ?? "general"}`;
-  const offlineScope = useMemo<OfflineDoorScope | null>(
-    () =>
-      venueId && selectedEventId
-        ? {
-            venueId,
-            eventId: selectedEventId,
-            businessDate: selectedDate,
-          }
-        : null,
-    [selectedDate, selectedEventId, venueId],
-  );
   const attendanceScope = useMemo(
     () =>
       venueId
@@ -177,31 +153,7 @@ function DoorPageContent() {
         : null,
     [selectedDate, selectedEventId, venueId],
   );
-  const requestGuard = useLatestRequestGuard();
-  const pollingGuard = useLatestRequestGuard();
-  const mutationGuard = useScopedOperationGuard();
-  const currentScopeKeyRef = useRef(requestScopeKey);
-  currentScopeKeyRef.current = requestScopeKey;
-
-  useEffect(() => {
-    if (!isFetching && loadedScopeKey === requestScopeKey) {
-      displayCacheRef.current = {
-        scopeKey: requestScopeKey,
-        guests,
-        users,
-        externalLinks,
-      };
-    }
-  }, [externalLinks, guests, isFetching, loadedScopeKey, requestScopeKey, users]);
-
-  const hasCurrentScopeData = loadedScopeKey === requestScopeKey;
-  const isCurrentScopeFetching = isFetching || !hasCurrentScopeData;
   useSectionLoadingTask(isCurrentScopeFetching);
-  const displayData = !hasCurrentScopeData
-    ? EMPTY_DISPLAY_DATA
-    : isFetching && displayCacheRef.current.scopeKey === requestScopeKey
-      ? displayCacheRef.current
-      : { guests, users, externalLinks };
 
   useEffect(() => {
     if (currentVenue) setSelectedDate(businessDate);
@@ -213,454 +165,12 @@ function DoorPageContent() {
 
   useEffect(() => {
     setSelectedDJ("all");
-    setLoadOutcome("idle");
   }, [requestScopeKey]);
 
-  const refreshOfflineMutations = useCallback(async (
-    scope: OfflineDoorScope | null = offlineScope,
-  ) => {
-    if (!scope) {
-      setOfflineMutations([]);
-      return [];
-    }
-    try {
-      const mutations = await listOfflineDoorMutations(scope);
-      setOfflineMutations(mutations);
-      return mutations;
-    } catch {
-      setOfflineMutations([]);
-      return [];
-    }
-  }, [offlineScope]);
-
-  const loadCachedOfflineRoster = useCallback(async (
-    scope: OfflineDoorScope,
-  ): Promise<boolean> => {
-    try {
-      const [snapshot, mutations] = await Promise.all([
-        loadOfflineDoorRoster(scope),
-        listOfflineDoorMutations(scope),
-      ]);
-      if (!snapshot) return false;
-      const cachedGuests = mutations
-        .filter((mutation) =>
-          mutation.state === "queued" || mutation.state === "confirmed",
-        )
-        .reduce(
-          (current, mutation) => applyQueuedDoorMutation(current, mutation),
-          snapshot.guests,
-        );
-      setGuests(cachedGuests.map((guest) => ({
-        id: guest.id,
-        venueId: scope.venueId,
-        eventId: scope.eventId,
-        name: guest.name,
-        status: guest.status,
-        checkInTime: guest.checkInTime,
-        date: scope.businessDate,
-        createdAt: snapshot.cachedAt,
-        updatedAt: snapshot.cachedAt,
-      })));
-      setUsers([]);
-      setExternalLinks([]);
-      setOfflineMutations(mutations);
-      setIsOfflineMode(true);
-      setLoadOutcome("success");
-      return true;
-    } catch {
-      return false;
-    }
-  }, []);
-
-  const syncOfflineQueue = useCallback(async () => {
-    if (
-      !offlineScope ||
-      offlineSyncingRef.current ||
-      (typeof navigator !== "undefined" && !navigator.onLine)
-    ) return;
-    offlineSyncingRef.current = true;
-    setIsOfflineSyncing(true);
-    try {
-      const mutations = await listOfflineDoorMutations(offlineScope);
-      const queued = mutations.filter((mutation) => mutation.state === "queued");
-      if (queued.length === 0) {
-        setOfflineMutations(mutations);
-        return;
-      }
-      const syncResults: OfflineDoorSyncResult[] = [];
-      let hasSyncFailure = false;
-      for (const group of groupOfflineDoorMutationsByDevice(queued)) {
-        const response = await syncOfflineDoorMutations({
-          ...offlineScope,
-          deviceId: group.deviceId,
-          items: group.mutations.map((mutation) => ({
-            idempotencyKey: mutation.idempotencyKey,
-            sequence: mutation.sequence,
-            guestId: mutation.guestId,
-            action: mutation.action,
-            queuedAt: mutation.queuedAt,
-          })),
-        });
-        if (response.error || !response.data) {
-          hasSyncFailure = true;
-          continue;
-        }
-        syncResults.push(...response.data);
-      }
-      if (syncResults.length === 0 && hasSyncFailure) {
-        setOfflineNotice("syncFailed");
-        return;
-      }
-      for (const result of syncResults) {
-        await resolveOfflineDoorMutation({
-          scope: offlineScope,
-          idempotencyKey: result.idempotencyKey,
-          state: result.state,
-          resolution: result.resolution,
-        });
-      }
-      await loadCachedOfflineRoster(offlineScope);
-      setGuests((current) => {
-        let next = current;
-        for (const result of syncResults) {
-          if (result.status === null) {
-            continue;
-          }
-          next = next.map((guest) =>
-            guest.id === result.guestId
-              ? {
-                  ...guest,
-                  status: result.status ?? guest.status,
-                  checkInTime: result.checkInTime,
-                }
-              : guest,
-          );
-        }
-        return next;
-      });
-      try {
-        const [authoritative, cacheableRoster] = await Promise.all([
-          fetchGuestOperationsSnapshot(
-            offlineScope.businessDate,
-            offlineScope.venueId,
-            offlineScope.eventId,
-          ),
-          fetchOfflineDoorRoster(offlineScope),
-        ]);
-        if (authoritative.data) {
-          setGuests(authoritative.data.guests);
-          setUsers(authoritative.data.users);
-          setExternalLinks(authoritative.data.externalLinks);
-          setIsOfflineMode(false);
-        }
-        if (cacheableRoster.data) {
-          try {
-            await saveOfflineDoorRoster(createOfflineDoorRosterSnapshot({
-              scope: offlineScope,
-              guests: cacheableRoster.data,
-            }));
-          } catch {
-            // The server result remains authoritative if local persistence is unavailable.
-          }
-        } else if (cacheableRoster.error === "OFFLINE_DOOR_EVENT_UNAVAILABLE") {
-          try {
-            await removeOfflineDoorRoster(offlineScope);
-          } catch {
-            // A stale snapshot will still expire locally and cannot sync into a closed Event.
-          }
-        }
-      } catch {
-        // Resolved queue states remain visible until a later authoritative refresh.
-      }
-      const hasScopeClosedResult = syncResults.some(
-        (result) => result.state === "scope_closed",
-      );
-      setOfflineNotice(
-        hasSyncFailure
-          ? "syncFailed"
-          : hasScopeClosedResult
-            ? "scopeClosed"
-            : null,
-      );
-      await refreshOfflineMutations(offlineScope);
-    } catch {
-      setOfflineNotice("syncFailed");
-    } finally {
-      offlineSyncingRef.current = false;
-      setIsOfflineSyncing(false);
-    }
-  }, [loadCachedOfflineRoster, offlineScope, refreshOfflineMutations]);
-
-  const loadData = useCallback(async () => {
-    pollingGuard.invalidateRequests();
-    const isLatestRequest = requestGuard.beginRequest();
-    if (!venueId) {
-      setGuests([]);
-      setUsers([]);
-      setExternalLinks([]);
-      setLoadedScopeKey(requestScopeKey);
-      setLoadOutcome("success");
-      setIsFetching(false);
-      return;
-    }
-    setIsFetching(true);
-    setFeedback(null);
-    try {
-      const [operationsResponse, offlineRosterResponse] = await Promise.all([
-        fetchGuestOperationsSnapshot(
-          selectedDate,
-          venueId,
-          selectedEventId,
-        ),
-        offlineScope
-          ? fetchOfflineDoorRoster(offlineScope)
-          : Promise.resolve(null),
-      ]);
-      const { data, error } = operationsResponse;
-      if (!isLatestRequest()) return;
-      if (!data) {
-        const usedCache = offlineScope
-          ? await loadCachedOfflineRoster(offlineScope)
-          : false;
-        if (!isLatestRequest()) return;
-        if (!usedCache) {
-          setGuests([]);
-          setUsers([]);
-          setExternalLinks([]);
-          setFeedback(tRef.current("loadFailed"));
-          setLoadOutcome("error");
-          setIsOfflineMode(false);
-        }
-      } else {
-        if (error) {
-          setFeedback(tRef.current("partialLoadFailed"));
-          setLoadOutcome("partial");
-        } else {
-          setLoadOutcome("success");
-        }
-        setGuests(data.guests);
-        setUsers(data.users);
-        setExternalLinks(data.externalLinks);
-        setIsOfflineMode(false);
-        if (offlineScope && offlineRosterResponse?.data) {
-          try {
-            await saveOfflineDoorRoster(createOfflineDoorRosterSnapshot({
-              scope: offlineScope,
-              guests: offlineRosterResponse.data,
-            }));
-            await refreshOfflineMutations(offlineScope);
-          } catch {
-            setOfflineMutations([]);
-          }
-        } else if (
-          offlineScope &&
-          offlineRosterResponse?.error === "OFFLINE_DOOR_EVENT_UNAVAILABLE"
-        ) {
-          try {
-            await removeOfflineDoorRoster(offlineScope);
-            await refreshOfflineMutations(offlineScope);
-          } catch {
-            setOfflineMutations([]);
-          }
-        }
-      }
-      setLoadedScopeKey(requestScopeKey);
-      if (data && offlineScope) void syncOfflineQueue();
-    } catch (error) {
-      if (!isLatestRequest()) return;
-      console.error("Failed to load data:", error);
-      const usedCache = offlineScope
-        ? await loadCachedOfflineRoster(offlineScope)
-        : false;
-      if (!isLatestRequest()) return;
-      setLoadedScopeKey(requestScopeKey);
-      if (!usedCache) {
-        setGuests([]);
-        setUsers([]);
-        setExternalLinks([]);
-        setFeedback(tRef.current("loadFailed"));
-        setLoadOutcome("error");
-        setIsOfflineMode(false);
-      }
-    } finally {
-      if (isLatestRequest()) setIsFetching(false);
-    }
-  }, [
-    loadCachedOfflineRoster,
-    offlineScope,
-    pollingGuard,
-    refreshOfflineMutations,
-    requestGuard,
-    requestScopeKey,
-    selectedDate,
-    selectedEventId,
-    syncOfflineQueue,
-    tRef,
-    venueId,
-  ]);
-
   useEffect(() => {
-    loadData();
-  }, [loadData]);
-
-  useEffect(() => {
-    setOfflineNotice(null);
-    setIsOfflineMode(false);
     setDoorCode("");
     setDoorCodeFeedback(null);
-    void refreshOfflineMutations(offlineScope);
-  }, [offlineScope, refreshOfflineMutations]);
-
-  useEffect(() => {
-    const handleOnline = () => {
-      void loadData();
-    };
-    window.addEventListener("online", handleOnline);
-    return () => window.removeEventListener("online", handleOnline);
-  }, [loadData]);
-
-  // 주기적으로 데이터 갱신 (15초)
-  const pollData = useCallback(async () => {
-    if (!venueId || loadedScopeKey !== requestScopeKey) return;
-    const isLatestRequest = pollingGuard.beginRequest();
-    const { data } = await fetchGuestsByDate(selectedDate, venueId, selectedEventId);
-    if (isLatestRequest() && loadedScopeKey === requestScopeKey && data) {
-      setGuests(data);
-    }
-  }, [loadedScopeKey, pollingGuard, requestScopeKey, selectedDate, selectedEventId, venueId]);
-
-  const pollingCoordinator = useGuestPolling(
-    pollData,
-    15000,
-    !!venueId && !isOfflineMode,
-  );
-
-  useEffect(() => {
-    mutationGuard.invalidateOperations();
-    pollingGuard.invalidateRequests();
-    pollingCoordinator.clearSuspensions();
-    setLoadingStates({});
-    setFeedback(null);
-  }, [mutationGuard, pollingCoordinator, pollingGuard, requestScopeKey]);
-
-  const queueOfflineStatusChange = useCallback(async (
-    guestId: string,
-    status: "pending" | "checked",
-  ): Promise<boolean> => {
-    if (!offlineScope) return false;
-    try {
-      const mutation = await enqueueOfflineDoorMutation({
-        scope: offlineScope,
-        guestId,
-        action: status === "pending" ? "cancel_check_in" : "check_in",
-      });
-      setGuests((current) =>
-        current.map((guest) =>
-          guest.id === guestId
-            ? {
-                ...guest,
-                status,
-                checkInTime: status === "checked" ? mutation.queuedAt : null,
-              }
-            : guest,
-        ),
-      );
-      await refreshOfflineMutations(offlineScope);
-      setIsOfflineMode(true);
-      setOfflineNotice("queued");
-      setFeedback(null);
-      return true;
-    } catch {
-      setFeedback(t("offlineQueueFailed"));
-      return false;
-    }
-  }, [offlineScope, refreshOfflineMutations, t]);
-
-  const handleStatusChange = async (
-    id: string,
-    newStatus: Guest["status"],
-    action: string,
-  ) => {
-    const operationScopeKey = requestScopeKey;
-    const busyKey = `${id}_${action}`;
-    const operation = mutationGuard.beginOperation(
-      operationScopeKey,
-      busyKey,
-    );
-    const releasePolling = pollingCoordinator.suspend();
-    pollingGuard.invalidateRequests();
-    setLoadingStates((prev) => ({ ...prev, [busyKey]: true }));
-
-    try {
-      if (
-        newStatus !== "deleted" &&
-        offlineScope &&
-        (isOfflineMode ||
-          (typeof navigator !== "undefined" && !navigator.onLine))
-      ) {
-        await queueOfflineStatusChange(id, newStatus);
-        return;
-      }
-      const { data, error } =
-        newStatus === "deleted"
-          ? await deleteGuest(id)
-          : await updateGuestStatus(id, newStatus, crypto.randomUUID());
-
-      if (!operation.isCurrent(currentScopeKeyRef.current)) return;
-      if (!error && data) {
-        setGuests((prev) => prev.map((guest) => (guest.id === id ? data : guest)));
-        setFeedback(null);
-        await loadData();
-      } else {
-        console.error("Failed to update guest status:", error);
-        setFeedback(
-          error === "ATTENDANCE_SCOPE_CLOSED"
-            ? t("attendanceScopeClosed")
-            : t("updateFailed"),
-        );
-      }
-    } catch (error) {
-      if (!operation.isCurrent(currentScopeKeyRef.current)) return;
-      console.error("Failed to update guest status:", error);
-      const queued =
-        newStatus !== "deleted" &&
-        offlineScope
-          ? await queueOfflineStatusChange(id, newStatus)
-          : false;
-      if (!queued) setFeedback(t("updateFailed"));
-    } finally {
-      releasePolling();
-      if (operation.finish(currentScopeKeyRef.current)) {
-        setLoadingStates((prev) => ({ ...prev, [busyKey]: false }));
-      }
-    }
-  };
-
-  const handleClearResolvedOfflineMutations = async () => {
-    if (!offlineScope) return;
-    try {
-      const [snapshot, mutations] = await Promise.all([
-        loadOfflineDoorRoster(offlineScope),
-        listOfflineDoorMutations(offlineScope),
-      ]);
-      if (snapshot) {
-        const confirmedRoster = mutations
-          .filter((mutation) => mutation.state === "confirmed")
-          .reduce(
-            (current, mutation) => applyQueuedDoorMutation(current, mutation),
-            snapshot.guests,
-          );
-        await saveOfflineDoorRoster(createOfflineDoorRosterSnapshot({
-          scope: offlineScope,
-          guests: confirmedRoster,
-        }));
-      }
-      await clearResolvedOfflineDoorMutations(offlineScope);
-      await refreshOfflineMutations(offlineScope);
-    } catch {
-      setFeedback(t("offlineStorageFailed"));
-    }
-  };
+  }, [offlineScope]);
 
   const handleDoorCodeLookup = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -730,20 +240,6 @@ function DoorPageContent() {
         : displayData.guests.filter(
             (guest) => guest.createdByUserId === selectedDJ,
           );
-  const offlineQueueCounts = offlineMutations.reduce(
-    (counts, mutation) => ({
-      ...counts,
-      [mutation.state]: counts[mutation.state] + 1,
-    }),
-    { queued: 0, confirmed: 0, conflict: 0, rejected: 0, scope_closed: 0 },
-  );
-  const hasResolvedOfflineMutations =
-    offlineQueueCounts.confirmed +
-      offlineQueueCounts.conflict +
-      offlineQueueCounts.rejected +
-      offlineQueueCounts.scope_closed >
-    0;
-
   const pendingGuests = filteredGuests.filter(
     (guest) => guest.status === "pending",
   );
