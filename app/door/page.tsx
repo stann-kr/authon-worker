@@ -23,6 +23,9 @@ import AttendanceCounter from "./components/AttendanceCounter";
 import useDoorRosterController, {
   type DoorRosterDependencies,
 } from "./useDoorRosterController";
+import useDoorCodeLookup, {
+  type DoorCodeLookupDependencies,
+} from "./useDoorCodeLookup";
 import { useSectionLoadingTask } from "../../components/RouteTransitionProvider";
 import { getBusinessDate } from "../../lib/date";
 import { orderGuestDisplayList } from "../../lib/guests/display-order";
@@ -41,7 +44,6 @@ import {
   findDoorGuestByCode,
   syncOfflineDoorMutations,
 } from "../../lib/api/offline-door";
-import { parseDoorGuestCode } from "../../lib/door/offline-domain";
 import {
   clearResolvedOfflineDoorMutations,
   enqueueOfflineDoorMutation,
@@ -69,6 +71,10 @@ const DOOR_ROSTER_DEPENDENCIES: DoorRosterDependencies = Object.freeze({
   resolveOfflineDoorMutation,
   saveOfflineDoorRoster,
   randomUUID: () => crypto.randomUUID(),
+});
+
+const DOOR_CODE_LOOKUP_DEPENDENCIES: DoorCodeLookupDependencies = Object.freeze({
+  findDoorGuestByCode,
 });
 
 export default function DoorPage() {
@@ -110,11 +116,6 @@ function DoorPageContent() {
     "door:prioritizeWaiting",
     true,
   );
-  const [doorCode, setDoorCode] = useState("");
-  const [isDoorCodeLoading, setIsDoorCodeLoading] = useState(false);
-  const [doorCodeFeedback, setDoorCodeFeedback] = useState<
-    "found" | "notFound" | "unavailable" | null
-  >(null);
   const {
     displayData,
     feedback,
@@ -167,51 +168,19 @@ function DoorPageContent() {
     setSelectedDJ("all");
   }, [requestScopeKey]);
 
-  useEffect(() => {
-    setDoorCode("");
-    setDoorCodeFeedback(null);
-  }, [offlineScope]);
-
-  const handleDoorCodeLookup = async (event: React.FormEvent) => {
-    event.preventDefault();
-    if (!offlineScope || !doorCode.trim() || isDoorCodeLoading) return;
-    setIsDoorCodeLoading(true);
-    setDoorCodeFeedback(null);
-    try {
-      if (isOfflineMode || !navigator.onLine) {
-        const guestId = parseDoorGuestCode(doorCode);
-        const localGuest = guestId
-          ? guests.find((guest) => guest.id === guestId)
-          : null;
-        if (!localGuest) {
-          setDoorCodeFeedback("notFound");
-          return;
-        }
-        setSearchQuery(localGuest.name);
-        setDoorCodeFeedback("found");
-        return;
-      }
-      const response = await findDoorGuestByCode({
-        ...offlineScope,
-        code: doorCode,
-      });
-      if (response.data) {
-        setSearchQuery(response.data.name);
-        setDoorCodeFeedback("found");
-      } else {
-        setDoorCodeFeedback(
-          response.error === "DOOR_GUEST_CODE_NOT_FOUND" ||
-            response.error === "INVALID_DOOR_GUEST_CODE"
-            ? "notFound"
-            : "unavailable",
-        );
-      }
-    } catch {
-      setDoorCodeFeedback("unavailable");
-    } finally {
-      setIsDoorCodeLoading(false);
-    }
-  };
+  const {
+    code: doorCode,
+    feedback: doorCodeFeedback,
+    busy: isDoorCodeLoading,
+    change: handleDoorCodeChange,
+    submit: handleDoorCodeLookup,
+  } = useDoorCodeLookup({
+    scope: offlineScope,
+    guests,
+    isOfflineMode,
+    onGuestFound: setSearchQuery,
+    dependencies: DOOR_CODE_LOOKUP_DEPENDENCIES,
+  });
 
   const getContributor = (guest: Guest): {
     name?: string;
@@ -477,10 +446,7 @@ function DoorPageContent() {
                       id="door-guest-code"
                       name="door-guest-code"
                       value={doorCode}
-                      onChange={(event) => {
-                        setDoorCode(event.target.value);
-                        setDoorCodeFeedback(null);
-                      }}
+                      onChange={(event) => handleDoorCodeChange(event.target.value)}
                       autoComplete="off"
                       autoCapitalize="characters"
                       spellCheck={false}
