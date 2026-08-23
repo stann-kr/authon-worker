@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useCallback } from "react";
 import {
   fetchVenues,
   createVenue,
@@ -16,25 +16,22 @@ import OperationsLayout from "../../../components/OperationsLayout";
 import OperationalSectionNav from "../../../components/OperationalSectionNav";
 import ConfirmDialog from "../../../components/ConfirmDialog";
 import Button from "../../../components/Button";
-import { useSectionLoadingTask } from "../../../components/RouteTransitionProvider";
-import { useLatestRequestGuard } from "../../../lib/hooks";
 import { captureImmutableDraft } from "../../../lib/forms/immutable-draft";
-import {
-  deriveAsyncListState,
-  shouldShowEmptyState,
-} from "../../../lib/ui/async-list-state";
+import { shouldShowEmptyState } from "../../../lib/ui/async-list-state";
 import { getVenueTypeColor } from "../../../lib/colors";
 import { useTranslations } from "next-intl";
 import { useVenueSelector } from "../../../components/VenueSelector";
 import {
-  DEFAULT_CLOSING_TIME,
-  DEFAULT_OPENING_TIME,
-  DEFAULT_VENUE_TIMEZONE,
-} from "../../../lib/date";
-import {
   VENUE_MUTATION_ERROR_KEYS,
   selectDomainMessageKey,
 } from "../../../lib/api/domain-error";
+import useVenueDirectoryController, {
+  type VenueDirectoryControllerDependencies,
+  type VenueMutationMessageResolver,
+} from "./useVenueDirectoryController";
+import useVenueCreateController, {
+  type VenueCreateControllerDependencies,
+} from "./useVenueCreateController";
 
 const VENUE_TYPES = [
   { value: "club", label: "CLUB" },
@@ -66,6 +63,13 @@ interface VenueManagementProps {
   showSectionNavigation?: boolean;
 }
 
+const VENUE_MANAGEMENT_ACTIONS: VenueDirectoryControllerDependencies &
+  VenueCreateControllerDependencies = Object.freeze({
+  fetchVenues,
+  createVenue,
+  updateVenue,
+});
+
 export default function VenueManagement({
   activeSection,
   onActiveSectionChange,
@@ -80,8 +84,6 @@ export default function VenueManagement({
     festival: t("typeFestival"),
     private: t("typePrivate"),
   };
-  const [venues, setVenues] = useState<Venue[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
   const [internalActiveSection, setInternalActiveSection] =
     useState<VenueManagementSection>("list");
   const activeTab = activeSection ?? internalActiveSection;
@@ -95,134 +97,39 @@ export default function VenueManagement({
     },
     [onActiveSectionChange],
   );
-  const [formData, setFormData] = useState({
-    name: "",
-    type: "club" as Venue["type"],
-    address: "",
-    description: "",
-    brandName: "",
-    brandTagline: "",
-    primaryDomain: "",
-    defaultLocale: "en" as NonNullable<Venue["defaultLocale"]>,
-    timezone: DEFAULT_VENUE_TIMEZONE,
-    openingTime: DEFAULT_OPENING_TIME,
-    closingTime: DEFAULT_CLOSING_TIME,
-  });
-  const [formError, setFormError] = useState("");
-  const [formSuccess, setFormSuccess] = useState("");
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [listError, setListError] = useState("");
-  const [loadOutcome, setLoadOutcome] = useState<
-    "idle" | "success" | "partial" | "error"
-  >("idle");
   const { refreshVenues: refreshActiveVenues } = useVenueSelector();
-  const requestGuard = useLatestRequestGuard();
-  useSectionLoadingTask(isLoading);
-
-  const loadVenues = useCallback(async () => {
-    const isLatestRequest = requestGuard.beginRequest();
-    setIsLoading(true);
-    setListError("");
-    try {
-      const { data, error } = await fetchVenues(true); // include inactive
-      if (!isLatestRequest()) return;
-      if (data) setVenues(data);
-      if (error) {
-        console.error("Failed to load venues:", error);
-        setListError(t("loadFailed"));
-        setLoadOutcome(data ? "partial" : "error");
-      } else {
-        setLoadOutcome("success");
-      }
-    } catch (error: unknown) {
-      if (!isLatestRequest()) return;
-      console.error("Failed to load venues:", error);
-      setListError(t("loadFailed"));
-      setLoadOutcome("error");
-    } finally {
-      if (isLatestRequest()) setIsLoading(false);
-    }
-  }, [requestGuard, t]);
-
-  useEffect(() => {
-    loadVenues();
-  }, [loadVenues]);
-
-  const handleCreate = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (isSubmitting) return;
-    const draft = captureImmutableDraft(formData);
-    setIsSubmitting(true);
-    setFormError("");
-    setFormSuccess("");
-
-    if (!draft.name.trim()) {
-      setFormError(t("nameRequired"));
-      setIsSubmitting(false);
-      return;
-    }
-
-    try {
-      const { data, error } = await createVenue({
-        name: draft.name.trim(),
-        type: draft.type,
-        address: draft.address.trim() || undefined,
-        description: draft.description.trim() || undefined,
-        brandName: draft.brandName.trim() || undefined,
-        brandTagline: draft.brandTagline.trim() || undefined,
-        primaryDomain: draft.primaryDomain.trim() || undefined,
-        defaultLocale: draft.defaultLocale,
-        timezone: draft.timezone.trim(),
-        openingTime: draft.openingTime,
-        closingTime: draft.closingTime,
-      });
-
-      if (error) {
-        console.error("Failed to create venue:", error);
-        setFormError(
-          t(selectDomainMessageKey(error, VENUE_MUTATION_ERROR_KEYS, "createFailed")),
-        );
-      } else if (data) {
-        setFormSuccess(t("created", { name: data.name }));
-        setFormData({
-          name: "",
-          type: "club",
-          address: "",
-          description: "",
-          brandName: "",
-          brandTagline: "",
-          primaryDomain: "",
-          defaultLocale: "en",
-          timezone: DEFAULT_VENUE_TIMEZONE,
-          openingTime: DEFAULT_OPENING_TIME,
-          closingTime: DEFAULT_CLOSING_TIME,
-        });
-        await Promise.all([loadVenues(), refreshActiveVenues()]);
-      }
-    } catch (error: unknown) {
-      console.error("Failed to create venue:", error);
-      setFormError(t("createFailed"));
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  const handleToggleActive = async (venue: Venue) => {
-    const { error } = await updateVenue(venue.id, { active: !venue.active });
-    if (error) {
-      console.error("Failed to update venue:", error);
-      setListError(t("updateFailed"));
-    } else {
-      await Promise.all([loadVenues(), refreshActiveVenues()]);
-    }
-  };
-  const listState = deriveAsyncListState({
-    hasStarted: isLoading || loadOutcome !== "idle",
-    isLoading,
-    itemCount: venues.length,
-    hasError: loadOutcome === "error",
-    isPartial: loadOutcome === "partial",
+  const resolveMutationMessage = useCallback<VenueMutationMessageResolver>(
+    (error, fallback) =>
+      t(selectDomainMessageKey(error, VENUE_MUTATION_ERROR_KEYS, fallback)),
+    [t],
+  );
+  const directory = useVenueDirectoryController({
+    dependencies: VENUE_MANAGEMENT_ACTIONS,
+    refreshActiveVenues,
+    resolveMutationMessage,
   });
+  const create = useVenueCreateController({
+    dependencies: VENUE_MANAGEMENT_ACTIONS,
+    onCreated: directory.refreshAfterMutation,
+    resolveMutationMessage,
+  });
+  const {
+    venues,
+    isLoading,
+    listError,
+    listState,
+    loadVenues,
+    handleToggleActive,
+    handleSave,
+  } = directory;
+  const {
+    formData,
+    setFormData,
+    formError,
+    formSuccess,
+    isSubmitting,
+    handleCreate,
+  } = create;
 
   return (
     <OperationsLayout
@@ -553,24 +460,7 @@ export default function VenueManagement({
                       key={venue.id}
                       venue={venue}
                       onToggleActive={handleToggleActive}
-                      onSave={async (id, updates) => {
-                        const { error } = await updateVenue(id, updates);
-                        if (!error) {
-                          setListError("");
-                          await Promise.all([loadVenues(), refreshActiveVenues()]);
-                        } else {
-                          setListError(
-                            t(
-                              selectDomainMessageKey(
-                                error,
-                                VENUE_MUTATION_ERROR_KEYS,
-                                "updateFailed",
-                              ),
-                            ),
-                          );
-                        }
-                        return error;
-                      }}
+                      onSave={handleSave}
                     />
                   ))}
                 </div>
