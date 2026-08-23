@@ -51,6 +51,70 @@ const OFFLINE_SNAPSHOT: OfflineDoorRosterSnapshot = {
 
 const TRANSLATE = (key: string) => key;
 
+function createDeferred<T>() {
+  let resolve!: (value: T | PromiseLike<T>) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise;
+    reject = rejectPromise;
+  });
+  return { promise, reject, resolve };
+}
+
+function createScopedGuest(eventId: string, name: string): Guest {
+  return {
+    ...GUEST,
+    id: `guest-${eventId}`,
+    eventId,
+    name,
+  };
+}
+
+function createScopedMutation(
+  eventId: string,
+  guestId: string,
+): OfflineDoorMutation {
+  return {
+    idempotencyKey: `offline:device-0001:${eventId}`,
+    deviceId: "device-0001",
+    sequence: 1,
+    scope: {
+      venueId: "venue-0001",
+      eventId,
+      businessDate: "2026-08-23",
+    },
+    guestId,
+    action: "check_in",
+    queuedAt: "2026-08-23T10:05:00.000Z",
+    expiresAt: "2026-08-23T22:05:00.000Z",
+    state: "queued",
+    resolution: null,
+  };
+}
+
+function createScopedSnapshot(
+  eventId: string,
+  guest: Guest,
+): OfflineDoorRosterSnapshot {
+  return {
+    scope: {
+      venueId: "venue-0001",
+      eventId,
+      businessDate: "2026-08-23",
+    },
+    guests: [
+      {
+        id: guest.id,
+        name: guest.name,
+        status: guest.status === "checked" ? "checked" : "pending",
+        checkInTime: guest.checkInTime ?? null,
+      },
+    ],
+    cachedAt: "2026-08-23T10:00:00.000Z",
+    expiresAt: "2026-08-23T18:00:00.000Z",
+  };
+}
+
 function setOnline(value: boolean) {
   Object.defineProperty(window.navigator, "onLine", {
     configurable: true,
@@ -123,7 +187,17 @@ function DoorRosterHarness({
       <output data-testid="guest-status">
         {roster.displayData.guests[0]?.status ?? "none"}
       </output>
+      <output data-testid="guest-name">
+        {roster.displayData.guests[0]?.name ?? "none"}
+      </output>
+      <output data-testid="has-current-scope-data">
+        {String(roster.hasCurrentScopeData)}
+      </output>
+      <output data-testid="fetching">{String(roster.isFetching)}</output>
       <output data-testid="offline-mode">{String(roster.isOfflineMode)}</output>
+      <output data-testid="offline-syncing">
+        {String(roster.isOfflineSyncing)}
+      </output>
       <output data-testid="offline-notice">{roster.offlineNotice ?? ""}</output>
       <output data-testid="offline-queued">{roster.offlineQueueCounts.queued}</output>
       <button
@@ -133,6 +207,9 @@ function DoorRosterHarness({
         }
       >
         Check in
+      </button>
+      <button type="button" onClick={() => void roster.syncOfflineQueue()}>
+        Sync offline queue
       </button>
     </>
   );
@@ -245,4 +322,274 @@ test("an offline status change queues once and updates the visible roster", asyn
     assert.equal(screen.getByTestId("offline-notice").textContent, "queued");
   });
   assert.equal(enqueueCalls, 1);
+});
+
+test("a deferred save from the previous scope cannot replace completed current-scope data", async () => {
+  const guestA = createScopedGuest("event-aaaa", "Guest A");
+  const guestB = createScopedGuest("event-bbbb", "Guest B");
+  const saveA = createDeferred<void>();
+  const savedScopes: string[] = [];
+  const dependencies = createDependencies({
+    fetchGuestOperationsSnapshot: async (_date, _venueId, eventId) => ({
+      data: {
+        guests: [eventId === "event-aaaa" ? guestA : guestB],
+        users: [],
+        externalLinks: [],
+        failedSections: [],
+      },
+      error: null,
+    }),
+    fetchOfflineDoorRoster: async (scope) => ({
+      data: [
+        {
+          id: scope.eventId === "event-aaaa" ? guestA.id : guestB.id,
+          name: scope.eventId === "event-aaaa" ? guestA.name : guestB.name,
+          status: "pending",
+          checkInTime: null,
+        },
+      ],
+      error: null,
+    }),
+    saveOfflineDoorRoster: async (snapshot) => {
+      savedScopes.push(snapshot.scope.eventId);
+      if (snapshot.scope.eventId === "event-aaaa") await saveA.promise;
+    },
+  });
+  const view = render(
+    <DoorRosterHarness dependencies={dependencies} selectedEventId="event-aaaa" />,
+  );
+
+  await waitFor(() => assert.deepEqual(savedScopes, ["event-aaaa"]));
+  view.rerender(
+    <DoorRosterHarness dependencies={dependencies} selectedEventId="event-bbbb" />,
+  );
+
+  await waitFor(() => {
+    assert.equal(screen.getByTestId("guest-name").textContent, "Guest B");
+    assert.equal(
+      screen.getByTestId("has-current-scope-data").textContent,
+      "true",
+    );
+    assert.equal(screen.getByTestId("fetching").textContent, "false");
+  });
+
+  saveA.resolve();
+  await waitFor(() =>
+    assert.deepEqual(savedScopes, ["event-aaaa", "event-bbbb"]),
+  );
+  assert.equal(screen.getByTestId("guest-name").textContent, "Guest B");
+  assert.equal(
+    screen.getByTestId("has-current-scope-data").textContent,
+    "true",
+  );
+});
+
+test("a current-scope sync runs once after the previous scope sync and keeps syncing ownership", async () => {
+  const guestA = createScopedGuest("event-aaaa", "Guest A");
+  const guestB = createScopedGuest("event-bbbb", "Guest B");
+  const syncA = createDeferred<{
+    data: [];
+    error: null;
+  }>();
+  const syncB = createDeferred<{
+    data: [];
+    error: null;
+  }>();
+  const syncScopes: string[] = [];
+  const dependencies = createDependencies({
+    fetchGuestOperationsSnapshot: async (_date, _venueId, eventId) => ({
+      data: {
+        guests: [eventId === "event-aaaa" ? guestA : guestB],
+        users: [],
+        externalLinks: [],
+        failedSections: [],
+      },
+      error: null,
+    }),
+    listOfflineDoorMutations: async (scope) => [
+      createScopedMutation(
+        scope.eventId,
+        scope.eventId === "event-aaaa" ? guestA.id : guestB.id,
+      ),
+    ],
+    syncOfflineDoorMutations: async (params) => {
+      syncScopes.push(params.eventId);
+      return params.eventId === "event-aaaa" ? syncA.promise : syncB.promise;
+    },
+  });
+  const view = render(
+    <DoorRosterHarness dependencies={dependencies} selectedEventId="event-aaaa" />,
+  );
+
+  await waitFor(() => {
+    assert.deepEqual(syncScopes, ["event-aaaa"]);
+    assert.equal(screen.getByTestId("offline-syncing").textContent, "true");
+  });
+  view.rerender(
+    <DoorRosterHarness dependencies={dependencies} selectedEventId="event-bbbb" />,
+  );
+  await waitFor(() => {
+    assert.equal(screen.getByTestId("guest-name").textContent, "Guest B");
+  });
+
+  syncA.resolve({ data: [], error: null });
+  await waitFor(() => {
+    assert.deepEqual(syncScopes, ["event-aaaa", "event-bbbb"]);
+    assert.equal(screen.getByTestId("offline-syncing").textContent, "true");
+  });
+
+  syncB.resolve({ data: [], error: null });
+  await waitFor(() => {
+    assert.equal(screen.getByTestId("offline-syncing").textContent, "false");
+  });
+  assert.deepEqual(syncScopes, ["event-aaaa", "event-bbbb"]);
+});
+
+test("a stale cached fallback cannot overwrite the authoritative current-scope roster state", async () => {
+  const guestA = createScopedGuest("event-aaaa", "Cached Guest A");
+  const guestB = createScopedGuest("event-bbbb", "Authoritative Guest B");
+  const loadA = createDeferred<OfflineDoorRosterSnapshot | null>();
+  let didStartLoadA = false;
+  const mutationA = createScopedMutation("event-aaaa", guestA.id);
+  const mutationB = createScopedMutation("event-bbbb", guestB.id);
+  const dependencies = createDependencies({
+    fetchGuestOperationsSnapshot: async (_date, _venueId, eventId) =>
+      eventId === "event-aaaa"
+        ? { data: null, error: "LOAD_FAILED" }
+        : {
+            data: {
+              guests: [guestB],
+              users: [],
+              externalLinks: [],
+              failedSections: ["users"],
+            },
+            error: "PARTIAL",
+          },
+    fetchOfflineDoorRoster: async () => ({
+      data: null,
+      error: "OFFLINE_DOOR_ROSTER_FAILED",
+    }),
+    listOfflineDoorMutations: async (scope) =>
+      scope.eventId === "event-aaaa"
+        ? [
+            mutationA,
+            {
+              ...mutationA,
+              idempotencyKey: "offline:device-0001:event-aaaa-2",
+              sequence: 2,
+            },
+          ]
+        : [mutationB],
+    loadOfflineDoorRoster: async (scope) => {
+      if (scope.eventId !== "event-aaaa") return null;
+      didStartLoadA = true;
+      return loadA.promise;
+    },
+  });
+  const view = render(
+    <DoorRosterHarness dependencies={dependencies} selectedEventId="event-aaaa" />,
+  );
+
+  await waitFor(() => assert.equal(didStartLoadA, true));
+  view.rerender(
+    <DoorRosterHarness dependencies={dependencies} selectedEventId="event-bbbb" />,
+  );
+  await waitFor(() => {
+    assert.equal(
+      screen.getByTestId("guest-name").textContent,
+      "Authoritative Guest B",
+    );
+    assert.equal(screen.getByTestId("outcome").textContent, "partial");
+    assert.equal(screen.getByTestId("offline-mode").textContent, "false");
+  });
+
+  loadA.resolve(createScopedSnapshot("event-aaaa", guestA));
+  await waitFor(() => {
+    assert.equal(screen.getByTestId("offline-queued").textContent, "1");
+  });
+  assert.equal(
+    screen.getByTestId("guest-name").textContent,
+    "Authoritative Guest B",
+  );
+  assert.equal(screen.getByTestId("outcome").textContent, "partial");
+  assert.equal(screen.getByTestId("offline-mode").textContent, "false");
+});
+
+test("offline store tasks wait for completion and continue after a rejection", async () => {
+  const guestA = createScopedGuest("event-aaaa", "Guest A");
+  const guestB = createScopedGuest("event-bbbb", "Guest B");
+  const saveA = createDeferred<void>();
+  const storeEvents: string[] = [];
+  let activeStoreTasks = 0;
+  let maxActiveStoreTasks = 0;
+
+  async function trackStoreTask<T>(name: string, task: () => Promise<T>) {
+    storeEvents.push(`start:${name}`);
+    activeStoreTasks += 1;
+    maxActiveStoreTasks = Math.max(maxActiveStoreTasks, activeStoreTasks);
+    try {
+      return await task();
+    } finally {
+      activeStoreTasks -= 1;
+      storeEvents.push(`end:${name}`);
+    }
+  }
+
+  const dependencies = createDependencies({
+    fetchGuestOperationsSnapshot: async (_date, _venueId, eventId) => ({
+      data: {
+        guests: [eventId === "event-aaaa" ? guestA : guestB],
+        users: [],
+        externalLinks: [],
+        failedSections: [],
+      },
+      error: null,
+    }),
+    fetchOfflineDoorRoster: async (scope) => ({
+      data: [
+        {
+          id: scope.eventId === "event-aaaa" ? guestA.id : guestB.id,
+          name: scope.eventId === "event-aaaa" ? guestA.name : guestB.name,
+          status: "pending",
+          checkInTime: null,
+        },
+      ],
+      error: null,
+    }),
+    listOfflineDoorMutations: async (scope) =>
+      trackStoreTask(`list:${scope.eventId}`, async () => []),
+    saveOfflineDoorRoster: async (snapshot) =>
+      trackStoreTask(`save:${snapshot.scope.eventId}`, async () => {
+        if (snapshot.scope.eventId === "event-aaaa") await saveA.promise;
+      }),
+  });
+  const view = render(
+    <DoorRosterHarness dependencies={dependencies} selectedEventId="event-aaaa" />,
+  );
+
+  await waitFor(() =>
+    assert.ok(storeEvents.includes("start:save:event-aaaa")),
+  );
+  view.rerender(
+    <DoorRosterHarness dependencies={dependencies} selectedEventId="event-bbbb" />,
+  );
+  await waitFor(() => {
+    assert.equal(screen.getByTestId("guest-name").textContent, "Guest B");
+    assert.equal(screen.getByTestId("fetching").textContent, "false");
+  });
+  assert.equal(
+    storeEvents.some((event) => event.includes("event-bbbb")),
+    false,
+  );
+
+  saveA.reject(new Error("OFFLINE_STORAGE_FAILED"));
+  await waitFor(() =>
+    assert.ok(storeEvents.includes("end:save:event-bbbb")),
+  );
+  assert.equal(maxActiveStoreTasks, 1);
+  assert.equal(screen.getByTestId("guest-name").textContent, "Guest B");
+  assert.equal(
+    screen.getByTestId("has-current-scope-data").textContent,
+    "true",
+  );
 });

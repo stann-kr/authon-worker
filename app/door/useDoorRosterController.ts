@@ -33,6 +33,21 @@ const EMPTY_DISPLAY_DATA = {
   externalLinks: [] as ExternalLinkDirectoryEntry[],
 };
 
+const STALE_OFFLINE_STORE_TASK = Symbol("STALE_OFFLINE_STORE_TASK");
+
+type OfflineStoreTaskResult<T> = T | typeof STALE_OFFLINE_STORE_TASK;
+type OwnershipCheck = () => boolean;
+
+interface DoorScopeToken {
+  key: string;
+}
+
+interface OfflineSyncRequest {
+  scope: OfflineDoorScope;
+  scopeToken: DoorScopeToken;
+  syncToken: number;
+}
+
 export interface DoorRosterDependencies {
   fetchGuestsByDate: (
     date: string,
@@ -118,7 +133,13 @@ export default function useDoorRosterController({
   const [offlineNotice, setOfflineNotice] = useState<
     "queued" | "syncFailed" | "scopeClosed" | null
   >(null);
-  const offlineSyncingRef = useRef(false);
+  const offlineStoreTailRef = useRef<Promise<void>>(Promise.resolve());
+  const syncRequestTokenRef = useRef(0);
+  const latestSyncRequestTokenRef = useRef(0);
+  const syncCoordinatorRef = useRef<{
+    isRunning: boolean;
+    pending: OfflineSyncRequest | null;
+  }>({ isRunning: false, pending: null });
 
   const displayCacheRef = useRef<{
     scopeKey: string;
@@ -148,7 +169,32 @@ export default function useDoorRosterController({
   const pollingGuard = useLatestRequestGuard();
   const mutationGuard = useScopedOperationGuard();
   const currentScopeKeyRef = useRef(requestScopeKey);
+  const currentScopeOwnerRef = useRef<DoorScopeToken>({ key: requestScopeKey });
+  if (currentScopeOwnerRef.current.key !== requestScopeKey) {
+    currentScopeOwnerRef.current = { key: requestScopeKey };
+  }
+  const currentScopeToken = currentScopeOwnerRef.current;
   currentScopeKeyRef.current = requestScopeKey;
+
+  const runOfflineStoreTask = useCallback(
+    <T,>(
+      isCurrent: OwnershipCheck,
+      task: () => Promise<T>,
+    ): Promise<OfflineStoreTaskResult<T>> => {
+      const result = offlineStoreTailRef.current.then(
+        async (): Promise<OfflineStoreTaskResult<T>> => {
+          if (!isCurrent()) return STALE_OFFLINE_STORE_TASK;
+          return task();
+        },
+      );
+      offlineStoreTailRef.current = result.then(
+        () => undefined,
+        () => undefined,
+      );
+      return result;
+    },
+    [],
+  );
 
   useEffect(() => {
     if (!isFetching && loadedScopeKey === requestScopeKey) {
@@ -174,31 +220,45 @@ export default function useDoorRosterController({
   }, [requestScopeKey]);
 
   const refreshOfflineMutations = useCallback(
-    async (scope: OfflineDoorScope | null = offlineScope) => {
+    async (scope: OfflineDoorScope | null, isCurrent: OwnershipCheck) => {
       if (!scope) {
-        setOfflineMutations([]);
+        if (isCurrent()) setOfflineMutations([]);
         return [];
       }
       try {
-        const mutations = await dependencies.listOfflineDoorMutations(scope);
+        const mutations = await runOfflineStoreTask(isCurrent, () =>
+          dependencies.listOfflineDoorMutations(scope),
+        );
+        if (mutations === STALE_OFFLINE_STORE_TASK || !isCurrent()) return [];
         setOfflineMutations(mutations);
         return mutations;
       } catch {
-        setOfflineMutations([]);
+        if (isCurrent()) setOfflineMutations([]);
         return [];
       }
     },
-    [dependencies, offlineScope],
+    [dependencies, runOfflineStoreTask],
   );
 
   const loadCachedOfflineRoster = useCallback(
-    async (scope: OfflineDoorScope): Promise<boolean> => {
+    async (
+      scope: OfflineDoorScope,
+      isCurrent: OwnershipCheck,
+    ): Promise<boolean> => {
       try {
-        const [snapshot, mutations] = await Promise.all([
+        const snapshot = await runOfflineStoreTask(isCurrent, () =>
           dependencies.loadOfflineDoorRoster(scope),
+        );
+        if (
+          snapshot === STALE_OFFLINE_STORE_TASK ||
+          !snapshot ||
+          !isCurrent()
+        )
+          return false;
+        const mutations = await runOfflineStoreTask(isCurrent, () =>
           dependencies.listOfflineDoorMutations(scope),
-        ]);
-        if (!snapshot) return false;
+        );
+        if (mutations === STALE_OFFLINE_STORE_TASK || !isCurrent()) return false;
         const cachedGuests = mutations
           .filter(
             (mutation) =>
@@ -231,140 +291,207 @@ export default function useDoorRosterController({
         return false;
       }
     },
-    [dependencies],
+    [dependencies, runOfflineStoreTask],
+  );
+
+  const runOfflineSync = useCallback(
+    async (request: OfflineSyncRequest) => {
+      const offlineScope = request.scope;
+      const isCurrent = () =>
+        currentScopeOwnerRef.current === request.scopeToken &&
+        latestSyncRequestTokenRef.current === request.syncToken;
+      if (
+        !isCurrent() ||
+        (typeof navigator !== "undefined" && !navigator.onLine)
+      )
+        return;
+      try {
+        const mutations = await runOfflineStoreTask(isCurrent, () =>
+          dependencies.listOfflineDoorMutations(offlineScope),
+        );
+        if (mutations === STALE_OFFLINE_STORE_TASK || !isCurrent()) return;
+        const queued = mutations.filter(
+          (mutation) => mutation.state === "queued",
+        );
+        if (queued.length === 0) {
+          setOfflineMutations(mutations);
+          return;
+        }
+        const syncResults: OfflineDoorSyncResult[] = [];
+        let hasSyncFailure = false;
+        for (const group of groupOfflineDoorMutationsByDevice(queued)) {
+          if (!isCurrent()) return;
+          const response = await dependencies.syncOfflineDoorMutations({
+            ...offlineScope,
+            deviceId: group.deviceId,
+            items: group.mutations.map((mutation) => ({
+              idempotencyKey: mutation.idempotencyKey,
+              sequence: mutation.sequence,
+              guestId: mutation.guestId,
+              action: mutation.action,
+              queuedAt: mutation.queuedAt,
+            })),
+          });
+          if (!isCurrent()) return;
+          if (response.error || !response.data) {
+            hasSyncFailure = true;
+            continue;
+          }
+          syncResults.push(...response.data);
+        }
+        if (syncResults.length === 0 && hasSyncFailure) {
+          setOfflineNotice("syncFailed");
+          return;
+        }
+        for (const result of syncResults) {
+          const resolution = await runOfflineStoreTask(isCurrent, () =>
+            dependencies.resolveOfflineDoorMutation({
+              scope: offlineScope,
+              idempotencyKey: result.idempotencyKey,
+              state: result.state,
+              resolution: result.resolution,
+            }),
+          );
+          if (resolution === STALE_OFFLINE_STORE_TASK || !isCurrent()) return;
+        }
+        await loadCachedOfflineRoster(offlineScope, isCurrent);
+        if (!isCurrent()) return;
+        setGuests((current) => {
+          let next = current;
+          for (const result of syncResults) {
+            if (result.status === null) continue;
+            next = next.map((guest) =>
+              guest.id === result.guestId
+                ? {
+                    ...guest,
+                    status: result.status ?? guest.status,
+                    checkInTime: result.checkInTime,
+                  }
+                : guest,
+            );
+          }
+          return next;
+        });
+        try {
+          const [authoritative, cacheableRoster] = await Promise.all([
+            dependencies.fetchGuestOperationsSnapshot(
+              offlineScope.businessDate,
+              offlineScope.venueId,
+              offlineScope.eventId,
+            ),
+            dependencies.fetchOfflineDoorRoster(offlineScope),
+          ]);
+          if (!isCurrent()) return;
+          if (authoritative.data) {
+            setGuests(authoritative.data.guests);
+            setUsers(authoritative.data.users);
+            setExternalLinks(authoritative.data.externalLinks);
+            setIsOfflineMode(false);
+          }
+          if (cacheableRoster.data) {
+            try {
+              await runOfflineStoreTask(isCurrent, () =>
+                dependencies.saveOfflineDoorRoster(
+                  createOfflineDoorRosterSnapshot({
+                    scope: offlineScope,
+                    guests: cacheableRoster.data ?? [],
+                  }),
+                ),
+              );
+            } catch {
+              // The server result remains authoritative if local persistence is unavailable.
+            }
+          } else if (
+            cacheableRoster.error === "OFFLINE_DOOR_EVENT_UNAVAILABLE"
+          ) {
+            try {
+              await runOfflineStoreTask(isCurrent, () =>
+                dependencies.removeOfflineDoorRoster(offlineScope),
+              );
+            } catch {
+              // A stale snapshot will still expire locally and cannot sync into a closed Event.
+            }
+          }
+        } catch {
+          // Resolved queue states remain visible until a later authoritative refresh.
+        }
+        if (!isCurrent()) return;
+        const hasScopeClosedResult = syncResults.some(
+          (result) => result.state === "scope_closed",
+        );
+        setOfflineNotice(
+          hasSyncFailure
+            ? "syncFailed"
+            : hasScopeClosedResult
+              ? "scopeClosed"
+              : null,
+        );
+        await refreshOfflineMutations(offlineScope, isCurrent);
+      } catch {
+        if (isCurrent()) setOfflineNotice("syncFailed");
+      }
+    },
+    [
+      dependencies,
+      loadCachedOfflineRoster,
+      refreshOfflineMutations,
+      runOfflineStoreTask,
+    ],
   );
 
   const syncOfflineQueue = useCallback(async () => {
     if (
       !offlineScope ||
-      offlineSyncingRef.current ||
+      currentScopeOwnerRef.current !== currentScopeToken ||
       (typeof navigator !== "undefined" && !navigator.onLine)
     )
       return;
-    offlineSyncingRef.current = true;
+    const request: OfflineSyncRequest = {
+      scope: offlineScope,
+      scopeToken: currentScopeToken,
+      syncToken: ++syncRequestTokenRef.current,
+    };
+    latestSyncRequestTokenRef.current = request.syncToken;
+    const coordinator = syncCoordinatorRef.current;
+    if (coordinator.isRunning) {
+      coordinator.pending = request;
+      setIsOfflineSyncing(true);
+      return;
+    }
+    coordinator.isRunning = true;
     setIsOfflineSyncing(true);
+    let nextRequest: OfflineSyncRequest | null = request;
     try {
-      const mutations =
-        await dependencies.listOfflineDoorMutations(offlineScope);
-      const queued = mutations.filter(
-        (mutation) => mutation.state === "queued",
-      );
-      if (queued.length === 0) {
-        setOfflineMutations(mutations);
-        return;
-      }
-      const syncResults: OfflineDoorSyncResult[] = [];
-      let hasSyncFailure = false;
-      for (const group of groupOfflineDoorMutationsByDevice(queued)) {
-        const response = await dependencies.syncOfflineDoorMutations({
-          ...offlineScope,
-          deviceId: group.deviceId,
-          items: group.mutations.map((mutation) => ({
-            idempotencyKey: mutation.idempotencyKey,
-            sequence: mutation.sequence,
-            guestId: mutation.guestId,
-            action: mutation.action,
-            queuedAt: mutation.queuedAt,
-          })),
-        });
-        if (response.error || !response.data) {
-          hasSyncFailure = true;
-          continue;
-        }
-        syncResults.push(...response.data);
-      }
-      if (syncResults.length === 0 && hasSyncFailure) {
-        setOfflineNotice("syncFailed");
-        return;
-      }
-      for (const result of syncResults) {
-        await dependencies.resolveOfflineDoorMutation({
-          scope: offlineScope,
-          idempotencyKey: result.idempotencyKey,
-          state: result.state,
-          resolution: result.resolution,
-        });
-      }
-      await loadCachedOfflineRoster(offlineScope);
-      setGuests((current) => {
-        let next = current;
-        for (const result of syncResults) {
-          if (result.status === null) {
-            continue;
-          }
-          next = next.map((guest) =>
-            guest.id === result.guestId
-              ? {
-                  ...guest,
-                  status: result.status ?? guest.status,
-                  checkInTime: result.checkInTime,
-                }
-              : guest,
-          );
-        }
-        return next;
-      });
-      try {
-        const [authoritative, cacheableRoster] = await Promise.all([
-          dependencies.fetchGuestOperationsSnapshot(
-            offlineScope.businessDate,
-            offlineScope.venueId,
-            offlineScope.eventId,
-          ),
-          dependencies.fetchOfflineDoorRoster(offlineScope),
-        ]);
-        if (authoritative.data) {
-          setGuests(authoritative.data.guests);
-          setUsers(authoritative.data.users);
-          setExternalLinks(authoritative.data.externalLinks);
-          setIsOfflineMode(false);
-        }
-        if (cacheableRoster.data) {
-          try {
-            await dependencies.saveOfflineDoorRoster(
-              createOfflineDoorRosterSnapshot({
-                scope: offlineScope,
-                guests: cacheableRoster.data,
-              }),
-            );
-          } catch {
-            // The server result remains authoritative if local persistence is unavailable.
-          }
-        } else if (
-          cacheableRoster.error === "OFFLINE_DOOR_EVENT_UNAVAILABLE"
+      while (nextRequest) {
+        coordinator.pending = null;
+        await runOfflineSync(nextRequest);
+        nextRequest = coordinator.pending as OfflineSyncRequest | null;
+        if (
+          nextRequest &&
+          currentScopeOwnerRef.current !== nextRequest.scopeToken
         ) {
-          try {
-            await dependencies.removeOfflineDoorRoster(offlineScope);
-          } catch {
-            // A stale snapshot will still expire locally and cannot sync into a closed Event.
-          }
+          nextRequest = null;
         }
-      } catch {
-        // Resolved queue states remain visible until a later authoritative refresh.
       }
-      const hasScopeClosedResult = syncResults.some(
-        (result) => result.state === "scope_closed",
-      );
-      setOfflineNotice(
-        hasSyncFailure
-          ? "syncFailed"
-          : hasScopeClosedResult
-            ? "scopeClosed"
-            : null,
-      );
-      await refreshOfflineMutations(offlineScope);
-    } catch {
-      setOfflineNotice("syncFailed");
     } finally {
-      offlineSyncingRef.current = false;
+      coordinator.isRunning = false;
+      coordinator.pending = null;
       setIsOfflineSyncing(false);
     }
-  }, [dependencies, loadCachedOfflineRoster, offlineScope, refreshOfflineMutations]);
+  }, [
+    currentScopeToken,
+    offlineScope,
+    runOfflineSync,
+  ]);
 
   const loadData = useCallback(async () => {
     pollingGuard.invalidateRequests();
     const isLatestRequest = requestGuard.beginRequest();
+    const isCurrent = () =>
+      isLatestRequest() &&
+      currentScopeOwnerRef.current === currentScopeToken;
     if (!venueId) {
+      if (!isCurrent()) return;
       setGuests([]);
       setUsers([]);
       setExternalLinks([]);
@@ -387,12 +514,12 @@ export default function useDoorRosterController({
           : Promise.resolve(null),
       ]);
       const { data, error } = operationsResponse;
-      if (!isLatestRequest()) return;
+      if (!isCurrent()) return;
       if (!data) {
         const usedCache = offlineScope
-          ? await loadCachedOfflineRoster(offlineScope)
+          ? await loadCachedOfflineRoster(offlineScope, isCurrent)
           : false;
-        if (!isLatestRequest()) return;
+        if (!isCurrent()) return;
         if (!usedCache) {
           setGuests([]);
           setUsers([]);
@@ -412,39 +539,48 @@ export default function useDoorRosterController({
         setUsers(data.users);
         setExternalLinks(data.externalLinks);
         setIsOfflineMode(false);
-        if (offlineScope && offlineRosterResponse?.data) {
-          try {
-            await dependencies.saveOfflineDoorRoster(
-              createOfflineDoorRosterSnapshot({
-                scope: offlineScope,
-                guests: offlineRosterResponse.data,
-              }),
-            );
-            await refreshOfflineMutations(offlineScope);
-          } catch {
-            setOfflineMutations([]);
-          }
-        } else if (
-          offlineScope &&
-          offlineRosterResponse?.error === "OFFLINE_DOOR_EVENT_UNAVAILABLE"
-        ) {
-          try {
-            await dependencies.removeOfflineDoorRoster(offlineScope);
-            await refreshOfflineMutations(offlineScope);
-          } catch {
-            setOfflineMutations([]);
-          }
+        setLoadedScopeKey(requestScopeKey);
+        if (offlineScope) {
+          void (async () => {
+            try {
+              if (offlineRosterResponse?.data) {
+                await runOfflineStoreTask(isCurrent, () =>
+                  dependencies.saveOfflineDoorRoster(
+                    createOfflineDoorRosterSnapshot({
+                      scope: offlineScope,
+                      guests: offlineRosterResponse.data ?? [],
+                    }),
+                  ),
+                );
+                if (isCurrent()) {
+                  await refreshOfflineMutations(offlineScope, isCurrent);
+                }
+              } else if (
+                offlineRosterResponse?.error ===
+                "OFFLINE_DOOR_EVENT_UNAVAILABLE"
+              ) {
+                await runOfflineStoreTask(isCurrent, () =>
+                  dependencies.removeOfflineDoorRoster(offlineScope),
+                );
+                if (isCurrent()) {
+                  await refreshOfflineMutations(offlineScope, isCurrent);
+                }
+              }
+            } catch {
+              if (isCurrent()) setOfflineMutations([]);
+            }
+            if (isCurrent()) void syncOfflineQueue();
+          })();
         }
       }
-      setLoadedScopeKey(requestScopeKey);
-      if (data && offlineScope) void syncOfflineQueue();
+      if (!data) setLoadedScopeKey(requestScopeKey);
     } catch (error) {
-      if (!isLatestRequest()) return;
+      if (!isCurrent()) return;
       console.error("Failed to load data:", error);
       const usedCache = offlineScope
-        ? await loadCachedOfflineRoster(offlineScope)
+        ? await loadCachedOfflineRoster(offlineScope, isCurrent)
         : false;
-      if (!isLatestRequest()) return;
+      if (!isCurrent()) return;
       setLoadedScopeKey(requestScopeKey);
       if (!usedCache) {
         setGuests([]);
@@ -455,9 +591,10 @@ export default function useDoorRosterController({
         setIsOfflineMode(false);
       }
     } finally {
-      if (isLatestRequest()) setIsFetching(false);
+      if (isCurrent()) setIsFetching(false);
     }
   }, [
+    currentScopeToken,
     dependencies,
     loadCachedOfflineRoster,
     offlineScope,
@@ -465,6 +602,7 @@ export default function useDoorRosterController({
     refreshOfflineMutations,
     requestGuard,
     requestScopeKey,
+    runOfflineStoreTask,
     selectedDate,
     selectedEventId,
     syncOfflineQueue,
@@ -477,10 +615,16 @@ export default function useDoorRosterController({
   }, [loadData]);
 
   useEffect(() => {
+    const isCurrent = () => currentScopeOwnerRef.current === currentScopeToken;
     setOfflineNotice(null);
     setIsOfflineMode(false);
-    void refreshOfflineMutations(offlineScope);
-  }, [offlineScope, refreshOfflineMutations]);
+    setOfflineMutations([]);
+    void refreshOfflineMutations(offlineScope, isCurrent);
+  }, [
+    currentScopeToken,
+    offlineScope,
+    refreshOfflineMutations,
+  ]);
 
   useEffect(() => {
     const handleOnline = () => {
@@ -531,12 +675,16 @@ export default function useDoorRosterController({
       status: "pending" | "checked",
     ): Promise<boolean> => {
       if (!offlineScope) return false;
+      const isCurrent = () => currentScopeOwnerRef.current === currentScopeToken;
       try {
-        const mutation = await dependencies.enqueueOfflineDoorMutation({
-          scope: offlineScope,
-          guestId,
-          action: status === "pending" ? "cancel_check_in" : "check_in",
-        });
+        const mutation = await runOfflineStoreTask(isCurrent, () =>
+          dependencies.enqueueOfflineDoorMutation({
+            scope: offlineScope,
+            guestId,
+            action: status === "pending" ? "cancel_check_in" : "check_in",
+          }),
+        );
+        if (mutation === STALE_OFFLINE_STORE_TASK || !isCurrent()) return false;
         setGuests((current) =>
           current.map((guest) =>
             guest.id === guestId
@@ -546,19 +694,27 @@ export default function useDoorRosterController({
                   checkInTime: status === "checked" ? mutation.queuedAt : null,
                 }
               : guest,
-          ),
+            ),
         );
-        await refreshOfflineMutations(offlineScope);
+        await refreshOfflineMutations(offlineScope, isCurrent);
+        if (!isCurrent()) return false;
         setIsOfflineMode(true);
         setOfflineNotice("queued");
         setFeedback(null);
         return true;
       } catch {
-        setFeedback(translate("offlineQueueFailed"));
+        if (isCurrent()) setFeedback(translate("offlineQueueFailed"));
         return false;
       }
     },
-    [dependencies, offlineScope, refreshOfflineMutations, translate],
+    [
+      currentScopeToken,
+      dependencies,
+      offlineScope,
+      refreshOfflineMutations,
+      runOfflineStoreTask,
+      translate,
+    ],
   );
 
   const handleStatusChange = async (
@@ -617,7 +773,9 @@ export default function useDoorRosterController({
         newStatus !== "deleted" && offlineScope
           ? await queueOfflineStatusChange(id, newStatus)
           : false;
-      if (!queued) setFeedback(translate("updateFailed"));
+      if (!queued && operation.isCurrent(currentScopeKeyRef.current)) {
+        setFeedback(translate("updateFailed"));
+      }
     } finally {
       releasePolling();
       if (operation.finish(currentScopeKeyRef.current)) {
@@ -628,11 +786,16 @@ export default function useDoorRosterController({
 
   const handleClearResolvedOfflineMutations = async () => {
     if (!offlineScope) return;
+    const isCurrent = () => currentScopeOwnerRef.current === currentScopeToken;
     try {
-      const [snapshot, mutations] = await Promise.all([
+      const snapshot = await runOfflineStoreTask(isCurrent, () =>
         dependencies.loadOfflineDoorRoster(offlineScope),
+      );
+      if (snapshot === STALE_OFFLINE_STORE_TASK || !isCurrent()) return;
+      const mutations = await runOfflineStoreTask(isCurrent, () =>
         dependencies.listOfflineDoorMutations(offlineScope),
-      ]);
+      );
+      if (mutations === STALE_OFFLINE_STORE_TASK || !isCurrent()) return;
       if (snapshot) {
         const confirmedRoster = mutations
           .filter((mutation) => mutation.state === "confirmed")
@@ -640,17 +803,23 @@ export default function useDoorRosterController({
             (current, mutation) => applyQueuedDoorMutation(current, mutation),
             snapshot.guests,
           );
-        await dependencies.saveOfflineDoorRoster(
-          createOfflineDoorRosterSnapshot({
-            scope: offlineScope,
-            guests: confirmedRoster,
-          }),
+        const saved = await runOfflineStoreTask(isCurrent, () =>
+          dependencies.saveOfflineDoorRoster(
+            createOfflineDoorRosterSnapshot({
+              scope: offlineScope,
+              guests: confirmedRoster,
+            }),
+          ),
         );
+        if (saved === STALE_OFFLINE_STORE_TASK || !isCurrent()) return;
       }
-      await dependencies.clearResolvedOfflineDoorMutations(offlineScope);
-      await refreshOfflineMutations(offlineScope);
+      const cleared = await runOfflineStoreTask(isCurrent, () =>
+        dependencies.clearResolvedOfflineDoorMutations(offlineScope),
+      );
+      if (cleared === STALE_OFFLINE_STORE_TASK || !isCurrent()) return;
+      await refreshOfflineMutations(offlineScope, isCurrent);
     } catch {
-      setFeedback(translate("offlineStorageFailed"));
+      if (isCurrent()) setFeedback(translate("offlineStorageFailed"));
     }
   };
 
