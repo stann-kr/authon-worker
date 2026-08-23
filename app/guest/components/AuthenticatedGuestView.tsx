@@ -21,9 +21,12 @@ import GuestListCard from "@/components/GuestListCard";
 import GuestSearchInput from "@/components/GuestSearchInput";
 import Skeleton from "@/components/Skeleton";
 import OperationsLayout from "@/components/OperationsLayout";
-import DisclosureSection from "@/components/DisclosureSection";
 import GuestCapacityIndicator from "@/components/GuestCapacityIndicator";
 import EventScopeSelector from "@/components/EventScopeSelector";
+import GuestLimitRequestPanel from "./GuestLimitRequestPanel";
+import useGuestLimitRequestController, {
+  type GuestLimitRequestControllerDependencies,
+} from "./useGuestLimitRequestController";
 import { useSectionLoadingTask } from "@/components/RouteTransitionProvider";
 import { getBusinessDate } from "@/lib/date";
 import {
@@ -33,24 +36,14 @@ import {
 } from "@/lib/api/guests";
 import type { BulkGuestCreateInput, Guest } from "@/lib/guests/types";
 import type { GuestQuota } from "@/lib/guest-limits/types";
-import {
-  createGuestLimitRequest,
-} from "@/lib/api/guest-limits";
+import { createGuestLimitRequest } from "@/lib/api/guest-limits";
 import { fetchGuestWorkspaceSnapshot } from "@/lib/api/guest-snapshots";
 import { type User as AuthUser } from "@/lib/auth";
 import {
-  canEditGuestLimitRequestDraft,
-  canSubmitGuestLimitRequest,
-  DEFAULT_GUEST_LIMIT_REQUEST_DRAFT,
-  getScopedGuestLimitRequestDraft,
-  getGuestLimitRequestSectionState,
   mergeGuestWorkspaceDisplay,
-  resetScopedGuestLimitRequestDraft,
   selectGuestWorkspaceDisplay,
-  type GuestLimitRequestDraft,
   type GuestWorkspaceDisplay,
 } from "@/lib/guests/request-section-state";
-import { canRequestGuestLimit } from "@/lib/users/policy";
 import {
   GUEST_CREATE_ERROR_KEYS,
   selectDomainMessageKey,
@@ -64,6 +57,11 @@ import { useLocale, useTranslations } from "next-intl";
 interface AuthenticatedGuestViewProps {
   user: AuthUser | null;
 }
+
+const GUEST_LIMIT_REQUEST_ACTIONS: GuestLimitRequestControllerDependencies =
+  Object.freeze({
+    createRequest: createGuestLimitRequest,
+  });
 
 export default function AuthenticatedGuestView({ user }: AuthenticatedGuestViewProps) {
   const t = useTranslations("GuestOperations");
@@ -86,12 +84,6 @@ export default function AuthenticatedGuestView({ user }: AuthenticatedGuestViewP
   const [quota, setQuota] = useState<GuestQuota | null>(null);
   const [verifiedQuotaScopeKey, setVerifiedQuotaScopeKey] = useState("");
   const [registeredByName, setRegisteredByName] = useState("");
-  const [requestDrafts, setRequestDrafts] = useState<
-    Record<string, GuestLimitRequestDraft>
-  >({});
-  const [requestingScopeKeys, setRequestingScopeKeys] = useState<ReadonlySet<string>>(
-    () => new Set(),
-  );
   const [sortMode, setSortMode] = useLocalStorage<"default" | "alpha">(
     "guest:sortMode",
     "default",
@@ -99,8 +91,6 @@ export default function AuthenticatedGuestView({ user }: AuthenticatedGuestViewP
 
   // 날짜별 화면 데이터를 보존해 날짜 전환 중 다른 날짜의 상태가 섞이지 않게 합니다.
   const displayCacheRef = useRef<Map<string, GuestWorkspaceDisplay>>(new Map());
-  const requestSummaryRef = useRef<HTMLElement>(null);
-  const pendingRequestStatusRef = useRef<HTMLDivElement>(null);
 
   // super_admin venue selector
   const {
@@ -119,11 +109,6 @@ export default function AuthenticatedGuestView({ user }: AuthenticatedGuestViewP
     : (user?.venue_id ?? "");
   const businessDate = getBusinessDate(currentVenue ?? {});
   const requestScopeKey = `${effectiveVenueId}:${selectedDate}:${selectedEventId ?? "general"}`;
-  const requestDraft = getScopedGuestLimitRequestDraft(
-    requestDrafts,
-    requestScopeKey,
-  );
-  const isRequestingExtra = requestingScopeKeys.has(requestScopeKey);
   const requestGuard = useLatestRequestGuard();
   const pollingGuard = useLatestRequestGuard();
   const currentScopeKeyRef = useRef(requestScopeKey);
@@ -263,6 +248,24 @@ export default function AuthenticatedGuestView({ user }: AuthenticatedGuestViewP
   }, [effectiveVenueId, loadedScopeKey, pollingGuard, requestScopeKey, selectedDate, selectedEventId]);
 
   useGuestPolling(pollGuests, 15000, !!effectiveVenueId);
+
+  const guestLimitRequestController = useGuestLimitRequestController({
+    user,
+    requestScopeKey,
+    selectedDate,
+    selectedEventId,
+    quota: displayQuota,
+    hasCurrentScopeData,
+    hasVerifiedCurrentQuota: verifiedQuotaScopeKey === requestScopeKey,
+    isCurrentScopeFetching,
+    currentScopeKeyRef,
+    invalidatePolling: pollingGuard.invalidateRequests,
+    loadGuests,
+    setError,
+    translate: (key, values) => t(key, values),
+    commonTranslate: (key, values) => commonT(key, values),
+    dependencies: GUEST_LIMIT_REQUEST_ACTIONS,
+  });
 
   const handleSave = async () => {
     if (!guestName.trim() || isLoading || isBulkSubmitting) return;
@@ -412,49 +415,6 @@ export default function AuthenticatedGuestView({ user }: AuthenticatedGuestViewP
   const remaining = displayQuota?.remaining ??
     (effectiveLimit === null ? null : Math.max(0, effectiveLimit - activeGuestsCount));
   const isAtLimit = remaining !== null && remaining <= 0;
-  const isGuestLimitRequestEligible = Boolean(
-    user &&
-      canRequestGuestLimit({
-        role: user.role,
-        accountKind: user.account_kind,
-        doorAccessEnabled: user.door_access_enabled,
-      }),
-  );
-  const requestSectionState = getGuestLimitRequestSectionState({
-    isEligible: isGuestLimitRequestEligible,
-    hasCurrentScopeData,
-    canRequestExtra: displayQuota?.canRequestExtra === true,
-    hasPendingRequest: Boolean(displayQuota?.pendingRequest),
-  });
-  const hasVerifiedCurrentQuota = verifiedQuotaScopeKey === requestScopeKey;
-  const isRequestDisclosureDisabled = !canEditGuestLimitRequestDraft(
-    requestSectionState,
-  );
-  const isRequestSubmissionDisabled = !canSubmitGuestLimitRequest({
-    sectionState: requestSectionState,
-    hasVerifiedQuota: hasVerifiedCurrentQuota,
-    isScopeFetching: isCurrentScopeFetching,
-  });
-  const requestSectionMeta =
-    requestSectionState === "loading" || isCurrentScopeFetching
-      ? commonT("loading")
-      : !hasVerifiedCurrentQuota
-        ? t("requestUnavailable")
-        : requestSectionState === "unavailable"
-          ? displayQuota?.baseLimit === null
-            ? t("requestNotNeeded")
-            : t("requestUnavailable")
-          : undefined;
-
-  const updateRequestDraft = (patch: Partial<GuestLimitRequestDraft>) => {
-    setRequestDrafts((current) => ({
-      ...current,
-      [requestScopeKey]: {
-        ...(current[requestScopeKey] ?? DEFAULT_GUEST_LIMIT_REQUEST_DRAFT),
-        ...patch,
-      },
-    }));
-  };
 
   const handleOperatorChange = (value: string) => {
     setRegisteredByName(value);
@@ -463,69 +423,6 @@ export default function AuthenticatedGuestView({ user }: AuthenticatedGuestViewP
       window.sessionStorage.setItem(`shared-operator:${user.id}`, value);
     } else {
       window.sessionStorage.removeItem(`shared-operator:${user.id}`);
-    }
-  };
-
-  const handleExtraRequest = async () => {
-    if (isRequestingExtra || isRequestSubmissionDisabled) return;
-
-    const operationScopeKey = requestScopeKey;
-    const shouldRestoreRequestFocus = Boolean(
-      requestSummaryRef.current?.parentElement?.contains(document.activeElement),
-    );
-    pollingGuard.invalidateRequests();
-    const extra = Number.parseInt(requestDraft.requestedExtra, 10);
-    setRequestingScopeKeys((current) => {
-      const next = new Set(current);
-      next.add(operationScopeKey);
-      return next;
-    });
-    setError(null);
-    try {
-      const { error: requestError } = await createGuestLimitRequest({
-        date: selectedDate,
-        eventId: selectedEventId,
-        requestedExtra: extra,
-        reason: requestDraft.requestReason,
-      });
-      if (!requestError) {
-        setRequestDrafts((current) =>
-          resetScopedGuestLimitRequestDraft(current, operationScopeKey),
-        );
-      }
-      if (currentScopeKeyRef.current !== operationScopeKey) return;
-      if (requestError) {
-        setError(
-          requestError === "PENDING_REQUEST_EXISTS"
-            ? t("requestAlreadyPending")
-            : t("requestFailed"),
-        );
-      } else {
-        await loadGuests({ silent: true });
-      }
-    } catch (requestError) {
-      if (currentScopeKeyRef.current === operationScopeKey) {
-        console.error("Failed to request additional guests:", requestError);
-        setError(t("requestFailed"));
-      }
-    } finally {
-      setRequestingScopeKeys((current) => {
-        const next = new Set(current);
-        next.delete(operationScopeKey);
-        return next;
-      });
-      if (shouldRestoreRequestFocus) {
-        requestAnimationFrame(() => {
-          if (currentScopeKeyRef.current !== operationScopeKey) return;
-          if (
-            document.activeElement &&
-            document.activeElement !== document.body
-          ) {
-            return;
-          }
-          (pendingRequestStatusRef.current ?? requestSummaryRef.current)?.focus();
-        });
-      }
     }
   };
 
@@ -704,96 +601,12 @@ export default function AuthenticatedGuestView({ user }: AuthenticatedGuestViewP
                       onSubmittingChange={setIsBulkSubmitting}
                     />
 
-                    {requestSectionState !== "hidden" ? (
-                      <>
-                        <DisclosureSection
-                          key={requestScopeKey}
-                          title={t("requestExtra")}
-                          summaryElementRef={requestSummaryRef}
-                          meta={
-                            requestSectionMeta ? (
-                              <span role="status" aria-live="polite">
-                                {requestSectionMeta}
-                              </span>
-                            ) : undefined
-                          }
-                          disabled={isRequestDisclosureDisabled}
-                          isLoading={
-                            requestSectionState === "loading" || isCurrentScopeFetching
-                          }
-                        >
-                          <div className="space-y-3">
-                            <div>
-                              <label htmlFor="extra-guest-count" className="app-label">
-                                {t("requestCount")}
-                              </label>
-                              <input
-                                id="extra-guest-count"
-                                name="extra-guest-count"
-                                type="number"
-                                min="1"
-                                max="10"
-                                value={requestDraft.requestedExtra}
-                                onChange={(event) =>
-                                  updateRequestDraft({ requestedExtra: event.target.value })
-                                }
-                                disabled={isRequestDisclosureDisabled}
-                                autoComplete="off"
-                                className="app-field"
-                              />
-                            </div>
-                            <div>
-                              <label htmlFor="extra-guest-reason" className="app-label">
-                                {t("requestReasonOptional")}
-                              </label>
-                              <textarea
-                                id="extra-guest-reason"
-                                name="extra-guest-reason"
-                                value={requestDraft.requestReason}
-                                onChange={(event) =>
-                                  updateRequestDraft({ requestReason: event.target.value })
-                                }
-                                maxLength={200}
-                                rows={2}
-                                disabled={isRequestDisclosureDisabled}
-                                autoComplete="off"
-                                className="app-field"
-                              />
-                            </div>
-                            <Button
-                              type="button"
-                              onClick={handleExtraRequest}
-                              isLoading={isRequestingExtra}
-                              disabled={
-                                isRequestSubmissionDisabled ||
-                                !Number.isInteger(Number(requestDraft.requestedExtra)) ||
-                                Number(requestDraft.requestedExtra) < 1 ||
-                                Number(requestDraft.requestedExtra) > 10
-                              }
-                              fullWidth
-                            >
-                              {t("submitRequest")}
-                            </Button>
-                          </div>
-                        </DisclosureSection>
-
-                        {requestSectionState === "pending" &&
-                        displayQuota?.pendingRequest ? (
-                          <div
-                            ref={pendingRequestStatusRef}
-                            role="status"
-                            aria-live="polite"
-                            aria-atomic="true"
-                            tabIndex={-1}
-                            className="mt-2 bg-status-waiting/10 px-3 py-3 text-xs leading-relaxed text-status-waiting"
-                          >
-                            {t("requestPending", {
-                              count: displayQuota.pendingRequest.requestedExtra,
-                            })}
-                          </div>
-                        ) : null}
-                      </>
-                    ) : null}
+                    <GuestLimitRequestPanel
+                      requestScopeKey={requestScopeKey}
+                      pendingRequest={displayQuota?.pendingRequest ?? null}
+                      translate={(key, values) => t(key, values)}
+                      controller={guestLimitRequestController}
+                    />
                   </div>
                 </section>
 
