@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   fetchVenues,
   createVenue,
@@ -27,7 +27,9 @@ import {
 } from "../../../lib/api/domain-error";
 import useVenueDirectoryController, {
   type VenueDirectoryControllerDependencies,
+  type VenueDirectoryMutationResult,
   type VenueMutationMessageResolver,
+  type VenueUpdateInput,
 } from "./useVenueDirectoryController";
 import useVenueCreateController, {
   type VenueCreateControllerDependencies,
@@ -116,6 +118,7 @@ export default function VenueManagement({
   const {
     venues,
     isLoading,
+    isMutating,
     listError,
     listState,
     loadVenues,
@@ -128,6 +131,8 @@ export default function VenueManagement({
     formError,
     formSuccess,
     isSubmitting,
+    hasNameValidationError,
+    nameInputRef,
     handleCreate,
   } = create;
 
@@ -193,6 +198,7 @@ export default function VenueManagement({
                     {t("venueName")}
                   </label>
                   <input
+                    ref={nameInputRef}
                     id="venue-create-name"
                     name="venue-name"
                     type="text"
@@ -204,6 +210,12 @@ export default function VenueManagement({
                     placeholder={t("namePlaceholder")}
                     autoComplete="off"
                     required
+                    aria-invalid={hasNameValidationError}
+                    aria-describedby={
+                      hasNameValidationError
+                        ? "venue-create-name-error"
+                        : undefined
+                    }
                   />
                 </div>
 
@@ -416,7 +428,17 @@ export default function VenueManagement({
                   </p>
                 </div>
 
-                {formError && <Alert type="error" message={formError} />}
+                {formError && (
+                  <div
+                    id={
+                      hasNameValidationError
+                        ? "venue-create-name-error"
+                        : undefined
+                    }
+                  >
+                    <Alert type="error" message={formError} />
+                  </div>
+                )}
 
                 {formSuccess && <Alert type="success" message={formSuccess} />}
 
@@ -459,6 +481,7 @@ export default function VenueManagement({
                     <VenueCard
                       key={venue.id}
                       venue={venue}
+                      actionsDisabled={isLoading || isMutating}
                       onToggleActive={handleToggleActive}
                       onSave={handleSave}
                     />
@@ -477,41 +500,22 @@ export default function VenueManagement({
 // VenueCard sub-component
 // ============================================================
 
-function VenueCard({
-  venue,
-  onToggleActive,
-  onSave,
-}: {
-  venue: Venue;
-  onToggleActive: (venue: Venue) => Promise<void>;
-  onSave: (
-    id: string,
-    updates: Partial<Pick<Venue,
-      | "name"
-      | "type"
-      | "address"
-      | "description"
-      | "brandName"
-      | "brandTagline"
-      | "primaryDomain"
-      | "defaultLocale"
-      | "timezone"
-      | "openingTime"
-      | "closingTime"
-    >>,
-  ) => Promise<string | null>;
-}) {
-  const t = useTranslations("VenueAdmin");
-  const commonT = useTranslations("Common");
-  const venueTypeLabels: Record<Venue["type"], string> = {
-    club: t("typeClub"),
-    bar: t("typeBar"),
-    lounge: t("typeLounge"),
-    festival: t("typeFestival"),
-    private: t("typePrivate"),
-  };
-  const [isEditing, setIsEditing] = useState(false);
-  const [editData, setEditData] = useState({
+type VenueEditData = {
+  name: Venue["name"];
+  type: Venue["type"];
+  address: string;
+  description: string;
+  brandName: string;
+  brandTagline: string;
+  primaryDomain: string;
+  defaultLocale: NonNullable<Venue["defaultLocale"]>;
+  timezone: Venue["timezone"];
+  openingTime: Venue["openingTime"];
+  closingTime: Venue["closingTime"];
+};
+
+function createVenueEditData(venue: Venue): VenueEditData {
+  return {
     name: venue.name,
     type: venue.type,
     address: venue.address || "",
@@ -523,17 +527,94 @@ function VenueCard({
     timezone: venue.timezone,
     openingTime: venue.openingTime,
     closingTime: venue.closingTime,
-  });
+  };
+}
+
+export function VenueCard({
+  venue,
+  actionsDisabled,
+  onToggleActive,
+  onSave,
+}: {
+  venue: Venue;
+  actionsDisabled: boolean;
+  onToggleActive: (venue: Venue) => Promise<VenueDirectoryMutationResult>;
+  onSave: (
+    id: string,
+    updates: VenueUpdateInput,
+  ) => Promise<VenueDirectoryMutationResult>;
+}) {
+  const t = useTranslations("VenueAdmin");
+  const commonT = useTranslations("Common");
+  const venueTypeLabels: Record<Venue["type"], string> = {
+    club: t("typeClub"),
+    bar: t("typeBar"),
+    lounge: t("typeLounge"),
+    festival: t("typeFestival"),
+    private: t("typePrivate"),
+  };
+  const [isEditing, setIsEditing] = useState(false);
+  const [editData, setEditData] = useState(() => createVenueEditData(venue));
+  const [editNameError, setEditNameError] = useState("");
   const [isDeactivateConfirmOpen, setIsDeactivateConfirmOpen] = useState(false);
   const [isTogglingActive, setIsTogglingActive] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const editButtonRef = useRef<HTMLButtonElement>(null);
+  const editNameInputRef = useRef<HTMLInputElement>(null);
+  const shouldFocusEditNameRef = useRef(false);
+  const shouldRestoreEditButtonFocusRef = useRef(false);
+  const saveOperationOwnerRef = useRef<symbol | null>(null);
+  const toggleOperationOwnerRef = useRef<symbol | null>(null);
+
+  useEffect(() => {
+    if (
+      isEditing &&
+      !actionsDisabled &&
+      shouldFocusEditNameRef.current
+    ) {
+      shouldFocusEditNameRef.current = false;
+      editNameInputRef.current?.focus();
+      return;
+    }
+    if (
+      !isEditing &&
+      !actionsDisabled &&
+      shouldRestoreEditButtonFocusRef.current
+    ) {
+      shouldRestoreEditButtonFocusRef.current = false;
+      editButtonRef.current?.focus();
+    }
+  }, [actionsDisabled, isEditing]);
+
+  const handleEdit = () => {
+    if (actionsDisabled) return;
+    setEditData(createVenueEditData(venue));
+    setEditNameError("");
+    shouldFocusEditNameRef.current = true;
+    setIsEditing(true);
+  };
+
+  const handleCancelEdit = () => {
+    setEditData(createVenueEditData(venue));
+    setEditNameError("");
+    shouldRestoreEditButtonFocusRef.current = true;
+    setIsEditing(false);
+  };
 
   const handleSave = async () => {
-    if (isSaving) return;
+    if (actionsDisabled || saveOperationOwnerRef.current) return;
     const draft = captureImmutableDraft(editData);
+    if (!draft.name.trim()) {
+      setEditNameError(t("nameRequired"));
+      editNameInputRef.current?.focus();
+      return;
+    }
+    const owner = Symbol("venue-card-save");
+    saveOperationOwnerRef.current = owner;
+    setEditNameError("");
     setIsSaving(true);
     try {
-      const error = await onSave(venue.id, {
+      const result = await onSave(venue.id, {
         name: draft.name,
         type: draft.type,
         address: draft.address || undefined,
@@ -546,17 +627,34 @@ function VenueCard({
         openingTime: draft.openingTime,
         closingTime: draft.closingTime,
       });
-      if (!error) setIsEditing(false);
+      if (result.status === "applied") {
+        shouldRestoreEditButtonFocusRef.current = true;
+        setIsEditing(false);
+      }
     } finally {
-      setIsSaving(false);
+      if (saveOperationOwnerRef.current === owner) {
+        saveOperationOwnerRef.current = null;
+        setIsSaving(false);
+      }
     }
   };
 
   const handleToggleActive = async () => {
+    if (actionsDisabled || toggleOperationOwnerRef.current) return;
+    const owner = Symbol("venue-card-toggle");
+    toggleOperationOwnerRef.current = owner;
     setIsTogglingActive(true);
-    await onToggleActive(venue);
-    setIsTogglingActive(false);
-    setIsDeactivateConfirmOpen(false);
+    let shouldCloseConfirmation = true;
+    try {
+      const result = await onToggleActive(venue);
+      if (result.status === "busy") shouldCloseConfirmation = false;
+    } finally {
+      if (toggleOperationOwnerRef.current === owner) {
+        toggleOperationOwnerRef.current = null;
+        setIsTogglingActive(false);
+        if (shouldCloseConfirmation) setIsDeactivateConfirmOpen(false);
+      }
+    }
   };
 
   return (
@@ -637,8 +735,10 @@ function VenueCard({
           </div>
           <div className="grid grid-cols-2 gap-2">
             <Button
+              ref={editButtonRef}
               type="button"
-              onClick={() => setIsEditing(true)}
+              onClick={handleEdit}
+              disabled={actionsDisabled}
               variant="secondary"
               size="sm"
               fullWidth
@@ -648,6 +748,7 @@ function VenueCard({
             <Button
               type="button"
               isLoading={isTogglingActive}
+              disabled={actionsDisabled}
               onClick={() => {
                 if (venue.active) {
                   setIsDeactivateConfirmOpen(true);
@@ -664,22 +765,38 @@ function VenueCard({
           </div>
         </div>
       ) : (
-        <fieldset disabled={isSaving} className="space-y-3" aria-busy={isSaving}>
+        <fieldset
+          disabled={isSaving || actionsDisabled}
+          className="space-y-3"
+          aria-busy={isSaving || actionsDisabled}
+        >
           <div>
             <label htmlFor={`venue-name-${venue.id}`} className="app-label">
               {t("venueName")}
             </label>
             <input
+              ref={editNameInputRef}
               id={`venue-name-${venue.id}`}
               name={`venue-name-${venue.id}`}
               type="text"
               value={editData.name}
-              onChange={(e) =>
-                setEditData({ ...editData, name: e.target.value })
-              }
+              onChange={(e) => {
+                setEditData({ ...editData, name: e.target.value });
+                if (editNameError) setEditNameError("");
+              }}
               className="app-field"
               autoComplete="off"
+              required
+              aria-invalid={Boolean(editNameError)}
+              aria-describedby={
+                editNameError ? `venue-name-error-${venue.id}` : undefined
+              }
             />
+            {editNameError && (
+              <div id={`venue-name-error-${venue.id}`}>
+                <Alert type="error" message={editNameError} />
+              </div>
+            )}
           </div>
 
           <fieldset>
@@ -895,22 +1012,7 @@ function VenueCard({
             </Button>
             <Button
               type="button"
-              onClick={() => {
-                setIsEditing(false);
-                setEditData({
-                  name: venue.name,
-                  type: venue.type,
-                  address: venue.address || "",
-                  description: venue.description || "",
-                  brandName: venue.brandName || "",
-                  brandTagline: venue.brandTagline || "",
-                  primaryDomain: venue.primaryDomain || "",
-                  defaultLocale: venue.defaultLocale || "en",
-                  timezone: venue.timezone,
-                  openingTime: venue.openingTime,
-                  closingTime: venue.closingTime,
-                });
-              }}
+              onClick={handleCancelEdit}
               variant="secondary"
               size="sm"
               fullWidth
@@ -930,6 +1032,7 @@ function VenueCard({
         onConfirm={() => void handleToggleActive()}
         onCancel={() => setIsDeactivateConfirmOpen(false)}
         isLoading={isTogglingActive}
+        confirmDisabled={actionsDisabled}
       />
     </>
   );

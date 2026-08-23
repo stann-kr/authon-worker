@@ -1,6 +1,12 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import {
+  useRef,
+  useState,
+  type Dispatch,
+  type FormEvent,
+  type SetStateAction,
+} from "react";
 import { useTranslations } from "next-intl";
 import {
   DEFAULT_CLOSING_TIME,
@@ -9,7 +15,10 @@ import {
 } from "@/lib/date";
 import { captureImmutableDraft } from "@/lib/forms/immutable-draft";
 import type { Venue } from "@/lib/venues/types";
-import type { VenueMutationMessageResolver } from "./useVenueDirectoryController";
+import type {
+  VenueDirectoryLoadResult,
+  VenueMutationMessageResolver,
+} from "./useVenueDirectoryController";
 
 export type VenueCreateFormData = {
   name: string;
@@ -47,7 +56,7 @@ export interface VenueCreateControllerDependencies {
 
 interface UseVenueCreateControllerOptions {
   dependencies: VenueCreateControllerDependencies;
-  onCreated: () => Promise<void>;
+  onCreated: () => Promise<VenueDirectoryLoadResult | void>;
   resolveMutationMessage: VenueMutationMessageResolver;
 }
 
@@ -73,28 +82,51 @@ export default function useVenueCreateController({
   resolveMutationMessage,
 }: UseVenueCreateControllerOptions) {
   const t = useTranslations("VenueAdmin");
-  const [formData, setFormData] = useState<VenueCreateFormData>(
+  const [formData, setFormDataState] = useState<VenueCreateFormData>(
     createDefaultFormData,
   );
+  const formDataRef = useRef(formData);
   const [formError, setFormError] = useState("");
   const [formSuccess, setFormSuccess] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [hasNameValidationError, setHasNameValidationError] = useState(false);
+  const hasNameValidationErrorRef = useRef(false);
+  const nameInputRef = useRef<HTMLInputElement>(null);
+  const activeOperationOwnerRef = useRef<symbol | null>(null);
+
+  const setFormData: Dispatch<SetStateAction<VenueCreateFormData>> = (value) => {
+    const nextFormData =
+      typeof value === "function" ? value(formDataRef.current) : value;
+    formDataRef.current = nextFormData;
+    setFormDataState(nextFormData);
+    if (hasNameValidationErrorRef.current && nextFormData.name.trim()) {
+      hasNameValidationErrorRef.current = false;
+      setHasNameValidationError(false);
+      setFormError("");
+    }
+  };
 
   const handleCreate = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (isSubmitting) return;
-    const draft = captureImmutableDraft(formData);
+    if (activeOperationOwnerRef.current) return;
+    const owner = Symbol("venue-create");
+    activeOperationOwnerRef.current = owner;
+    const draft = captureImmutableDraft(formDataRef.current);
     setIsSubmitting(true);
     setFormError("");
     setFormSuccess("");
-
-    if (!draft.name.trim()) {
-      setFormError(t("nameRequired"));
-      setIsSubmitting(false);
-      return;
-    }
+    setHasNameValidationError(false);
+    hasNameValidationErrorRef.current = false;
 
     try {
+      if (!draft.name.trim()) {
+        setFormError(t("nameRequired"));
+        setHasNameValidationError(true);
+        hasNameValidationErrorRef.current = true;
+        nameInputRef.current?.focus();
+        return;
+      }
+
       const { data, error } = await dependencies.createVenue({
         name: draft.name.trim(),
         type: draft.type,
@@ -115,13 +147,24 @@ export default function useVenueCreateController({
       } else if (data) {
         setFormSuccess(t("created", { name: data.name }));
         setFormData(createDefaultFormData());
-        await onCreated();
+        try {
+          const refreshResult = await onCreated();
+          if (refreshResult?.status === "failed") {
+            setFormError(t("loadFailed"));
+          }
+        } catch (refreshError: unknown) {
+          console.error("Failed to refresh venues:", refreshError);
+          setFormError(t("loadFailed"));
+        }
       }
     } catch (error: unknown) {
       console.error("Failed to create venue:", error);
       setFormError(t("createFailed"));
     } finally {
-      setIsSubmitting(false);
+      if (activeOperationOwnerRef.current === owner) {
+        activeOperationOwnerRef.current = null;
+        setIsSubmitting(false);
+      }
     }
   };
 
@@ -131,6 +174,8 @@ export default function useVenueCreateController({
     formError,
     formSuccess,
     isSubmitting,
+    hasNameValidationError,
+    nameInputRef,
     handleCreate,
   };
 }
