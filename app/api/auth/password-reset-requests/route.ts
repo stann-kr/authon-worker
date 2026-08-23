@@ -1,34 +1,26 @@
 import { NextResponse } from "next/server";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
-import { drizzle } from "drizzle-orm/d1";
-import { eq } from "drizzle-orm";
-import { users, venues } from "@/lib/db/schema";
+
 import {
   consumeRateLimitOrDeny,
   getRequestIp,
 } from "@/lib/auth/rate-limit";
 import { shouldUseSecureAuthCookies } from "@/lib/auth/cookie-policy";
 import {
-  createPasswordResetReceipt,
-  derivePasswordResetChallenge,
   getPasswordResetClaimCookieOptions,
   getPasswordResetClaimGrantRecord,
   getPasswordResetReceiptCookieOptions,
   getPasswordResetReceiptRequestId,
-  getPasswordResetReceiptRequestIdForCandidate,
-  getPasswordResetRequestExpiry,
-  PASSWORD_RESET_RECEIPT_COOKIE_NAME,
   PASSWORD_RESET_CLAIM_COOKIE_NAME,
+  PASSWORD_RESET_RECEIPT_COOKIE_NAME,
 } from "@/lib/auth/password-reset-receipt";
-import { shouldCreatePasswordResetRequest } from "@/lib/auth/password-reset-request-policy";
+import {
+  cancelPublicPasswordResetRequest,
+  submitPublicPasswordResetRequest,
+} from "@/lib/auth/password-reset-public-service";
+import { createPasswordResetPublicPersistence } from "@/lib/auth/password-reset-public-persistence";
 import { getTenantContextForRequest } from "@/lib/tenant/server";
 import { isTrustedMutationOrigin } from "@/lib/auth/request-origin";
-import {
-  CANCEL_BROWSER_PASSWORD_RESET_REQUEST_SQL,
-  CANCEL_EXPIRED_OPEN_PASSWORD_RESET_REQUESTS_SQL,
-  INSERT_SELF_SERVICE_PASSWORD_RESET_REQUEST_WITH_EXPIRY_SQL,
-  SELECT_EXISTING_BROWSER_PASSWORD_RESET_REQUEST_SQL,
-} from "@/lib/auth/password-reset-request-sql";
 import {
   getRequestId,
   reportServerError,
@@ -82,9 +74,7 @@ export async function POST(request: Request) {
         },
         {
           status: 429,
-          headers: {
-            "Retry-After": String(candidateRateLimit.retryAfterSeconds),
-          },
+          headers: { "Retry-After": String(candidateRateLimit.retryAfterSeconds) },
         },
       );
     }
@@ -112,109 +102,34 @@ export async function POST(request: Request) {
       );
     }
 
-    const db = drizzle(env.DB);
-    const [user] = await db
-      .select({
-        id: users.id,
-        venueId: users.venueId,
-        role: users.role,
-        venueActive: venues.active,
-        active: users.active,
-        deletedAt: users.deletedAt,
-      })
-      .from(users)
-      .leftJoin(venues, eq(users.venueId, venues.id))
-      .where(eq(users.email, normalizedEmail))
-      .limit(1);
-
-    const eligibleUserId =
-      shouldCreatePasswordResetRequest({
-        tenantResolved: tenant.resolved,
-        tenantScope: tenant.scope,
-        tenantVenueId: tenant.venueId,
-        user,
-      }) && user
-        ? user.id
-        : crypto.randomUUID();
-    const existingReceiptRequestId = await getPasswordResetReceiptRequestIdForCandidate(
-      request.headers,
-      normalizedEmail,
-      env.JWT_SECRET,
+    const submission = await submitPublicPasswordResetRequest(
+      {
+        email: normalizedEmail,
+        headers: request.headers,
+        secret: env.JWT_SECRET,
+        tenant,
+      },
+      { persistence: createPasswordResetPublicPersistence(env.DB) },
     );
-    const nowIso = new Date().toISOString();
-    const requestId = existingReceiptRequestId ?? crypto.randomUUID();
-    let receiptRequestId = requestId;
-    const expiresAt = getPasswordResetRequestExpiry(Date.parse(nowIso));
-    try {
-      const [, insertResult, existingResult] = await env.DB.batch<{ id: string }>([
-        env.DB.prepare(CANCEL_EXPIRED_OPEN_PASSWORD_RESET_REQUESTS_SQL).bind(
-          nowIso,
-          eligibleUserId,
-          nowIso,
-        ),
-        env.DB.prepare(
-          INSERT_SELF_SERVICE_PASSWORD_RESET_REQUEST_WITH_EXPIRY_SQL,
-        ).bind(
-          requestId,
-          expiresAt,
-          nowIso,
-          nowIso,
-          eligibleUserId,
-          tenant.scope,
-          tenant.venueId,
-        ),
-        env.DB.prepare(
-          SELECT_EXISTING_BROWSER_PASSWORD_RESET_REQUEST_SQL,
-        ).bind(
-          existingReceiptRequestId ?? crypto.randomUUID(),
-          eligibleUserId,
-          nowIso,
-          tenant.scope,
-          tenant.venueId,
-        ),
-      ]);
-
-      const insertedId = (
-        insertResult.results?.[0] as { id?: string } | undefined
-      )?.id ?? null;
-      const existingId = (
-        existingResult.results?.[0] as { id?: string } | undefined
-      )?.id ?? null;
-      if (insertedId === requestId) {
-        receiptRequestId = requestId;
-      } else if (
-        existingReceiptRequestId &&
-        existingId === existingReceiptRequestId
-      ) {
-        receiptRequestId = existingReceiptRequestId;
-      }
-    } catch (error: unknown) {
-      // 계정 존재 여부에 따라 write 실패 응답이 달라지지 않게 decoy
-      // receipt와 공통 202를 유지한다. 원문 이메일은 로그에 남기지 않는다.
-      await reportServerError("auth.password_reset_request.persist", error, {
-        requestId: correlationId,
-        venueId: tenant.venueId,
-      });
+    if (submission.persistenceError) {
+      await reportServerError(
+        "auth.password_reset_request.persist",
+        submission.persistenceError,
+        { requestId: correlationId, venueId: tenant.venueId },
+      );
     }
-    const [receipt, challenge] = await Promise.all([
-      createPasswordResetReceipt(
-        receiptRequestId,
-        env.JWT_SECRET,
-        normalizedEmail,
-      ),
-      derivePasswordResetChallenge(receiptRequestId, env.JWT_SECRET),
-    ]);
+
     const response = NextResponse.json(
       {
         ok: true,
         message: "If the account can be managed here, an administrator will see the request.",
-        challenge,
+        challenge: submission.challenge,
       },
       { status: 202, headers: { "Cache-Control": "no-store" } },
     );
     response.cookies.set({
       name: PASSWORD_RESET_RECEIPT_COOKIE_NAME,
-      value: receipt,
+      value: submission.receipt,
       ...getPasswordResetReceiptCookieOptions(
         shouldUseSecureAuthCookies(request),
       ),
@@ -272,12 +187,10 @@ export async function DELETE(request: Request) {
       getPasswordResetClaimGrantRecord(request.headers, env.JWT_SECRET),
       getTenantContextForRequest(request),
     ]);
-    const requestId = claimGrant?.requestId ?? receiptRequestId;
-    if (!requestId || !tenant.resolved) return response;
-
-    await env.DB.prepare(CANCEL_BROWSER_PASSWORD_RESET_REQUEST_SQL)
-      .bind(new Date().toISOString(), requestId, tenant.scope, tenant.venueId)
-      .run();
+    await cancelPublicPasswordResetRequest(
+      { receiptRequestId, claimGrant, tenant },
+      { persistence: createPasswordResetPublicPersistence(env.DB) },
+    );
   } catch (error: unknown) {
     await reportServerError("auth.password_reset_request.cancel", error, {
       requestId: correlationId,
