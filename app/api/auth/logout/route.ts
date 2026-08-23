@@ -3,13 +3,9 @@ import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { errors as joseErrors, jwtVerify } from "jose";
 import { shouldUseSecureAuthCookies } from "@/lib/auth/cookie-policy";
 import { isTrustedMutationOrigin } from "@/lib/auth/request-origin";
-import {
-  parseLogoutAuthCookies,
-  REVOKE_USER_SESSIONS_SQL,
-  resolveLogoutSessionBinding,
-  retrySessionRevocation,
-} from "@/lib/auth/session-revocation";
-import { parseStoredSession } from "@/lib/auth/session-policy";
+import { parseLogoutAuthCookies } from "@/lib/auth/session-revocation";
+import { createLogoutPersistence } from "@/lib/auth/logout-persistence";
+import { logoutSession } from "@/lib/auth/logout-service";
 import {
   getRequestId,
   reportServerError,
@@ -24,8 +20,6 @@ export async function POST(request: Request) {
       { status: 403 },
     );
   }
-  let cleanupFailed = false;
-  let revocationPending = false;
   try {
     const { env } = getCloudflareContext();
 
@@ -33,87 +27,41 @@ export async function POST(request: Request) {
       request.headers.get("cookie"),
     );
 
-    if (token && sessionId) {
-      if (!env.JWT_SECRET || !env.SESSIONS || !env.DB) {
-        throw new Error("Auth logout bindings are unavailable");
-      }
-
-      const binding = await resolveLogoutSessionBinding(
-        async () => {
+    if (token && sessionId && (!env.JWT_SECRET || !env.SESSIONS || !env.DB)) {
+      throw new Error("Auth logout bindings are unavailable");
+    }
+    const result = await logoutSession(
+      { token, sessionId },
+      {
+        persistence: createLogoutPersistence(env),
+        verifyToken: async (candidateToken) => {
           const { payload } = await jwtVerify(
-            token,
+            candidateToken,
             new TextEncoder().encode(env.JWT_SECRET),
             { algorithms: ["HS256"], clockTolerance: 60 },
           );
           return { userId: payload.sub, sessionVersion: payload.sv };
         },
-        async () => {
-          const sessionRaw = await env.SESSIONS.get(`session:${sessionId}`);
-          return sessionRaw ? parseStoredSession(sessionRaw) : null;
-        },
-        (error) => error instanceof joseErrors.JOSEError,
-      );
+        isInvalidTokenError: (error) => error instanceof joseErrors.JOSEError,
+      },
+    );
 
-      if (binding.status === "pending") {
-        cleanupFailed = true;
-        revocationPending = true;
-        try {
-          await reportServerError(
-            "auth.logout.session_binding",
-            binding.error,
-            { requestId },
-          );
-        } catch {
-          // The credential-preserving pending response must survive telemetry failure.
-        }
-      } else if (binding.status === "bound") {
-        // D1 invalidates every device and any late refresh response. KV deletion
-        // below removes only this session key and is not a substitute for it.
-        const revocation = await retrySessionRevocation(() =>
-          env.DB.prepare(REVOKE_USER_SESSIONS_SQL)
-            .bind(binding.userId, binding.sessionVersion)
-            .first<{ sessionVersion: number }>(),
-        );
-        if (!revocation.ok) {
-          cleanupFailed = true;
-          revocationPending = true;
-          try {
-            await reportServerError(
-              "auth.logout.session_revocation",
-              revocation.error,
-              { requestId },
-            );
-          } catch {
-            // The credential-preserving pending response must survive telemetry failure.
-          }
-        }
-      }
-    }
-
-    // Once durable revocation is known or no valid binding exists, removing the
-    // current KV key is best-effort local cleanup. Pending paths preserve it so
-    // the same credential can retry the all-device D1 revocation.
-    if (!revocationPending && sessionId && env.SESSIONS) {
+    for (const failure of result.failures) {
       try {
-        await env.SESSIONS.delete(`session:${sessionId}`);
-      } catch (error) {
-        cleanupFailed = true;
-        try {
-          await reportServerError("auth.logout.session_cleanup", error, { requestId });
-        } catch {
-          // The client-side termination response must survive observability failure.
-        }
+        await reportServerError(failure.event, failure.error, { requestId });
+      } catch {
+        // Logout semantics must survive telemetry failure.
       }
     }
 
     try {
-      await writeStructuredLog(cleanupFailed ? "warn" : "info", {
+      await writeStructuredLog(result.cleanupFailed ? "warn" : "info", {
         event: "auth.logout",
         requestId,
-        outcome: cleanupFailed ? "failure" : "success",
-        ...(cleanupFailed
+        outcome: result.cleanupFailed ? "failure" : "success",
+        ...(result.cleanupFailed
           ? {
-              errorKind: revocationPending
+              errorKind: result.revocationPending
                 ? "SessionRevocationPending"
                 : "SessionCleanupFailed",
             }
@@ -122,16 +70,14 @@ export async function POST(request: Request) {
     } catch {
       // Logout semantics must survive telemetry failure.
     }
-    return createLogoutResponse(request, revocationPending);
+    return createLogoutResponse(request, result.revocationPending);
   } catch (error) {
-    cleanupFailed = true;
-    revocationPending = true;
     try {
       await reportServerError("auth.logout", error, { requestId });
     } catch {
       // The credential-preserving pending response must survive telemetry failure.
     }
-    return createLogoutResponse(request, revocationPending);
+    return createLogoutResponse(request, true);
   }
 }
 
