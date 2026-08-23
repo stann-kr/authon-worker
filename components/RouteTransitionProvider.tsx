@@ -28,6 +28,9 @@ interface RouteTransitionContextValue {
     startWhenIdle?: boolean;
   }) => () => void;
   startRouteTransition: (href?: string) => boolean;
+  requestFocusRestore: (
+    targetRef: { current: HTMLElement | null },
+  ) => () => void;
 }
 
 const MINIMUM_VISIBLE_MS = 160;
@@ -49,6 +52,14 @@ export function RouteTransitionProvider({ children }: { children: ReactNode }) {
   const safetyTimerRef = useRef<number | null>(null);
   const overlayRef = useRef<HTMLDivElement>(null);
   const shouldRestoreFocusRef = useRef(false);
+  const requestedFocusRef = useRef<{
+    id: number;
+    targetRef: { current: HTMLElement | null };
+  } | null>(null);
+  const focusRequestIdRef = useRef(0);
+  const focusFrameRef = useRef<number | null>(null);
+  const focusFrameRequestIdRef = useRef<number | null>(null);
+  const focusFrameIsRouteRestoreRef = useRef(false);
   const [phase, setPhase] = useState<TransitionPhase>("idle");
   const [loadingTracker] = useState(createRouteLoadingTracker);
 
@@ -72,6 +83,78 @@ export function RouteTransitionProvider({ children }: { children: ReactNode }) {
       clearTimer(timerRef);
     }
   }, [clearTimer]);
+
+  const clearFocusFrame = useCallback(() => {
+    if (focusFrameRef.current !== null) {
+      window.cancelAnimationFrame(focusFrameRef.current);
+      focusFrameRef.current = null;
+      focusFrameRequestIdRef.current = null;
+      focusFrameIsRouteRestoreRef.current = false;
+    }
+  }, []);
+
+  const focusRequestedOrMain = useCallback((requested: {
+    id: number;
+    targetRef: { current: HTMLElement | null };
+  } | null) => {
+    if (requested && requestedFocusRef.current?.id === requested.id) {
+      requestedFocusRef.current = null;
+      const target = requested.targetRef.current;
+      if (target?.isConnected && !target.closest("[inert]")) {
+        target.focus({ preventScroll: true });
+        return;
+      }
+    }
+    const mainContent = document.getElementById("main-content");
+    if (!mainContent) return;
+    mainContent.dataset.routeFocus = "true";
+    mainContent.addEventListener(
+      "blur",
+      () => delete mainContent.dataset.routeFocus,
+      { once: true },
+    );
+    mainContent.focus({ preventScroll: true });
+  }, []);
+
+  const scheduleFocusRestore = useCallback((requested: {
+    id: number;
+    targetRef: { current: HTMLElement | null };
+  } | null, isRouteRestore = false) => {
+    clearFocusFrame();
+    focusFrameRequestIdRef.current = requested?.id ?? 0;
+    focusFrameIsRouteRestoreRef.current = isRouteRestore;
+    focusFrameRef.current = window.requestAnimationFrame(() => {
+      focusFrameRef.current = null;
+      focusFrameRequestIdRef.current = null;
+      focusFrameIsRouteRestoreRef.current = false;
+      if (phaseRef.current !== "idle") return;
+      focusRequestedOrMain(requested);
+    });
+  }, [clearFocusFrame, focusRequestedOrMain]);
+
+  const requestFocusRestore = useCallback((targetRef: {
+    current: HTMLElement | null;
+  }) => {
+    requestedFocusRef.current = {
+      id: ++focusRequestIdRef.current,
+      targetRef,
+    };
+
+    if (phaseRef.current === "idle") {
+      const inheritRouteRestore =
+        focusFrameIsRouteRestoreRef.current || shouldRestoreFocusRef.current;
+      scheduleFocusRestore(requestedFocusRef.current, inheritRouteRestore);
+    }
+    const requestId = requestedFocusRef.current.id;
+    return () => {
+      if (requestedFocusRef.current?.id !== requestId) return;
+      requestedFocusRef.current = null;
+      if (
+        focusFrameRequestIdRef.current === requestId &&
+        !focusFrameIsRouteRestoreRef.current
+      ) clearFocusFrame();
+    };
+  }, [clearFocusFrame, scheduleFocusRestore]);
 
   const finishTransition = useCallback(() => {
     updatePhase("leaving");
@@ -184,7 +267,13 @@ export function RouteTransitionProvider({ children }: { children: ReactNode }) {
     reconcileLoading();
   }, [clearTimer, loadingTracker, pathname, reconcileLoading]);
 
-  useEffect(() => clearTimers, [clearTimers]);
+  useEffect(
+    () => () => {
+      clearTimers();
+      clearFocusFrame();
+    },
+    [clearFocusFrame, clearTimers],
+  );
 
   useEffect(() => {
     if (phase === "visible") {
@@ -195,19 +284,10 @@ export function RouteTransitionProvider({ children }: { children: ReactNode }) {
 
     if (phase === "idle" && shouldRestoreFocusRef.current) {
       shouldRestoreFocusRef.current = false;
-      window.requestAnimationFrame(() => {
-        const mainContent = document.getElementById("main-content");
-        if (!mainContent) return;
-        mainContent.dataset.routeFocus = "true";
-        mainContent.addEventListener(
-          "blur",
-          () => delete mainContent.dataset.routeFocus,
-          { once: true },
-        );
-        mainContent.focus({ preventScroll: true });
-      });
+      const requested = requestedFocusRef.current;
+      scheduleFocusRestore(requested, true);
     }
-  }, [phase]);
+  }, [phase, scheduleFocusRestore]);
 
   return (
     <RouteTransitionContext.Provider
@@ -215,6 +295,7 @@ export function RouteTransitionProvider({ children }: { children: ReactNode }) {
         isRouteTransitionActive: phase !== "idle",
         registerRouteLoadingTask,
         startRouteTransition,
+        requestFocusRestore,
       }}
     >
       <div

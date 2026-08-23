@@ -60,8 +60,6 @@ export default function ExternalDJGuestView({ token }: ExternalDJGuestViewProps)
     error,
     guests,
     guestName,
-    handleBulkSubmissionComplete,
-    handleBulkSubmittingChange,
     handleBulkSave,
     handleDelete,
     handleInitialRetry,
@@ -80,7 +78,7 @@ export default function ExternalDJGuestView({ token }: ExternalDJGuestViewProps)
     reconciliationHeadingRef,
     requiresReconciliation,
     retryHeadingRef,
-    setGuestName,
+    handleGuestNameChange,
     showReconciliationBanner,
     showRetryPanel,
     venueInfo,
@@ -334,7 +332,7 @@ export default function ExternalDJGuestView({ token }: ExternalDJGuestViewProps)
                       name="external-guest-name"
                       type="text"
                       value={guestName}
-                      onChange={(event) => setGuestName(event.target.value)}
+                      onChange={(event) => handleGuestNameChange(event.target.value)}
                       placeholder={t("enterFullName")}
                       maxLength={100}
                       autoComplete="off"
@@ -403,8 +401,6 @@ export default function ExternalDJGuestView({ token }: ExternalDJGuestViewProps)
                     deletingId !== null
                   }
                   onSubmitChunk={handleBulkSave}
-                  onSubmissionComplete={handleBulkSubmissionComplete}
-                  onSubmittingChange={handleBulkSubmittingChange}
                 />
               )}
             </div>

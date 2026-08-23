@@ -2,7 +2,10 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useLatestRequestGuard } from "@/lib/hooks";
-import { useRouteLoadingTask } from "@/components/RouteTransitionProvider";
+import {
+  useRouteLoadingTask,
+  useRouteTransition,
+} from "@/components/RouteTransitionProvider";
 import { getExternalLinkValidationDisposition } from "@/lib/external-links/domain";
 import {
   createExternalOwnerKey,
@@ -66,6 +69,12 @@ interface UseExternalGuestControllerOptions {
   dependencies: ExternalGuestControllerDependencies;
 }
 
+type ExternalLoadResult = "applied" | "failed" | "stale";
+interface ExternalOperationLease {
+  identity: symbol;
+  guestNameRevision: number;
+}
+
 export default function useExternalGuestController({
   token,
   dependencies,
@@ -84,10 +93,13 @@ export default function useExternalGuestController({
   const [requiresReconciliation, setRequiresReconciliation] = useState(false);
   const [isReconciling, setIsReconciling] = useState(false);
   const [guests, setGuests] = useState<ExternalLinkPublicGuest[]>([]);
+  const activeOperationRef = useRef<ExternalOperationLease | null>(null);
+  const guestNameRevisionRef = useRef(0);
   const retryHeadingRef = useRef<HTMLHeadingElement>(null);
   const reconciliationHeadingRef = useRef<HTMLHeadingElement>(null);
   const contentHeadingRef = useRef<HTMLHeadingElement>(null);
   const validationGuard = useLatestRequestGuard();
+  const { requestFocusRestore } = useRouteTransition();
   const showRetryPanel =
     !isValidating &&
     !hasValidationError &&
@@ -105,6 +117,27 @@ export default function useExternalGuestController({
 
   useRouteLoadingTask(isValidating || !isOwnerKeyReady);
 
+  const acquireOperation = () => {
+    if (activeOperationRef.current) return null;
+    const lease: ExternalOperationLease = {
+      identity: Symbol("external-guest-operation"),
+      guestNameRevision: guestNameRevisionRef.current,
+    };
+    activeOperationRef.current = lease;
+    return lease;
+  };
+
+  const releaseOperation = (lease: ExternalOperationLease) => {
+    if (activeOperationRef.current !== lease) return false;
+    activeOperationRef.current = null;
+    return true;
+  };
+
+  const handleGuestNameChange = (value: string) => {
+    guestNameRevisionRef.current += 1;
+    setGuestName(value);
+  };
+
   useEffect(() => {
     try {
       const storageKey = externalOwnerStorageKey(token);
@@ -119,7 +152,10 @@ export default function useExternalGuestController({
     }
   }, [token]);
 
-  const loadExternalData = useCallback(async (showInitialLoading = false) => {
+  const loadExternalData = useCallback(async (
+    showInitialLoading = false,
+    guestNameRevisionBaseline = guestNameRevisionRef.current,
+  ): Promise<ExternalLoadResult> => {
     const isLatestRequest = validationGuard.beginRequest();
     if (showInitialLoading) {
       setIsValidating(true);
@@ -132,7 +168,7 @@ export default function useExternalGuestController({
     try {
       const { data, error: validationError } =
         await dependencies.validateExternalToken(token, ownerKey);
-      if (!isLatestRequest()) return;
+      if (!isLatestRequest()) return "stale" as const;
       if (validationError) {
         console.error("Invalid external guest link:", validationError);
         if (getExternalLinkValidationDisposition(validationError) === "invalid") {
@@ -144,7 +180,7 @@ export default function useExternalGuestController({
           setHasValidationError(false);
           setError("refreshFailed");
         }
-        return false;
+        return "failed" as const;
       } else if (data) {
         setHasValidationError(false);
         setRequiresReconciliation(false);
@@ -152,19 +188,22 @@ export default function useExternalGuestController({
         setLinkInfo(data.link);
         setVenueInfo(data.venue);
         setGuests(data.guests ?? []);
-        if (data.link.kind === "self_rsvp") {
+        if (
+          data.link.kind === "self_rsvp" &&
+          guestNameRevisionRef.current === guestNameRevisionBaseline
+        ) {
           setGuestName(data.guests?.[0]?.name ?? "");
         }
-        return true;
+        return "applied" as const;
       }
       setError("refreshFailed");
-      return false;
+      return "failed" as const;
     } catch (validationError) {
-      if (!isLatestRequest()) return;
+      if (!isLatestRequest()) return "stale" as const;
       console.error("Invalid external guest link:", validationError);
       setHasValidationError(false);
       setError("refreshFailed");
-      return false;
+      return "failed" as const;
     } finally {
       if (showInitialLoading && isLatestRequest()) setIsValidating(false);
     }
@@ -178,35 +217,42 @@ export default function useExternalGuestController({
 
   useEffect(() => {
     if (isReconciling || (!showRetryPanel && !showReconciliationBanner)) return;
-    const frame = window.requestAnimationFrame(() => {
-      if (showRetryPanel) {
-        retryHeadingRef.current?.focus();
-      } else {
-        reconciliationHeadingRef.current?.focus();
-      }
-    });
-    return () => window.cancelAnimationFrame(frame);
-  }, [isReconciling, showReconciliationBanner, showRetryPanel]);
+    return requestFocusRestore(
+      showRetryPanel ? retryHeadingRef : reconciliationHeadingRef,
+    );
+  }, [
+    isReconciling,
+    requestFocusRestore,
+    showReconciliationBanner,
+    showRetryPanel,
+  ]);
 
   const handleReconciliationRetry = async () => {
-    if (isReconciling) return;
+    const lease = acquireOperation();
+    if (!lease) return;
     setIsReconciling(true);
     try {
       const refreshed = await loadExternalData(false);
-      if (refreshed === false) {
+      if (refreshed !== "applied") {
         setRequiresReconciliation(true);
-      } else if (refreshed === true) {
-        window.requestAnimationFrame(() => contentHeadingRef.current?.focus());
+      } else {
+        requestFocusRestore(contentHeadingRef);
       }
     } finally {
-      setIsReconciling(false);
+      if (releaseOperation(lease)) setIsReconciling(false);
     }
   };
 
   const handleInitialRetry = async () => {
-    const refreshed = await loadExternalData(true);
-    if (refreshed === true) {
-      window.requestAnimationFrame(() => contentHeadingRef.current?.focus());
+    const lease = acquireOperation();
+    if (!lease) return;
+    try {
+      const refreshed = await loadExternalData(true);
+      if (refreshed === "applied") {
+        requestFocusRestore(contentHeadingRef);
+      }
+    } finally {
+      releaseOperation(lease);
     }
   };
 
@@ -217,10 +263,10 @@ export default function useExternalGuestController({
       (linkInfo.kind === "self_rsvp" && !ownerKey) ||
       isSelfRsvpLocked ||
       requiresReconciliation ||
-      isLoading ||
-      isBulkSubmitting ||
-      deletingId !== null
+      activeOperationRef.current
     ) return;
+    const lease = acquireOperation();
+    if (!lease) return;
     setIsLoading(true);
     setError(null);
     let actionFeedback: ExternalGuestFeedbackKey | null = null;
@@ -253,7 +299,9 @@ export default function useExternalGuestController({
       } else if (data) {
         if (isSelfRsvp) {
           setGuests([data]);
-          setGuestName(data.name);
+          if (guestNameRevisionRef.current === lease.guestNameRevision) {
+            setGuestName(data.name);
+          }
         } else {
           setGuests((prev) => [...prev, data]);
           setGuestName("");
@@ -269,20 +317,25 @@ export default function useExternalGuestController({
       actionFeedback = "registerResultUnknown";
     } finally {
       try {
-        const refreshed = await loadExternalData(false);
-        if (refreshed === false) {
+        const refreshed = await loadExternalData(
+          false,
+          lease.guestNameRevision,
+        );
+        if (refreshed !== "applied") {
           setRequiresReconciliation(true);
-        } else if (refreshed === true && actionFeedback) {
+        } else if (actionFeedback) {
           setError(actionFeedback);
         }
       } finally {
-        setIsLoading(false);
+        if (releaseOperation(lease)) setIsLoading(false);
       }
     }
   };
 
   const handleDelete = async (guestId: string) => {
-    if (requiresReconciliation || isReconciling) return;
+    if (requiresReconciliation || activeOperationRef.current) return;
+    const lease = acquireOperation();
+    if (!lease) return;
     setDeletingId(guestId);
     setError(null);
     let actionFeedback: ExternalGuestFeedbackKey | null = null;
@@ -309,56 +362,61 @@ export default function useExternalGuestController({
     } finally {
       try {
         const refreshed = await loadExternalData(false);
-        if (refreshed === false) {
+        if (refreshed !== "applied") {
           setRequiresReconciliation(true);
-        } else if (refreshed === true && actionFeedback) {
+        } else if (actionFeedback) {
           setError(actionFeedback);
         }
       } finally {
-        setDeletingId(null);
+        if (releaseOperation(lease)) setDeletingId(null);
       }
     }
   };
 
   const handleBulkSave = async (bulkGuests: BulkGuestCreateInput[]) => {
-    if (!linkInfo || linkInfo.kind === "self_rsvp") {
+    if (
+      !linkInfo ||
+      linkInfo.kind === "self_rsvp" ||
+      requiresReconciliation ||
+      activeOperationRef.current
+    ) {
       return { data: null, error: "SELF_RSVP_BULK_UNSUPPORTED" };
     }
+    const lease = acquireOperation();
+    if (!lease) return { data: null, error: "SELF_RSVP_BULK_UNSUPPORTED" };
+    setIsBulkSubmitting(true);
     setError(null);
+    try {
+      const response = await dependencies.createGuestsViaExternalLink({
+        token,
+        date: linkInfo.date || "",
+        items: bulkGuests,
+      });
 
-    const response = await dependencies.createGuestsViaExternalLink({
-      token,
-      date: linkInfo.date || "",
-      items: bulkGuests,
-    });
-
-    if (response.data) {
-      const createdGuests = response.data.items.flatMap((item) =>
-        item.status === "created" && item.guest ? [item.guest] : [],
-      );
-      if (createdGuests.length > 0) {
-        setGuests((current) => [...current, ...createdGuests]);
-        setLinkInfo((current) =>
-          current
-            ? { ...current, usedGuests: current.usedGuests + createdGuests.length }
-            : current,
+      if (response.data) {
+        const createdGuests = response.data.items.flatMap((item) =>
+          item.status === "created" && item.guest ? [item.guest] : [],
         );
+        if (createdGuests.length > 0) {
+          setGuests((current) => [...current, ...createdGuests]);
+          setLinkInfo((current) =>
+            current
+              ? { ...current, usedGuests: current.usedGuests + createdGuests.length }
+              : current,
+          );
+        }
       }
+
+      const refreshed = await loadExternalData(false);
+      if (refreshed !== "applied") setRequiresReconciliation(true);
+      return response;
+    } catch (error) {
+      const refreshed = await loadExternalData(false);
+      if (refreshed !== "applied") setRequiresReconciliation(true);
+      throw error;
+    } finally {
+      if (releaseOperation(lease)) setIsBulkSubmitting(false);
     }
-
-    return response;
-  };
-
-  const handleBulkSubmissionComplete = async () => {
-    const refreshed = await loadExternalData(false);
-    if (!refreshed) {
-      setRequiresReconciliation(true);
-      throw new Error("External guest list refresh failed");
-    }
-  };
-
-  const handleBulkSubmittingChange = (isSubmitting: boolean) => {
-    setIsBulkSubmitting(isSubmitting);
   };
 
   return {
@@ -367,8 +425,6 @@ export default function useExternalGuestController({
     error,
     guests,
     guestName,
-    handleBulkSubmissionComplete,
-    handleBulkSubmittingChange,
     handleBulkSave,
     handleDelete,
     handleInitialRetry,
@@ -388,7 +444,7 @@ export default function useExternalGuestController({
     reconciliationHeadingRef,
     requiresReconciliation,
     retryHeadingRef,
-    setGuestName,
+    handleGuestNameChange,
     showReconciliationBanner,
     showRetryPanel,
     venueInfo,

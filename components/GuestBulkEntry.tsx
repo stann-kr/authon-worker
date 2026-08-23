@@ -83,6 +83,7 @@ export default function GuestBulkEntry({
     () => new Set(),
   );
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const isSubmittingRef = useRef(false);
   const [feedback, setFeedback] = useState<FeedbackState | null>(null);
   const [csvDocument, setCsvDocument] = useState<ParsedGuestCsv | null>(null);
   const [csvColumnIndex, setCsvColumnIndex] = useState<number | null>(null);
@@ -135,6 +136,7 @@ export default function GuestBulkEntry({
   const heldForCapacity = Math.max(0, confirmedLines.length - submittableLines.length);
 
   const setSubmittingState = (value: boolean) => {
+    isSubmittingRef.current = value;
     setIsSubmitting(value);
     onSubmittingChange?.(value);
   };
@@ -205,8 +207,9 @@ export default function GuestBulkEntry({
   };
 
   const handleSubmit = async () => {
-    if (submittableLines.length === 0 || isSubmitting || disabled) return;
+    if (submittableLines.length === 0 || isSubmittingRef.current || disabled) return;
 
+    isSubmittingRef.current = true;
     textareaRef.current?.focus();
     setSubmittingState(true);
     setFeedback(null);
@@ -333,12 +336,13 @@ export default function GuestBulkEntry({
       }
     } finally {
       if (isMountedRef.current) {
-        setIsSubmitting(false);
         if (shouldRestoreFocusRef.current) {
           shouldRestoreFocusRef.current = false;
           focusTextarea();
         }
       }
+      isSubmittingRef.current = false;
+      if (isMountedRef.current) setIsSubmitting(false);
       onSubmittingChange?.(false);
     }
   };
