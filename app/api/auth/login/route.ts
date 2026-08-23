@@ -1,43 +1,19 @@
 import { NextResponse } from "next/server";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
-import { drizzle } from "drizzle-orm/d1";
-import { eq } from "drizzle-orm";
-import { SignJWT } from "jose";
-import { users, venues } from "@/lib/db/schema";
-import {
-  DUMMY_PASSWORD_HASH,
-  verifyPassword,
-  hashPassword,
-  needsRehash,
-} from "@/lib/auth/password";
+
 import { shouldUseSecureAuthCookies } from "@/lib/auth/cookie-policy";
-import {
-  consumeRateLimitOrDeny,
-  getRequestIp,
-} from "@/lib/auth/rate-limit";
-import { getTenantContextForRequest } from "@/lib/tenant/server";
-import {
-  isLocale,
-  LOCALE_COOKIE_MAX_AGE,
-  LOCALE_COOKIE_NAME,
-} from "@/i18n/config";
-import { isAccountKind, isRole } from "@/lib/users/policy";
+import { createLoginPersistence } from "@/lib/auth/login-persistence";
+import { createLoginSessionAdapter } from "@/lib/auth/login-session";
+import { loginWithPassword } from "@/lib/auth/login-service";
 import { isTrustedMutationOrigin } from "@/lib/auth/request-origin";
-import { hasActiveVenueAccess } from "@/lib/tenant/active-policy";
-import {
-  createLoginSessionLifetime,
-  createStoredSession,
-} from "@/lib/auth/session-policy";
+import { consumeRateLimitOrDeny, getRequestIp } from "@/lib/auth/rate-limit";
+import { isLocale, LOCALE_COOKIE_MAX_AGE, LOCALE_COOKIE_NAME } from "@/i18n/config";
+import { getTenantContextForRequest } from "@/lib/tenant/server";
 import {
   getRequestId,
   reportServerError,
   writeStructuredLog,
 } from "@/lib/observability/structured-log";
-import {
-  CANCEL_OPEN_PASSWORD_RESET_REQUESTS_AFTER_LOGIN_SQL,
-  SELECT_LATEST_SETUP_CODE_REQUEST_SQL,
-  UPDATE_USER_FOR_LOGIN_SQL,
-} from "@/lib/auth/credential-lifecycle-sql";
 
 export async function POST(request: Request) {
   const requestId = getRequestId(request);
@@ -48,9 +24,9 @@ export async function POST(request: Request) {
         { status: 403 },
       );
     }
+
     const { env } = getCloudflareContext();
     const { email, password, keepSignedIn } = await request.json();
-
     if (
       typeof email !== "string" ||
       !email.trim() ||
@@ -59,97 +35,46 @@ export async function POST(request: Request) {
     ) {
       return NextResponse.json(
         { code: "MISSING_CREDENTIALS", error: "Email and password are required." },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
-    const normalizedEmail = String(email).trim().toLowerCase();
-    const ip = getRequestIp(request);
+    const normalizedEmail = email.trim().toLowerCase();
     const credentialRateLimit = await consumeRateLimitOrDeny({
       namespace: "login",
-      identifier: `${ip}:${normalizedEmail}`,
+      identifier: `${getRequestIp(request)}:${normalizedEmail}`,
       limit: 5,
       windowSeconds: 60 * 15,
     });
-
     if (!credentialRateLimit.allowed) {
       return NextResponse.json(
         { code: "RATE_LIMITED", error: "Too many login attempts. Please try again later." },
         {
           status: 429,
-          headers: {
-            "Retry-After": String(credentialRateLimit.retryAfterSeconds),
-          },
-        }
+          headers: { "Retry-After": String(credentialRateLimit.retryAfterSeconds) },
+        },
       );
     }
 
-    const db = drizzle(env.DB);
-    const result = await db
-      .select({ user: users, venueActive: venues.active })
-      .from(users)
-      .leftJoin(venues, eq(users.venueId, venues.id))
-      .where(eq(users.email, normalizedEmail))
-      .limit(1);
-    const user = result[0]?.user;
-    const venueActive = result[0]?.venueActive;
-    const tenant = await getTenantContextForRequest(request);
-
-    const invalidCredentialsResponse = () => NextResponse.json(
-      { code: "INVALID_CREDENTIALS", error: "Invalid email or password." },
-      { status: 401 }
-    );
-
-    const userIsEligible = Boolean(
-      tenant.resolved &&
-      user &&
-      user.active &&
-      !user.deletedAt &&
-      isRole(user.role) &&
-      isAccountKind(user.accountKind) &&
-      hasActiveVenueAccess({
-        role: user.role,
-        venueId: user.venueId,
-        venueActive,
-      }) &&
-      !(
-        tenant.scope === "venue" &&
-        user.role !== "super_admin" &&
-        user.venueId !== tenant.venueId
-      ),
-    );
-
-    const nowIso = new Date().toISOString();
-    const lookupUserId = userIsEligible && user ? user.id : crypto.randomUUID();
-    const [latestSetupCodeRequest, passwordMatches] = await Promise.all([
-      env.DB.prepare(SELECT_LATEST_SETUP_CODE_REQUEST_SQL)
-        .bind(lookupUserId)
-        .first<{
-          status: string;
-          setup_method: string | null;
-          expires_at: string | null;
-        }>(),
-      verifyPassword(
+    const result = await loginWithPassword(
+      {
+        email: normalizedEmail,
         password,
-        userIsEligible && user ? user.passwordHash : DUMMY_PASSWORD_HASH,
-      ),
-    ]);
-
-    if (!userIsEligible || !user) return invalidCredentialsResponse();
-
-    const isPendingSetup =
-      user.migrationStatus === "pending_reset" && !user.passwordSetAt;
-
-    if (isPendingSetup) {
-      const isLegacySetup = !latestSetupCodeRequest;
-      const hasUsableSetupCodeApproval =
-        latestSetupCodeRequest?.status === "approved" &&
-        latestSetupCodeRequest.setup_method === "setup_code" &&
-        typeof latestSetupCodeRequest.expires_at === "string" &&
-        latestSetupCodeRequest.expires_at > nowIso;
-      if ((!isLegacySetup && !hasUsableSetupCodeApproval) || !passwordMatches) {
-        return invalidCredentialsResponse();
-      }
+        keepSignedIn: keepSignedIn === true,
+        tenant: await getTenantContextForRequest(request),
+      },
+      {
+        persistence: createLoginPersistence(env),
+        session: createLoginSessionAdapter(env),
+      },
+    );
+    if (result.status === "invalid_credentials") {
+      return NextResponse.json(
+        { code: "INVALID_CREDENTIALS", error: "Invalid email or password." },
+        { status: 401 },
+      );
+    }
+    if (result.status === "setup_required") {
       return NextResponse.json(
         {
           error: "First-time password setup is required.",
@@ -159,109 +84,56 @@ export async function POST(request: Request) {
         { status: 409 },
       );
     }
-
-    if (!passwordMatches) {
-      return invalidCredentialsResponse();
-    }
-
-    if (!env.JWT_SECRET) {
+    if (result.status === "unavailable") {
       await writeStructuredLog("error", {
         event: "auth.login",
         requestId,
-        actorId: user.id,
-        venueId: user.venueId,
+        actorId: result.user.id,
+        venueId: result.user.venueId,
         outcome: "unavailable",
         errorKind: "MissingConfiguration",
       });
-      return NextResponse.json({ code: "SERVER_ERROR", error: "Unable to sign in right now." }, { status: 500 });
+      return NextResponse.json(
+        { code: "SERVER_ERROR", error: "Unable to sign in right now." },
+        { status: 500 },
+      );
     }
-
-    // 성공한 로그인 시각 기록 + bcrypt 해시 → PBKDF2 자동 재해시
-    const nextPasswordHash = needsRehash(user.passwordHash)
-      ? await hashPassword(password)
-      : user.passwordHash;
-    const [loginResult] = await env.DB.batch<{ session_version?: number }>([
-      env.DB.prepare(UPDATE_USER_FOR_LOGIN_SQL).bind(
-        nowIso,
-        nextPasswordHash,
-        user.id,
-        user.passwordHash,
-        user.sessionVersion ?? 0,
-      ),
-      env.DB.prepare(CANCEL_OPEN_PASSWORD_RESET_REQUESTS_AFTER_LOGIN_SQL).bind(
-        nowIso,
-        user.id,
-      ),
-    ]);
-    const updatedSessionVersion = (
-      loginResult.results?.[0] as { session_version?: number } | undefined
-    )?.session_version;
-
-    if (typeof updatedSessionVersion !== "number") {
-      return invalidCredentialsResponse();
-    }
-
-    const lifetime = createLoginSessionLifetime(keepSignedIn === true);
-    const secret = new TextEncoder().encode(env.JWT_SECRET);
-    const token = await new SignJWT({
-      sub: user.id,
-      email: user.email,
-      role: user.role,
-      venueId: user.venueId,
-      sv: updatedSessionVersion,
-    })
-      .setProtectedHeader({ alg: "HS256" })
-      .setIssuedAt(lifetime.issuedAtSeconds)
-      .setExpirationTime(lifetime.expiresAtSeconds)
-      .sign(secret);
-
-    const sessionId = crypto.randomUUID();
-    await env.SESSIONS.put(`session:${sessionId}`, JSON.stringify(
-      createStoredSession(user.id, updatedSessionVersion, lifetime),
-    ), {
-      expirationTtl: lifetime.storageTtlSeconds,
-    });
 
     const response = NextResponse.json({
       ok: true,
       user: {
-        id: user.id,
-        email: user.email,
-        role: user.role,
-        accountKind: user.accountKind,
-        doorAccessEnabled: user.doorAccessEnabled,
-        name: user.name,
-        venueId: user.venueId ?? null,
-        guestLimit: user.guestLimit ?? null,
-        preferredLocale: isLocale(user.preferredLocale) ? user.preferredLocale : null,
+        id: result.user.id,
+        email: result.user.email,
+        role: result.user.role,
+        accountKind: result.user.accountKind,
+        doorAccessEnabled: result.user.doorAccessEnabled,
+        name: result.user.name,
+        venueId: result.user.venueId ?? null,
+        guestLimit: result.user.guestLimit ?? null,
+        preferredLocale: isLocale(result.user.preferredLocale)
+          ? result.user.preferredLocale
+          : null,
       },
     });
     const secureCookies = shouldUseSecureAuthCookies(request);
-
-    response.cookies.set({
-      name: "token",
-      value: token,
-      httpOnly: true,
-      secure: secureCookies,
-      sameSite: "lax",
-      maxAge: lifetime.ttlSeconds,
-      path: "/",
-    });
-
-    response.cookies.set({
-      name: "sessionId",
-      value: sessionId,
-      httpOnly: true,
-      secure: secureCookies,
-      sameSite: "lax",
-      maxAge: lifetime.ttlSeconds,
-      path: "/",
-    });
-
-    if (isLocale(user.preferredLocale)) {
+    for (const [name, value] of [
+      ["token", result.session.token],
+      ["sessionId", result.session.sessionId],
+    ] as const) {
+      response.cookies.set({
+        name,
+        value,
+        httpOnly: true,
+        secure: secureCookies,
+        sameSite: "lax",
+        maxAge: result.session.lifetime.ttlSeconds,
+        path: "/",
+      });
+    }
+    if (isLocale(result.user.preferredLocale)) {
       response.cookies.set({
         name: LOCALE_COOKIE_NAME,
-        value: user.preferredLocale,
+        value: result.user.preferredLocale,
         sameSite: "lax",
         secure: secureCookies,
         maxAge: LOCALE_COOKIE_MAX_AGE,
@@ -272,17 +144,16 @@ export async function POST(request: Request) {
     await writeStructuredLog("info", {
       event: "auth.login",
       requestId,
-      actorId: user.id,
-      venueId: user.venueId,
+      actorId: result.user.id,
+      venueId: result.user.venueId,
       outcome: "success",
     });
-
     return response;
   } catch (error) {
     await reportServerError("auth.login", error, { requestId });
     return NextResponse.json(
       { code: "SERVER_ERROR", error: "Unable to sign in right now." },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
