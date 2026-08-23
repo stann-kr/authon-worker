@@ -10,6 +10,7 @@ import { useSectionLoadingTask } from "@/components/RouteTransitionProvider";
 import { deriveAsyncListState } from "@/lib/ui/async-list-state";
 import { shareUrl, toUrlShareData } from "@/lib/share/url";
 import type { ApiResponse } from "@/lib/api/response";
+import type { ScopedOperation } from "@/lib/latest-request";
 import type {
   ManagedPasswordLinkResult,
   User,
@@ -24,8 +25,14 @@ export type StatusFilter =
   | "inactive"
   | "deleted";
 
-type Feedback = {
+interface UserDirectoryScopeOwner {
   scopeKey: string;
+}
+
+type UserDirectoryLoadResult = "applied" | "failed" | "stale";
+
+type Feedback = {
+  scopeOwner: UserDirectoryScopeOwner;
   type: "success" | "error";
   message: string;
 } | null;
@@ -35,8 +42,37 @@ type PendingUserAction = {
   user: User;
 } | null;
 
+interface OwnedPendingUserAction {
+  scopeOwner: UserDirectoryScopeOwner;
+  action: Exclude<PendingUserAction, null>;
+  opener: HTMLElement | null;
+}
+
+interface OperationLease {
+  scopeOwner: UserDirectoryScopeOwner;
+  operation: ScopedOperation;
+}
+
+interface DirectoryFocusIntent {
+  scopeOwner: UserDirectoryScopeOwner;
+  opener: HTMLElement | null;
+}
+
 const EMPTY_USERS: User[] = [];
 const EMPTY_AUDIT_EVENTS: UserAuditEvent[] = [];
+
+function getActiveFocusOwner(): HTMLElement | null {
+  if (typeof document === "undefined") return null;
+  const activeElement = document.activeElement;
+  if (
+    !(activeElement instanceof HTMLElement) ||
+    activeElement === document.body ||
+    activeElement === document.documentElement
+  ) {
+    return null;
+  }
+  return activeElement;
+}
 
 export interface UserDirectoryControllerActions {
   fetchManagedUsersByVenue: (
@@ -72,11 +108,16 @@ export function useUserDirectoryController({
   const [users, setUsers] = useState<User[]>([]);
   const [auditEvents, setAuditEvents] = useState<UserAuditEvent[]>([]);
   const [isLoading, setIsLoading] = useState(false);
-  const [loadedScopeKey, setLoadedScopeKey] = useState("");
-  const [loadError, setLoadError] = useState("");
-  const [loadOutcome, setLoadOutcome] = useState<
-    "idle" | "success" | "partial" | "error"
-  >("idle");
+  const [loadedScopeOwner, setLoadedScopeOwner] =
+    useState<UserDirectoryScopeOwner | null>(null);
+  const [loadErrorState, setLoadErrorState] = useState<{
+    scopeOwner: UserDirectoryScopeOwner;
+    message: string;
+  } | null>(null);
+  const [loadOutcomeState, setLoadOutcomeState] = useState<{
+    scopeOwner: UserDirectoryScopeOwner;
+    outcome: "idle" | "success" | "partial" | "error";
+  } | null>(null);
   const [feedback, setFeedback] = useState<Feedback>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [roleFilter, setRoleFilter] = useState<
@@ -84,11 +125,14 @@ export function useUserDirectoryController({
   >("all");
   const [statusFilter, setStatusFilter] =
     useState<StatusFilter>("current");
-  const [busyUserId, setBusyUserId] = useState<string | null>(null);
-  const [pendingUserAction, setPendingUserAction] =
-    useState<PendingUserAction>(null);
+  const [busyUserState, setBusyUserState] = useState<{
+    lease: OperationLease;
+    userId: string;
+  } | null>(null);
+  const [pendingUserActionState, setPendingUserActionState] =
+    useState<OwnedPendingUserAction | null>(null);
   const [passwordLink, setPasswordLink] = useState<{
-    scopeKey: string;
+    scopeOwner: UserDirectoryScopeOwner;
     userName: string;
     linkKind: "invitation" | "password_reset";
     passwordUrl: string;
@@ -96,35 +140,135 @@ export function useUserDirectoryController({
   } | null>(null);
   const passwordLinkPanelRef = useRef<HTMLDivElement>(null);
   const shouldFocusPasswordLinkRef = useRef(false);
+  const directoryFocusFallbackRef = useRef<HTMLInputElement>(null);
+  const [directoryFocusIntent, setDirectoryFocusIntent] =
+    useState<DirectoryFocusIntent | null>(null);
+  const activeMutationLeaseRef = useRef<OperationLease | null>(null);
+  const activeShareLeaseRef = useRef<OperationLease | null>(null);
+  const [activeShareLease, setActiveShareLease] =
+    useState<OperationLease | null>(null);
 
   const requestScopeKey = `${isSuperAdmin ? "super" : "venue"}:${effectiveVenueId ?? ""}`;
   const requestGuard = useLatestRequestGuard();
   const mutationGuard = useScopedOperationGuard();
-  const currentScopeKeyRef = useRef(requestScopeKey);
-  const activeMutationIdRef = useRef<number | null>(null);
-  currentScopeKeyRef.current = requestScopeKey;
+  const scopeOwnerRef = useRef<UserDirectoryScopeOwner>({
+    scopeKey: requestScopeKey,
+  });
+  const [scopeStateOwner, setScopeStateOwner] = useState(
+    scopeOwnerRef.current,
+  );
+  if (scopeOwnerRef.current.scopeKey !== requestScopeKey) {
+    scopeOwnerRef.current = { scopeKey: requestScopeKey };
+  }
+  const renderedScopeOwner = scopeOwnerRef.current;
+  const isScopeStateCurrent = scopeStateOwner === renderedScopeOwner;
+  const pendingUserActionOwnership =
+    isScopeStateCurrent &&
+    pendingUserActionState?.scopeOwner === renderedScopeOwner
+      ? pendingUserActionState
+      : null;
+  const pendingUserAction = pendingUserActionOwnership?.action ?? null;
   const scopedPasswordLink =
-    passwordLink?.scopeKey === requestScopeKey ? passwordLink : null;
+    isScopeStateCurrent && passwordLink?.scopeOwner === renderedScopeOwner
+      ? passwordLink
+      : null;
   const scopedFeedback =
-    feedback?.scopeKey === requestScopeKey ? feedback : null;
+    isScopeStateCurrent && feedback?.scopeOwner === renderedScopeOwner
+      ? feedback
+      : null;
+  const loadError =
+    isScopeStateCurrent && loadErrorState?.scopeOwner === renderedScopeOwner
+      ? loadErrorState.message
+      : "";
+  const loadOutcome =
+    isScopeStateCurrent && loadOutcomeState?.scopeOwner === renderedScopeOwner
+      ? loadOutcomeState.outcome
+      : "idle";
+  const busyUserId =
+    isScopeStateCurrent &&
+    busyUserState?.lease.scopeOwner === renderedScopeOwner
+      ? busyUserState.userId
+      : null;
+  const isSharingPasswordLink = Boolean(
+    isScopeStateCurrent && activeShareLease?.scopeOwner === renderedScopeOwner,
+  );
 
-  const scopedUsers = loadedScopeKey === requestScopeKey ? users : EMPTY_USERS;
+  const scopedUsers =
+    isScopeStateCurrent && loadedScopeOwner === renderedScopeOwner
+      ? users
+      : EMPTY_USERS;
   const scopedAuditEvents =
-    loadedScopeKey === requestScopeKey ? auditEvents : EMPTY_AUDIT_EVENTS;
-  const isCurrentScopeLoading = isLoading || loadedScopeKey !== requestScopeKey;
+    isScopeStateCurrent && loadedScopeOwner === renderedScopeOwner
+      ? auditEvents
+      : EMPTY_AUDIT_EVENTS;
+  const isCurrentScopeLoading =
+    !isScopeStateCurrent || isLoading || loadedScopeOwner !== renderedScopeOwner;
   useSectionLoadingTask(isActive && isCurrentScopeLoading);
 
+  const setPendingUserAction = useCallback((action: PendingUserAction) => {
+    if (!action) {
+      setPendingUserActionState(null);
+      return;
+    }
+    const opener = getActiveFocusOwner();
+    setPendingUserActionState({
+      scopeOwner: scopeOwnerRef.current,
+      action,
+      opener,
+    });
+  }, []);
+
+  const closePasswordLink = useCallback(() => {
+    const scopeOwner = scopeOwnerRef.current;
+    const opener = getActiveFocusOwner();
+    setPasswordLink((current) =>
+      current?.scopeOwner === scopeOwner ? null : current,
+    );
+    setDirectoryFocusIntent({ scopeOwner, opener });
+  }, []);
+
   useEffect(() => {
+    const scopeOwner = renderedScopeOwner;
     requestGuard.invalidateRequests();
     mutationGuard.invalidateOperations();
-    activeMutationIdRef.current = null;
-    setBusyUserId(null);
-    setPendingUserAction(null);
+    activeMutationLeaseRef.current = null;
+    activeShareLeaseRef.current = null;
+    setBusyUserState(null);
+    setActiveShareLease(null);
+    setPendingUserActionState(null);
     setPasswordLink(null);
+    setDirectoryFocusIntent(null);
     shouldFocusPasswordLinkRef.current = false;
     setFeedback(null);
-    setLoadOutcome("idle");
-  }, [mutationGuard, requestGuard, requestScopeKey]);
+    setLoadErrorState(null);
+    setLoadOutcomeState(null);
+    setLoadedScopeOwner(null);
+    setIsLoading(false);
+    setScopeStateOwner(scopeOwner);
+  }, [mutationGuard, renderedScopeOwner, requestGuard]);
+
+  useEffect(() => {
+    if (!directoryFocusIntent) return;
+    const intent = directoryFocusIntent;
+    const frameId = window.requestAnimationFrame(() => {
+      if (
+        scopeOwnerRef.current === intent.scopeOwner &&
+        !(
+          intent.opener?.isConnected &&
+          !intent.opener.closest("[inert]")
+        )
+      ) {
+        const fallback = directoryFocusFallbackRef.current;
+        if (fallback?.isConnected && !fallback.closest("[inert]")) {
+          fallback.focus({ preventScroll: true });
+        }
+      }
+      setDirectoryFocusIntent((current) =>
+        current === intent ? null : current,
+      );
+    });
+    return () => window.cancelAnimationFrame(frameId);
+  }, [directoryFocusIntent]);
 
   useEffect(() => {
     if (
@@ -147,19 +291,22 @@ export function useUserDirectoryController({
     return () => window.cancelAnimationFrame(frameId);
   }, [pendingUserAction, scopedPasswordLink]);
 
-  const loadUsers = useCallback(async () => {
-    if (currentScopeKeyRef.current !== requestScopeKey) return;
+  const loadUsers = useCallback(async (): Promise<UserDirectoryLoadResult> => {
+    const scopeOwner = renderedScopeOwner;
+    if (scopeOwnerRef.current !== scopeOwner) return "stale";
     const isLatestRequest = requestGuard.beginRequest();
+    const isCurrentRequest = () =>
+      isLatestRequest() && scopeOwnerRef.current === scopeOwner;
     if (!effectiveVenueId && !isSuperAdmin) {
       setUsers([]);
       setAuditEvents([]);
-      setLoadedScopeKey(requestScopeKey);
-      setLoadOutcome("success");
+      setLoadedScopeOwner(scopeOwner);
+      setLoadOutcomeState({ scopeOwner, outcome: "success" });
       setIsLoading(false);
-      return;
+      return "applied";
     }
     setIsLoading(true);
-    setLoadError("");
+    setLoadErrorState(null);
     try {
       const requestedVenueId = isSuperAdmin
         ? effectiveVenueId || null
@@ -170,51 +317,60 @@ export function useUserDirectoryController({
           ? actions.fetchUserAuditEvents(requestedVenueId)
           : Promise.resolve(null),
       ]);
-      if (
-        !isLatestRequest() ||
-        currentScopeKeyRef.current !== requestScopeKey
-      )
-        return;
+      if (!isCurrentRequest()) return "stale";
       if (userResult.error) {
         console.error("Failed to load users:", userResult.error);
-        setLoadError(t("loadFailed"));
+        setLoadErrorState({ scopeOwner, message: t("loadFailed") });
         setUsers([]);
-        setLoadOutcome("error");
+        setLoadOutcomeState({ scopeOwner, outcome: "error" });
       } else {
         setUsers(userResult.data ?? []);
-        setLoadOutcome(auditResult?.error ? "partial" : "success");
+        setLoadOutcomeState({
+          scopeOwner,
+          outcome: auditResult?.error ? "partial" : "success",
+        });
       }
       if (auditResult?.error) {
         console.error("Failed to load user activity:", auditResult.error);
         setAuditEvents([]);
-        if (!userResult.error) setLoadError(t("activityLoadFailed"));
+        if (!userResult.error) {
+          setLoadErrorState({
+            scopeOwner,
+            message: t("activityLoadFailed"),
+          });
+        }
       } else if (isSuperAdmin) {
         setAuditEvents(auditResult?.data ?? []);
       } else if (!isSuperAdmin) {
         setAuditEvents([]);
       }
-      setLoadedScopeKey(requestScopeKey);
+      setLoadedScopeOwner(scopeOwner);
+      return userResult.error ? "failed" : "applied";
     } catch (error) {
-      if (
-        !isLatestRequest() ||
-        currentScopeKeyRef.current !== requestScopeKey
-      )
-        return;
+      if (!isCurrentRequest()) return "stale";
       console.error("Failed to load users:", error);
       setUsers([]);
       setAuditEvents([]);
-      setLoadedScopeKey(requestScopeKey);
-      setLoadError(t("connectionLoadFailed"));
-      setLoadOutcome("error");
+      setLoadedScopeOwner(scopeOwner);
+      setLoadErrorState({
+        scopeOwner,
+        message: t("connectionLoadFailed"),
+      });
+      setLoadOutcomeState({ scopeOwner, outcome: "error" });
+      return "failed";
     } finally {
-      if (
-        isLatestRequest() &&
-        currentScopeKeyRef.current === requestScopeKey
-      ) {
+      if (isCurrentRequest()) {
         setIsLoading(false);
       }
     }
-  }, [actions, effectiveVenueId, isSuperAdmin, requestGuard, requestScopeKey, t]);
+  }, [
+    actions,
+    effectiveVenueId,
+    isSuperAdmin,
+    renderedScopeOwner,
+    requestGuard,
+    t,
+  ]);
 
   useEffect(() => {
     if (isActive && (effectiveVenueId || isSuperAdmin)) {
@@ -223,65 +379,76 @@ export function useUserDirectoryController({
   }, [effectiveVenueId, isActive, isSuperAdmin, loadUsers]);
 
   const beginUserMutation = (userId: string) => {
-    if (activeMutationIdRef.current !== null) return null;
+    const scopeOwner = renderedScopeOwner;
+    if (activeMutationLeaseRef.current?.scopeOwner === scopeOwner) return null;
     const operation = mutationGuard.beginOperation(
-      requestScopeKey,
+      scopeOwner.scopeKey,
       "user-mutation",
     );
-    activeMutationIdRef.current = operation.id;
-    setBusyUserId(userId);
+    const lease: OperationLease = {
+      scopeOwner,
+      operation,
+    };
+    activeMutationLeaseRef.current = lease;
+    setBusyUserState({ lease, userId });
     setFeedback(null);
-    return operation;
+    return lease;
   };
 
-  const finishUserMutation = (
-    operation: ReturnType<typeof mutationGuard.beginOperation>,
-  ) => {
-    if (activeMutationIdRef.current !== operation.id) return;
-    activeMutationIdRef.current = null;
-    if (operation.finish(currentScopeKeyRef.current)) {
-      setBusyUserId(null);
-    }
+  const isUserMutationCurrent = (lease: OperationLease) =>
+    activeMutationLeaseRef.current === lease &&
+    scopeOwnerRef.current === lease.scopeOwner &&
+    lease.operation.isCurrent(lease.scopeOwner.scopeKey);
+
+  const finishUserMutation = (lease: OperationLease) => {
+    if (activeMutationLeaseRef.current !== lease) return;
+    activeMutationLeaseRef.current = null;
+    lease.operation.finish(scopeOwnerRef.current.scopeKey);
+    setBusyUserState((current) =>
+      current?.lease === lease ? null : current,
+    );
   };
 
   const handleUserUpdate = async (
     userId: string,
     updates: UserProfileUpdateInput,
   ): Promise<boolean> => {
-    const operation = beginUserMutation(userId);
-    if (!operation) return false;
+    const lease = beginUserMutation(userId);
+    if (!lease) return false;
     try {
       const { error } = await actions.updateUserProfile(userId, updates);
-      if (!operation.isCurrent(currentScopeKeyRef.current)) return false;
+      if (!isUserMutationCurrent(lease)) return false;
       if (error) {
         console.error("Failed to update user:", error);
         setFeedback({
-          scopeKey: operation.scopeKey,
+          scopeOwner: lease.scopeOwner,
           type: "error",
           message: getActionError(error),
         });
         return false;
       } else {
-        await loadUsers();
-        if (!operation.isCurrent(currentScopeKeyRef.current)) return false;
+        const refreshResult = await loadUsers();
+        if (!isUserMutationCurrent(lease) || refreshResult !== "applied") {
+          return false;
+        }
         setFeedback({
-          scopeKey: operation.scopeKey,
+          scopeOwner: lease.scopeOwner,
           type: "success",
           message: t("updated"),
         });
         return true;
       }
     } catch (error) {
-      if (!operation.isCurrent(currentScopeKeyRef.current)) return false;
+      if (!isUserMutationCurrent(lease)) return false;
       console.error("Failed to update user:", error);
       setFeedback({
-        scopeKey: operation.scopeKey,
+        scopeOwner: lease.scopeOwner,
         type: "error",
         message: t("updateFailed"),
       });
       return false;
     } finally {
-      finishUserMutation(operation);
+      finishUserMutation(lease);
     }
   };
 
@@ -308,17 +475,17 @@ export function useUserDirectoryController({
   };
 
   const handlePasswordReset = async (user: User) => {
-    const operation = beginUserMutation(user.id);
-    if (!operation) return;
+    const lease = beginUserMutation(user.id);
+    if (!lease) return;
     setPasswordLink(null);
     shouldFocusPasswordLinkRef.current = false;
     try {
       const { data, error } =
         await actions.issueManagedPasswordLinkViaEdge(user.id);
-      if (!operation.isCurrent(currentScopeKeyRef.current)) return;
+      if (!isUserMutationCurrent(lease)) return;
       if (error || !data) {
         setFeedback({
-          scopeKey: operation.scopeKey,
+          scopeOwner: lease.scopeOwner,
           type: "error",
           message: getActionError(error ?? "UPDATE_FAILED"),
         });
@@ -326,126 +493,159 @@ export function useUserDirectoryController({
       }
       shouldFocusPasswordLinkRef.current = true;
       setPasswordLink({
-        scopeKey: operation.scopeKey,
+        scopeOwner: lease.scopeOwner,
         userName: user.name,
         linkKind: data.linkKind,
         passwordUrl: data.passwordUrl,
         expiresAt: data.expiresAt,
       });
+      const refreshResult = await loadUsers();
+      if (!isUserMutationCurrent(lease) || refreshResult !== "applied") return;
       setFeedback({
-        scopeKey: operation.scopeKey,
+        scopeOwner: lease.scopeOwner,
         type: "success",
         message:
           data.linkKind === "invitation"
             ? t("invitationReissued")
             : t("passwordResetLinkIssued"),
       });
-      await loadUsers();
     } catch (error: unknown) {
-      if (!operation.isCurrent(currentScopeKeyRef.current)) return;
+      if (!isUserMutationCurrent(lease)) return;
       console.error("Failed to reset user password:", error);
       setFeedback({
-        scopeKey: operation.scopeKey,
+        scopeOwner: lease.scopeOwner,
         type: "error",
         message: t("resetPasswordFailed"),
       });
     } finally {
-      finishUserMutation(operation);
+      finishUserMutation(lease);
     }
   };
 
-  const handleUserDelete = async (user: User) => {
-    const operation = beginUserMutation(user.id);
-    if (!operation) return;
+  const handleUserDelete = async (
+    user: User,
+  ): Promise<"deleted" | "failed" | "stale"> => {
+    const lease = beginUserMutation(user.id);
+    if (!lease) return "failed";
     try {
       const { error } = await actions.deleteUserViaEdge(user.id);
-      if (!operation.isCurrent(currentScopeKeyRef.current)) return;
+      if (!isUserMutationCurrent(lease)) return "stale";
       if (error) {
         console.error("Failed to delete user:", error);
         setFeedback({
-          scopeKey: operation.scopeKey,
+          scopeOwner: lease.scopeOwner,
           type: "error",
           message: getActionError(error),
         });
+        return "failed";
       } else {
-        await loadUsers();
-        if (!operation.isCurrent(currentScopeKeyRef.current)) return;
-        setFeedback({
-          scopeKey: operation.scopeKey,
-          type: "success",
-          message: t("deleted"),
-        });
+        const refreshResult = await loadUsers();
+        if (!isUserMutationCurrent(lease) || refreshResult === "stale") {
+          return "stale";
+        }
+        if (refreshResult === "applied") {
+          setFeedback({
+            scopeOwner: lease.scopeOwner,
+            type: "success",
+            message: t("deleted"),
+          });
+        }
+        return "deleted";
       }
     } catch (error: unknown) {
-      if (!operation.isCurrent(currentScopeKeyRef.current)) return;
+      if (!isUserMutationCurrent(lease)) return "stale";
       console.error("Failed to delete user:", error);
       setFeedback({
-        scopeKey: operation.scopeKey,
+        scopeOwner: lease.scopeOwner,
         type: "error",
         message: t("deleteFailed"),
       });
+      return "failed";
     } finally {
-      finishUserMutation(operation);
+      finishUserMutation(lease);
     }
   };
 
   const confirmPendingUserAction = async () => {
-    if (!pendingUserAction) return;
-    const { kind, user } = pendingUserAction;
-    const operationScopeKey = requestScopeKey;
+    if (!pendingUserActionOwnership) return;
+    const { action, opener, scopeOwner } = pendingUserActionOwnership;
+    const { kind, user } = action;
+    let deleteResult: "deleted" | "failed" | "stale" = "failed";
     if (kind === "toggle") await handleActiveChange(user);
     if (kind === "reset-password") await handlePasswordReset(user);
-    if (kind === "delete") await handleUserDelete(user);
-    if (currentScopeKeyRef.current === operationScopeKey) {
-      setPendingUserAction((current) =>
-        current?.kind === kind && current.user.id === user.id ? null : current,
+    if (kind === "delete") deleteResult = await handleUserDelete(user);
+    if (scopeOwnerRef.current === scopeOwner) {
+      setPendingUserActionState((current) =>
+        current === pendingUserActionOwnership ? null : current,
       );
+      if (kind === "delete" && deleteResult === "deleted") {
+        setDirectoryFocusIntent({ scopeOwner, opener });
+      }
     }
   };
 
   const sharePasswordLink = async () => {
     if (!scopedPasswordLink) return;
+    const scopeOwner = renderedScopeOwner;
+    if (activeShareLeaseRef.current?.scopeOwner === scopeOwner) return;
     const operation = mutationGuard.beginOperation(
-      requestScopeKey,
+      scopeOwner.scopeKey,
       "share-password-link",
     );
-    const result = await shareUrl(
-      toUrlShareData(scopedPasswordLink.passwordUrl),
-      {
-        share:
-          typeof navigator.share === "function"
-            ? (data) => navigator.share(data)
-            : undefined,
-        canShare:
-          typeof navigator.canShare === "function"
-            ? (data) => navigator.canShare(data)
-            : undefined,
-        copy: async (url) => {
-          if (!navigator.clipboard?.writeText) {
-            throw new Error("Clipboard API is unavailable");
-          }
-          await navigator.clipboard.writeText(url);
+    const lease: OperationLease = {
+      scopeOwner,
+      operation,
+    };
+    activeShareLeaseRef.current = lease;
+    setActiveShareLease(lease);
+    try {
+      const result = await shareUrl(
+        toUrlShareData(scopedPasswordLink.passwordUrl),
+        {
+          share:
+            typeof navigator.share === "function"
+              ? (data) => navigator.share(data)
+              : undefined,
+          canShare:
+            typeof navigator.canShare === "function"
+              ? (data) => navigator.canShare(data)
+              : undefined,
+          copy: async (url) => {
+            if (!navigator.clipboard?.writeText) {
+              throw new Error("Clipboard API is unavailable");
+            }
+            await navigator.clipboard.writeText(url);
+          },
         },
-      },
-    );
-    if (!operation.isCurrent(currentScopeKeyRef.current)) return;
-    if (result === "shared" || result === "copied") {
-      setFeedback({
-        scopeKey: operation.scopeKey,
-        type: "success",
-        message:
-          result === "shared"
-            ? t("passwordLinkShared")
-            : t("passwordLinkCopied"),
-      });
-    } else if (result === "failed") {
-      setFeedback({
-        scopeKey: operation.scopeKey,
-        type: "error",
-        message: t("passwordLinkCopyFailed"),
-      });
+      );
+      const isCurrentShare =
+        activeShareLeaseRef.current === lease &&
+        scopeOwnerRef.current === scopeOwner &&
+        operation.isCurrent(scopeOwner.scopeKey);
+      if (!isCurrentShare) return;
+      if (result === "shared" || result === "copied") {
+        setFeedback({
+          scopeOwner,
+          type: "success",
+          message:
+            result === "shared"
+              ? t("passwordLinkShared")
+              : t("passwordLinkCopied"),
+        });
+      } else if (result === "failed") {
+        setFeedback({
+          scopeOwner,
+          type: "error",
+          message: t("passwordLinkCopyFailed"),
+        });
+      }
+    } finally {
+      if (activeShareLeaseRef.current === lease) {
+        activeShareLeaseRef.current = null;
+        operation.finish(scopeOwnerRef.current.scopeKey);
+        setActiveShareLease((current) => (current === lease ? null : current));
+      }
     }
-    operation.finish(currentScopeKeyRef.current);
   };
 
   const currentUsers = useMemo(
@@ -492,11 +692,14 @@ export function useUserDirectoryController({
 
   return {
     busyUserId,
+    closePasswordLink,
     confirmPendingUserAction,
     currentUsers,
+    directoryFocusFallbackRef,
     filteredUsers,
     handleUserUpdate,
     isCurrentScopeLoading,
+    isSharingPasswordLink,
     listState,
     loadError,
     loadUsers,
@@ -508,7 +711,6 @@ export function useUserDirectoryController({
     scopedPasswordLink,
     scopedUsers,
     searchQuery,
-    setPasswordLink,
     setPendingUserAction,
     setRoleFilter,
     setSearchQuery,

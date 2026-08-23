@@ -96,11 +96,14 @@ export default function UserManagement({
 
   const {
     busyUserId,
+    closePasswordLink,
     confirmPendingUserAction,
     currentUsers,
+    directoryFocusFallbackRef,
     filteredUsers,
     handleUserUpdate,
     isCurrentScopeLoading,
+    isSharingPasswordLink,
     listState,
     loadError,
     loadUsers,
@@ -112,7 +115,6 @@ export default function UserManagement({
     scopedPasswordLink,
     scopedUsers,
     searchQuery,
-    setPasswordLink,
     setPendingUserAction,
     setRoleFilter,
     setSearchQuery,
@@ -374,6 +376,7 @@ export default function UserManagement({
                       <button
                         type="button"
                         onClick={() => void sharePasswordLink()}
+                        disabled={isSharingPasswordLink}
                         className="min-h-11 bg-action-primary px-3 py-2 text-xs font-semibold text-action-text hover:bg-action-hover"
                       >
                         {scopedPasswordLink.linkKind === "invitation"
@@ -382,7 +385,7 @@ export default function UserManagement({
                       </button>
                       <button
                         type="button"
-                        onClick={() => setPasswordLink(null)}
+                        onClick={closePasswordLink}
                         className="min-h-11 border border-border-default px-3 py-2 text-xs text-text-muted hover:text-text-heading"
                       >
                         {t("closeCredential")}
@@ -398,6 +401,7 @@ export default function UserManagement({
                     {t("searchUsers")}
                   </label>
                   <input
+                    ref={directoryFocusFallbackRef}
                     id="user-search"
                     name="user-search"
                     type="search"
