@@ -254,6 +254,9 @@ export default function useGuestLimitRequestController({
       ) {
         return;
       }
+      if (hasPublishedPendingError) {
+        setError(translateRef.current("requestAlreadyPending"));
+      }
       if (operation.shouldRestoreFocus) {
         setFocusIntent({
           scopeKey: operation.scopeKey,
@@ -265,7 +268,9 @@ export default function useGuestLimitRequestController({
         committedScopeOwnersRef.current.get(operation.scopeKey) ===
           operation.owner && committedScopeOwnerRef.current === operation.owner;
       if (isCurrentScopeOperation) {
-        if (!hasPublishedPendingError) {
+        if (hasPublishedPendingError) {
+          setError(translateRef.current("requestAlreadyPending"));
+        } else {
           console.error("Failed to request additional guests:", requestError);
           setError(translateRef.current("requestFailed"));
         }

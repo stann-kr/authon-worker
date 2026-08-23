@@ -52,12 +52,10 @@ function translate(key: string, values?: Record<string, string | number>) {
 
 function createDeferred<T>() {
   let resolve!: (value: T | PromiseLike<T>) => void;
-  let reject!: (reason?: unknown) => void;
-  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+  const promise = new Promise<T>((resolvePromise) => {
     resolve = resolvePromise;
-    reject = rejectPromise;
   });
-  return { promise, reject, resolve };
+  return { promise, resolve };
 }
 
 function createPendingRequest(count = 3): GuestLimitRequest {
@@ -101,7 +99,9 @@ interface HarnessProps {
   hasVerifiedCurrentQuota?: boolean;
   isCurrentScopeFetching?: boolean;
   dependencies: GuestLimitRequestControllerDependencies;
-  onLoadGuests?: () => Promise<boolean | undefined>;
+  onLoadGuests?: (
+    publishError: (message: string | null) => void,
+  ) => Promise<boolean | undefined>;
   onInvalidatePolling?: () => void;
   onController?: (
     controller: ReturnType<typeof useGuestLimitRequestController>,
@@ -133,7 +133,7 @@ function GuestLimitRequestHarness({
     hasVerifiedCurrentQuota,
     isCurrentScopeFetching,
     invalidatePolling: onInvalidatePolling,
-    loadGuests: onLoadGuests,
+    loadGuests: () => onLoadGuests(setError),
     setError,
     translate: harnessTranslate,
     commonTranslate: harnessTranslate,
@@ -451,8 +451,9 @@ test("success preserves a newer same-scope draft revision", async () => {
 test("current PENDING_REQUEST_EXISTS refreshes once and reveals authoritative pending status", async () => {
   const refresh = createDeferred<boolean | undefined>();
   let loadCount = 0;
-  const loadGuests = () => {
+  const loadGuests = (publishError: (message: string | null) => void) => {
     loadCount += 1;
+    publishError(null);
     return refresh.promise;
   };
   const dependencies: GuestLimitRequestControllerDependencies = {
@@ -499,7 +500,6 @@ test("current PENDING_REQUEST_EXISTS refreshes once and reveals authoritative pe
 });
 
 test("a failed pending refresh preserves the authoritative pending feedback", async () => {
-  const refresh = createDeferred<boolean | undefined>();
   let loadCount = 0;
   let controller: ReturnType<typeof useGuestLimitRequestController> | null =
     null;
@@ -509,9 +509,10 @@ test("a failed pending refresh preserves the authoritative pending feedback", as
   render(
     <GuestLimitRequestTestHarness
       dependencies={dependencies}
-      onLoadGuests={() => {
+      onLoadGuests={async (publishError) => {
         loadCount += 1;
-        return refresh.promise;
+        publishError("Guest list failed");
+        return false;
       }}
       onController={(next) => {
         controller = next;
@@ -523,12 +524,11 @@ test("a failed pending refresh preserves the authoritative pending feedback", as
   act(() => {
     operation = controller!.handleExtraRequest();
   });
-  await waitFor(() => assert.equal(loadCount, 1));
   await act(async () => {
-    refresh.reject(new Error("GUEST_SNAPSHOT_UNAVAILABLE"));
     await operation;
   });
 
+  assert.equal(loadCount, 1);
   assert.equal(
     screen.getByTestId("error").textContent,
     "A request is already pending",
