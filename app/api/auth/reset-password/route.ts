@@ -1,8 +1,10 @@
 import { NextResponse } from "next/server";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
-import { hashPassword } from "@/lib/auth/password";
-import { getPasswordPolicyError } from "@/lib/auth/password-policy";
-import { hashResetToken, isResetToken } from "@/lib/auth/token";
+import { createPasswordResetTokenPersistence } from "@/lib/auth/password-reset-token-persistence";
+import {
+  prepareTokenPasswordReset,
+  resetPasswordWithToken,
+} from "@/lib/auth/password-reset-token-service";
 import {
   consumeRateLimitOrDeny,
   getRequestIp,
@@ -14,14 +16,6 @@ import {
   reportServerError,
   writeStructuredLog,
 } from "@/lib/observability/structured-log";
-import {
-  COMPLETE_TOKEN_RESET_REQUESTS_SQL,
-  CONSUME_EXACT_RESET_TOKEN_SQL,
-  INSERT_TOKEN_RESET_AUDIT_SQL,
-  INVALIDATE_ALL_USER_RESET_TOKENS_SQL,
-  SELECT_VALID_RESET_TOKEN_CANDIDATE_SQL,
-  UPDATE_PASSWORD_WITH_VALID_TOKEN_SQL,
-} from "@/lib/auth/credential-lifecycle-sql";
 
 /**
  * 자가 이메일 요청 차단 (POST) 및 이미 발급된 token 재설정 실행 (PUT)
@@ -55,20 +49,17 @@ export async function PUT(request: Request) {
       ? (body as { newPassword?: unknown }).newPassword
       : undefined;
 
-    if (typeof token !== "string" || typeof newPassword !== "string") {
+    const prepared = prepareTokenPasswordReset({ token, newPassword });
+    if (prepared.status === "missing") {
       return NextResponse.json({ error: "필수 정보가 누락되었습니다." }, { status: 400 });
     }
-
-    const policyError = getPasswordPolicyError(newPassword);
-    if (policyError) {
-      return NextResponse.json({ error: policyError }, { status: 400 });
+    if (prepared.status === "policy_error") {
+      return NextResponse.json({ error: prepared.error }, { status: 400 });
     }
-
-    const nowIso = new Date().toISOString();
-    const normalizedToken = token.trim();
-    if (!isResetToken(normalizedToken)) {
+    if (prepared.status === "invalid_token") {
       return NextResponse.json({ error: "유효하지 않거나 만료된 토큰입니다." }, { status: 400 });
     }
+    const operationNow = new Date();
 
     const rateLimit = await consumeRateLimitOrDeny({
       namespace: "password-reset-token",
@@ -89,7 +80,6 @@ export async function PUT(request: Request) {
       );
     }
 
-    const tokenHash = await hashResetToken(normalizedToken);
     const tenant = await getTenantContextForRequest(request);
     const expectedVenueId = tenant.scope === "venue" ? tenant.venueId : null;
 
@@ -97,82 +87,25 @@ export async function PUT(request: Request) {
       return NextResponse.json({ error: "Unknown venue." }, { status: 404 });
     }
 
-    const candidate = await env.DB.prepare(
-      SELECT_VALID_RESET_TOKEN_CANDIDATE_SQL,
-    )
-      .bind(tokenHash, nowIso, expectedVenueId, expectedVenueId)
-      .first<{
-        user_id: string;
-        migration_status: string;
-        password_set_at: string | null;
-      }>();
-    if (!candidate?.user_id) {
-      return NextResponse.json({ error: "유효하지 않거나 만료된 토큰입니다." }, { status: 400 });
-    }
-
-    // 고비용 password hash는 고엔트로피 exact token과 tenant가 먼저
-    // 검증된 경우에만 계산한다. 아래 batch가 최종 경쟁 승자를 다시 판정한다.
-    const passwordHash = await hashPassword(newPassword);
-    const isInitialSetup =
-      candidate.migration_status === "pending_reset" && !candidate.password_set_at;
-    const auditAction = isInitialSetup
-      ? "password_setup_completed"
-      : "password_reset_completed";
-    const auditMethod = isInitialSetup ? "invitation_link" : "password_reset_link";
-
-    // The exact token consumption is the winning operation. The immediately
-    // following audit row receives changes() from that operation, and every
-    // remaining mutation is gated by the audit event's unique ID.
-    const auditEventId = crypto.randomUUID();
-    const [passwordResult, tokenResult, auditResult] = await env.DB.batch<{
-      id?: string;
-      user_id?: string;
-      target_user_id?: string;
-    }>([
-      env.DB.prepare(UPDATE_PASSWORD_WITH_VALID_TOKEN_SQL).bind(
-        passwordHash,
-        nowIso,
-        tokenHash,
-        nowIso,
+    const result = await resetPasswordWithToken(
+      {
+        token: prepared.token,
+        newPassword: prepared.newPassword,
         expectedVenueId,
-        expectedVenueId,
-      ),
-      env.DB.prepare(CONSUME_EXACT_RESET_TOKEN_SQL).bind(tokenHash, nowIso),
-      env.DB.prepare(INSERT_TOKEN_RESET_AUDIT_SQL).bind(
-        auditEventId,
-        auditAction,
-        JSON.stringify({ method: auditMethod }),
-        nowIso,
-        tokenHash,
-      ),
-      env.DB.prepare(INVALIDATE_ALL_USER_RESET_TOKENS_SQL).bind(auditEventId),
-      env.DB.prepare(COMPLETE_TOKEN_RESET_REQUESTS_SQL).bind(
-        nowIso,
-        nowIso,
-        auditEventId,
-      ),
-    ]);
-
-    const updatedUserId = (passwordResult.results?.[0] as { id?: string } | undefined)?.id;
-    const consumedUserId = (tokenResult.results?.[0] as { user_id?: string } | undefined)?.user_id;
-    const auditedUserId = (
-      auditResult.results?.[0] as { target_user_id?: string } | undefined
-    )?.target_user_id;
-
-    if (
-      !updatedUserId ||
-      !consumedUserId ||
-      !auditedUserId ||
-      updatedUserId !== consumedUserId ||
-      updatedUserId !== auditedUserId
-    ) {
+      },
+      {
+        persistence: createPasswordResetTokenPersistence(env.DB),
+        now: () => operationNow,
+      },
+    );
+    if (result.status === "invalid_token") {
       return NextResponse.json({ error: "유효하지 않거나 만료된 토큰입니다." }, { status: 400 });
     }
 
     await writeStructuredLog("info", {
-      event: isInitialSetup ? "auth.account_invitation" : "auth.password_reset",
+      event: result.isInitialSetup ? "auth.account_invitation" : "auth.password_reset",
       requestId,
-      actorId: updatedUserId,
+      actorId: result.userId,
       venueId: expectedVenueId,
       outcome: "success",
     });
