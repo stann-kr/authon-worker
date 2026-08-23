@@ -35,10 +35,8 @@ import {
   activateExternalLink,
 } from "../../../lib/api/external-links";
 import type { ExternalDJLink } from "@/lib/external-links/types";
-import type { ExternalDjSuggestion } from "@/lib/contributors/types";
 import {
   MAX_EXTERNAL_LINK_EVENT_LENGTH,
-  prepareExternalLinkCreateInput,
   shareExternalLink,
   toExternalLinkShareData,
   toExternalLinkTemplateDraft,
@@ -56,25 +54,17 @@ import {
   type ManageSort,
 } from "./linkStatus";
 import ExternalDjCombobox from "./ExternalDjCombobox";
+import {
+  useLinkCreateController,
+  type LinkCreateControllerActions,
+} from "./useLinkCreateController";
 
 const EMPTY_LINKS: ExternalDJLink[] = [];
-
-interface LinkFormData {
-  date: string;
-  dj: string;
-  contributorId: string | null;
-  event: string;
-  maxGuests: number | "";
-  localeMode: ExternalDJLink["localeMode"];
-  kind: ExternalDJLink["kind"];
-}
-
-type LinkFormField = "date" | "dj" | "event" | "maxGuests" | "localeMode" | "kind";
-
-interface LinkFormValidationError {
-  field: LinkFormField;
-  message: string;
-}
+const LINK_CREATE_ACTIONS: LinkCreateControllerActions = Object.freeze({
+  fetchDirectory: fetchExternalDjDirectory,
+  createLink: createExternalLink,
+  shareLink: shareExternalLink,
+});
 
 interface LinkActionFeedback {
   id: string;
@@ -124,28 +114,7 @@ export default function LinkManagement({
   const [manageFilter, setManageFilter] = useState<ManageFilter>("all");
   const [manageSort, setManageSort] = useState<ManageSort>("newest");
   const [now, setNow] = useState(() => Date.now());
-  const [formData, setFormData] = useState<LinkFormData>({
-    date: selectedDate,
-    dj: "",
-    contributorId: null,
-    event: "",
-    maxGuests: 5,
-    localeMode: "auto" as ExternalDJLink["localeMode"],
-    kind: "contributor" as ExternalDJLink["kind"],
-  });
-  const [generatedLink, setGeneratedLink] = useState<ExternalDJLink | null>(
-    null,
-  );
-  const [generatedLinkScopeKey, setGeneratedLinkScopeKey] = useState("");
-  const [isGenerating, setIsGenerating] = useState(false);
-  const [isGeneratedLinkActionPending, setIsGeneratedLinkActionPending] =
-    useState(false);
-  const [nativeShareAvailable, setNativeShareAvailable] = useState(false);
   const [links, setLinks] = useState<ExternalDJLink[]>([]);
-  const [djSuggestions, setDjSuggestions] = useState<ExternalDjSuggestion[]>([]);
-  const [djDirectoryVenueId, setDjDirectoryVenueId] = useState("");
-  const [isDjDirectoryLoading, setIsDjDirectoryLoading] = useState(false);
-  const [djDirectoryError, setDjDirectoryError] = useState<string | null>(null);
   const [isFetching, setIsFetching] = useState(false);
   const [loadedScopeKey, setLoadedScopeKey] = useState("");
   const [loadOutcome, setLoadOutcome] = useState<
@@ -161,24 +130,11 @@ export default function LinkManagement({
   const [errorScopeKey, setErrorScopeKey] = useState("");
   const [success, setSuccess] = useState<string | null>(null);
   const [successScopeKey, setSuccessScopeKey] = useState("");
-  const [linkActionToast, setLinkActionToast] = useState<string | null>(null);
-  const [templateNotice, setTemplateNotice] = useState<string | null>(null);
-  const [formValidationError, setFormValidationError] =
-    useState<LinkFormValidationError | null>(null);
+  const [manageLinkActionToast, setManageLinkActionToast] = useState<string | null>(null);
   const [pendingDeleteLink, setPendingDeleteLink] = useState<ExternalDJLink | null>(null);
   const [pendingDeactivateLink, setPendingDeactivateLink] =
     useState<ExternalDJLink | null>(null);
-  const linkDateInputRef = useRef<HTMLInputElement>(null);
-  const linkDjInputRef = useRef<HTMLInputElement>(null);
-  const linkEventInputRef = useRef<HTMLInputElement>(null);
-  const linkMaxGuestsInputRef = useRef<HTMLInputElement>(null);
-  const linkLocaleInputRef = useRef<HTMLButtonElement>(null);
-  const linkKindInputRef = useRef<HTMLInputElement>(null);
-  const generatedLinkPanelRef = useRef<HTMLDivElement>(null);
-  const shouldFocusTemplateDateRef = useRef(false);
-  const shouldFocusGeneratedLinkRef = useRef(false);
-  const activeCreateOperationIdRef = useRef<number | null>(null);
-  const linkActionToastOwnerRef = useRef<number | null>(null);
+  const manageLinkActionToastOwnerRef = useRef<number | null>(null);
 
   // 로딩 중 이전 데이터를 유지하여 화면 깜빡임 방지
   const displayCacheRef = useRef<{ scopeKey: string; links: ExternalDJLink[] }>({
@@ -198,27 +154,45 @@ export default function LinkManagement({
   const requestScopeKey = `${venueId}:${manageScope}:${
     manageScope === "recent" ? recentLimit : selectedDate
   }:${eventId ?? "general"}`;
-  const credentialScopeKey = `${venueId}:create:${formData.date}:${eventId ?? "general"}`;
   const requestGuard = useLatestRequestGuard();
-  const djDirectoryRequestGuard = useLatestRequestGuard();
   const linkMutationGuard = useScopedOperationGuard();
-  const createOperationGuard = useScopedOperationGuard();
   const shareOperationGuard = useScopedOperationGuard();
   const currentRequestScopeKeyRef = useRef(requestScopeKey);
-  const currentCredentialScopeKeyRef = useRef(credentialScopeKey);
-  const currentVenueIdRef = useRef(venueId);
   currentRequestScopeKeyRef.current = requestScopeKey;
-  currentCredentialScopeKeyRef.current = credentialScopeKey;
-  currentVenueIdRef.current = venueId;
-  const scopedGeneratedLink =
-    generatedLinkScopeKey === credentialScopeKey ? generatedLink : null;
-  const currentMessageScopeKey =
-    activeTab === "create" ? credentialScopeKey : requestScopeKey;
-  const scopedError = errorScopeKey === currentMessageScopeKey ? error : null;
-  const scopedSuccess =
-    successScopeKey === currentMessageScopeKey ? success : null;
-  const currentDjSuggestions =
-    djDirectoryVenueId === venueId ? djSuggestions : [];
+  const scopedManageError = errorScopeKey === requestScopeKey ? error : null;
+  const scopedSuccess = successScopeKey === requestScopeKey ? success : null;
+  const create = useLinkCreateController({
+    selectedDate,
+    venueId,
+    eventId,
+    isActive: activeTab === "create",
+    actions: LINK_CREATE_ACTIONS,
+  });
+  const {
+    formData,
+    setFormData,
+    isGenerating,
+    nativeShareAvailable,
+    currentDjSuggestions,
+    isDjDirectoryLoading,
+    djDirectoryError,
+    formValidationError,
+    scopedCreateError: scopedError,
+    templateNotice,
+    scopedGeneratedLink,
+    isGeneratedLinkActionPending,
+    linkDateInputRef,
+    linkDjInputRef,
+    linkEventInputRef,
+    linkMaxGuestsInputRef,
+    linkLocaleInputRef,
+    linkKindInputRef,
+    generatedLinkPanelRef,
+    clearFormFieldError,
+    handleDjChange,
+    handleSubmit,
+  } = create;
+  const linkActionToast = create.linkActionToast ?? manageLinkActionToast;
 
   useEffect(() => {
     requestGuard.invalidateRequests();
@@ -236,22 +210,6 @@ export default function LinkManagement({
   }, [linkMutationGuard, requestGuard, requestScopeKey, shareOperationGuard]);
 
   useEffect(() => {
-    createOperationGuard.invalidateOperations();
-    shareOperationGuard.invalidateOperations();
-    activeCreateOperationIdRef.current = null;
-    linkActionToastOwnerRef.current = null;
-    shouldFocusGeneratedLinkRef.current = false;
-    setIsGenerating(false);
-    setIsGeneratedLinkActionPending(false);
-    setGeneratedLink(null);
-    setGeneratedLinkScopeKey("");
-    setLinkActionToast(null);
-    setError(null);
-    setErrorScopeKey("");
-    setFormValidationError(null);
-  }, [createOperationGuard, credentialScopeKey, shareOperationGuard]);
-
-  useEffect(() => {
     if (!isFetching && loadedScopeKey === requestScopeKey) {
       displayCacheRef.current = { scopeKey: requestScopeKey, links };
     }
@@ -265,59 +223,6 @@ export default function LinkManagement({
     : isFetching && displayCacheRef.current.scopeKey === requestScopeKey
       ? displayCacheRef.current.links
       : links;
-
-  // Update form date when selectedDate prop changes
-  useEffect(() => {
-    setFormData((prev) => ({ ...prev, date: selectedDate }));
-    setFormValidationError((current) =>
-      current?.field === "date" ? null : current,
-    );
-  }, [selectedDate]);
-
-  useEffect(() => {
-    djDirectoryRequestGuard.invalidateRequests();
-    setDjSuggestions([]);
-    setDjDirectoryVenueId("");
-    setDjDirectoryError(null);
-    setIsDjDirectoryLoading(false);
-    setFormData((prev) => ({ ...prev, contributorId: null }));
-  }, [djDirectoryRequestGuard, venueId]);
-
-  const loadDjDirectory = useCallback(async () => {
-    const requestedVenueId = venueId;
-    const isLatestRequest = djDirectoryRequestGuard.beginRequest();
-    if (!requestedVenueId) {
-      setDjSuggestions([]);
-      setDjDirectoryVenueId("");
-      setDjDirectoryError(null);
-      setIsDjDirectoryLoading(false);
-      return;
-    }
-
-    setIsDjDirectoryLoading(true);
-    setDjDirectoryError(null);
-    try {
-      const { data, error } = await fetchExternalDjDirectory(requestedVenueId);
-      if (!isLatestRequest() || currentVenueIdRef.current !== requestedVenueId) {
-        return;
-      }
-      setDjSuggestions(data ?? []);
-      setDjDirectoryVenueId(requestedVenueId);
-      setDjDirectoryError(error ? t("djDirectoryUnavailable") : null);
-    } catch (directoryError) {
-      if (!isLatestRequest() || currentVenueIdRef.current !== requestedVenueId) {
-        return;
-      }
-      console.error("Failed to load external DJ directory:", directoryError);
-      setDjSuggestions([]);
-      setDjDirectoryVenueId(requestedVenueId);
-      setDjDirectoryError(t("djDirectoryUnavailable"));
-    } finally {
-      if (isLatestRequest() && currentVenueIdRef.current === requestedVenueId) {
-        setIsDjDirectoryLoading(false);
-      }
-    }
-  }, [djDirectoryRequestGuard, t, venueId]);
 
   const loadLinks = useCallback(async () => {
     if (currentRequestScopeKeyRef.current !== requestScopeKey) return;
@@ -376,95 +281,9 @@ export default function LinkManagement({
   }, [activeTab, loadLinks]);
 
   useEffect(() => {
-    if (activeTab === "create") {
-      void loadDjDirectory();
-    }
-  }, [activeTab, loadDjDirectory]);
-
-  useEffect(() => {
     const intervalId = window.setInterval(() => setNow(Date.now()), 30 * 1000);
     return () => window.clearInterval(intervalId);
   }, []);
-
-  useEffect(() => {
-    setNativeShareAvailable(typeof navigator.share === "function");
-  }, []);
-
-  useEffect(() => {
-    if (activeTab !== "create" || !shouldFocusTemplateDateRef.current) return;
-    shouldFocusTemplateDateRef.current = false;
-    const frameId = window.requestAnimationFrame(() => {
-      linkDateInputRef.current?.focus();
-    });
-    return () => window.cancelAnimationFrame(frameId);
-  }, [activeTab, templateNotice]);
-
-  useEffect(() => {
-    if (!scopedGeneratedLink || !shouldFocusGeneratedLinkRef.current) return;
-    shouldFocusGeneratedLinkRef.current = false;
-    const frameId = window.requestAnimationFrame(() => {
-      generatedLinkPanelRef.current?.focus();
-    });
-    return () => window.cancelAnimationFrame(frameId);
-  }, [scopedGeneratedLink]);
-
-  const clearFormFieldError = useCallback((field: LinkFormField) => {
-    setFormValidationError((current) =>
-      current?.field === field ? null : current,
-    );
-  }, []);
-
-  const handleDjChange = useCallback(
-    (dj: string, contributorId: string | null) => {
-      clearFormFieldError("dj");
-      setFormData((current) => ({ ...current, dj, contributorId }));
-    },
-    [clearFormFieldError],
-  );
-
-  const focusFormField = (field: LinkFormField) => {
-    const target = {
-      date: linkDateInputRef,
-      dj: linkDjInputRef,
-      event: linkEventInputRef,
-      maxGuests: linkMaxGuestsInputRef,
-      localeMode: linkLocaleInputRef,
-      kind: linkKindInputRef,
-    }[field];
-    window.requestAnimationFrame(() => target.current?.focus());
-  };
-
-  const applyFormValidationError = (code: string): boolean => {
-    const validationError: LinkFormValidationError | null = (() => {
-      switch (code) {
-        case "INVALID_DATE":
-          return { field: "date", message: t("invalidDate") };
-        case "INVALID_DJ_NAME":
-        case "DJ_NAME_TOO_LONG":
-          return { field: "dj", message: t("invalidDjName") };
-        case "INVALID_CONTRIBUTOR":
-          return { field: "dj", message: t("invalidContributor") };
-        case "INVALID_EVENT":
-        case "EVENT_TOO_LONG":
-          return { field: "event", message: t("invalidEvent") };
-        case "INVALID_MAX_GUESTS":
-          return { field: "maxGuests", message: t("invalidMaxGuests") };
-        case "INVALID_LOCALE_MODE":
-          return { field: "localeMode", message: t("invalidLocaleMode") };
-        case "INVALID_LINK_KIND":
-          return { field: "kind", message: t("invalidLinkKind") };
-        default:
-          return null;
-      }
-    })();
-    if (!validationError) return false;
-
-    setError(null);
-    setErrorScopeKey("");
-    setFormValidationError(validationError);
-    focusFormField(validationError.field);
-    return true;
-  };
 
   const getGuestPageUrl = (token: string, guestUrl?: string | null) => {
     if (guestUrl) return guestUrl;
@@ -472,97 +291,12 @@ export default function LinkManagement({
     return `${window.location.origin}/guest?token=${token}`;
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!venueId || activeCreateOperationIdRef.current !== null) return;
-
-    const prepared = prepareExternalLinkCreateInput({
-      date: formData.date,
-      djName: formData.dj,
-      contributorId: formData.contributorId,
-      event: formData.event,
-      maxGuests: formData.maxGuests,
-      localeMode: formData.localeMode,
-      kind: formData.kind,
-    });
-    if (prepared.error || !prepared.draft) {
-      if (!applyFormValidationError(prepared.error ?? "INVALID_INPUT")) {
-        setError(t("invalidCreateInput"));
-        setErrorScopeKey(credentialScopeKey);
-      }
-      return;
-    }
-
-    const operationVenueId = venueId;
-    const operationDate = selectedDate;
-    const operation = createOperationGuard.beginOperation(
-      credentialScopeKey,
-      "create-link",
-    );
-    activeCreateOperationIdRef.current = operation.id;
-    setIsGenerating(true);
-    setError(null);
-    setFormValidationError(null);
-
-    try {
-      const { data, error } = await createExternalLink({
-        venueId: operationVenueId,
-        eventId,
-        ...prepared.draft,
-      });
-
-      if (!operation.isCurrent(currentCredentialScopeKeyRef.current)) return;
-      if (error) {
-        console.error("Failed to create link:", error);
-        if (!applyFormValidationError(error)) {
-          setError(t("createFailed"));
-          setErrorScopeKey(operation.scopeKey);
-        }
-      } else if (data) {
-        shouldFocusGeneratedLinkRef.current = true;
-        setGeneratedLink(data);
-        setGeneratedLinkScopeKey(operation.scopeKey);
-        setTemplateNotice(null);
-        setFormData({
-          date: operationDate,
-          dj: "",
-          contributorId: null,
-          event: "",
-          maxGuests: 5,
-          localeMode: "auto",
-          kind: "contributor",
-        });
-        void loadDjDirectory();
-      }
-    } catch (createError) {
-      if (!operation.isCurrent(currentCredentialScopeKeyRef.current)) return;
-      console.error("Failed to create link:", createError);
-      setError(t("createFailed"));
-      setErrorScopeKey(operation.scopeKey);
-    } finally {
-      if (activeCreateOperationIdRef.current === operation.id) {
-        activeCreateOperationIdRef.current = null;
-        if (operation.finish(currentCredentialScopeKeyRef.current)) {
-          setIsGenerating(false);
-        }
-      }
-    }
-  };
-
-  const shareOrCopyLink = async (url: string, id?: string) => {
-    const operationScopeKey = id ? requestScopeKey : credentialScopeKey;
-    const operationScopeRef = id
-      ? currentRequestScopeKeyRef
-      : currentCredentialScopeKeyRef;
+  const shareOrCopyManagedLink = async (url: string, id: string) => {
     const operation = shareOperationGuard.beginOperation(
-      operationScopeKey,
-      `share:${id ?? "generated"}`,
+      requestScopeKey,
+      `share:${id}`,
     );
-    if (id) {
-      setLoadingStates((prev) => ({ ...prev, [`share_${id}`]: true }));
-    } else {
-      setIsGeneratedLinkActionPending(true);
-    }
+    setLoadingStates((prev) => ({ ...prev, [`share_${id}`]: true }));
     setError(null);
 
     const shareData = toExternalLinkShareData(url);
@@ -583,32 +317,24 @@ export default function LinkManagement({
       },
     });
 
-    if (!operation.isCurrent(operationScopeRef.current)) return;
+    if (!operation.isCurrent(currentRequestScopeKeyRef.current)) return;
     if (result === "shared" || result === "copied") {
-      if (id) {
-        setLinkActionFeedback({ id, operationId: operation.id, result });
-        window.setTimeout(() => {
-          setLinkActionFeedback((current) =>
-            current?.id === id && current.operationId === operation.id
-              ? null
-              : current,
-          );
-        }, 2000);
-      }
-      linkActionToastOwnerRef.current = operation.id;
-      setLinkActionToast(
-        result === "shared"
-          ? id
-            ? t("guestLinkShared")
-            : t("generatedLinkShared")
-          : id
-            ? t("guestLinkCopied")
-            : t("generatedLinkCopied"),
+      setLinkActionFeedback({ id, operationId: operation.id, result });
+      window.setTimeout(() => {
+        setLinkActionFeedback((current) =>
+          current?.id === id && current.operationId === operation.id
+            ? null
+            : current,
+        );
+      }, 2000);
+      manageLinkActionToastOwnerRef.current = operation.id;
+      setManageLinkActionToast(
+        result === "shared" ? t("guestLinkShared") : t("guestLinkCopied"),
       );
       window.setTimeout(() => {
-        if (linkActionToastOwnerRef.current === operation.id) {
-          linkActionToastOwnerRef.current = null;
-          setLinkActionToast(null);
+        if (manageLinkActionToastOwnerRef.current === operation.id) {
+          manageLinkActionToastOwnerRef.current = null;
+          setManageLinkActionToast(null);
         }
       }, 2200);
     } else if (result === "failed") {
@@ -616,33 +342,18 @@ export default function LinkManagement({
       setErrorScopeKey(operation.scopeKey);
     }
 
-    if (operation.finish(operationScopeRef.current)) {
-      if (id) {
-        setLoadingStates((prev) => ({ ...prev, [`share_${id}`]: false }));
-      } else {
-        setIsGeneratedLinkActionPending(false);
-      }
+    if (operation.finish(currentRequestScopeKeyRef.current)) {
+      setLoadingStates((prev) => ({ ...prev, [`share_${id}`]: false }));
     }
   };
 
   const handleUseAsTemplate = (link: ExternalDJLink) => {
     const draft = toExternalLinkTemplateDraft(link, selectedDate);
-    setFormData({
-      date: draft.date,
-      dj: draft.djName,
-      contributorId: draft.contributorId,
-      event: draft.event,
-      maxGuests: draft.maxGuests,
-      localeMode: draft.localeMode,
-      kind: draft.kind,
-    });
-    setGeneratedLink(null);
-    setGeneratedLinkScopeKey("");
+    create.applyTemplate(draft);
     setError(null);
-    setFormValidationError(null);
     setSuccess(null);
-    setTemplateNotice(t("templateReady", { djName: draft.djName }));
-    shouldFocusTemplateDateRef.current = true;
+    setLinkActionFeedback(null);
+    setManageLinkActionToast(null);
     setActiveTab("create");
   };
 
@@ -1294,7 +1005,7 @@ export default function LinkManagement({
                 <Button
                   type="button"
                   onClick={() =>
-                    shareOrCopyLink(
+                    create.shareOrCopyGeneratedLink(
                       getGuestPageUrl(
                         scopedGeneratedLink.token,
                         scopedGeneratedLink.guestUrl,
@@ -1319,7 +1030,7 @@ export default function LinkManagement({
 
         {activeTab === "manage" && (
           <div className="space-y-4">
-            {scopedError && <Alert type="error" message={scopedError} />}
+            {scopedManageError && <Alert type="error" message={scopedManageError} />}
             {scopedSuccess && <Alert type="success" message={scopedSuccess} />}
 
             <div className="app-panel">
@@ -1589,7 +1300,7 @@ export default function LinkManagement({
                           <Button
                             type="button"
                             onClick={() =>
-                              shareOrCopyLink(guestPageUrl, link.id)
+                              shareOrCopyManagedLink(guestPageUrl, link.id)
                             }
                             isLoading={loadingStates[`share_${link.id}`]}
                             size="sm"
