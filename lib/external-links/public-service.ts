@@ -563,11 +563,19 @@ export async function updatePublicGuestViaExternalLink(
     return resultError("Unable to update this RSVP.");
   }
 
+  const event = await dependencies.resolveEventForRosterWrite({
+    venueId: link.venueId,
+    businessDate: link.date,
+    eventId: link.eventId,
+    purpose: "register",
+  });
+
   const occurredAt = now().toISOString();
   const activityId = createId(dependencies);
   const updated = await dependencies.persistence.updateSelfRsvpGuest({
     link,
     guest: current,
+    eventId: event.id,
     ownerKeyHash,
     guestName: toStoredGuestName(preparedName.name),
     activityId,

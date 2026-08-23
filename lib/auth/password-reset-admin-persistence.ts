@@ -10,7 +10,7 @@ import {
   MANAGEABLE_PASSWORD_RESET_TARGET_SQL,
   SET_USER_SETUP_CODE_FOR_REQUEST_SQL,
 } from "./password-reset-lifecycle-sql.ts";
-import type { PasswordResetAdminActor } from "./password-reset-admin-service.ts";
+import type { PasswordResetAdminActor } from "./password-reset-admin-types.ts";
 import { passwordResetRequests, users, venues } from "../db/schema.ts";
 import { VENUE_MANAGED_ROLES } from "../users/policy.ts";
 

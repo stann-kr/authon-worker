@@ -28,6 +28,7 @@ export interface UserServiceActor {
   id: string;
   role: Role;
   venueId: string | null;
+  sessionVersion: number;
 }
 
 type RequireActiveVenueId = (venueId: string) => Promise<string>;
@@ -316,9 +317,9 @@ export async function updateManagedUserProfile(
   if (plan.changedFields.length === 0) return target;
 
   const now = (dependencies.now?.() ?? new Date()).toISOString();
-  await dependencies.persistence.updateProfile({
+  const updated = await dependencies.persistence.updateProfile({
     target,
-    actorId: input.actor.id,
+    actor: input.actor,
     isSelfUpdate,
     values: plan.values,
     incrementsSessionVersion: plan.incrementsSessionVersion,
@@ -332,6 +333,15 @@ export async function updateManagedUserProfile(
         }
       : null,
   });
+  if (!updated) {
+    if (
+      plan.requiresAnotherActiveSuperAdmin &&
+      !(await dependencies.persistence.hasAnotherActiveSuperAdmin(target.id))
+    ) {
+      throw new UserOperationError("LAST_SUPER_ADMIN");
+    }
+    throw new UserOperationError("UPDATE_FAILED");
+  }
   return requireTarget(await dependencies.persistence.loadUser(target.id));
 }
 
@@ -406,7 +416,8 @@ export async function createManagedUser(
   const createId = dependencies.createId ?? (() => crypto.randomUUID());
   const id = createId();
   const createdAt = (dependencies.now?.() ?? new Date()).toISOString();
-  await dependencies.persistence.createUser({
+  const created = await dependencies.persistence.createUser({
+    actor: input.actor,
     user: {
       id,
       email,
@@ -423,7 +434,6 @@ export async function createManagedUser(
     invitation: prepared.invitation,
     audit: {
       id: createId(),
-      actorUserId: input.actor.id,
       details: {
         role: input.params.role,
         accountKind,
@@ -433,6 +443,7 @@ export async function createManagedUser(
       },
     },
   });
+  if (!created) throw new UserOperationError("UPDATE_FAILED");
   return {
     id,
     invitationUrl: prepared.invitation.url,
@@ -476,12 +487,21 @@ export async function deleteManagedUser(
   }
   await requireAnotherActiveSuperAdmin(target, dependencies.persistence);
 
-  await dependencies.persistence.deleteUser({
+  const deleted = await dependencies.persistence.deleteUser({
     target,
-    actorUserId: input.actor.id,
+    actor: input.actor,
     passwordHash: await dependencies.createDeletedPasswordHash(),
     tombstoneEmail: `deleted+${target.id}@deleted.invalid`,
     deletedAt: (dependencies.now?.() ?? new Date()).toISOString(),
     auditId: (dependencies.createId ?? (() => crypto.randomUUID()))(),
   });
+  if (!deleted) {
+    if (
+      target.role === "super_admin" &&
+      !(await dependencies.persistence.hasAnotherActiveSuperAdmin(target.id))
+    ) {
+      throw new UserOperationError("LAST_SUPER_ADMIN");
+    }
+    throw new UserOperationError("UPDATE_FAILED");
+  }
 }

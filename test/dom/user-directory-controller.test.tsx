@@ -191,6 +191,9 @@ function UserDirectoryHarness({
       </output>
       <output data-testid="load-error">{controller.loadError}</output>
       <output data-testid="busy">{controller.busyUserId ?? ""}</output>
+      <output data-testid="mutation-pending">
+        {String(controller.isUserMutationPending)}
+      </output>
       <output data-testid="feedback-type">
         {controller.scopedFeedback?.type ?? ""}
       </output>
@@ -321,6 +324,28 @@ test("super-admin user and audit loads start in parallel and retain a partial re
   );
 });
 
+test("a rejected optional audit request keeps the super-admin user directory", async () => {
+  renderHarness({
+    actions: createActions({
+      fetchManagedUsersByVenue: async () => ({ data: [USER_A], error: null }),
+      fetchUserAuditEvents: async () => {
+        throw new Error("audit transport failed");
+      },
+    }),
+    isSuperAdmin: true,
+  });
+
+  await waitFor(() => {
+    assert.equal(screen.getByTestId("users").textContent, USER_A.name);
+    assert.equal(screen.getByTestId("state").textContent, "partial");
+  });
+  assert.equal(screen.getByTestId("audit-count").textContent, "0");
+  assert.equal(
+    screen.getByTestId("load-error").textContent,
+    "Users loaded, but recent account activity is unavailable. Please refresh.",
+  );
+});
+
 test("an A-scope response cannot replace the loaded B-scope directory", async () => {
   const venueARequest = createDeferred<{ data: User[]; error: null }>();
   const venueBRequest = createDeferred<{ data: User[]; error: null }>();
@@ -401,6 +426,43 @@ test("a same-tick mutation duplicate is synchronously latched and refreshes once
     screen.getByTestId("feedback").textContent,
     "User information updated.",
   );
+});
+
+test("a scope-wide mutation lease rejects another user's pending action", async () => {
+  const mutationRequest = createDeferred<{ data: User; error: null }>();
+  let controller: ReturnType<typeof useUserDirectoryController> | undefined;
+  renderHarness({
+    actions: createActions({
+      fetchManagedUsersByVenue: async () => ({
+        data: [USER_A, USER_B],
+        error: null,
+      }),
+      updateUserProfile: async () => mutationRequest.promise,
+    }),
+    onController: (nextController) => {
+      controller = nextController;
+    },
+  });
+  await waitFor(() =>
+    assert.equal(screen.getByTestId("state").textContent, "success-data"),
+  );
+
+  let updatePromise!: Promise<boolean>;
+  act(() => {
+    updatePromise = controller!.handleUserUpdate(USER_A.id, {
+      name: "Alpha Updated",
+    });
+    controller!.setPendingUserAction({ kind: "toggle", user: USER_B });
+  });
+
+  assert.equal(screen.getByTestId("mutation-pending").textContent, "true");
+  assert.equal(screen.getByTestId("pending").textContent, "");
+
+  await act(async () => {
+    mutationRequest.resolve({ data: USER_A, error: null });
+    await updatePromise;
+  });
+  assert.equal(screen.getByTestId("mutation-pending").textContent, "false");
 });
 
 test("credential confirmation issues the exact user link, refreshes, and focuses it", async () => {

@@ -1,16 +1,289 @@
-import { and, asc, desc, eq, inArray, isNull, ne, sql, type SQL } from "drizzle-orm";
+import { getCloudflareContext } from "@opennextjs/cloudflare";
+import type { D1Database, D1Result } from "@cloudflare/workers-types";
+import { and, asc, desc, eq, inArray, isNull, ne } from "drizzle-orm";
+import { drizzle } from "drizzle-orm/d1";
 
-import { getDb } from "../db/client";
 import {
-  passwordResetRequests,
-  passwordResetTokens,
   userAuditEvents,
   users,
-} from "../db/schema";
-import { isLocale } from "@/i18n/config";
-import { isAccountKind, isRole, type Role } from "./policy";
-import { UserOperationError } from "./errors";
-import type { User, UserAuditEvent, UserDirectoryEntry } from "./types";
+} from "../db/schema.ts";
+import { isLocale } from "../../i18n/config.ts";
+import { isAccountKind, isRole, type Role } from "./policy.ts";
+import { UserOperationError } from "./errors.ts";
+import type { User, UserAuditEvent, UserDirectoryEntry } from "./types.ts";
+
+const UPDATE_PROFILE_CAS_SQL = `
+  UPDATE users
+  SET
+    name = CASE WHEN ? = 1 THEN ? ELSE name END,
+    guest_limit = CASE WHEN ? = 1 THEN ? ELSE guest_limit END,
+    active = CASE WHEN ? = 1 THEN ? ELSE active END,
+    role = CASE WHEN ? = 1 THEN ? ELSE role END,
+    account_kind = CASE WHEN ? = 1 THEN ? ELSE account_kind END,
+    door_access_enabled = CASE WHEN ? = 1 THEN ? ELSE door_access_enabled END,
+    session_version = session_version + ?
+  WHERE id = ?
+    AND venue_id IS ?
+    AND name = ?
+    AND role = ?
+    AND account_kind = ?
+    AND door_access_enabled = ?
+    AND guest_limit IS ?
+    AND active = ?
+    AND deleted_at IS NULL
+    AND EXISTS (
+      SELECT 1
+      FROM users mutation_actor
+      WHERE mutation_actor.id = ?
+        AND mutation_actor.role = ?
+        AND mutation_actor.venue_id IS ?
+        AND mutation_actor.session_version = ?
+        AND mutation_actor.active = 1
+        AND mutation_actor.deleted_at IS NULL
+        AND (
+          mutation_actor.role = 'super_admin'
+          OR EXISTS (
+            SELECT 1
+            FROM venues actor_venue
+            WHERE actor_venue.id = mutation_actor.venue_id
+              AND actor_venue.active = 1
+          )
+        )
+        AND (
+          (? = 1 AND mutation_actor.id = users.id)
+          OR (
+            ? = 0
+            AND mutation_actor.id <> users.id
+            AND (
+              mutation_actor.role = 'super_admin'
+              OR (
+                mutation_actor.role = 'venue_admin'
+                AND mutation_actor.venue_id = users.venue_id
+                AND users.role IN ('door_staff', 'staff', 'dj')
+              )
+            )
+          )
+        )
+    )
+    AND (
+      users.role = 'super_admin'
+      OR EXISTS (
+        SELECT 1
+        FROM venues target_venue
+        WHERE target_venue.id = users.venue_id
+          AND target_venue.active = 1
+      )
+    )
+    AND (
+      ? = 0
+      OR users.role <> 'super_admin'
+      OR EXISTS (
+        SELECT 1
+        FROM users other_super_admin
+        WHERE other_super_admin.role = 'super_admin'
+          AND other_super_admin.active = 1
+          AND other_super_admin.deleted_at IS NULL
+          AND other_super_admin.id <> users.id
+      )
+    )
+  RETURNING id
+`;
+
+const INSERT_PROFILE_AUDIT_AFTER_CAS_SQL = `
+  INSERT INTO user_audit_events (
+    id, venue_id, actor_user_id, target_user_id, action, details, created_at
+  )
+  SELECT ?, venue_id, ?, id, ?, ?, ?
+  FROM users
+  WHERE id = ?
+    AND changes() = 1
+  RETURNING target_user_id
+`;
+
+const INVALIDATE_RESET_TOKENS_AFTER_USER_AUDIT_SQL = `
+  UPDATE password_reset_tokens
+  SET used = 1
+  WHERE user_id = ?
+    AND EXISTS (
+      SELECT 1
+      FROM user_audit_events
+      WHERE id = ?
+        AND actor_user_id = ?
+        AND target_user_id = ?
+        AND action = ?
+        AND created_at = ?
+    )
+`;
+
+const CANCEL_RESET_REQUESTS_AFTER_USER_AUDIT_SQL = `
+  UPDATE password_reset_requests
+  SET status = 'cancelled', updated_at = ?
+  WHERE user_id = ?
+    AND status IN ('pending', 'approved')
+    AND EXISTS (
+      SELECT 1
+      FROM user_audit_events
+      WHERE id = ?
+        AND actor_user_id = ?
+        AND target_user_id = ?
+        AND action = ?
+        AND created_at = ?
+    )
+`;
+
+const DELETE_USER_CAS_SQL = `
+  UPDATE users
+  SET
+    legacy_auth_user_id = NULL,
+    email = ?,
+    password_hash = ?,
+    name = 'Deleted user',
+    account_kind = 'personal',
+    door_access_enabled = 0,
+    guest_limit = NULL,
+    active = 0,
+    session_version = session_version + 1,
+    migration_status = 'active',
+    password_set_at = NULL,
+    preferred_locale = NULL,
+    last_login_at = NULL,
+    deleted_at = ?,
+    deleted_by = ?
+  WHERE id = ?
+    AND venue_id IS ?
+    AND email = ?
+    AND name = ?
+    AND role = ?
+    AND account_kind = ?
+    AND door_access_enabled = ?
+    AND guest_limit IS ?
+    AND active = 0
+    AND deleted_at IS NULL
+    AND EXISTS (
+      SELECT 1
+      FROM users mutation_actor
+      WHERE mutation_actor.id = ?
+        AND mutation_actor.role = ?
+        AND mutation_actor.venue_id IS ?
+        AND mutation_actor.session_version = ?
+        AND mutation_actor.active = 1
+        AND mutation_actor.deleted_at IS NULL
+        AND mutation_actor.id <> users.id
+        AND (
+          mutation_actor.role = 'super_admin'
+          OR (
+            mutation_actor.role = 'venue_admin'
+            AND mutation_actor.venue_id = users.venue_id
+            AND users.role IN ('door_staff', 'staff', 'dj')
+            AND EXISTS (
+              SELECT 1
+              FROM venues actor_venue
+              WHERE actor_venue.id = mutation_actor.venue_id
+                AND actor_venue.active = 1
+            )
+          )
+        )
+    )
+    AND (
+      users.role = 'super_admin'
+      OR EXISTS (
+        SELECT 1
+        FROM venues target_venue
+        WHERE target_venue.id = users.venue_id
+          AND target_venue.active = 1
+      )
+    )
+    AND (
+      users.role <> 'super_admin'
+      OR EXISTS (
+        SELECT 1
+        FROM users other_super_admin
+        WHERE other_super_admin.role = 'super_admin'
+          AND other_super_admin.active = 1
+          AND other_super_admin.deleted_at IS NULL
+          AND other_super_admin.id <> users.id
+      )
+    )
+  RETURNING id
+`;
+
+const INSERT_DELETE_AUDIT_AFTER_CAS_SQL = `
+  INSERT INTO user_audit_events (
+    id, venue_id, actor_user_id, target_user_id, action, details, created_at
+  )
+  SELECT ?, venue_id, ?, id, 'deleted', ?, ?
+  FROM users
+  WHERE id = ?
+    AND deleted_at = ?
+    AND changes() = 1
+  RETURNING target_user_id
+`;
+
+const INSERT_MANAGED_USER_GUARDED_SQL = `
+  INSERT INTO users (
+    id, email, password_hash, name, role, account_kind,
+    door_access_enabled, venue_id, guest_limit, active, session_version,
+    migration_status, password_set_at, preferred_locale, created_at
+  )
+  SELECT ?, ?, ?, ?, ?, ?, ?, target_venue.id, ?, 1, 0,
+         'pending_reset', NULL, ?, ?
+  FROM venues target_venue
+  WHERE target_venue.id = ?
+    AND target_venue.active = 1
+    AND EXISTS (
+      SELECT 1
+      FROM users mutation_actor
+      WHERE mutation_actor.id = ?
+        AND mutation_actor.role = ?
+        AND mutation_actor.venue_id IS ?
+        AND mutation_actor.session_version = ?
+        AND mutation_actor.active = 1
+        AND mutation_actor.deleted_at IS NULL
+        AND (
+          (
+            mutation_actor.role = 'super_admin'
+            AND ? IN ('venue_admin', 'door_staff', 'staff', 'dj')
+          )
+          OR (
+            mutation_actor.role = 'venue_admin'
+            AND mutation_actor.venue_id = target_venue.id
+            AND ? IN ('door_staff', 'staff', 'dj')
+          )
+        )
+    )
+  RETURNING id
+`;
+
+const INSERT_INVITATION_AFTER_USER_CREATE_SQL = `
+  INSERT INTO password_reset_tokens (
+    id, user_id, token, expires_at, used, created_at
+  )
+  SELECT ?, id, ?, ?, 0, ?
+  FROM users
+  WHERE id = ?
+    AND email = ?
+    AND venue_id = ?
+    AND created_at = ?
+    AND migration_status = 'pending_reset'
+    AND changes() = 1
+  RETURNING id
+`;
+
+const INSERT_CREATE_AUDIT_AFTER_INVITATION_SQL = `
+  INSERT INTO user_audit_events (
+    id, venue_id, actor_user_id, target_user_id, action, details, created_at
+  )
+  SELECT ?, created_user.venue_id, ?, created_user.id, 'created', ?, ?
+  FROM users created_user
+  JOIN password_reset_tokens invitation
+    ON invitation.id = ?
+    AND invitation.user_id = created_user.id
+  WHERE created_user.id = ?
+    AND created_user.email = ?
+    AND created_user.created_at = ?
+    AND changes() = 1
+  RETURNING target_user_id
+`;
 
 const managedUserFields = {
   id: users.id,
@@ -89,6 +362,13 @@ export interface UserProfileMutationValues {
   doorAccessEnabled?: boolean;
 }
 
+export interface UserMutationActor {
+  id: string;
+  role: Role;
+  venueId: string | null;
+  sessionVersion: number;
+}
+
 export interface UserPersistence {
   listDirectory(input: {
     venueId: string | null;
@@ -104,7 +384,7 @@ export interface UserPersistence {
   hasAnotherActiveSuperAdmin(targetId: string): Promise<boolean>;
   updateProfile(input: {
     target: User;
-    actorId: string;
+    actor: UserMutationActor;
     isSelfUpdate: boolean;
     values: UserProfileMutationValues;
     incrementsSessionVersion: boolean;
@@ -115,8 +395,9 @@ export interface UserPersistence {
       details: Record<string, unknown>;
       createdAt: string;
     } | null;
-  }): Promise<void>;
+  }): Promise<boolean>;
   createUser(input: {
+    actor: UserMutationActor;
     user: {
       id: string;
       email: string;
@@ -137,18 +418,17 @@ export interface UserPersistence {
     };
     audit: {
       id: string;
-      actorUserId: string;
       details: Record<string, unknown>;
     };
-  }): Promise<void>;
+  }): Promise<boolean>;
   deleteUser(input: {
     target: User;
-    actorUserId: string;
+    actor: UserMutationActor;
     passwordHash: string;
     tombstoneEmail: string;
     deletedAt: string;
     auditId: string;
-  }): Promise<void>;
+  }): Promise<boolean>;
 }
 
 export function isUserEmailUniqueConstraint(error: unknown): boolean {
@@ -158,8 +438,23 @@ export function isUserEmailUniqueConstraint(error: unknown): boolean {
   );
 }
 
-export function createUserPersistence(): UserPersistence {
-  const db = getDb();
+function hasReturnedId(result: D1Result<unknown>): boolean {
+  return Boolean((result.results?.[0] as { id?: string } | undefined)?.id);
+}
+
+function presence<T>(value: T | undefined): 0 | 1 {
+  return value === undefined ? 0 : 1;
+}
+
+function toSqlBoolean(value: boolean | undefined): number | null {
+  return value === undefined ? null : value ? 1 : 0;
+}
+
+export function createUserPersistence(
+  database?: D1Database,
+): UserPersistence {
+  const d1 = database ?? getCloudflareContext().env.DB;
+  const db = drizzle(d1);
 
   return {
     async listDirectory({ venueId, excludeSuperAdmins }) {
@@ -256,146 +551,188 @@ export function createUserPersistence(): UserPersistence {
 
     async updateProfile({
       target,
-      actorId,
+      actor,
       isSelfUpdate,
       values,
       incrementsSessionVersion,
       invalidatesCredentials,
       audit,
     }) {
-      const dbUpdates: Partial<
-        Omit<typeof users.$inferInsert, "sessionVersion">
-      > & { sessionVersion?: number | SQL } = { ...values };
-      if (incrementsSessionVersion) {
-        dbUpdates.sessionVersion = sql`${users.sessionVersion} + 1`;
-      }
-      const updateStatement = db
-        .update(users)
-        .set(dbUpdates)
-        .where(eq(users.id, target.id));
+      const statements = [
+        d1.prepare(UPDATE_PROFILE_CAS_SQL).bind(
+          presence(values.name),
+          values.name ?? null,
+          presence(values.guestLimit),
+          values.guestLimit ?? null,
+          presence(values.active),
+          toSqlBoolean(values.active),
+          presence(values.role),
+          values.role ?? null,
+          presence(values.accountKind),
+          values.accountKind ?? null,
+          presence(values.doorAccessEnabled),
+          toSqlBoolean(values.doorAccessEnabled),
+          incrementsSessionVersion ? 1 : 0,
+          target.id,
+          target.venueId,
+          target.name,
+          target.role,
+          target.accountKind,
+          target.doorAccessEnabled ? 1 : 0,
+          target.guestLimit,
+          target.active ? 1 : 0,
+          actor.id,
+          actor.role,
+          actor.venueId,
+          actor.sessionVersion,
+          isSelfUpdate ? 1 : 0,
+          isSelfUpdate ? 1 : 0,
+          values.active === false && target.role === "super_admin" ? 1 : 0,
+        ),
+      ];
 
-      if (isSelfUpdate || !audit) {
-        await updateStatement;
-        return;
-      }
-
-      const auditStatement = db.insert(userAuditEvents).values({
-        id: audit.id,
-        venueId: target.venueId,
-        actorUserId: actorId,
-        targetUserId: target.id,
-        action: audit.action,
-        details: JSON.stringify(audit.details),
-        createdAt: audit.createdAt,
-      });
-      if (!invalidatesCredentials) {
-        await db.batch([updateStatement, auditStatement]);
-        return;
-      }
-
-      // Account/session policy and credential revocation must commit together.
-      await db.batch([
-        updateStatement,
-        db
-          .update(passwordResetRequests)
-          .set({ status: "cancelled", updatedAt: audit.createdAt })
-          .where(
-            and(
-              eq(passwordResetRequests.userId, target.id),
-              sql`${passwordResetRequests.status} IN ('pending', 'approved')`,
-            ),
+      if (audit) {
+        statements.push(
+          d1.prepare(INSERT_PROFILE_AUDIT_AFTER_CAS_SQL).bind(
+            audit.id,
+            actor.id,
+            audit.action,
+            JSON.stringify(audit.details),
+            audit.createdAt,
+            target.id,
           ),
-        db
-          .update(passwordResetTokens)
-          .set({ used: true })
-          .where(eq(passwordResetTokens.userId, target.id)),
-        auditStatement,
-      ]);
+        );
+        if (invalidatesCredentials) {
+          statements.push(
+            d1.prepare(CANCEL_RESET_REQUESTS_AFTER_USER_AUDIT_SQL).bind(
+              audit.createdAt,
+              target.id,
+              audit.id,
+              actor.id,
+              target.id,
+              audit.action,
+              audit.createdAt,
+            ),
+            d1.prepare(INVALIDATE_RESET_TOKENS_AFTER_USER_AUDIT_SQL).bind(
+              target.id,
+              audit.id,
+              actor.id,
+              target.id,
+              audit.action,
+              audit.createdAt,
+            ),
+          );
+        }
+      }
+
+      const results = await d1.batch(statements);
+      return hasReturnedId(results[0]);
     },
 
-    async createUser({ user, invitation, audit }) {
-      await db.batch([
-        db.insert(users).values({
-          ...user,
-          active: true,
-          migrationStatus: "pending_reset",
-          passwordSetAt: null,
-        }),
-        db.insert(passwordResetTokens).values({
-          id: invitation.id,
-          userId: user.id,
-          token: invitation.tokenHash,
-          expiresAt: invitation.expiresAt,
-          used: false,
-          createdAt: user.createdAt,
-        }),
-        db.insert(userAuditEvents).values({
-          id: audit.id,
-          venueId: user.venueId,
-          actorUserId: audit.actorUserId,
-          targetUserId: user.id,
-          action: "created",
-          details: JSON.stringify(audit.details),
-          createdAt: user.createdAt,
-        }),
+    async createUser({ actor, user, invitation, audit }) {
+      const [createResult] = await d1.batch([
+        d1.prepare(INSERT_MANAGED_USER_GUARDED_SQL).bind(
+          user.id,
+          user.email,
+          user.passwordHash,
+          user.name,
+          user.role,
+          user.accountKind,
+          user.doorAccessEnabled ? 1 : 0,
+          user.guestLimit,
+          user.preferredLocale,
+          user.createdAt,
+          user.venueId,
+          actor.id,
+          actor.role,
+          actor.venueId,
+          actor.sessionVersion,
+          user.role,
+          user.role,
+        ),
+        d1.prepare(INSERT_INVITATION_AFTER_USER_CREATE_SQL).bind(
+          invitation.id,
+          invitation.tokenHash,
+          invitation.expiresAt,
+          user.createdAt,
+          user.id,
+          user.email,
+          user.venueId,
+          user.createdAt,
+        ),
+        d1.prepare(INSERT_CREATE_AUDIT_AFTER_INVITATION_SQL).bind(
+          audit.id,
+          actor.id,
+          JSON.stringify(audit.details),
+          user.createdAt,
+          invitation.id,
+          user.id,
+          user.email,
+          user.createdAt,
+        ),
       ]);
+      return hasReturnedId(createResult);
     },
 
     async deleteUser({
       target,
-      actorUserId,
+      actor,
       passwordHash,
       tombstoneEmail,
       deletedAt,
       auditId,
     }) {
-      await db.batch([
-        db
-          .update(users)
-          .set({
-            legacyAuthUserId: null,
-            email: tombstoneEmail,
-            passwordHash,
-            name: "Deleted user",
-            accountKind: "personal",
-            doorAccessEnabled: false,
-            guestLimit: null,
-            active: false,
-            sessionVersion: sql`${users.sessionVersion} + 1`,
-            migrationStatus: "active",
-            passwordSetAt: null,
-            preferredLocale: null,
-            lastLoginAt: null,
-            deletedAt,
-            deletedBy: actorUserId,
-          })
-          .where(eq(users.id, target.id)),
-        db
-          .update(passwordResetTokens)
-          .set({ used: true })
-          .where(eq(passwordResetTokens.userId, target.id)),
-        db
-          .update(passwordResetRequests)
-          .set({ status: "cancelled", updatedAt: deletedAt })
-          .where(
-            and(
-              eq(passwordResetRequests.userId, target.id),
-              sql`${passwordResetRequests.status} IN ('pending', 'approved')`,
-            ),
-          ),
-        db.insert(userAuditEvents).values({
-          id: auditId,
-          venueId: target.venueId,
-          actorUserId,
-          targetUserId: target.id,
-          action: "deleted",
-          details: JSON.stringify({
-            previousRole: target.role,
-            personalDataRemoved: true,
-          }),
-          createdAt: deletedAt,
-        }),
+      const action = "deleted";
+      const details = JSON.stringify({
+        previousRole: target.role,
+        personalDataRemoved: true,
+      });
+      const [deleteResult] = await d1.batch([
+        d1.prepare(DELETE_USER_CAS_SQL).bind(
+          tombstoneEmail,
+          passwordHash,
+          deletedAt,
+          actor.id,
+          target.id,
+          target.venueId,
+          target.email,
+          target.name,
+          target.role,
+          target.accountKind,
+          target.doorAccessEnabled ? 1 : 0,
+          target.guestLimit,
+          actor.id,
+          actor.role,
+          actor.venueId,
+          actor.sessionVersion,
+        ),
+        d1.prepare(INSERT_DELETE_AUDIT_AFTER_CAS_SQL).bind(
+          auditId,
+          actor.id,
+          details,
+          deletedAt,
+          target.id,
+          deletedAt,
+        ),
+        d1.prepare(INVALIDATE_RESET_TOKENS_AFTER_USER_AUDIT_SQL).bind(
+          target.id,
+          auditId,
+          actor.id,
+          target.id,
+          action,
+          deletedAt,
+        ),
+        d1.prepare(CANCEL_RESET_REQUESTS_AFTER_USER_AUDIT_SQL).bind(
+          deletedAt,
+          target.id,
+          auditId,
+          actor.id,
+          target.id,
+          action,
+          deletedAt,
+        ),
       ]);
+      return hasReturnedId(deleteResult);
     },
   };
 }

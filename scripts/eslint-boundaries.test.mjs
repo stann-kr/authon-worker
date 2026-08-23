@@ -18,6 +18,8 @@ const eslint = new ESLint({ cwd: projectRoot });
 const noApiTypesRule = "authon-boundaries/no-api-types-facade";
 const noComponentsAppRule =
   "authon-boundaries/no-app-imports-from-components";
+const noPersistenceServiceRule =
+  "authon-boundaries/no-service-imports-from-persistence";
 
 async function lint(code, relativeFilePath) {
   const [result] = await eslint.lintText(code, {
@@ -39,7 +41,7 @@ test("the legacy lib/api/types facade is absent", () => {
 });
 
 test(
-  "the real ESLint config rejects every legacy facade import form in repo TypeScript",
+  "the real ESLint config rejects legacy facade imports across repo source extensions",
   { skip: waitForFacadeRemoval },
   async () => {
     const forbiddenCases = [
@@ -82,6 +84,11 @@ test(
         name: "TypeScript import equals declaration",
         filePath: "lib/users/legacy-import-equals.ts",
         code: 'import legacy = require("@/lib/api/types.js"); export { legacy };',
+      },
+      {
+        name: "JavaScript static import",
+        filePath: "lib/users/legacy-static-import.js",
+        code: 'export { User } from "@/lib/api/types";',
       },
     ];
 
@@ -129,7 +136,7 @@ test(
 
     const componentMessages = await lint(
       'export { default } from "@/app/admin/components/UserManagement";',
-      "components/app-import-boundary-probe.tsx",
+      "components/app-import-boundary-probe.jsx",
     );
     assert.equal(
       messagesForRule(componentMessages, noComponentsAppRule).length,
@@ -138,3 +145,25 @@ test(
     );
   },
 );
+
+test("persistence modules cannot reverse-import service contracts", async () => {
+  const forbiddenMessages = await lint(
+    'import type { PasswordResetAdminActor } from "@/lib/auth/password-reset-admin-service"; export type Actor = PasswordResetAdminActor;',
+    "lib/auth/dependency-probe-persistence.ts",
+  );
+  assert.equal(
+    messagesForRule(forbiddenMessages, noPersistenceServiceRule).length,
+    1,
+    JSON.stringify(forbiddenMessages),
+  );
+
+  const allowedMessages = await lint(
+    'import type { PasswordResetAdminActor } from "@/lib/auth/password-reset-admin-types"; export type Actor = PasswordResetAdminActor;',
+    "lib/auth/dependency-probe-persistence.ts",
+  );
+  assert.equal(
+    messagesForRule(allowedMessages, noPersistenceServiceRule).length,
+    0,
+    JSON.stringify(allowedMessages),
+  );
+});

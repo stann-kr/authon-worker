@@ -3,10 +3,10 @@ import type { TenantContext } from "@/lib/tenant/types";
 import { hasActiveVenueAccess } from "../tenant/active-policy.ts";
 import { isAccountKind, isRole } from "../users/policy.ts";
 import {
-  DUMMY_PASSWORD_HASH,
   hashPassword,
   needsRehash,
   verifyPassword,
+  verifyPasswordWithDummies,
 } from "./password.ts";
 import type { LoginCandidate, LoginPersistence } from "./login-persistence.ts";
 import type { CreatedLoginSession, LoginSessionAdapter } from "./login-session.ts";
@@ -72,9 +72,10 @@ export async function loginWithPassword(
   const nowIso = (dependencies.now?.() ?? new Date()).toISOString();
   const [latestSetupCodeRequest, passwordMatches] = await Promise.all([
     dependencies.persistence.findLatestSetupCodeRequest(lookupUserId),
-    (dependencies.verifyPassword ?? verifyPassword)(
+    verifyPasswordWithDummies(
       input.password,
-      isEligible ? user.passwordHash : DUMMY_PASSWORD_HASH,
+      isEligible ? user.passwordHash : null,
+      dependencies.verifyPassword ?? verifyPassword,
     ),
   ]);
 

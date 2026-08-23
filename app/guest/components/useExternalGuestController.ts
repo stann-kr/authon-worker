@@ -95,6 +95,9 @@ export default function useExternalGuestController({
   const [guests, setGuests] = useState<ExternalLinkPublicGuest[]>([]);
   const activeOperationRef = useRef<ExternalOperationLease | null>(null);
   const guestNameRevisionRef = useRef(0);
+  const externalViewRootRef = useRef<HTMLDivElement>(null);
+  const invalidHeadingRef = useRef<HTMLHeadingElement>(null);
+  const shouldFocusInvalidHeadingRef = useRef(false);
   const retryHeadingRef = useRef<HTMLHeadingElement>(null);
   const reconciliationHeadingRef = useRef<HTMLHeadingElement>(null);
   const contentHeadingRef = useRef<HTMLHeadingElement>(null);
@@ -172,6 +175,20 @@ export default function useExternalGuestController({
       if (validationError) {
         console.error("Invalid external guest link:", validationError);
         if (getExternalLinkValidationDisposition(validationError) === "invalid") {
+          const activeElement = document.activeElement;
+          const focusIsInsideView = Boolean(
+            activeElement &&
+              externalViewRootRef.current?.contains(activeElement),
+          );
+          const focusIsOutsideView = Boolean(
+            activeElement &&
+              activeElement !== document.body &&
+              activeElement.isConnected &&
+              !focusIsInsideView,
+          );
+          shouldFocusInvalidHeadingRef.current =
+            focusIsInsideView ||
+            (showInitialLoading && !focusIsOutsideView);
           setHasValidationError(true);
           setLinkInfo(null);
           setVenueInfo(null);
@@ -182,6 +199,7 @@ export default function useExternalGuestController({
         }
         return "failed" as const;
       } else if (data) {
+        shouldFocusInvalidHeadingRef.current = false;
         setHasValidationError(false);
         setRequiresReconciliation(false);
         setError(null);
@@ -216,11 +234,17 @@ export default function useExternalGuestController({
   }, [isOwnerKeyReady, loadExternalData]);
 
   useEffect(() => {
-    if (isReconciling || (!showRetryPanel && !showReconciliationBanner)) return;
+    if (isReconciling) return;
+    if (hasValidationError && shouldFocusInvalidHeadingRef.current) {
+      shouldFocusInvalidHeadingRef.current = false;
+      return requestFocusRestore(invalidHeadingRef);
+    }
+    if (!showRetryPanel && !showReconciliationBanner) return;
     return requestFocusRestore(
       showRetryPanel ? retryHeadingRef : reconciliationHeadingRef,
     );
   }, [
+    hasValidationError,
     isReconciling,
     requestFocusRestore,
     showReconciliationBanner,
@@ -423,6 +447,7 @@ export default function useExternalGuestController({
     contentHeadingRef,
     deletingId,
     error,
+    externalViewRootRef,
     guests,
     guestName,
     handleBulkSave,
@@ -431,6 +456,7 @@ export default function useExternalGuestController({
     handleReconciliationRetry,
     handleSave,
     hasValidationError,
+    invalidHeadingRef,
     isBulkSubmitting,
     isLoading,
     isOwnerKeyReady,

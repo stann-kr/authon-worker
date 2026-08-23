@@ -1,11 +1,12 @@
 import assert from "node:assert/strict";
 import { afterEach, test } from "node:test";
-import { useLayoutEffect } from "react";
+import { useLayoutEffect, useRef, useState, type FocusEvent, type FormEvent } from "react";
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 
 import useAttendanceCounterController, {
   type AttendanceCounterDependencies,
 } from "@/app/door/components/useAttendanceCounterController";
+import AttendanceReconciliationForm from "@/app/door/components/AttendanceReconciliationForm";
 import type {
   AttendanceScope,
   DoorAttendanceAction,
@@ -272,6 +273,153 @@ function AttendanceCounterHarness({
 afterEach(() => {
   cleanup();
   setOnline(true);
+});
+
+function ReconciliationFocusHarness({
+  saveGate,
+  finalizationStatus = "finalized",
+}: {
+  saveGate?: Promise<void>;
+  finalizationStatus?: "finalized" | "nonfinalizable";
+}) {
+  const [summary, setSummary] = useState(createSummary(SCOPE_A));
+  const reconciliationStatusRef = useRef<HTMLParagraphElement>(null);
+  const reconciliationFormHadFocusRef = useRef(false);
+  const reconciliationFormWasVisibleRef = useRef(true);
+  const isReconciliationFormVisible = !summary.isFinalized && summary.canFinalize;
+
+  useLayoutEffect(() => {
+    if (isReconciliationFormVisible) {
+      reconciliationFormWasVisibleRef.current = true;
+      return;
+    }
+
+    const shouldMoveFocus =
+      reconciliationFormWasVisibleRef.current &&
+      reconciliationFormHadFocusRef.current;
+    reconciliationFormWasVisibleRef.current = false;
+    reconciliationFormHadFocusRef.current = false;
+    if (!shouldMoveFocus || document.activeElement !== document.body) return;
+    reconciliationStatusRef.current?.focus({ preventScroll: true });
+  }, [isReconciliationFormVisible]);
+
+  const markReconciliationFormBlurred = (
+    event: FocusEvent<HTMLFormElement>,
+  ) => {
+    const nextTarget = event.relatedTarget;
+    if (
+      nextTarget instanceof Node &&
+      !event.currentTarget.contains(nextTarget)
+    ) {
+      reconciliationFormHadFocusRef.current = false;
+    }
+  };
+  const submitAdjustment = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    await saveGate;
+    setSummary(
+      createSummary(SCOPE_A, {
+        isFinalized: finalizationStatus === "finalized",
+        canFinalize: false,
+        canRecord: false,
+        finalizedAt:
+          finalizationStatus === "finalized"
+            ? "2026-08-23T11:00:00.000Z"
+            : null,
+      }),
+    );
+  };
+
+  return (
+    <>
+      <button type="button">External attendance focus</button>
+      <AttendanceReconciliationForm
+        scope={SCOPE_A}
+        scopedSummary={summary}
+        serverCheckedInGuests={5}
+        serverWalkIns={2}
+        reconciliationTarget="10"
+        reconciliationDelta={3}
+        adjustmentReason="counted at door"
+        hasPendingReconciliationMutations={false}
+        isAdjusting={false}
+        isReconciliationTargetInvalid={false}
+        isReconciliationBelowCheckedGuests={false}
+        isReconciliationDeltaOutOfRange={false}
+        changeReconciliationTarget={() => {}}
+        changeAdjustmentReason={() => {}}
+        loadSummary={async () => {}}
+        submitAdjustment={submitAdjustment}
+        reconciliationStatusRef={reconciliationStatusRef}
+        markReconciliationFormFocused={() => {
+          reconciliationFormHadFocusRef.current = true;
+        }}
+        markReconciliationFormBlurred={markReconciliationFormBlurred}
+        translate={(key) => key}
+      />
+    </>
+  );
+}
+
+test("finalization moves focus from the removed reconciliation form to its status", async () => {
+  render(<ReconciliationFocusHarness />);
+  const details = document.querySelector("details");
+  assert.ok(details);
+  details.open = true;
+  const submitButton = screen.getByRole("button", {
+    name: "adjustment.save",
+  });
+  submitButton.focus();
+  const form = submitButton.closest("form");
+  assert.ok(form);
+  fireEvent.blur(form, { relatedTarget: null });
+  fireEvent.submit(form);
+
+  await waitFor(() => {
+    const status = screen.getByText("adjustment.finalized");
+    assert.equal(document.activeElement === status, true);
+  });
+});
+
+test("a nonfinalizable scope moves focus from the removed reconciliation form to its status", async () => {
+  render(<ReconciliationFocusHarness finalizationStatus="nonfinalizable" />);
+  const details = document.querySelector("details");
+  assert.ok(details);
+  details.open = true;
+  const submitButton = screen.getByRole("button", {
+    name: "adjustment.save",
+  });
+  submitButton.focus();
+  fireEvent.submit(submitButton.closest("form")!);
+
+  await waitFor(() => {
+    const status = screen.getByText("adjustment.eventMustBeClosed");
+    assert.equal(document.activeElement === status, true);
+  });
+});
+
+test("finalization preserves focus moved outside while reconciliation is pending", async () => {
+  const saveGate = createDeferred<void>();
+  render(<ReconciliationFocusHarness saveGate={saveGate.promise} />);
+  const details = document.querySelector("details");
+  assert.ok(details);
+  details.open = true;
+  const submitButton = screen.getByRole("button", {
+    name: "adjustment.save",
+  });
+  submitButton.focus();
+  fireEvent.submit(submitButton.closest("form")!);
+  const externalFocus = screen.getByRole("button", {
+    name: "External attendance focus",
+  });
+  externalFocus.focus();
+
+  await act(async () => {
+    saveGate.resolve();
+    await saveGate.promise;
+  });
+  assert.equal(screen.getByText("adjustment.finalized").textContent, "adjustment.finalized");
+  assert.equal(document.activeElement === externalFocus, true);
 });
 
 test("a stale scope A summary cannot replace the completed scope B summary", async () => {

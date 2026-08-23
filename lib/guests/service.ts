@@ -1,10 +1,14 @@
 import type { Event } from "../events/types.ts";
-import { hasAccess, type AccountKind, type Role } from "../users/policy.ts";
+import {
+  hasAccess,
+  type AccessScope,
+} from "../users/policy.ts";
 import {
   MAX_BULK_WRITE_NAMES,
   prepareGuestName,
   toStoredGuestName,
 } from "./bulk-entry.ts";
+import type { GuestWriteActor } from "./actor.ts";
 import type {
   AccessibleGuestRecord,
   GuestPersistence,
@@ -19,14 +23,7 @@ import type {
 
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
-export interface GuestServiceActor {
-  id: string;
-  role: Role;
-  venueId: string | null;
-  guestLimit: number | null;
-  accountKind: AccountKind;
-  doorAccessEnabled: boolean;
-}
+export type GuestServiceActor = GuestWriteActor;
 
 export interface GuestServiceDependencies {
   persistence: GuestPersistence;
@@ -50,6 +47,15 @@ export interface GuestServiceDependencies {
     businessDate: string;
     eventId?: string | null;
     actorUserId?: string | null;
+    actorGuard?: {
+      id: string;
+      role: GuestWriteActor["role"];
+      accountKind: GuestWriteActor["accountKind"];
+      doorAccessEnabled: boolean;
+      venueId: string | null;
+      sessionVersion: number;
+      allowedRoles: GuestWriteActor["role"][];
+    };
     purpose: "register" | "check_in";
   }): Promise<Event>;
   eventIncludesLegacyDateRows(event: Event): boolean;
@@ -57,7 +63,7 @@ export interface GuestServiceDependencies {
     event: Event;
     venueId: string;
     userId: string;
-    fallbackGuestLimit: number | null;
+    actor: GuestWriteActor;
     createdByUserId: string;
     createdAt: string;
   }): Promise<number | null>;
@@ -96,6 +102,13 @@ function parseBulkGuestCreateInput(value: unknown): {
     name: candidate.name,
     allowDuplicate: candidate.allowDuplicate === true,
   };
+}
+
+function requireActorAccess(
+  actor: GuestServiceActor,
+  access: AccessScope,
+): void {
+  if (!hasAccess(actor, [access])) throw new Error("Forbidden");
 }
 
 async function scopedVenueId(
@@ -141,6 +154,18 @@ function nowIso(dependencies: GuestServiceDependencies): string {
   return (dependencies.now?.() ?? new Date()).toISOString();
 }
 
+function eventActorGuard(actor: GuestServiceActor) {
+  return {
+    id: actor.id,
+    role: actor.role,
+    accountKind: actor.accountKind,
+    doorAccessEnabled: actor.doorAccessEnabled,
+    venueId: actor.venueId,
+    sessionVersion: actor.sessionVersion,
+    allowedRoles: [actor.role],
+  };
+}
+
 export async function listGuestsByDate(
   input: {
     actor: GuestServiceActor;
@@ -150,6 +175,7 @@ export async function listGuestsByDate(
   },
   dependencies: GuestServiceDependencies,
 ): Promise<Guest[]> {
+  requireActorAccess(input.actor, "door");
   let venueId = await scopedVenueId(
     input.actor,
     input.requestedVenueId,
@@ -185,6 +211,7 @@ export async function listAllGuests(
     "persistence" | "requireActiveVenueId"
   >,
 ): Promise<Guest[]> {
+  requireActorAccess(input.actor, "admin");
   const venueId = await scopedVenueId(
     input.actor,
     input.requestedVenueId,
@@ -204,6 +231,7 @@ export async function createGuestBatch(
   },
   dependencies: GuestServiceDependencies,
 ): Promise<GuestServiceResult<BulkGuestCreateResult>> {
+  requireActorAccess(input.actor, "guest");
   const venueId = await scopedVenueId(
     input.actor,
     input.venueId,
@@ -222,6 +250,7 @@ export async function createGuestBatch(
     businessDate: input.date,
     eventId: input.eventId,
     actorUserId: input.actor.id,
+    actorGuard: eventActorGuard(input.actor),
     purpose: "register",
   });
   const occurredAt = nowIso(dependencies);
@@ -230,7 +259,7 @@ export async function createGuestBatch(
       event,
       venueId,
       userId: input.actor.id,
-      fallbackGuestLimit: input.actor.guestLimit,
+      actor: input.actor,
       createdByUserId: input.actor.id,
       createdAt: occurredAt,
     });
@@ -298,6 +327,7 @@ export async function createGuestBatch(
 
   const outcomes = await dependencies.persistence.createBulk({
     pending,
+    actor: input.actor,
     venueId,
     eventId: event.id,
     date: input.date,
@@ -338,6 +368,7 @@ export async function updateManagedGuestStatus(
   },
   dependencies: GuestServiceDependencies,
 ): Promise<GuestServiceResult<Guest>> {
+  requireActorAccess(input.actor, "door");
   if (input.status !== "pending" && input.status !== "checked") {
     return { data: null, error: "INVALID_GUEST_STATUS" };
   }
@@ -362,6 +393,7 @@ export async function updateManagedGuestStatus(
         businessDate: current.date,
         eventId: current.eventId,
         actorUserId: input.actor.id,
+        actorGuard: eventActorGuard(input.actor),
         purpose: "check_in",
       });
   if (!event) throw new Error("EVENT_NOT_FOUND");
@@ -395,6 +427,7 @@ export async function updateManagedGuestStatus(
     businessDate: current.date,
     guestId: input.guestId,
     action,
+    actor: input.actor,
     actorUserId: input.actor.id,
     channel: hasAccess(input.actor, ["admin"]) ? "admin" : "door",
     idempotencyKey: input.idempotencyKey,
@@ -454,10 +487,12 @@ export async function deleteManagedGuest(
     businessDate: current.date,
     eventId: current.eventId,
     actorUserId: input.actor.id,
+    actorGuard: eventActorGuard(input.actor),
     purpose: "register",
   });
   return dependencies.persistence.softDelete({
     current,
+    actor: input.actor,
     eventId: event.id,
     includeLegacyDateRows: dependencies.eventIncludesLegacyDateRows(event),
     canDeleteVenueWide,
@@ -492,6 +527,7 @@ export async function permanentlyDeleteManagedGuest(
   );
   await dependencies.persistence.permanentlyDelete({
     current,
+    actor: input.actor,
     actorUserId: input.actor.id,
     sessionKeyHash: input.sessionKeyHash,
     occurredAt: nowIso(dependencies),
@@ -564,10 +600,12 @@ export async function updateManagedGuest(
         ? current.eventId
         : null,
     actorUserId: input.actor.id,
+    actorGuard: eventActorGuard(input.actor),
     purpose: "register",
   });
   const updated = await dependencies.persistence.updateDetails({
     current,
+    actor: input.actor,
     nextVenueId,
     nextName,
     nextDate,
@@ -607,10 +645,12 @@ export async function restoreManagedGuest(
     businessDate: current.date,
     eventId: current.eventId,
     actorUserId: input.actor.id,
+    actorGuard: eventActorGuard(input.actor),
     purpose: "register",
   });
   const restored = await dependencies.persistence.restore({
     current,
+    actor: input.actor,
     eventId: event.id,
     includeLegacyDateRows: dependencies.eventIncludesLegacyDateRows(event),
     actorUserId: input.actor.id,

@@ -189,6 +189,7 @@ export function useUserDirectoryController({
     busyUserState?.lease.scopeOwner === renderedScopeOwner
       ? busyUserState.userId
       : null;
+  const isUserMutationPending = busyUserId !== null;
   const isSharingPasswordLink = Boolean(
     isScopeStateCurrent && activeShareLease?.scopeOwner === renderedScopeOwner,
   );
@@ -208,6 +209,11 @@ export function useUserDirectoryController({
   const setPendingUserAction = useCallback((action: PendingUserAction) => {
     if (!action) {
       setPendingUserActionState(null);
+      return;
+    }
+    if (
+      activeMutationLeaseRef.current?.scopeOwner === scopeOwnerRef.current
+    ) {
       return;
     }
     const opener = getActiveFocusOwner();
@@ -311,13 +317,21 @@ export function useUserDirectoryController({
       const requestedVenueId = isSuperAdmin
         ? effectiveVenueId || null
         : effectiveVenueId;
+      const userRequest = actions.fetchManagedUsersByVenue(requestedVenueId);
+      let auditRequestRejected = false;
+      const auditRequest = isSuperAdmin
+        ? actions.fetchUserAuditEvents(requestedVenueId).catch((error: unknown) => {
+            auditRequestRejected = true;
+            console.error("Failed to load user activity:", error);
+            return null;
+          })
+        : Promise.resolve(null);
       const [userResult, auditResult] = await Promise.all([
-        actions.fetchManagedUsersByVenue(requestedVenueId),
-        isSuperAdmin
-          ? actions.fetchUserAuditEvents(requestedVenueId)
-          : Promise.resolve(null),
+        userRequest,
+        auditRequest,
       ]);
       if (!isCurrentRequest()) return "stale";
+      const auditFailed = auditRequestRejected || Boolean(auditResult?.error);
       if (userResult.error) {
         console.error("Failed to load users:", userResult.error);
         setLoadErrorState({ scopeOwner, message: t("loadFailed") });
@@ -327,11 +341,13 @@ export function useUserDirectoryController({
         setUsers(userResult.data ?? []);
         setLoadOutcomeState({
           scopeOwner,
-          outcome: auditResult?.error ? "partial" : "success",
+          outcome: auditFailed ? "partial" : "success",
         });
       }
-      if (auditResult?.error) {
-        console.error("Failed to load user activity:", auditResult.error);
+      if (auditFailed) {
+        if (auditResult?.error) {
+          console.error("Failed to load user activity:", auditResult.error);
+        }
         setAuditEvents([]);
         if (!userResult.error) {
           setLoadErrorState({
@@ -568,6 +584,12 @@ export function useUserDirectoryController({
 
   const confirmPendingUserAction = async () => {
     if (!pendingUserActionOwnership) return;
+    if (
+      activeMutationLeaseRef.current?.scopeOwner ===
+      pendingUserActionOwnership.scopeOwner
+    ) {
+      return;
+    }
     const { action, opener, scopeOwner } = pendingUserActionOwnership;
     const { kind, user } = action;
     let deleteResult: "deleted" | "failed" | "stale" = "failed";
@@ -699,6 +721,7 @@ export function useUserDirectoryController({
     filteredUsers,
     handleUserUpdate,
     isCurrentScopeLoading,
+    isUserMutationPending,
     isSharingPasswordLink,
     listState,
     loadError,

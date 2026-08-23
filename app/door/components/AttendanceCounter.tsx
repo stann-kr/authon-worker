@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef } from "react";
+import { useLayoutEffect, useRef } from "react";
 import { useTranslations } from "next-intl";
 import { useAuthSession } from "@/components/AuthSessionProvider";
 import {
@@ -56,6 +56,9 @@ export default function AttendanceCounter({
   const t = useTranslations("Door.attendance");
   const { user } = useAuthSession();
   const mobileDockRef = useRef<HTMLElement>(null);
+  const reconciliationStatusRef = useRef<HTMLParagraphElement>(null);
+  const reconciliationFormHadFocusRef = useRef(false);
+  const reconciliationFormWasVisibleRef = useRef(false);
   const canAdjust = user?.role === "super_admin" || user?.role === "venue_admin";
   const {
     adjustmentReason,
@@ -99,6 +102,35 @@ export default function AttendanceCounter({
   });
 
   useMobileDockInset(mobileDockRef);
+
+  const isReconciliationFormVisible = Boolean(
+    !scopedSummary ||
+      (!scopedSummary.isFinalized && scopedSummary.canFinalize),
+  );
+
+  useLayoutEffect(() => {
+    if (isReconciliationFormVisible) {
+      reconciliationFormWasVisibleRef.current = true;
+      return;
+    }
+
+    const shouldMoveFocus =
+      reconciliationFormWasVisibleRef.current &&
+      reconciliationFormHadFocusRef.current;
+    reconciliationFormWasVisibleRef.current = false;
+    reconciliationFormHadFocusRef.current = false;
+    if (!shouldMoveFocus) return;
+
+    const activeElement = document.activeElement;
+    if (
+      activeElement &&
+      activeElement !== document.body &&
+      activeElement.isConnected
+    ) {
+      return;
+    }
+    reconciliationStatusRef.current?.focus({ preventScroll: true });
+  }, [isReconciliationFormVisible]);
 
   return (
     <>
@@ -207,6 +239,19 @@ export default function AttendanceCounter({
           changeAdjustmentReason={changeAdjustmentReason}
           loadSummary={loadSummary}
           submitAdjustment={submitAdjustment}
+          reconciliationStatusRef={reconciliationStatusRef}
+          markReconciliationFormFocused={() => {
+            reconciliationFormHadFocusRef.current = true;
+          }}
+          markReconciliationFormBlurred={(event) => {
+            const nextTarget = event.relatedTarget;
+            if (
+              nextTarget instanceof Node &&
+              !event.currentTarget.contains(nextTarget)
+            ) {
+              reconciliationFormHadFocusRef.current = false;
+            }
+          }}
           translate={t}
         />
       )}

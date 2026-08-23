@@ -548,6 +548,87 @@ test("busy dialog reports aria-busy and ignores Escape", () => {
   assert.ok(screen.getByRole("alertdialog"));
 });
 
+test("dialog falls back to main when confirmation removes its opener", () => {
+  function Harness() {
+    const [open, setOpen] = useState(false);
+    const [showOpener, setShowOpener] = useState(true);
+    return (
+      <>
+        {showOpener && (
+          <button type="button" onClick={() => setOpen(true)}>
+            Remove opener
+          </button>
+        )}
+        <ConfirmDialog
+          open={open}
+          title="Remove opener"
+          description="The opener will no longer exist."
+          confirmLabel="Confirm removal"
+          cancelLabel="Cancel"
+          onConfirm={() => {
+            setShowOpener(false);
+            setOpen(false);
+          }}
+          onCancel={() => setOpen(false)}
+        />
+      </>
+    );
+  }
+
+  render(<Harness />);
+  const opener = screen.getByRole("button", { name: "Remove opener" });
+  opener.focus();
+  fireEvent.click(opener);
+  const confirmButton = screen.getByRole("button", {
+    name: "Confirm removal",
+  });
+  confirmButton.focus();
+  fireEvent.click(confirmButton);
+
+  assert.equal(screen.queryByRole("button", { name: "Remove opener" }), null);
+  assert.equal(document.activeElement, document.getElementById("main-content"));
+});
+
+test("dialog cleanup preserves focus already moved outside", () => {
+  let closeDialog: (() => void) | null = null;
+  function Harness() {
+    const [open, setOpen] = useState(false);
+    closeDialog = () => setOpen(false);
+    return (
+      <>
+        <button type="button" onClick={() => setOpen(true)}>
+          Open focus guard
+        </button>
+        <ConfirmDialog
+          open={open}
+          title="Focus guard"
+          description="Preserve a newer focus target."
+          confirmLabel="Confirm"
+          cancelLabel="Cancel"
+          onConfirm={() => {}}
+          onCancel={() => setOpen(false)}
+        />
+      </>
+    );
+  }
+
+  render(<Harness />);
+  const opener = screen.getByRole("button", { name: "Open focus guard" });
+  opener.focus();
+  fireEvent.click(opener);
+  const externalButton = document.createElement("button");
+  externalButton.textContent = "External focus";
+  document.body.append(externalButton);
+
+  try {
+    externalButton.focus();
+    act(() => closeDialog?.());
+    assert.equal(document.activeElement, externalButton);
+  } finally {
+    externalButton.remove();
+  }
+});
+
 test("guest deletion dialog explains that analytics will change", () => {
   render(
     <NextIntlClientProvider

@@ -147,6 +147,14 @@ export const UPDATE_PROFILE_PASSWORD_CAS_SQL = `
     AND session_version = ?
     AND active = 1
     AND deleted_at IS NULL
+    AND (
+      role = 'super_admin'
+      OR EXISTS (
+        SELECT 1 FROM venues profile_venue
+        WHERE profile_venue.id = users.venue_id
+          AND profile_venue.active = 1
+      )
+    )
   RETURNING id
 `;
 

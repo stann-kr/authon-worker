@@ -25,6 +25,17 @@ interface ConfirmDialogProps {
   children?: ReactNode;
 }
 
+function isAvailableFocusTarget(target: HTMLElement | null): target is HTMLElement {
+  return Boolean(
+    target &&
+      target !== document.body &&
+      target.isConnected &&
+      !target.closest("[inert]") &&
+      !target.matches(":disabled") &&
+      target.getAttribute("aria-disabled") !== "true",
+  );
+}
+
 export default function ConfirmDialog({
   open,
   title,
@@ -97,6 +108,7 @@ export default function ConfirmDialog({
     previousFocusRef.current = document.activeElement as HTMLElement | null;
     const previousOverflow = document.body.style.overflow;
     const mainContent = document.getElementById("main-content");
+    const dialogElement = dialogRef.current;
     const mainContentWasInert = mainContent?.hasAttribute("inert") ?? false;
     document.body.style.overflow = "hidden";
     if (mainContent && !mainContentWasInert) {
@@ -145,7 +157,27 @@ export default function ConfirmDialog({
       if (mainContent && !mainContentWasInert) {
         mainContent.removeAttribute("inert");
       }
-      previousFocusRef.current?.focus();
+      const activeElement = document.activeElement as HTMLElement | null;
+      const focusWasLostWithDialog =
+        !activeElement ||
+        activeElement === document.body ||
+        !activeElement.isConnected ||
+        Boolean(dialogElement?.contains(activeElement));
+      if (!focusWasLostWithDialog) return;
+      const previousFocus = previousFocusRef.current;
+      const focusTarget = isAvailableFocusTarget(previousFocus)
+        ? previousFocus
+        : isAvailableFocusTarget(mainContent)
+          ? mainContent
+          : null;
+      if (
+        mainContent &&
+        focusTarget === mainContent &&
+        !mainContent.hasAttribute("tabindex")
+      ) {
+        mainContent.tabIndex = -1;
+      }
+      focusTarget?.focus({ preventScroll: true });
     };
   }, [open, requestCancel]);
 

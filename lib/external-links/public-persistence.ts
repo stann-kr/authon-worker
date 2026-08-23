@@ -110,6 +110,7 @@ export interface ExternalLinkPublicPersistence {
   updateSelfRsvpGuest(input: {
     link: ExternalLinkPublicRecord;
     guest: ExternalLinkPublicGuestRecord;
+    eventId: string;
     ownerKeyHash: string;
     guestName: string;
     activityId: string;
@@ -417,6 +418,8 @@ export function createExternalLinkPublicPersistence(
           occurredAt,
           date,
           guests.length,
+          eventId,
+          eventId,
           ...guardedNames.flatMap((name) => [linkId, name]),
         );
       const inserts = guests.flatMap((guest) => [
@@ -481,6 +484,8 @@ export function createExternalLinkPublicPersistence(
           link.venueId,
           occurredAt,
           link.date,
+          eventId,
+          eventId,
           ownerKeyHash,
         ),
         database.prepare(EXTERNAL_GUEST_INSERT_AFTER_RESERVATION_SQL).bind(
@@ -525,6 +530,7 @@ export function createExternalLinkPublicPersistence(
     async updateSelfRsvpGuest({
       link,
       guest,
+      eventId,
       ownerKeyHash,
       guestName,
       activityId,
@@ -542,11 +548,14 @@ export function createExternalLinkPublicPersistence(
           ownerKeyHash,
           link.token,
           occurredAt,
+          eventId,
+          eventId,
+          eventId,
         ),
         prepareGuestActivityAfterChange(database, {
           activityId,
           venueId: link.venueId,
-          eventId: guest.eventId ?? link.eventId,
+          eventId,
           guestId: guest.id,
           action: "update",
           actorUserId: null,

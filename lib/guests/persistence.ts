@@ -22,6 +22,7 @@ import {
   prepareGuestActivityAfterChange,
   type GuestActivityMutationResult,
 } from "./activity-ledger";
+import type { GuestWriteActor } from "./actor";
 import { prepareGuestName } from "./bulk-entry";
 import type { Guest } from "./types";
 
@@ -70,6 +71,7 @@ export interface GuestPersistence {
   }): Promise<string[]>;
   createBulk(input: {
     pending: PendingBulkGuestWrite[];
+    actor: GuestWriteActor;
     venueId: string;
     eventId: string;
     date: string;
@@ -90,6 +92,7 @@ export interface GuestPersistence {
   ): Promise<GuestActivityMutationResult>;
   softDelete(input: {
     current: AccessibleGuestRecord;
+    actor: GuestWriteActor;
     eventId: string;
     includeLegacyDateRows: boolean;
     canDeleteVenueWide: boolean;
@@ -102,6 +105,7 @@ export interface GuestPersistence {
   }): Promise<Guest>;
   permanentlyDelete(input: {
     current: AccessibleGuestRecord;
+    actor: GuestWriteActor;
     actorUserId: string;
     sessionKeyHash: string | null;
     occurredAt: string;
@@ -110,6 +114,7 @@ export interface GuestPersistence {
   }): Promise<void>;
   updateDetails(input: {
     current: AccessibleGuestRecord;
+    actor: GuestWriteActor;
     nextVenueId: string;
     nextName: string;
     nextDate: string;
@@ -124,6 +129,7 @@ export interface GuestPersistence {
   }): Promise<Guest>;
   restore(input: {
     current: AccessibleGuestRecord;
+    actor: GuestWriteActor;
     eventId: string;
     includeLegacyDateRows: boolean;
     actorUserId: string;
@@ -132,6 +138,19 @@ export interface GuestPersistence {
     activityId: string;
     requestId: string;
   }): Promise<Guest | null>;
+}
+
+function guestActorBindings(actor: GuestWriteActor, includeGuestLimit = true) {
+  const bindings = [
+    actor.id,
+    actor.role,
+    actor.accountKind,
+    actor.doorAccessEnabled ? 1 : 0,
+    actor.venueId,
+  ];
+  if (includeGuestLimit) bindings.push(actor.guestLimit);
+  bindings.push(actor.sessionVersion);
+  return bindings;
 }
 
 function toGuest(row: typeof guests.$inferSelect): Guest {
@@ -248,6 +267,7 @@ export function createGuestPersistence(): GuestPersistence {
 
     async createBulk({
       pending,
+      actor,
       venueId,
       eventId,
       date,
@@ -270,6 +290,9 @@ export function createGuestPersistence(): GuestPersistence {
           occurredAt,
           occurredAt,
           venueId,
+          eventId,
+          venueId,
+          date,
           guest.allowDuplicate ? 1 : 0,
           venueId,
           actorUserId,
@@ -278,15 +301,23 @@ export function createGuestPersistence(): GuestPersistence {
           date,
           guest.name,
           baseGuestLimit,
+          venueId,
           actorUserId,
           eventId,
           includeLegacyDateRows ? 1 : 0,
           date,
           baseGuestLimit ?? 0,
+          venueId,
           actorUserId,
           eventId,
           includeLegacyDateRows ? 1 : 0,
           date,
+          eventId,
+          venueId,
+          actorUserId,
+          baseGuestLimit,
+          ...guestActorBindings(actor, false),
+          venueId,
         ),
         prepareGuestActivityAfterChange(d1, {
           activityId: guest.activityId,
@@ -301,6 +332,9 @@ export function createGuestPersistence(): GuestPersistence {
           previousStatus: null,
           nextStatus: "pending",
           occurredAt,
+          finalActor: actor,
+          finalAccess: "guest",
+          verifyGuestLimit: false,
         }),
       ]);
       const results = await d1.batch<{ id: string }>(statements);
@@ -418,6 +452,7 @@ export function createGuestPersistence(): GuestPersistence {
 
     async softDelete({
       current,
+      actor,
       eventId,
       includeLegacyDateRows,
       canDeleteVenueWide,
@@ -440,6 +475,7 @@ export function createGuestPersistence(): GuestPersistence {
           eventId,
           canDeleteVenueWide ? 1 : 0,
           actorUserId,
+          ...guestActorBindings(actor),
         ),
         prepareGuestActivityAfterChange(d1, {
           activityId,
@@ -455,6 +491,8 @@ export function createGuestPersistence(): GuestPersistence {
           nextStatus: "deleted",
           sessionKeyHash,
           occurredAt,
+          finalActor: actor,
+          finalAccess: "guest",
         }),
       ];
       if (current.externalLinkId) {
@@ -478,6 +516,7 @@ export function createGuestPersistence(): GuestPersistence {
 
     async permanentlyDelete({
       current,
+      actor,
       actorUserId,
       sessionKeyHash,
       occurredAt,
@@ -486,7 +525,7 @@ export function createGuestPersistence(): GuestPersistence {
     }) {
       const deleteStatement = d1
         .prepare(PERMANENT_DELETE_GUEST_SQL)
-        .bind(current.id, current.venueId);
+        .bind(current.id, current.venueId, ...guestActorBindings(actor));
       const activityStatement = prepareGuestActivityAfterChange(d1, {
         activityId,
         venueId: current.venueId,
@@ -501,6 +540,8 @@ export function createGuestPersistence(): GuestPersistence {
         nextStatus: null,
         sessionKeyHash,
         occurredAt,
+        finalActor: actor,
+        finalAccess: "admin",
       });
       const statements = current.externalLinkId
         ? [
@@ -511,6 +552,7 @@ export function createGuestPersistence(): GuestPersistence {
                 current.id,
                 current.externalLinkId,
                 current.venueId,
+                ...guestActorBindings(actor),
               ),
             deleteStatement,
             activityStatement,
@@ -528,6 +570,7 @@ export function createGuestPersistence(): GuestPersistence {
 
     async updateDetails({
       current,
+      actor,
       nextVenueId,
       nextName,
       nextDate,
@@ -555,6 +598,7 @@ export function createGuestPersistence(): GuestPersistence {
           nextDate,
           canAdministerGuests ? 1 : 0,
           actorUserId,
+          ...guestActorBindings(actor),
         ),
         prepareGuestActivityAfterChange(d1, {
           activityId,
@@ -570,6 +614,8 @@ export function createGuestPersistence(): GuestPersistence {
           nextStatus: current.status,
           sessionKeyHash,
           occurredAt,
+          finalActor: actor,
+          finalAccess: "guest",
         }),
       ]);
       if (
@@ -585,6 +631,7 @@ export function createGuestPersistence(): GuestPersistence {
 
     async restore({
       current,
+      actor,
       eventId,
       includeLegacyDateRows,
       actorUserId,
@@ -603,6 +650,7 @@ export function createGuestPersistence(): GuestPersistence {
           includeLegacyDateRows ? 1 : 0,
           current.date,
           eventId,
+          ...guestActorBindings(actor),
         ),
         prepareGuestActivityAfterChange(d1, {
           activityId,
@@ -618,6 +666,8 @@ export function createGuestPersistence(): GuestPersistence {
           nextStatus: "pending",
           sessionKeyHash,
           occurredAt,
+          finalActor: actor,
+          finalAccess: "admin",
         }),
       ]);
       if (

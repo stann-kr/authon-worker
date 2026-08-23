@@ -8,8 +8,8 @@ import {
   listAdminPasswordResetRequests,
   rejectAdminPasswordResetRequest,
   startAdminManagedPasswordReset,
-  type PasswordResetAdminActor,
 } from "@/lib/auth/password-reset-admin-service";
+import type { PasswordResetAdminActor } from "@/lib/auth/password-reset-admin-types";
 import { createPasswordResetAdminPersistence } from "@/lib/auth/password-reset-admin-persistence";
 import {
   isPasswordResetSetupMethod,

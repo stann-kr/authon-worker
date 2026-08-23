@@ -1,5 +1,4 @@
 import {
-  getExternalLinkDeletionDisposition,
   isValidExternalLinkDate,
   type ExternalLinkCreateDraft,
 } from "./domain.ts";
@@ -16,16 +15,13 @@ import type {
   ExternalLinkLifecyclePersistence,
   ExternalLinkLifecycleTarget,
   ExternalLinkLifecycleVenueScope,
+  ExternalLinkMutationActor,
 } from "./persistence.ts";
 
 const DEFAULT_EXTERNAL_LINK_TTL_DAYS = 7;
 const MAX_EXTERNAL_DJ_DIRECTORY_ROWS = 500;
 
-export interface ExternalLinkLifecycleActor {
-  userId: string;
-  role: string;
-  venueId: string | null;
-}
+export type ExternalLinkLifecycleActor = ExternalLinkMutationActor;
 
 export type ExternalLinkAdminActor = ExternalLinkLifecycleActor;
 
@@ -58,6 +54,14 @@ export interface ExternalLinkAdminServiceDependencies {
     businessDate: string;
     eventId?: string | null;
     actorUserId?: string | null;
+    actorGuard?: {
+      id: string;
+      role: ExternalLinkAdminActor["role"];
+      accountKind: ExternalLinkAdminActor["accountKind"];
+      venueId: string | null;
+      sessionVersion: number;
+      allowedRoles: readonly ExternalLinkAdminActor["role"][];
+    };
     purpose: "register";
   }): Promise<{ id: string }>;
   createId?: () => string;
@@ -72,6 +76,17 @@ export interface ExternalLinkAdminCreateInput {
   requestedVenueId: string;
   eventId?: string | null;
   draft: ExternalLinkCreateDraft;
+}
+
+function externalAdminEventActorGuard(actor: ExternalLinkAdminActor) {
+  return {
+    id: actor.userId,
+    role: actor.role,
+    accountKind: actor.accountKind,
+    venueId: actor.venueId,
+    sessionVersion: actor.sessionVersion,
+    allowedRoles: ["super_admin", "venue_admin"] as const,
+  };
 }
 
 export type ExternalLinkLifecycleErrorCode =
@@ -224,6 +239,7 @@ export async function createAdminExternalLink(
     businessDate: input.draft.date,
     eventId: input.eventId,
     actorUserId: input.actor.userId,
+    actorGuard: externalAdminEventActorGuard(input.actor),
     purpose: "register",
   });
   const getNow = dependencies.now ?? (() => new Date());
@@ -238,7 +254,8 @@ export async function createAdminExternalLink(
     dependencies,
   );
 
-  return dependencies.persistence.createExternalLink({
+  const created = await dependencies.persistence.createExternalLink({
+    actor: input.actor,
     link: {
       id: linkId,
       venueId,
@@ -271,6 +288,35 @@ export async function createAdminExternalLink(
         : null,
     mappingAuditId: contributor ? createId() : null,
   });
+  if (created) return created;
+
+  if (!(await dependencies.persistence.isVenueActive(venueId))) {
+    throw new ExternalLinkAdminError("VENUE_UNAVAILABLE");
+  }
+  await dependencies.resolveEventForRosterWrite({
+    venueId,
+    businessDate: input.draft.date,
+    eventId: event.id,
+    actorUserId: input.actor.userId,
+    actorGuard: externalAdminEventActorGuard(input.actor),
+    purpose: "register",
+  });
+  if (contributor) {
+    const currentContributor = await dependencies.persistence.loadContributor({
+      venueId,
+      contributorId: contributor.id,
+      nameKey: contributor.nameKey,
+    });
+    if (
+      !currentContributor ||
+      !currentContributor.active ||
+      currentContributor.displayName !== contributor.displayName ||
+      currentContributor.nameKey !== contributor.nameKey
+    ) {
+      throw new ExternalLinkAdminError("INVALID_CONTRIBUTOR");
+    }
+  }
+  throw new Error("External link create precondition changed");
 }
 
 interface ExternalLinkLifecycleInput {
@@ -332,23 +378,17 @@ export async function deleteAdminExternalLink(
   input: ExternalLinkLifecycleInput,
   dependencies: ExternalLinkLifecycleServiceDependencies,
 ): Promise<void> {
+  const target = await requireManagedTarget(input, dependencies.persistence);
+  const disposition = await dependencies.persistence.deleteManaged({
+    linkId: target.id,
+    venueId: target.venueId,
+    deletedAt: (dependencies.now?.() ?? new Date()).toISOString(),
+    actor: input.actor,
+  });
+  if (disposition) return;
+
   await requireManagedTarget(input, dependencies.persistence);
-  await dependencies.persistence.deactivateUndeletedForDeletion(input.linkId);
-  const hasGuestHistory = await dependencies.persistence.hasGuestHistory(
-    input.linkId,
-  );
-  const disposition = getExternalLinkDeletionDisposition(hasGuestHistory);
-
-  if (disposition === "archive") {
-    await dependencies.persistence.archiveUndeleted({
-      linkId: input.linkId,
-      deletedBy: input.actor.userId,
-      deletedAt: (dependencies.now?.() ?? new Date()).toISOString(),
-    });
-    return;
-  }
-
-  await dependencies.persistence.hardDeleteUndeleted(input.linkId);
+  throw new ExternalLinkLifecycleError("NOT_FOUND");
 }
 
 export async function deactivateAdminExternalLink(
@@ -360,6 +400,7 @@ export async function deactivateAdminExternalLink(
     linkId: target.id,
     venueId: target.venueId,
     expectedActive: target.active,
+    actor: input.actor,
   });
   if (updated) return;
 
@@ -381,6 +422,7 @@ export async function activateAdminExternalLink(
     date: target.date,
     expiresAt: target.expiresAt,
     now: getNow().toISOString(),
+    actor: input.actor,
   });
   if (updated) return;
 

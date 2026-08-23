@@ -1,6 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import dynamic from "next/dynamic";
 import GuestList from "./components/GuestList";
 import LinkManagement, {
@@ -32,7 +39,9 @@ import {
 } from "../../components/RouteTransitionProvider";
 import { type AdminTaskGroup } from "../../lib/admin-navigation";
 import { fetchPendingPasswordResetRequestCount } from "@/lib/api/password-reset-requests";
-import useAdminWorkspaceNavigation from "./useAdminWorkspaceNavigation";
+import useAdminWorkspaceNavigation, {
+  focusAdminWorkspaceAfterTaskChange,
+} from "./useAdminWorkspaceNavigation";
 
 const AdminAnalytics = dynamic(() => import("./components/AdminAnalytics"));
 
@@ -70,6 +79,7 @@ function AdminPageContent() {
     selectedEventId,
     setSelectedDate,
     setSelectedEventId,
+    workspaceFocusRequestId,
   } = useAdminWorkspaceNavigation({
     businessDate,
     hasCurrentVenue: Boolean(currentVenue),
@@ -78,7 +88,13 @@ function AdminPageContent() {
     venueId,
   });
   const [pendingPasswordResetCount, setPendingPasswordResetCount] = useState(0);
+  const workspaceRef = useRef<HTMLElement>(null);
   useRouteLoadingTask(!isRoleReady);
+
+  useLayoutEffect(() => {
+    if (workspaceFocusRequestId === 0) return;
+    focusAdminWorkspaceAfterTaskChange(workspaceRef.current);
+  }, [workspaceFocusRequestId]);
 
   useEffect(() => {
     if (!isRoleReady) return;
@@ -194,9 +210,11 @@ function AdminPageContent() {
         </aside>
 
         <section
+          ref={workspaceRef}
           id="admin-workspace"
           aria-labelledby="admin-active-task-title"
-          className="min-h-0"
+          tabIndex={-1}
+          className="min-h-0 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-border-focus"
         >
         <h2 id="admin-active-task-title" className="sr-only">
           {activeTaskLabel}

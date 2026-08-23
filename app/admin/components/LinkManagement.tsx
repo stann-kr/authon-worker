@@ -169,6 +169,7 @@ export default function LinkManagement({
     visibleLinkId,
     setVisibleLinkId,
     loadingStates,
+    lifecycleBusyIds,
     linkActionToast: manageLinkActionToast,
     pendingDeleteLink,
     setPendingDeleteLink,
@@ -177,6 +178,7 @@ export default function LinkManagement({
     loadLinks,
     handleDeleteLink,
     requestDeleteLink,
+    requestDeactivateLink,
     handleDeactivateLink,
     handleActivateLink,
     shareOrCopyManagedLink,
@@ -1005,9 +1007,10 @@ export default function LinkManagement({
                           ) : link.active ? (
                             <Button
                               type="button"
-                              onClick={() => setPendingDeactivateLink(link)}
+                              onClick={() => requestDeactivateLink(link)}
                               variant="secondary"
                               size="sm"
+                              disabled={Boolean(lifecycleBusyIds[link.id])}
                               isLoading={loadingStates[`deactivate_${link.id}`]}
                             >
                               {t("deactivate")}
@@ -1018,6 +1021,7 @@ export default function LinkManagement({
                               onClick={() => handleActivateLink(link.id)}
                               variant="secondary"
                               size="sm"
+                              disabled={Boolean(lifecycleBusyIds[link.id])}
                               isLoading={loadingStates[`activate_${link.id}`]}
                             >
                               {t("activate")}
@@ -1028,6 +1032,7 @@ export default function LinkManagement({
                             onClick={() => requestDeleteLink(link)}
                             variant="danger"
                             size="sm"
+                            disabled={Boolean(lifecycleBusyIds[link.id])}
                             isLoading={loadingStates[`delete_${link.id}`]}
                           >
                             {t("delete")}

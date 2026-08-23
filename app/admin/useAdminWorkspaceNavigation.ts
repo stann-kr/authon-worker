@@ -55,6 +55,24 @@ function getCanonicalEventSearch(scope: EventScope): string {
   return `?${search.toString()}`;
 }
 
+export function focusAdminWorkspaceAfterTaskChange(
+  workspace: HTMLElement | null,
+): boolean {
+  const activeElement = document.activeElement;
+  if (
+    (activeElement &&
+      activeElement !== document.body &&
+      activeElement.isConnected) ||
+    !workspace?.isConnected ||
+    workspace.closest("[inert]")
+  ) {
+    return false;
+  }
+  workspace.focus({ preventScroll: true });
+  workspace.scrollIntoView({ block: "start" });
+  return true;
+}
+
 export default function useAdminWorkspaceNavigation({
   businessDate,
   hasCurrentVenue,
@@ -70,6 +88,20 @@ export default function useAdminWorkspaceNavigation({
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
   const pendingEventScopeRef = useRef<EventScope | null>(null);
   const [isRoleReady, setIsRoleReady] = useState(false);
+  const [workspaceFocusRequestId, setWorkspaceFocusRequestId] = useState(0);
+
+  const requestWorkspaceFocusIfOwned = useCallback(() => {
+    const workspace = document.getElementById("admin-workspace");
+    const activeElement = document.activeElement;
+    if (
+      workspace &&
+      activeElement instanceof HTMLElement &&
+      workspace !== activeElement &&
+      workspace.contains(activeElement)
+    ) {
+      setWorkspaceFocusRequestId((current) => current + 1);
+    }
+  }, []);
 
   const applyEventScope = useCallback(
     (scope: EventScope) => {
@@ -134,6 +166,7 @@ export default function useAdminWorkspaceNavigation({
       if (task === activeTask || !isAdminTaskAvailable(task, isSuperAdmin)) {
         return;
       }
+      requestWorkspaceFocusIfOwned();
       setActiveTask(task);
       const nextUrl = `/admin${getAdminTaskSearch(task)}`;
       if (historyMode === "replace") {
@@ -142,7 +175,7 @@ export default function useAdminWorkspaceNavigation({
         window.history.pushState(null, "", nextUrl);
       }
     },
-    [activeTask, isSuperAdmin],
+    [activeTask, isSuperAdmin, requestWorkspaceFocusIfOwned],
   );
 
   useEffect(() => {
@@ -156,6 +189,7 @@ export default function useAdminWorkspaceNavigation({
       const search = new URLSearchParams(window.location.search);
       const requestedTask = parseAdminTask(search);
       if (!requestedTask || !isAdminTaskAvailable(requestedTask, isSuperAdmin)) {
+        requestWorkspaceFocusIfOwned();
         setActiveTask("guest-list");
         return;
       }
@@ -168,11 +202,18 @@ export default function useAdminWorkspaceNavigation({
           setSelectedEventId(null);
         }
       }
+      requestWorkspaceFocusIfOwned();
       setActiveTask(requestedTask);
     };
     window.addEventListener("popstate", handlePopState);
     return () => window.removeEventListener("popstate", handlePopState);
-  }, [applyEventScope, isRoleReady, isSuperAdmin, venueId]);
+  }, [
+    applyEventScope,
+    isRoleReady,
+    isSuperAdmin,
+    requestWorkspaceFocusIfOwned,
+    venueId,
+  ]);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -219,11 +260,19 @@ export default function useAdminWorkspaceNavigation({
       }
 
       const scope = { eventId, businessDate: eventBusinessDate, venueId };
+      requestWorkspaceFocusIfOwned();
       applyEventScope(scope);
       setActiveTask("event-manage");
       window.history.pushState(null, "", `/admin${getCanonicalEventSearch(scope)}`);
     },
-    [activeTask, applyEventScope, selectedDate, selectedEventId, venueId],
+    [
+      activeTask,
+      applyEventScope,
+      requestWorkspaceFocusIfOwned,
+      selectedDate,
+      selectedEventId,
+      venueId,
+    ],
   );
 
   return {
@@ -235,5 +284,6 @@ export default function useAdminWorkspaceNavigation({
     selectedEventId,
     setSelectedDate,
     setSelectedEventId,
+    workspaceFocusRequestId,
   };
 }

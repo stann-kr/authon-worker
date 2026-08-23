@@ -21,6 +21,7 @@ import type {
   PasswordResetRequest,
   PasswordResetRequestView,
 } from "./password-reset-request-types.ts";
+import type { PasswordResetAdminActor } from "./password-reset-admin-types.ts";
 import {
   canManageTargetAccount,
   isAccountKind,
@@ -59,13 +60,6 @@ export class PasswordResetAdminError extends Error {
     this.code = code;
     this.isMissingConfiguration = isMissingConfiguration;
   }
-}
-
-export interface PasswordResetAdminActor {
-  id: string;
-  role: Extract<Role, "super_admin" | "venue_admin">;
-  venueId: string | null;
-  sessionVersion: number | null;
 }
 
 export interface PasswordResetAdminServiceDependencies {

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useLocalStorage } from "../../../lib/hooks";
 import InviteUser from "./InviteUser";
 import VenueSelector, {
@@ -103,6 +103,7 @@ export default function UserManagement({
     filteredUsers,
     handleUserUpdate,
     isCurrentScopeLoading,
+    isUserMutationPending,
     isSharingPasswordLink,
     listState,
     loadError,
@@ -486,6 +487,9 @@ export default function UserManagement({
                         currentVenue?.timezone
                       }
                       isBusy={busyUserId === user.id}
+                      actionsDisabled={
+                        isUserMutationPending || isCurrentScopeLoading
+                      }
                       onUpdate={handleUserUpdate}
                       onToggleActive={async (user) =>
                         setPendingUserAction({ kind: "toggle", user })
@@ -547,7 +551,7 @@ export default function UserManagement({
           cancelLabel={commonT("cancel")}
           onConfirm={confirmPendingUserAction}
           onCancel={() => setPendingUserAction(null)}
-          isLoading={busyUserId === pendingUserAction.user.id}
+          isLoading={isUserMutationPending}
           tone={
             pendingUserAction.kind === "reset-password" ||
             (pendingUserAction.kind === "toggle" && !pendingUserAction.user.active)
@@ -575,12 +579,13 @@ export default function UserManagement({
   );
 }
 
-function UserCard({
+export function UserCard({
   user,
   actorRole,
   currentUserId,
   timeZone,
   isBusy,
+  actionsDisabled,
   onUpdate,
   onToggleActive,
   onResetPassword,
@@ -591,6 +596,7 @@ function UserCard({
   currentUserId: string | null;
   timeZone?: string | null;
   isBusy: boolean;
+  actionsDisabled: boolean;
   onUpdate: (
     id: string,
     updates: {
@@ -609,6 +615,11 @@ function UserCard({
   const commonT = useTranslations("Common");
   const locale = useLocale();
   const [isEditing, setIsEditing] = useState(false);
+  const editButtonRef = useRef<HTMLButtonElement>(null);
+  const editRegionRef = useRef<HTMLDivElement>(null);
+  const nameInputRef = useRef<HTMLInputElement>(null);
+  const shouldFocusEditorRef = useRef(false);
+  const shouldRestoreEditButtonRef = useRef(false);
   const isSetupPending =
     user.active && user.migrationStatus === "pending_reset" && !user.passwordSetAt;
   const isSelf = user.id === currentUserId;
@@ -648,6 +659,44 @@ function UserCard({
     user.role,
   ]);
 
+  useEffect(() => {
+    if (actionsDisabled) return;
+    const activeElement = document.activeElement;
+    const focusWasLost =
+      !activeElement ||
+      activeElement === document.body ||
+      !activeElement.isConnected;
+
+    if (isEditing && shouldFocusEditorRef.current) {
+      shouldFocusEditorRef.current = false;
+      if (focusWasLost) nameInputRef.current?.focus({ preventScroll: true });
+      return;
+    }
+    if (!isEditing && shouldRestoreEditButtonRef.current) {
+      shouldRestoreEditButtonRef.current = false;
+      if (focusWasLost) editButtonRef.current?.focus({ preventScroll: true });
+    }
+  }, [actionsDisabled, isEditing]);
+
+  const beginEditing = () => {
+    shouldFocusEditorRef.current = true;
+    setIsEditing(true);
+  };
+
+  const closeEditor = () => {
+    shouldRestoreEditButtonRef.current = Boolean(
+      editRegionRef.current?.contains(document.activeElement),
+    );
+    setIsEditing(false);
+    setEditData({
+      name: user.name,
+      role: user.role,
+      accountKind: user.accountKind,
+      doorAccessEnabled: user.doorAccessEnabled,
+      guestLimit: user.guestLimit,
+    });
+  };
+
   const handleSave = async () => {
     const saved = await onUpdate(user.id, {
       name: editData.name,
@@ -661,7 +710,12 @@ function UserCard({
           }
         : {}),
     });
-    if (saved) setIsEditing(false);
+    if (saved) {
+      shouldRestoreEditButtonRef.current = Boolean(
+        editRegionRef.current?.contains(document.activeElement),
+      );
+      setIsEditing(false);
+    }
   };
 
   const formatDate = (value: string | null): string => {
@@ -775,9 +829,10 @@ function UserCard({
             <div className="grid grid-cols-2 gap-2">
               {canEditDetails && (
                 <Button
+                  ref={editButtonRef}
                   type="button"
-                  onClick={() => setIsEditing(true)}
-                  disabled={isBusy}
+                  onClick={beginEditing}
+                  disabled={actionsDisabled}
                   variant="secondary"
                   size="sm"
                   fullWidth
@@ -788,7 +843,7 @@ function UserCard({
               <Button
                 type="button"
                 onClick={() => onResetPassword(user)}
-                disabled={isBusy || !user.active}
+                disabled={actionsDisabled || !user.active}
                 title={!user.active ? t("inactiveResetUnavailable") : undefined}
                 variant="outline"
                 size="sm"
@@ -801,7 +856,7 @@ function UserCard({
               <Button
                 type="button"
                 onClick={() => onToggleActive(user)}
-                disabled={isBusy}
+                disabled={actionsDisabled}
                 variant={user.active ? "danger" : "primary"}
                 size="sm"
                 fullWidth
@@ -812,7 +867,7 @@ function UserCard({
                 <Button
                   type="button"
                   onClick={() => onDelete(user)}
-                  disabled={isBusy}
+                  disabled={actionsDisabled}
                   variant="danger"
                   size="sm"
                   fullWidth
@@ -824,12 +879,13 @@ function UserCard({
           )}
         </div>
       ) : (
-        <div className="space-y-3">
+        <div ref={editRegionRef} className="space-y-3">
           <div>
             <label htmlFor={`user-name-${user.id}`} className="app-label">
               {t("name")}
             </label>
             <input
+              ref={nameInputRef}
               id={`user-name-${user.id}`}
               name={`user-name-${user.id}`}
               type="text"
@@ -837,7 +893,7 @@ function UserCard({
               onChange={(event) => setEditData({ ...editData, name: event.target.value })}
               className="app-field"
               maxLength={100}
-              disabled={isBusy}
+              disabled={actionsDisabled}
               autoComplete="off"
             />
           </div>
@@ -859,7 +915,7 @@ function UserCard({
                           accountKind === "shared" ? editData.doorAccessEnabled : false,
                       })
                     }
-                    disabled={isBusy}
+                    disabled={actionsDisabled}
                     className={`min-h-11 border p-2 text-xs font-medium transition-colors disabled:opacity-50 sm:p-3 ${
                       editData.accountKind === accountKind
                         ? "border-action-primary bg-action-primary text-action-text"
@@ -887,7 +943,7 @@ function UserCard({
                     onClick={() =>
                       setEditData({ ...editData, role: role as User["role"] })
                     }
-                    disabled={isBusy}
+                    disabled={actionsDisabled}
                     className={`min-h-11 border p-2 text-xs font-medium transition-colors disabled:opacity-50 sm:p-3 ${
                       editData.role === role
                         ? "border-action-primary bg-action-primary text-action-text"
@@ -910,7 +966,7 @@ function UserCard({
                 onChange={(event) =>
                   setEditData({ ...editData, doorAccessEnabled: event.target.checked })
                 }
-                disabled={isBusy}
+                disabled={actionsDisabled}
                 className="mt-0.5 h-4 w-4"
                 autoComplete="off"
               />
@@ -936,7 +992,7 @@ function UserCard({
               className="app-field font-mono tabular-nums"
               min="0"
               max="999"
-              disabled={isBusy}
+              disabled={actionsDisabled}
               autoComplete="off"
             />
           </div>
@@ -945,7 +1001,7 @@ function UserCard({
             <Button
               type="button"
               onClick={handleSave}
-              disabled={isBusy}
+              disabled={actionsDisabled}
               size="sm"
               fullWidth
             >
@@ -953,17 +1009,8 @@ function UserCard({
             </Button>
             <Button
               type="button"
-              disabled={isBusy}
-              onClick={() => {
-                setIsEditing(false);
-                setEditData({
-                  name: user.name,
-                  role: user.role,
-                  accountKind: user.accountKind,
-                  doorAccessEnabled: user.doorAccessEnabled,
-                  guestLimit: user.guestLimit,
-                });
-              }}
+              disabled={actionsDisabled}
+              onClick={closeEditor}
               variant="secondary"
               size="sm"
               fullWidth

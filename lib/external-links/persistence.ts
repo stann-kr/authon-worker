@@ -1,5 +1,14 @@
 import type { D1Database } from "@cloudflare/workers-types";
 import type { ExternalDjSuggestion } from "../contributors/types.ts";
+import type { AccountKind, Role } from "../users/policy.ts";
+
+export interface ExternalLinkMutationActor {
+  userId: string;
+  role: Role;
+  accountKind: AccountKind;
+  venueId: string | null;
+  sessionVersion: number;
+}
 
 export interface ExternalLinkLifecycleTarget {
   id: string;
@@ -19,18 +28,17 @@ export interface ExternalLinkLifecyclePersistence {
     venueScope: ExternalLinkLifecycleVenueScope;
   }): Promise<ExternalLinkLifecycleTarget | null>;
   isVenueActive(venueId: string): Promise<boolean>;
-  deactivateUndeletedForDeletion(linkId: string): Promise<void>;
-  hasGuestHistory(linkId: string): Promise<boolean>;
-  archiveUndeleted(input: {
+  deleteManaged(input: {
     linkId: string;
-    deletedBy: string;
+    venueId: string;
     deletedAt: string;
-  }): Promise<void>;
-  hardDeleteUndeleted(linkId: string): Promise<void>;
+    actor: ExternalLinkMutationActor;
+  }): Promise<"archived" | "deleted" | null>;
   deactivateManaged(input: {
     linkId: string;
     venueId: string;
     expectedActive: boolean;
+    actor: ExternalLinkMutationActor;
   }): Promise<boolean>;
   activateManaged(input: {
     linkId: string;
@@ -39,6 +47,7 @@ export interface ExternalLinkLifecyclePersistence {
     date: string;
     expiresAt: string | null;
     now: string;
+    actor: ExternalLinkMutationActor;
   }): Promise<boolean>;
 }
 
@@ -72,6 +81,7 @@ export interface ExternalLinkAdminRecord {
 }
 
 export interface ExternalLinkAdminCreateWrite {
+  actor: ExternalLinkMutationActor;
   link: {
     id: string;
     venueId: string;
@@ -146,28 +156,64 @@ const SELECT_ACTIVE_VENUE_SQL = `
   LIMIT 1
 `;
 
-const DEACTIVATE_UNDELETED_FOR_DELETION_SQL = `
-  UPDATE external_dj_links
-  SET active = 0
-  WHERE id = ? AND deleted_at IS NULL
+const ADMIN_ACTOR_SCOPE_SQL = `
+  EXISTS (
+    SELECT 1
+    FROM users AS mutation_actor
+    WHERE mutation_actor.id = ?
+      AND mutation_actor.role = ?
+      AND mutation_actor.account_kind = ?
+      AND mutation_actor.venue_id IS ?
+      AND mutation_actor.session_version = ?
+      AND mutation_actor.active = 1
+      AND mutation_actor.deleted_at IS NULL
+      AND mutation_actor.role IN ('super_admin', 'venue_admin')
+      AND (
+        mutation_actor.role = 'super_admin'
+        OR mutation_actor.venue_id = external_dj_links.venue_id
+      )
+  )
 `;
 
-const SELECT_GUEST_HISTORY_SQL = `
-  SELECT id
-  FROM guests
-  WHERE external_link_id = ?
-  LIMIT 1
-`;
-
-const ARCHIVE_UNDELETED_SQL = `
+const ARCHIVE_MANAGED_WITH_HISTORY_SQL = `
   UPDATE external_dj_links
   SET active = 0, deleted_at = ?, deleted_by = ?
-  WHERE id = ? AND deleted_at IS NULL
+  WHERE
+    id = ?
+    AND venue_id = ?
+    AND deleted_at IS NULL
+    AND EXISTS (
+      SELECT 1
+      FROM venues
+      WHERE venues.id = external_dj_links.venue_id AND venues.active = 1
+    )
+    AND ${ADMIN_ACTOR_SCOPE_SQL}
+    AND EXISTS (
+      SELECT 1
+      FROM guests
+      WHERE guests.external_link_id = external_dj_links.id
+    )
+  RETURNING id
 `;
 
-const HARD_DELETE_UNDELETED_SQL = `
+const HARD_DELETE_MANAGED_WITHOUT_HISTORY_SQL = `
   DELETE FROM external_dj_links
-  WHERE id = ? AND deleted_at IS NULL
+  WHERE
+    id = ?
+    AND venue_id = ?
+    AND deleted_at IS NULL
+    AND EXISTS (
+      SELECT 1
+      FROM venues
+      WHERE venues.id = external_dj_links.venue_id AND venues.active = 1
+    )
+    AND ${ADMIN_ACTOR_SCOPE_SQL}
+    AND NOT EXISTS (
+      SELECT 1
+      FROM guests
+      WHERE guests.external_link_id = external_dj_links.id
+    )
+  RETURNING id
 `;
 
 const DEACTIVATE_MANAGED_SQL = `
@@ -183,6 +229,7 @@ const DEACTIVATE_MANAGED_SQL = `
       FROM venues
       WHERE venues.id = external_dj_links.venue_id AND venues.active = 1
     )
+    AND ${ADMIN_ACTOR_SCOPE_SQL}
   RETURNING id
 `;
 
@@ -206,6 +253,7 @@ const ACTIVATE_MANAGED_SQL = `
       FROM venues
       WHERE venues.id = external_dj_links.venue_id AND venues.active = 1
     )
+    AND ${ADMIN_ACTOR_SCOPE_SQL}
   RETURNING id
 `;
 
@@ -252,10 +300,54 @@ const SELECT_CONTRIBUTOR_BY_NAME_KEY_SQL = `
   LIMIT 1
 `;
 
+const ACTIVE_CREATE_SCOPE_SQL = `
+  EXISTS (
+    SELECT 1 FROM venues
+    WHERE id = ? AND active = 1
+  )
+  AND EXISTS (
+    SELECT 1 FROM events
+    WHERE id = ?
+      AND venue_id = ?
+      AND business_date = ?
+      AND state IN ('draft', 'open')
+  )
+  AND EXISTS (
+    SELECT 1
+    FROM users AS mutation_actor
+    WHERE mutation_actor.id = ?
+      AND mutation_actor.role = ?
+      AND mutation_actor.account_kind = ?
+      AND mutation_actor.venue_id IS ?
+      AND mutation_actor.session_version = ?
+      AND mutation_actor.active = 1
+      AND mutation_actor.deleted_at IS NULL
+      AND mutation_actor.role IN ('super_admin', 'venue_admin')
+      AND (
+        mutation_actor.role = 'super_admin'
+        OR mutation_actor.venue_id = ?
+      )
+  )
+`;
+
+const EXACT_ACTIVE_CONTRIBUTOR_SQL = `
+  EXISTS (
+    SELECT 1 FROM venue_contributors
+    WHERE id = ?
+      AND venue_id = ?
+      AND display_name = ?
+      AND name_key = ?
+      AND kind = 'dj'
+      AND active = 1
+  )
+`;
+
 const INSERT_CONTRIBUTOR_SQL = `
   INSERT INTO venue_contributors (
     id, venue_id, display_name, name_key, kind, active, created_at, updated_at
-  ) VALUES (?, ?, ?, ?, 'dj', 1, ?, ?)
+  )
+  SELECT ?, ?, ?, ?, 'dj', 1, ?, ?
+  WHERE ${ACTIVE_CREATE_SCOPE_SQL}
   ON CONFLICT DO NOTHING
 `;
 
@@ -263,7 +355,10 @@ const INSERT_CONTRIBUTOR_CREATED_AUDIT_SQL = `
   INSERT INTO contributor_audit_events (
     id, venue_id, contributor_id, actor_user_id, source_kind, source_id,
     action, details, created_at
-  ) VALUES (?, ?, ?, ?, 'contributor', ?, 'created', ?, ?)
+  )
+  SELECT ?, ?, ?, ?, 'contributor', ?, 'created', ?, ?
+  WHERE ${ACTIVE_CREATE_SCOPE_SQL}
+    AND ${EXACT_ACTIVE_CONTRIBUTOR_SQL}
   ON CONFLICT DO NOTHING
 `;
 
@@ -272,14 +367,33 @@ const INSERT_EXTERNAL_LINK_SQL = `
     id, venue_id, token, dj_name, contributor_id, event, date, event_id,
     max_guests, used_guests, active, expires_at, created_by, locale_mode,
     kind, created_at
-  ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 1, ?, ?, ?, ?, ?)
+  )
+  SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 1, ?, ?, ?, ?, ?
+  WHERE ${ACTIVE_CREATE_SCOPE_SQL}
+    AND (
+      (? = 'self_rsvp' AND ? IS NULL)
+      OR (
+        ? = 'contributor'
+        AND ? IS NOT NULL
+        AND ${EXACT_ACTIVE_CONTRIBUTOR_SQL}
+      )
+    )
 `;
 
 const INSERT_CONTRIBUTOR_MAPPING_AUDIT_SQL = `
   INSERT INTO contributor_audit_events (
     id, venue_id, contributor_id, actor_user_id, source_kind, source_id,
     action, details, created_at
-  ) VALUES (?, ?, ?, ?, 'external_link', ?, 'mapped', ?, ?)
+  )
+  SELECT ?, ?, ?, ?, 'external_link', ?, 'mapped', ?, ?
+  WHERE EXISTS (
+    SELECT 1 FROM external_dj_links
+    WHERE id = ?
+      AND venue_id = ?
+      AND contributor_id IS ?
+      AND created_by IS ?
+      AND created_at IS ?
+  )
 `;
 
 const SELECT_EXTERNAL_LINK_BY_ID_SQL = `
@@ -304,11 +418,25 @@ const SELECT_EXTERNAL_LINK_BY_ID_SQL = `
     deleted_by AS deletedBy
   FROM external_dj_links
   WHERE id = ?
+    AND venue_id = ?
+    AND token = ?
+    AND created_by IS ?
+    AND created_at IS ?
   LIMIT 1
 `;
 
 function toBoolean(value: unknown): boolean {
   return value === true || value === 1;
+}
+
+function actorBindings(actor: ExternalLinkMutationActor) {
+  return [
+    actor.userId,
+    actor.role,
+    actor.accountKind,
+    actor.venueId,
+    actor.sessionVersion,
+  ] as const;
 }
 
 function toAdminContributor(
@@ -348,39 +476,35 @@ export function createExternalLinkLifecyclePersistence(
       return Boolean(venue);
     },
 
-    async deactivateUndeletedForDeletion(linkId) {
-      await database
-        .prepare(DEACTIVATE_UNDELETED_FOR_DELETION_SQL)
-        .bind(linkId)
-        .run();
+    async deleteManaged({ linkId, venueId, deletedAt, actor }) {
+      const results = await database.batch<{ id?: string }>([
+        database
+          .prepare(ARCHIVE_MANAGED_WITH_HISTORY_SQL)
+          .bind(
+            deletedAt,
+            actor.userId,
+            linkId,
+            venueId,
+            ...actorBindings(actor),
+          ),
+        database
+          .prepare(HARD_DELETE_MANAGED_WITHOUT_HISTORY_SQL)
+          .bind(linkId, venueId, ...actorBindings(actor)),
+      ]);
+      if (results[0]?.results[0]?.id) return "archived";
+      if (results[1]?.results[0]?.id) return "deleted";
+      return null;
     },
 
-    async hasGuestHistory(linkId) {
-      const guest = await database
-        .prepare(SELECT_GUEST_HISTORY_SQL)
-        .bind(linkId)
-        .first<{ id: string }>();
-      return Boolean(guest);
-    },
-
-    async archiveUndeleted({ linkId, deletedBy, deletedAt }) {
-      await database
-        .prepare(ARCHIVE_UNDELETED_SQL)
-        .bind(deletedAt, deletedBy, linkId)
-        .run();
-    },
-
-    async hardDeleteUndeleted(linkId) {
-      await database
-        .prepare(HARD_DELETE_UNDELETED_SQL)
-        .bind(linkId)
-        .run();
-    },
-
-    async deactivateManaged({ linkId, venueId, expectedActive }) {
+    async deactivateManaged({ linkId, venueId, expectedActive, actor }) {
       const updated = await database
         .prepare(DEACTIVATE_MANAGED_SQL)
-        .bind(linkId, venueId, expectedActive ? 1 : 0)
+        .bind(
+          linkId,
+          venueId,
+          expectedActive ? 1 : 0,
+          ...actorBindings(actor),
+        )
         .first<{ id: string }>();
       return Boolean(updated);
     },
@@ -392,6 +516,7 @@ export function createExternalLinkLifecyclePersistence(
       date,
       expiresAt,
       now,
+      actor,
     }) {
       const updated = await database
         .prepare(ACTIVATE_MANAGED_SQL)
@@ -402,6 +527,7 @@ export function createExternalLinkLifecyclePersistence(
           date,
           expiresAt,
           now,
+          ...actorBindings(actor),
         )
         .first<{ id: string }>();
       return Boolean(updated);
@@ -447,11 +573,32 @@ export function createExternalLinkAdminPersistence(
     },
 
     async createExternalLink({
+      actor,
       link,
       contributor,
       createdAuditId,
       mappingAuditId,
     }) {
+      if (
+        (link.kind === "contributor" &&
+          (!contributor ||
+            link.contributorId !== contributor.id ||
+            link.venueId !== contributor.venueId)) ||
+        (link.kind === "self_rsvp" &&
+          (contributor !== null || link.contributorId !== null)) ||
+        (link.kind !== "contributor" && link.kind !== "self_rsvp") ||
+        link.createdBy !== actor.userId
+      ) {
+        throw new Error("Invalid external link contributor scope");
+      }
+      const activeCreateScopeBindings = [
+        link.venueId,
+        link.eventId,
+        link.venueId,
+        link.date,
+        ...actorBindings(actor),
+        link.venueId,
+      ];
       const linkInsert = database
         .prepare(INSERT_EXTERNAL_LINK_SQL)
         .bind(
@@ -469,6 +616,15 @@ export function createExternalLinkAdminPersistence(
           link.localeMode,
           link.kind,
           link.createdAt,
+          ...activeCreateScopeBindings,
+          link.kind,
+          link.contributorId,
+          link.kind,
+          link.contributorId,
+          link.contributorId,
+          link.venueId,
+          contributor?.displayName ?? "",
+          contributor?.nameKey ?? "",
         );
 
       if (contributor) {
@@ -483,6 +639,11 @@ export function createExternalLinkAdminPersistence(
             link.id,
             JSON.stringify({ reason: "external_link_create" }),
             link.createdAt,
+            link.id,
+            link.venueId,
+            contributor.id,
+            link.createdBy,
+            link.createdAt,
           );
         if (contributor.shouldCreate) {
           if (!createdAuditId) throw new Error("Missing contributor created audit ID");
@@ -496,6 +657,7 @@ export function createExternalLinkAdminPersistence(
                 contributor.nameKey,
                 link.createdAt,
                 link.createdAt,
+                ...activeCreateScopeBindings,
               ),
             database
               .prepare(INSERT_CONTRIBUTOR_CREATED_AUDIT_SQL)
@@ -507,6 +669,11 @@ export function createExternalLinkAdminPersistence(
                 contributor.id,
                 JSON.stringify({ kind: "dj", source: "external_link_create" }),
                 link.createdAt,
+                ...activeCreateScopeBindings,
+                contributor.id,
+                contributor.venueId,
+                contributor.displayName,
+                contributor.nameKey,
               ),
             linkInsert,
             mappingAudit,
@@ -520,7 +687,13 @@ export function createExternalLinkAdminPersistence(
 
       const row = await database
         .prepare(SELECT_EXTERNAL_LINK_BY_ID_SQL)
-        .bind(link.id)
+        .bind(
+          link.id,
+          link.venueId,
+          link.token,
+          link.createdBy,
+          link.createdAt,
+        )
         .first<Omit<ExternalLinkAdminRecord, "active"> & { active: unknown }>();
       return row ? toAdminRecord(row) : null;
     },

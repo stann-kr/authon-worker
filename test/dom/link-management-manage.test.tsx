@@ -78,10 +78,36 @@ function ManageHarness({
       </button>
       <button
         type="button"
-        disabled={Boolean(manage.loadingStates["deactivate_link-a"])}
+        disabled={Boolean(manage.lifecycleBusyIds["link-a"])}
         onClick={() => manage.handleDeactivateLink("link-a")}
       >
         Deactivate
+      </button>
+      <button
+        type="button"
+        disabled={Boolean(manage.lifecycleBusyIds["link-a"])}
+        onClick={() => manage.handleActivateLink("link-a")}
+      >
+        Activate
+      </button>
+      <button
+        type="button"
+        disabled={Boolean(manage.lifecycleBusyIds["link-a"])}
+        onClick={() => manage.handleDeleteLink("link-a")}
+      >
+        Delete now
+      </button>
+      <button
+        type="button"
+        onClick={() => {
+          void manage.handleDeactivateLink("link-a");
+          void manage.handleDeleteLink("link-a");
+        }}
+      >
+        Race lifecycle
+      </button>
+      <button type="button" onClick={() => void manage.loadLinks()}>
+        Refresh
       </button>
       <button
         type="button"
@@ -99,8 +125,11 @@ function ManageHarness({
       </button>
       <output data-testid="state">{manage.listState}</output>
       <output data-testid="links">{manage.sortedLinks.length}</output>
+      <output data-testid="active">
+        {String(manage.sortedLinks[0]?.active ?? false)}
+      </output>
       <output data-testid="pending">
-        {String(Boolean(manage.loadingStates["deactivate_link-a"]))}
+        {String(Boolean(manage.lifecycleBusyIds["link-a"]))}
       </output>
       <output data-testid="toast">{manage.linkActionToast ?? ""}</output>
     </>
@@ -201,6 +230,81 @@ test("the rendered pending lock prevents a duplicate lifecycle mutation", async 
     await mutation.promise;
   });
   assert.equal(screen.getByTestId("pending").textContent, "false");
+});
+
+test("one per-link lease rejects contradictory lifecycle writes in the same act", async () => {
+  const mutation = createDeferred<{ error: null }>();
+  let deactivateCalls = 0;
+  let deleteCalls = 0;
+  renderHarness(
+    createActions({
+      deactivateLink: async () => {
+        deactivateCalls += 1;
+        return mutation.promise;
+      },
+      deleteLink: async () => {
+        deleteCalls += 1;
+        return { error: null };
+      },
+    }),
+  );
+  await flushAsyncWork();
+
+  fireEvent.click(screen.getByRole("button", { name: "Race lifecycle" }));
+  assert.equal(deactivateCalls, 1);
+  assert.equal(deleteCalls, 0);
+  assert.equal(screen.getByTestId("pending").textContent, "true");
+  assert.equal(
+    screen.getByRole("button", { name: "Delete now" }).hasAttribute("disabled"),
+    true,
+  );
+
+  await act(async () => {
+    mutation.resolve({ error: null });
+    await mutation.promise;
+  });
+  assert.equal(screen.getByTestId("pending").textContent, "false");
+});
+
+test("a late pre-commit refresh cannot overwrite the authoritative lifecycle reload", async () => {
+  const staleRefresh = createDeferred<{
+    data: ExternalDJLink[];
+    error: null;
+  }>();
+  const activation = createDeferred<{ error: null }>();
+  let fetchCalls = 0;
+  renderHarness(
+    createActions({
+      fetchByDate: async () => {
+        fetchCalls += 1;
+        if (fetchCalls === 1)
+          return { data: [{ ...LINK, active: false }], error: null };
+        if (fetchCalls === 2) return staleRefresh.promise;
+        return { data: [{ ...LINK, active: true }], error: null };
+      },
+      activateLink: async () => activation.promise,
+    }),
+  );
+  await flushAsyncWork();
+  assert.equal(screen.getByTestId("active").textContent, "false");
+
+  fireEvent.click(screen.getByRole("button", { name: "Refresh" }));
+  fireEvent.click(screen.getByRole("button", { name: "Activate" }));
+  await act(async () => {
+    activation.resolve({ error: null });
+    await activation.promise;
+  });
+  assert.equal(fetchCalls, 3);
+  assert.equal(screen.getByTestId("active").textContent, "true");
+
+  await act(async () => {
+    staleRefresh.resolve({
+      data: [{ ...LINK, active: false }],
+      error: null,
+    });
+    await staleRefresh.promise;
+  });
+  assert.equal(screen.getByTestId("active").textContent, "true");
 });
 
 test("template handoff clears managed share feedback", async () => {

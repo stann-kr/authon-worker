@@ -37,7 +37,12 @@ import type {
 import type { ApiResponse } from "./response";
 
 function toUserServiceActor(user: SessionUser): UserServiceActor {
-  return { id: user.id, role: user.role, venueId: user.venueId };
+  return {
+    id: user.id,
+    role: user.role,
+    venueId: user.venueId,
+    sessionVersion: user.sessionVersion,
+  };
 }
 
 function getUserActionError(

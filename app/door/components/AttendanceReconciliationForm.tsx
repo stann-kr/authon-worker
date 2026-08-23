@@ -1,4 +1,4 @@
-import type { FormEvent } from "react";
+import type { FocusEvent, FormEvent, Ref } from "react";
 import type { AttendanceScope } from "@/lib/attendance/domain";
 import type { DoorAttendanceSummary } from "@/lib/attendance/types";
 
@@ -24,6 +24,11 @@ interface AttendanceReconciliationFormProps {
   changeAdjustmentReason: (value: string) => void;
   loadSummary: (scope: AttendanceScope) => Promise<void>;
   submitAdjustment: (event: FormEvent<HTMLFormElement>) => Promise<void>;
+  reconciliationStatusRef: Ref<HTMLParagraphElement>;
+  markReconciliationFormFocused: () => void;
+  markReconciliationFormBlurred: (
+    event: FocusEvent<HTMLFormElement>,
+  ) => void;
   translate: AttendanceReconciliationTranslate;
 }
 
@@ -44,6 +49,9 @@ export default function AttendanceReconciliationForm({
   changeAdjustmentReason,
   loadSummary,
   submitAdjustment,
+  reconciliationStatusRef,
+  markReconciliationFormFocused,
+  markReconciliationFormBlurred,
   translate: t,
 }: AttendanceReconciliationFormProps) {
   return (
@@ -57,15 +65,25 @@ export default function AttendanceReconciliationForm({
         {t("adjustment.title")}
       </summary>
       {scopedSummary?.isFinalized ? (
-        <p className="mt-3 border-l-2 border-status-checked bg-status-checked/10 px-3 py-2 text-xs leading-relaxed text-text-muted" role="status">
+        <p
+          ref={reconciliationStatusRef}
+          tabIndex={-1}
+          className="mt-3 border-l-2 border-status-checked bg-status-checked/10 px-3 py-2 text-xs leading-relaxed text-text-muted focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-border-focus"
+          role="status"
+        >
           {t("adjustment.finalized")}
         </p>
       ) : scopedSummary && !scopedSummary.canFinalize ? (
-        <p className="mt-3 border-l-2 border-status-waiting bg-status-waiting/10 px-3 py-2 text-xs leading-relaxed text-text-muted" role="status">
+        <p
+          ref={reconciliationStatusRef}
+          tabIndex={-1}
+          className="mt-3 border-l-2 border-status-waiting bg-status-waiting/10 px-3 py-2 text-xs leading-relaxed text-text-muted focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-border-focus"
+          role="status"
+        >
           {t("adjustment.eventMustBeClosed")}
         </p>
       ) : (
-        <form onSubmit={submitAdjustment} className="mt-3 space-y-3">
+        <form onSubmit={submitAdjustment} onFocusCapture={markReconciliationFormFocused} onBlurCapture={markReconciliationFormBlurred} className="mt-3 space-y-3">
           <p
             id="attendance-reconciliation-help"
             className="text-xs leading-relaxed text-text-dim"

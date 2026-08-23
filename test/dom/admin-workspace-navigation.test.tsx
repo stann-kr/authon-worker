@@ -1,8 +1,10 @@
 import assert from "node:assert/strict";
 import { afterEach, test } from "node:test";
+import { useLayoutEffect, useRef } from "react";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 
 import useAdminWorkspaceNavigation, {
+  focusAdminWorkspaceAfterTaskChange,
   getAdminEventScope,
 } from "@/app/admin/useAdminWorkspaceNavigation";
 
@@ -24,6 +26,12 @@ function NavigationHarness({
     isSuperAdmin,
     venueId,
   });
+  const workspaceRef = useRef<HTMLElement>(null);
+
+  useLayoutEffect(() => {
+    if (navigation.workspaceFocusRequestId === 0) return;
+    focusAdminWorkspaceAfterTaskChange(workspaceRef.current);
+  }, [navigation.workspaceFocusRequestId]);
 
   return (
     <>
@@ -38,14 +46,24 @@ function NavigationHarness({
       <button onClick={() => navigation.changeTask("guest-list")}>
         Open guest list
       </button>
-      <button
-        onClick={() =>
-          navigation.onAnalyticsEventOpen("event-1", "2026-08-19")
-        }
-      >
-        Open event
-      </button>
       <input aria-label="Task filter" />
+      <section
+        ref={workspaceRef}
+        id="admin-workspace"
+        aria-label="Admin workspace"
+        tabIndex={-1}
+      >
+        <button key={navigation.activeTask} type="button">
+          Workspace action
+        </button>
+        <button
+          onClick={() =>
+            navigation.onAnalyticsEventOpen("event-1", "2026-08-19")
+          }
+        >
+          Open event
+        </button>
+      </section>
     </>
   );
 }
@@ -174,6 +192,65 @@ test("shortcuts skip editable targets, route transitions, and modal dialogs", as
   fireEvent.keyDown(window, { key: "4" });
   assert.equal(screen.getByTestId("active-task").textContent, "guest-list");
   dialog.remove();
+});
+
+test("task replacement restores only focus lost inside the workspace", async () => {
+  const originalScrollIntoView = HTMLElement.prototype.scrollIntoView;
+  let scrollCalls = 0;
+  HTMLElement.prototype.scrollIntoView = () => {
+    scrollCalls += 1;
+  };
+
+  try {
+    render(<NavigationHarness />);
+    await waitFor(() => {
+      assert.equal(screen.getByTestId("active-task").textContent, "guest-list");
+    });
+    const workspaceAction = screen.getByRole("button", {
+      name: "Workspace action",
+    });
+    workspaceAction.focus();
+    fireEvent.keyDown(window, { key: "4" });
+    await waitFor(() => {
+      assert.equal(screen.getByTestId("active-task").textContent, "analytics");
+      assert.equal(
+        document.activeElement === screen.getByRole("region", {
+          name: "Admin workspace",
+        }),
+        true,
+      );
+    });
+    assert.equal(scrollCalls, 1);
+
+    const guestListNavigation = screen.getByRole("button", {
+      name: "Open guest list",
+    });
+    guestListNavigation.focus();
+    fireEvent.click(guestListNavigation);
+    await waitFor(() => {
+      assert.equal(screen.getByTestId("active-task").textContent, "guest-list");
+    });
+    assert.equal(document.activeElement === guestListNavigation, true);
+    assert.equal(scrollCalls, 1);
+  } finally {
+    HTMLElement.prototype.scrollIntoView = originalScrollIntoView;
+  }
+});
+
+test("workspace focus fallback does not steal an external connected focus", () => {
+  const workspace = document.createElement("section");
+  workspace.tabIndex = -1;
+  const externalButton = document.createElement("button");
+  document.body.append(workspace, externalButton);
+  externalButton.focus();
+
+  try {
+    assert.equal(focusAdminWorkspaceAfterTaskChange(workspace), false);
+    assert.equal(document.activeElement === externalButton, true);
+  } finally {
+    workspace.remove();
+    externalButton.remove();
+  }
 });
 
 test("role changes replace an unavailable task with the guest list", async () => {

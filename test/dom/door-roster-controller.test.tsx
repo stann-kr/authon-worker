@@ -231,6 +231,27 @@ test("authoritative success publishes the current roster", async () => {
   assert.equal(screen.getByTestId("offline-mode").textContent, "false");
 });
 
+test("an optional offline roster rejection cannot hide authoritative data", async () => {
+  render(
+    <DoorRosterHarness
+      dependencies={createDependencies({
+        fetchOfflineDoorRoster: async () => {
+          throw new Error("offline roster transport failed");
+        },
+      })}
+      selectedEventId="event-0001"
+    />,
+  );
+
+  await waitFor(() => {
+    assert.equal(screen.getByTestId("outcome").textContent, "success");
+    assert.equal(screen.getByTestId("guest-count").textContent, "1");
+    assert.equal(screen.getByTestId("fetching").textContent, "false");
+  });
+  assert.equal(screen.getByTestId("feedback").textContent, "");
+  assert.equal(screen.getByTestId("offline-mode").textContent, "false");
+});
+
 test("a partial authoritative response keeps its roster and scoped feedback", async () => {
   const dependencies = createDependencies({
     fetchGuestOperationsSnapshot: async () => ({

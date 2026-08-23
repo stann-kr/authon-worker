@@ -1,6 +1,13 @@
 import assert from "node:assert/strict";
 import { afterEach, test } from "node:test";
-import { act, cleanup, render, screen, waitFor } from "@testing-library/react";
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import { NextIntlClientProvider } from "next-intl";
 
 import { RouteTransitionProvider } from "@/components/RouteTransitionProvider";
@@ -17,6 +24,7 @@ import type {
 import type { Venue } from "@/lib/venues/types";
 
 const TOKEN = "external-token-a";
+const SETUP_MAIN_CONTENT = document.getElementById("main-content");
 
 if (!window.requestAnimationFrame) {
   window.requestAnimationFrame = (callback) => window.setTimeout(callback, 0);
@@ -107,12 +115,35 @@ function ExternalGuestControllerHarness({
   onController?.(controller);
 
   return (
+    <div ref={controller.externalViewRootRef}>
     <main id="main-content" tabIndex={-1}>
-      <h1 ref={controller.retryHeadingRef} tabIndex={-1}>Retry</h1>
-      <h1 ref={controller.reconciliationHeadingRef} tabIndex={-1}>
-        Reconcile
-      </h1>
-      <h1 ref={controller.contentHeadingRef} tabIndex={-1}>Content</h1>
+      {controller.isValidating ? (
+        <h1>Loading</h1>
+      ) : controller.hasValidationError ? (
+        <h1 ref={controller.invalidHeadingRef} tabIndex={-1}>Invalid</h1>
+      ) : controller.showRetryPanel ? (
+        <h1 ref={controller.retryHeadingRef} tabIndex={-1}>Retry</h1>
+      ) : (
+        <>
+          {controller.showReconciliationBanner && (
+            <h1 ref={controller.reconciliationHeadingRef} tabIndex={-1}>
+              Reconcile
+            </h1>
+          )}
+          <h1 ref={controller.contentHeadingRef} tabIndex={-1}>Content</h1>
+          <label htmlFor="external-test-name">Guest name</label>
+          <input
+            id="external-test-name"
+            value={controller.guestName}
+            onChange={(event) =>
+              controller.handleGuestNameChange(event.target.value)
+            }
+          />
+          <button type="button" onClick={() => void controller.handleSave()}>
+            Save guest
+          </button>
+        </>
+      )}
       <output data-testid="validating">{String(controller.isValidating)}</output>
       <output data-testid="invalid">{String(controller.hasValidationError)}</output>
       <output data-testid="retry">{String(controller.showRetryPanel)}</output>
@@ -130,10 +161,13 @@ function ExternalGuestControllerHarness({
         {String(controller.isSelfRsvpLocked)}
       </output>
     </main>
+    </div>
   );
 }
 
 function renderHarness(props: HarnessProps) {
+  SETUP_MAIN_CONTENT?.blur();
+  SETUP_MAIN_CONTENT?.removeAttribute("id");
   return render(
     <NextIntlClientProvider locale="en" messages={{ Common: { loading: "Loading" } }}>
       <RouteTransitionProvider>
@@ -146,6 +180,7 @@ function renderHarness(props: HarnessProps) {
 afterEach(() => {
   cleanup();
   window.localStorage.clear();
+  SETUP_MAIN_CONTENT?.setAttribute("id", "main-content");
 });
 
 test("bootstraps the per-token owner key and publishes validated external data", async () => {
@@ -158,7 +193,6 @@ test("bootstraps the per-token owner key and publishes validated external data",
       },
     }),
   });
-
   await waitFor(() => {
     assert.equal(screen.getByTestId("validating").textContent, "false");
   });
@@ -238,7 +272,6 @@ test("retry success focuses Content only after the overlay and inert ancestor ar
   await waitFor(() => {
     assert.equal(screen.getByTestId("retry").textContent, "true");
   });
-  const content = screen.getByText("Content");
   let operation: Promise<void> | undefined;
   await act(async () => {
     operation = controller?.handleInitialRetry();
@@ -250,10 +283,92 @@ test("retry success focuses Content only after the overlay and inert ancestor ar
   });
 
   await waitFor(() => {
+    const content = screen.getByText("Content");
     assert.equal(document.activeElement === content, true);
     assert.equal(content.closest("[inert]") === null, true);
     assert.equal(document.querySelector(".route-transition-overlay") === null, true);
   });
+});
+
+test("a post-write invalid response focuses the replacement heading", async () => {
+  let validationCalls = 0;
+  renderHarness({
+    dependencies: createDependencies({
+      validateExternalToken: async () => {
+        validationCalls += 1;
+        return validationCalls === 1
+          ? { data: validationData({ guests: [] }), error: null }
+          : { data: null, error: "INVALID_EXTERNAL_LINK" };
+      },
+    }),
+  });
+  await waitFor(() => {
+    assert.equal(screen.getByTestId("validating").textContent, "false");
+    assert.ok(screen.getByText("Content"));
+  });
+  await act(async () => {
+    await new Promise<void>((resolve) => window.setTimeout(resolve, 350));
+  });
+  assert.equal(document.querySelector(".route-transition-overlay"), null);
+  fireEvent.change(screen.getByRole("textbox", { name: "Guest name" }), {
+    target: { value: "Guest A" },
+  });
+  const saveButton = screen.getByRole("button", { name: "Save guest" });
+  saveButton.focus();
+  fireEvent.click(saveButton);
+
+  await waitFor(() => {
+    const invalidHeading = screen.getByRole("heading", { name: "Invalid" });
+    assert.equal(document.activeElement === invalidHeading, true);
+  });
+});
+
+test("a post-write invalid response preserves focus moved outside while refreshing", async () => {
+  const refresh = createDeferred<{
+    data: ExternalLinkPublicValidationData | null;
+    error: string | null;
+  }>();
+  let validationCalls = 0;
+  renderHarness({
+    dependencies: createDependencies({
+      validateExternalToken: async () => {
+        validationCalls += 1;
+        return validationCalls === 1
+          ? { data: validationData({ guests: [] }), error: null }
+          : refresh.promise;
+      },
+    }),
+  });
+  await waitFor(() => {
+    assert.equal(screen.getByTestId("validating").textContent, "false");
+    assert.ok(screen.getByText("Content"));
+  });
+  await act(async () => {
+    await new Promise<void>((resolve) => window.setTimeout(resolve, 350));
+  });
+  assert.equal(document.querySelector(".route-transition-overlay"), null);
+  fireEvent.change(screen.getByRole("textbox", { name: "Guest name" }), {
+    target: { value: "Guest A" },
+  });
+  const saveButton = screen.getByRole("button", { name: "Save guest" });
+  saveButton.focus();
+  fireEvent.click(saveButton);
+  await waitFor(() => assert.equal(validationCalls, 2));
+  const externalButton = document.createElement("button");
+  externalButton.textContent = "External focus";
+  document.body.append(externalButton);
+
+  try {
+    externalButton.focus();
+    await act(async () => {
+      refresh.resolve({ data: null, error: "INVALID_EXTERNAL_LINK" });
+      await refresh.promise;
+    });
+    await waitFor(() => assert.ok(screen.getByText("Invalid")));
+    assert.equal(document.activeElement === externalButton, true);
+  } finally {
+    externalButton.remove();
+  }
 });
 
 test("create feedback is published only after its authoritative refresh completes", async () => {

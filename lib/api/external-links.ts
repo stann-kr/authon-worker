@@ -77,7 +77,9 @@ function toExternalLinkLifecycleActor(
   return {
     userId: user.id,
     role: user.role,
+    accountKind: user.accountKind,
     venueId: user.venueId,
+    sessionVersion: user.sessionVersion,
   };
 }
 

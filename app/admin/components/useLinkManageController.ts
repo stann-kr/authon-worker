@@ -57,6 +57,11 @@ interface LinkActionFeedback {
   result: Extract<ExternalLinkShareResult, "shared" | "copied">;
 }
 
+interface LifecycleLease {
+  scopeKey: string;
+  owner: symbol;
+}
+
 export function useLinkManageController({
   selectedDate,
   venueId,
@@ -96,6 +101,12 @@ export function useLinkManageController({
     { scopeKey: "", links: [] },
   );
   const toastOwnerRef = useRef<number | null>(null);
+  const activeLifecycleLeasesRef = useRef<Map<string, LifecycleLease>>(
+    new Map(),
+  );
+  const [lifecycleBusyIds, setLifecycleBusyIds] = useState<
+    Record<string, boolean>
+  >({});
   const requestGuard = useLatestRequestGuard();
   const mutationGuard = useScopedOperationGuard();
   const shareGuard = useScopedOperationGuard();
@@ -113,8 +124,10 @@ export function useLinkManageController({
     requestGuard.invalidateRequests();
     mutationGuard.invalidateOperations();
     shareGuard.invalidateOperations();
+    activeLifecycleLeasesRef.current.clear();
     toastOwnerRef.current = null;
     setLoadingStates({});
+    setLifecycleBusyIds({});
     setPendingDeleteLink(null);
     setPendingDeactivateLink(null);
     setLinkActionFeedback(null);
@@ -131,9 +144,11 @@ export function useLinkManageController({
     requestGuard.invalidateRequests();
     mutationGuard.invalidateOperations();
     shareGuard.invalidateOperations();
+    activeLifecycleLeasesRef.current.clear();
     toastOwnerRef.current = null;
     setIsFetching(false);
     setLoadingStates({});
+    setLifecycleBusyIds({});
     setPendingDeleteLink(null);
     setPendingDeactivateLink(null);
     setLinkActionFeedback(null);
@@ -255,23 +270,29 @@ export function useLinkManageController({
   const completeMutation = useCallback(
     async (
       id: string,
-      operationKey: string,
+      operationName: "delete" | "deactivate" | "activate",
       pendingKey: string,
       action: (id: string) => Promise<{ error: string | null }>,
       failureKey: "deleteFailed" | "deactivateFailed" | "reactivateFailed",
       successKey: "deleted" | "deactivated" | "reactivated",
-      shouldInvalidateAfterSuccess: boolean,
       update: (current: ExternalDJLink[]) => ExternalDJLink[],
     ) => {
       if (!isActiveRef.current) return;
+      if (activeLifecycleLeasesRef.current.has(id)) return;
+      const lease: LifecycleLease = {
+        scopeKey: requestScopeKey,
+        owner: Symbol(`link-lifecycle:${id}`),
+      };
+      activeLifecycleLeasesRef.current.set(id, lease);
       const operation = mutationGuard.beginOperation(
         requestScopeKey,
-        operationKey,
+        `lifecycle:${id}`,
       );
       requestGuard.invalidateRequests();
       setIsFetching(false);
       setError(null);
       setSuccess(null);
+      setLifecycleBusyIds((current) => ({ ...current, [id]: true }));
       setLoadingStates((current) => ({ ...current, [pendingKey]: true }));
       try {
         const result = await action(id);
@@ -281,17 +302,23 @@ export function useLinkManageController({
         )
           return;
         if (result.error) {
-          console.error(`Failed to ${operationKey}:`, result.error);
+          console.error(`Failed to ${operationName}:`, result.error);
           setError(tRef.current(failureKey));
           setErrorScopeKey(operation.scopeKey);
         } else {
-          if (shouldInvalidateAfterSuccess) {
-            requestGuard.invalidateRequests();
-            setIsFetching(false);
-          }
-          setLinks(update);
+          requestGuard.invalidateRequests();
+          setIsFetching(false);
+          setLinks((current) => {
+            const next = update(current);
+            displayCacheRef.current = {
+              scopeKey: operation.scopeKey,
+              links: next,
+            };
+            return next;
+          });
           setSuccess(tRef.current(successKey));
           setSuccessScopeKey(operation.scopeKey);
+          await loadLinks();
         }
       } catch (mutationError) {
         if (
@@ -299,31 +326,37 @@ export function useLinkManageController({
           !operation.isCurrent(currentScopeRef.current)
         )
           return;
-        console.error(`Failed to ${operationKey}:`, mutationError);
+        console.error(`Failed to ${operationName}:`, mutationError);
         setError(tRef.current(failureKey));
         setErrorScopeKey(operation.scopeKey);
       } finally {
-        if (operation.finish(currentScopeRef.current)) {
+        const currentLease = activeLifecycleLeasesRef.current.get(id);
+        if (
+          currentLease?.owner === lease.owner &&
+          currentLease.scopeKey === lease.scopeKey &&
+          operation.finish(currentScopeRef.current)
+        ) {
+          activeLifecycleLeasesRef.current.delete(id);
+          setLifecycleBusyIds((current) => ({ ...current, [id]: false }));
           setLoadingStates((current) => ({ ...current, [pendingKey]: false }));
-          if (operationKey.startsWith("delete")) setPendingDeleteLink(null);
-          if (operationKey.startsWith("deactivate"))
+          if (operationName === "delete") setPendingDeleteLink(null);
+          if (operationName === "deactivate")
             setPendingDeactivateLink(null);
         }
       }
     },
-    [mutationGuard, requestGuard, requestScopeKey],
+    [loadLinks, mutationGuard, requestGuard, requestScopeKey],
   );
 
   const handleDeleteLink = useCallback(
     (id: string) =>
       completeMutation(
         id,
-        `delete:${id}`,
+        "delete",
         `delete_${id}`,
         actionsRef.current.deleteLink,
         "deleteFailed",
         "deleted",
-        true,
         (current) => current.filter((link) => link.id !== id),
       ),
     [completeMutation],
@@ -332,12 +365,11 @@ export function useLinkManageController({
     (id: string) =>
       completeMutation(
         id,
-        `deactivate:${id}`,
+        "deactivate",
         `deactivate_${id}`,
         actionsRef.current.deactivateLink,
         "deactivateFailed",
         "deactivated",
-        false,
         (current) =>
           current.map((link) =>
             link.id === id ? { ...link, active: false } : link,
@@ -349,12 +381,11 @@ export function useLinkManageController({
     (id: string) =>
       completeMutation(
         id,
-        `activate:${id}`,
+        "activate",
         `activate_${id}`,
         actionsRef.current.activateLink,
         "reactivateFailed",
         "reactivated",
-        false,
         (current) =>
           current.map((link) =>
             link.id === id ? { ...link, active: true } : link,
@@ -434,11 +465,16 @@ export function useLinkManageController({
     setLinkActionToast(null);
   }, []);
   const requestDeleteLink = useCallback((link: ExternalDJLink) => {
+    if (activeLifecycleLeasesRef.current.has(link.id)) return;
     setError(null);
     setErrorScopeKey("");
     setSuccess(null);
     setSuccessScopeKey("");
     setPendingDeleteLink(link);
+  }, []);
+  const requestDeactivateLink = useCallback((link: ExternalDJLink) => {
+    if (activeLifecycleLeasesRef.current.has(link.id)) return;
+    setPendingDeactivateLink(link);
   }, []);
   const getGuestPageUrl = useCallback(
     (token: string, guestUrl?: string | null) =>
@@ -468,6 +504,7 @@ export function useLinkManageController({
     visibleLinkId,
     setVisibleLinkId,
     loadingStates,
+    lifecycleBusyIds,
     linkActionToast,
     pendingDeleteLink,
     setPendingDeleteLink,
@@ -476,6 +513,7 @@ export function useLinkManageController({
     loadLinks,
     handleDeleteLink,
     requestDeleteLink,
+    requestDeactivateLink,
     handleDeactivateLink,
     handleActivateLink,
     shareOrCopyManagedLink,

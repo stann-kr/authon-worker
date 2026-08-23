@@ -1,7 +1,7 @@
 import {
-  DUMMY_PASSWORD_HASH,
   hashPassword,
   verifyPassword,
+  verifyPasswordWithDummies,
 } from "./password.ts";
 import { getPasswordPolicyErrorCode } from "./password-policy.ts";
 import type {
@@ -87,11 +87,12 @@ export async function claimAccount(
     candidate,
   );
   const setupCodeMatches = !input.useBrowserReceipt
-    ? await dependencies.verifyPassword(
+    ? await verifyPasswordWithDummies(
       input.setupCode,
       candidate && (Boolean(candidate.request_id) || isLegacySetup)
         ? candidate.password_hash
-        : DUMMY_PASSWORD_HASH,
+        : null,
+      dependencies.verifyPassword,
     )
     : false;
 

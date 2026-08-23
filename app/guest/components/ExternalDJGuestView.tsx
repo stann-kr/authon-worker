@@ -58,6 +58,7 @@ export default function ExternalDJGuestView({ token }: ExternalDJGuestViewProps)
     contentHeadingRef,
     deletingId,
     error,
+    externalViewRootRef,
     guests,
     guestName,
     handleBulkSave,
@@ -66,6 +67,7 @@ export default function ExternalDJGuestView({ token }: ExternalDJGuestViewProps)
     handleReconciliationRetry,
     handleSave,
     hasValidationError,
+    invalidHeadingRef,
     isBulkSubmitting,
     isLoading,
     isReconciling,
@@ -121,7 +123,7 @@ export default function ExternalDJGuestView({ token }: ExternalDJGuestViewProps)
 
   if (isValidating) {
     return (
-      <div className="min-h-[100dvh] bg-canvas flex flex-col">
+      <div ref={externalViewRootRef} className="min-h-[100dvh] bg-canvas flex flex-col">
         {externalHeader}
         <div className="flex-1 overflow-x-hidden pt-[calc(5rem+env(safe-area-inset-top))] sm:pt-[calc(5.5rem+env(safe-area-inset-top))] flex flex-col">
           <main id="main-content" tabIndex={-1} className="page-container">
@@ -142,7 +144,11 @@ export default function ExternalDJGuestView({ token }: ExternalDJGuestViewProps)
           <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center border border-status-danger/70 bg-status-danger/10">
             <Icon name="warning" size={24} className="text-status-danger" />
           </div>
-          <h1 className="mb-2 text-xl font-semibold text-text-heading">
+          <h1
+            ref={invalidHeadingRef}
+            tabIndex={-1}
+            className="mb-2 text-xl font-semibold text-text-heading outline-none focus-visible:ring-2 focus-visible:ring-focus"
+          >
             {t("invalidTitle")}
           </h1>
           <p className="mb-6 text-sm leading-relaxed text-text-muted">
@@ -156,7 +162,7 @@ export default function ExternalDJGuestView({ token }: ExternalDJGuestViewProps)
 
   if (showRetryPanel) {
     return (
-      <div className="min-h-[100dvh] bg-canvas flex flex-col">
+      <div ref={externalViewRootRef} className="min-h-[100dvh] bg-canvas flex flex-col">
         {externalHeader}
         <main id="main-content" tabIndex={-1} className="flex flex-1 items-center justify-center px-4 pt-[calc(5rem+env(safe-area-inset-top))]">
           <div
@@ -204,7 +210,7 @@ export default function ExternalDJGuestView({ token }: ExternalDJGuestViewProps)
     : sortedGuests;
 
   return (
-    <div className="min-h-[100dvh] bg-canvas flex flex-col">
+    <div ref={externalViewRootRef} className="min-h-[100dvh] bg-canvas flex flex-col">
       {externalHeader}
       <div className="flex-1 overflow-x-hidden pt-[calc(5rem+env(safe-area-inset-top))] sm:pt-[calc(5.5rem+env(safe-area-inset-top))] flex flex-col">
         <main id="main-content" tabIndex={-1} className="page-container">

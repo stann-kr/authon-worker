@@ -42,6 +42,7 @@ function toGuestServiceActor(user: SessionUser): GuestServiceActor {
     guestLimit: user.guestLimit,
     accountKind: user.accountKind,
     doorAccessEnabled: user.doorAccessEnabled,
+    sessionVersion: user.sessionVersion,
   };
 }
 

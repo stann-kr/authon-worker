@@ -19,6 +19,7 @@ const parsedTsconfig = ts.parseJsonConfigFileContent(
 );
 const appPath = path.join(projectRoot, "app");
 const apiTypesPath = path.join(projectRoot, "lib/api/types.ts");
+const serviceModulePattern = /(?:^|[/\\])(?:[^/\\]+-)?service\.[cm]?[jt]sx?$/;
 const moduleResolutionHost = {
   ...ts.sys,
   fileExists(fileName) {
@@ -62,6 +63,13 @@ function resolvesInsideApp(specifier, containingFile) {
       !relativePath.startsWith(`..${path.sep}`) &&
       !path.isAbsolute(relativePath))
   );
+}
+
+function resolvesToServiceModule(specifier, containingFile) {
+  const resolvedFileName = resolveModulePath(specifier, containingFile);
+  return resolvedFileName
+    ? serviceModulePattern.test(path.resolve(resolvedFileName))
+    : false;
 }
 
 function getModuleSpecifier(node) {
@@ -155,6 +163,32 @@ const capabilityBoundaryPlugin = {
         return createModuleSourceVisitors(checkModuleSource);
       },
     },
+    "no-service-imports-from-persistence": {
+      meta: {
+        type: "problem",
+        schema: [],
+        messages: {
+          keepDependencyDirection:
+            "Persistence modules must not import service modules. Move shared contracts to a capability-owned type module.",
+        },
+      },
+      create(context) {
+        function checkModuleSource(node, source) {
+          const specifier = getModuleSpecifier(source);
+          if (
+            specifier &&
+            resolvesToServiceModule(specifier, context.filename)
+          ) {
+            context.report({
+              node,
+              messageId: "keepDependencyDirection",
+            });
+          }
+        }
+
+        return createModuleSourceVisitors(checkModuleSource);
+      },
+    },
   },
 };
 
@@ -181,7 +215,7 @@ const eslintConfig = [
     },
   },
   {
-    files: ["**/*.{ts,tsx}"],
+    files: ["**/*.{js,jsx,mjs,cjs,ts,tsx}"],
     plugins: {
       "authon-boundaries": capabilityBoundaryPlugin,
     },
@@ -190,12 +224,21 @@ const eslintConfig = [
     },
   },
   {
-    files: ["components/**/*.{ts,tsx}"],
+    files: ["components/**/*.{js,jsx,mjs,cjs,ts,tsx}"],
     plugins: {
       "authon-boundaries": capabilityBoundaryPlugin,
     },
     rules: {
       "authon-boundaries/no-app-imports-from-components": "error",
+    },
+  },
+  {
+    files: ["lib/**/*persistence.{js,jsx,mjs,cjs,ts,tsx}"],
+    plugins: {
+      "authon-boundaries": capabilityBoundaryPlugin,
+    },
+    rules: {
+      "authon-boundaries/no-service-imports-from-persistence": "error",
     },
   },
 ];
