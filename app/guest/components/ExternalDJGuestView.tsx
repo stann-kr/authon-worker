@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
-import { useLatestRequestGuard, useLocalStorage } from "@/lib/hooks";
+import { useState } from "react";
+import { useLocalStorage } from "@/lib/hooks";
 import Footer from "@/components/Footer";
 import StatGrid from "@/components/StatGrid";
 import PanelHeader from "@/components/PanelHeader";
@@ -17,14 +17,8 @@ import GuestSearchInput from "@/components/GuestSearchInput";
 import GuestQrCode from "@/components/GuestQrCode";
 import Icon from "@/components/Icon";
 import LanguageSwitcher from "@/components/LanguageSwitcher";
-import { useRouteLoadingTask } from "@/components/RouteTransitionProvider";
 import { useLocale, useTranslations } from "next-intl";
 import { formatDateDisplay } from "@/lib/date";
-import { getExternalLinkValidationDisposition } from "@/lib/external-links/domain";
-import {
-  createExternalOwnerKey,
-  externalOwnerStorageKey,
-} from "@/lib/external-links/ownership";
 import {
   validateExternalToken,
   createGuestViaExternalLink,
@@ -32,318 +26,65 @@ import {
   deleteGuestViaExternalLink,
   updateGuestViaExternalLink,
 } from "@/lib/api/external-links";
-import type { BulkGuestCreateInput } from "@/lib/guests/types";
-import type {
-  ExternalDJLink,
-  ExternalLinkPublicGuest,
-} from "@/lib/external-links/types";
-import type { Venue } from "@/lib/venues/types";
+import type { ExternalLinkPublicGuest } from "@/lib/external-links/types";
+import useExternalGuestController, {
+  type ExternalGuestControllerDependencies,
+} from "./useExternalGuestController";
 
 interface ExternalDJGuestViewProps {
   token: string;
 }
 
-type ExternalGuestFeedbackKey =
-  | "refreshFailed"
-  | "registerResultUnknown"
-  | "duplicateRequiresConfirmation"
-  | "rateLimited"
-  | "rsvpFull"
-  | "deleteFailed"
-  | "deleteResultUnknown";
+const EXTERNAL_GUEST_ACTIONS: ExternalGuestControllerDependencies =
+  Object.freeze({
+    validateExternalToken,
+    createGuestViaExternalLink,
+    createGuestsViaExternalLink,
+    deleteGuestViaExternalLink,
+    updateGuestViaExternalLink,
+  });
 
 export default function ExternalDJGuestView({ token }: ExternalDJGuestViewProps) {
   const t = useTranslations("ExternalGuest");
   const commonT = useTranslations("Common");
   const locale = useLocale() as "en" | "ko";
   const { brand } = useVenueBrand();
-  const [linkInfo, setLinkInfo] = useState<ExternalDJLink | null>(null);
-  const [ownerKey, setOwnerKey] = useState<string | null>(null);
-  const [isOwnerKeyReady, setIsOwnerKeyReady] = useState(false);
-  const [venueInfo, setVenueInfo] = useState<Venue | null>(null);
-  const [isValidating, setIsValidating] = useState(true);
-  const [hasValidationError, setHasValidationError] = useState(false);
-  const [guestName, setGuestName] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
-  const [isBulkSubmitting, setIsBulkSubmitting] = useState(false);
-  const [deletingId, setDeletingId] = useState<string | null>(null);
-  const [error, setError] = useState<ExternalGuestFeedbackKey | null>(null);
-  const [requiresReconciliation, setRequiresReconciliation] = useState(false);
-  const [isReconciling, setIsReconciling] = useState(false);
-  const [guests, setGuests] = useState<ExternalLinkPublicGuest[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [sortMode, setSortMode] = useLocalStorage<"default" | "alpha">(
     "guest:sortMode",
     "default",
   );
-  const retryHeadingRef = useRef<HTMLHeadingElement>(null);
-  const reconciliationHeadingRef = useRef<HTMLHeadingElement>(null);
-  const contentHeadingRef = useRef<HTMLHeadingElement>(null);
-  const validationGuard = useLatestRequestGuard();
-  useRouteLoadingTask(isValidating || !isOwnerKeyReady);
-  const showRetryPanel =
-    !isValidating &&
-    !hasValidationError &&
-    (!linkInfo || !venueInfo);
-  const showReconciliationBanner =
-    !isValidating &&
-    !hasValidationError &&
-    requiresReconciliation &&
-    Boolean(linkInfo && venueInfo);
-  const isSelfRsvp = linkInfo?.kind === "self_rsvp";
-  const ownedGuest = isSelfRsvp ? guests[0] ?? null : null;
-  const isSelfRsvpLocked = Boolean(
-    ownedGuest && ownedGuest.status !== "pending",
-  );
-
-  useEffect(() => {
-    try {
-      const storageKey = externalOwnerStorageKey(token);
-      const stored = window.localStorage.getItem(storageKey);
-      const key = stored ?? createExternalOwnerKey();
-      if (!stored) window.localStorage.setItem(storageKey, key);
-      setOwnerKey(key);
-    } catch {
-      setOwnerKey(null);
-    } finally {
-      setIsOwnerKeyReady(true);
-    }
-  }, [token]);
-
-  const loadExternalData = useCallback(async (showInitialLoading = false) => {
-    const isLatestRequest = validationGuard.beginRequest();
-    if (showInitialLoading) {
-      setIsValidating(true);
-      setHasValidationError(false);
-      setError(null);
-      setLinkInfo(null);
-      setVenueInfo(null);
-      setGuests([]);
-    }
-    try {
-      const { data, error: validationError } = await validateExternalToken(
-        token,
-        ownerKey,
-      );
-      if (!isLatestRequest()) return;
-      if (validationError) {
-        console.error("Invalid external guest link:", validationError);
-        if (getExternalLinkValidationDisposition(validationError) === "invalid") {
-          setHasValidationError(true);
-          setLinkInfo(null);
-          setVenueInfo(null);
-          setGuests([]);
-        } else {
-          setHasValidationError(false);
-          setError("refreshFailed");
-        }
-        return false;
-      } else if (data) {
-        setHasValidationError(false);
-        setRequiresReconciliation(false);
-        setError(null);
-        setLinkInfo(data.link);
-        setVenueInfo(data.venue);
-        setGuests(data.guests ?? []);
-        if (data.link.kind === "self_rsvp") {
-          setGuestName(data.guests?.[0]?.name ?? "");
-        }
-        return true;
-      }
-      setError("refreshFailed");
-      return false;
-    } catch (validationError) {
-      if (!isLatestRequest()) return;
-      console.error("Invalid external guest link:", validationError);
-      setHasValidationError(false);
-      setError("refreshFailed");
-      return false;
-    } finally {
-      if (showInitialLoading && isLatestRequest()) setIsValidating(false);
-    }
-  }, [ownerKey, token, validationGuard]);
-
-  useEffect(() => {
-    if (isOwnerKeyReady) void loadExternalData(true);
-    // 번역 함수 변경은 이미 검증된 token과 무관하다. locale 전환 때
-    // token 검증과 전체 route loading을 다시 시작하지 않는다.
-  }, [isOwnerKeyReady, loadExternalData]);
-
-  useEffect(() => {
-    if (isReconciling || (!showRetryPanel && !showReconciliationBanner)) return;
-    const frame = window.requestAnimationFrame(() => {
-      if (showRetryPanel) {
-        retryHeadingRef.current?.focus();
-      } else {
-        reconciliationHeadingRef.current?.focus();
-      }
-    });
-    return () => window.cancelAnimationFrame(frame);
-  }, [isReconciling, showReconciliationBanner, showRetryPanel]);
-
-  const handleReconciliationRetry = async () => {
-    if (isReconciling) return;
-    setIsReconciling(true);
-    try {
-      const refreshed = await loadExternalData(false);
-      if (refreshed === false) {
-        setRequiresReconciliation(true);
-      } else if (refreshed === true) {
-        window.requestAnimationFrame(() => contentHeadingRef.current?.focus());
-      }
-    } finally {
-      setIsReconciling(false);
-    }
-  };
-
-  const handleInitialRetry = async () => {
-    const refreshed = await loadExternalData(true);
-    if (refreshed === true) {
-      window.requestAnimationFrame(() => contentHeadingRef.current?.focus());
-    }
-  };
-
-  const handleSave = async () => {
-    if (
-      !guestName.trim() ||
-      !linkInfo ||
-      (linkInfo.kind === "self_rsvp" && !ownerKey) ||
-      isSelfRsvpLocked ||
-      requiresReconciliation ||
-      isLoading ||
-      isBulkSubmitting ||
-      deletingId !== null
-    ) return;
-    setIsLoading(true);
-    setError(null);
-    let actionFeedback: ExternalGuestFeedbackKey | null = null;
-
-    try {
-      const { data, error: createError } = ownedGuest
-        ? await updateGuestViaExternalLink({
-            token,
-            ownerKey: ownerKey ?? "",
-            guestId: ownedGuest.id,
-            guestName: guestName.trim().toUpperCase(),
-          })
-        : await createGuestViaExternalLink({
-            token,
-            ownerKey,
-            guestName: guestName.trim().toUpperCase(),
-            date: linkInfo.date || "",
-          });
-
-      if (createError) {
-        console.error("Failed to register guest:", createError);
-        actionFeedback =
-          createError === "RATE_LIMITED"
-            ? "rateLimited"
-            : createError === "Guest limit reached for this link."
-              ? "rsvpFull"
-            : createError === "DUPLICATE_REQUIRES_CONFIRMATION"
-              ? "duplicateRequiresConfirmation"
-              : "registerResultUnknown";
-      } else if (data) {
-        if (isSelfRsvp) {
-          setGuests([data]);
-          setGuestName(data.name);
-        } else {
-          setGuests((prev) => [...prev, data]);
-          setGuestName("");
-          setLinkInfo((prev) =>
-            prev ? { ...prev, usedGuests: prev.usedGuests + 1 } : prev,
-          );
-        }
-      } else {
-        actionFeedback = "registerResultUnknown";
-      }
-    } catch (createError) {
-      console.error("Failed to register guest:", createError);
-      actionFeedback = "registerResultUnknown";
-    } finally {
-      // A write can commit before its response is lost. Always reconcile from
-      // the server; a refresh failure intentionally supersedes the action
-      // message because the visible roster is then not authoritative.
-      try {
-        const refreshed = await loadExternalData(false);
-        if (refreshed === false) {
-          setRequiresReconciliation(true);
-        } else if (refreshed === true && actionFeedback) {
-          setError(actionFeedback);
-        }
-      } finally {
-        setIsLoading(false);
-      }
-    }
-  };
-
-  const handleDelete = async (guestId: string) => {
-    if (requiresReconciliation || isReconciling) return;
-    setDeletingId(guestId);
-    setError(null);
-    let actionFeedback: ExternalGuestFeedbackKey | null = null;
-
-    try {
-      const { error: deleteError } = await deleteGuestViaExternalLink({
-        token,
-        guestId,
-        ownerKey,
-      });
-
-      if (deleteError) {
-        console.error("Failed to delete guest:", deleteError);
-        actionFeedback = "deleteFailed";
-      } else {
-        setGuests((prev) => prev.filter((g) => g.id !== guestId));
-        setLinkInfo((prev) =>
-          prev ? { ...prev, usedGuests: Math.max(0, prev.usedGuests - 1) } : prev,
-        );
-      }
-    } catch (deleteError) {
-      console.error("Failed to delete guest:", deleteError);
-      actionFeedback = "deleteResultUnknown";
-    } finally {
-      try {
-        const refreshed = await loadExternalData(false);
-        if (refreshed === false) {
-          setRequiresReconciliation(true);
-        } else if (refreshed === true && actionFeedback) {
-          setError(actionFeedback);
-        }
-      } finally {
-        setDeletingId(null);
-      }
-    }
-  };
-
-  const handleBulkSave = async (bulkGuests: BulkGuestCreateInput[]) => {
-    if (!linkInfo || linkInfo.kind === "self_rsvp") {
-      return { data: null, error: "SELF_RSVP_BULK_UNSUPPORTED" };
-    }
-    setError(null);
-
-    const response = await createGuestsViaExternalLink({
-      token,
-      date: linkInfo.date || "",
-      items: bulkGuests,
-    });
-
-    if (response.data) {
-      const createdGuests = response.data.items.flatMap((item) =>
-        item.status === "created" && item.guest ? [item.guest] : [],
-      );
-      if (createdGuests.length > 0) {
-        setGuests((current) => [...current, ...createdGuests]);
-        setLinkInfo((current) =>
-          current
-            ? { ...current, usedGuests: current.usedGuests + createdGuests.length }
-            : current,
-        );
-      }
-    }
-
-    return response;
-  };
+  const {
+    contentHeadingRef,
+    deletingId,
+    error,
+    guests,
+    guestName,
+    handleBulkSubmissionComplete,
+    handleBulkSubmittingChange,
+    handleBulkSave,
+    handleDelete,
+    handleInitialRetry,
+    handleReconciliationRetry,
+    handleSave,
+    hasValidationError,
+    isBulkSubmitting,
+    isLoading,
+    isReconciling,
+    isSelfRsvp,
+    isSelfRsvpLocked,
+    isValidating,
+    linkInfo,
+    ownedGuest,
+    ownerKey,
+    reconciliationHeadingRef,
+    requiresReconciliation,
+    retryHeadingRef,
+    setGuestName,
+    showReconciliationBanner,
+    showRetryPanel,
+    venueInfo,
+  } = useExternalGuestController({ token, dependencies: EXTERNAL_GUEST_ACTIONS });
 
   const sortGuestsByName = (list: ExternalLinkPublicGuest[]) => {
     return [...list].sort((a, b) =>
@@ -662,14 +403,8 @@ export default function ExternalDJGuestView({ token }: ExternalDJGuestViewProps)
                     deletingId !== null
                   }
                   onSubmitChunk={handleBulkSave}
-                  onSubmissionComplete={async () => {
-                    const refreshed = await loadExternalData(false);
-                    if (!refreshed) {
-                      setRequiresReconciliation(true);
-                      throw new Error("External guest list refresh failed");
-                    }
-                  }}
-                  onSubmittingChange={setIsBulkSubmitting}
+                  onSubmissionComplete={handleBulkSubmissionComplete}
+                  onSubmittingChange={handleBulkSubmittingChange}
                 />
               )}
             </div>
