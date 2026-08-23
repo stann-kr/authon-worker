@@ -33,44 +33,11 @@ import {
   reportServerError,
   writeStructuredLog,
 } from "@/lib/observability/structured-log";
-
-const UPDATE_USER_FOR_LOGIN_SQL = `
-  UPDATE users
-  SET last_login_at = ?,
-      password_hash = ?
-  WHERE id = ?
-    AND password_hash = ?
-    AND session_version = ?
-    AND active = 1
-    AND deleted_at IS NULL
-    AND (
-      role = 'super_admin'
-      OR EXISTS (
-        SELECT 1 FROM venues login_venue
-        WHERE login_venue.id = users.venue_id
-          AND login_venue.active = 1
-      )
-    )
-  RETURNING session_version
-`;
-
-const CANCEL_OPEN_PASSWORD_RESET_REQUESTS_AFTER_LOGIN_SQL = `
-  UPDATE password_reset_requests
-  SET status = 'cancelled',
-      updated_at = ?
-  WHERE user_id = ?
-    AND status IN ('pending', 'approved')
-    AND changes() = 1
-`;
-
-const SELECT_LATEST_SETUP_CODE_REQUEST_SQL = `
-  SELECT status, setup_method, expires_at
-  FROM password_reset_requests
-  WHERE user_id = ?
-    AND setup_method = 'setup_code'
-  ORDER BY created_at DESC, id DESC
-  LIMIT 1
-`;
+import {
+  CANCEL_OPEN_PASSWORD_RESET_REQUESTS_AFTER_LOGIN_SQL,
+  SELECT_LATEST_SETUP_CODE_REQUEST_SQL,
+  UPDATE_USER_FOR_LOGIN_SQL,
+} from "@/lib/auth/credential-lifecycle-sql";
 
 export async function POST(request: Request) {
   const requestId = getRequestId(request);

@@ -12,59 +12,12 @@ import {
   reportServerError,
   writeStructuredLog,
 } from "@/lib/observability/structured-log";
-
-const UPDATE_PROFILE_PASSWORD_CAS_SQL = `
-  UPDATE users
-  SET password_hash = ?,
-      password_set_at = ?,
-      session_version = session_version + 1
-  WHERE id = ?
-    AND password_hash = ?
-    AND session_version = ?
-    AND active = 1
-    AND deleted_at IS NULL
-  RETURNING id
-`;
-
-const INSERT_PROFILE_PASSWORD_AUDIT_SQL = `
-  INSERT INTO user_audit_events (
-    id, venue_id, actor_user_id, target_user_id, action, details, created_at
-  )
-  SELECT ?, venue_id, id, id, 'password_changed', ?, ?
-  FROM users
-  WHERE id = ?
-    AND changes() = 1
-  RETURNING target_user_id
-`;
-
-const INVALIDATE_PROFILE_RESET_TOKENS_SQL = `
-  UPDATE password_reset_tokens
-  SET used = 1
-  WHERE user_id = ?
-    AND used = 0
-    AND EXISTS (
-      SELECT 1
-      FROM user_audit_events
-      WHERE id = ?
-        AND target_user_id = ?
-        AND action = 'password_changed'
-    )
-`;
-
-const CANCEL_PROFILE_RESET_REQUESTS_SQL = `
-  UPDATE password_reset_requests
-  SET status = 'cancelled',
-      updated_at = ?
-  WHERE user_id = ?
-    AND status IN ('pending', 'approved')
-    AND EXISTS (
-      SELECT 1
-      FROM user_audit_events
-      WHERE id = ?
-        AND target_user_id = ?
-        AND action = 'password_changed'
-    )
-`;
+import {
+  CANCEL_PROFILE_RESET_REQUESTS_SQL,
+  INSERT_PROFILE_PASSWORD_AUDIT_SQL,
+  INVALIDATE_PROFILE_RESET_TOKENS_SQL,
+  UPDATE_PROFILE_PASSWORD_CAS_SQL,
+} from "@/lib/auth/credential-lifecycle-sql";
 
 function getAuthErrorStatus(error: unknown): number | null {
   if (!(error instanceof Error)) return null;
