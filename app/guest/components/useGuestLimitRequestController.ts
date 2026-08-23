@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useRef, useState, type RefObject } from "react";
+import { useCallback, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { User as AuthUser } from "@/lib/auth";
 import type { GuestQuota } from "@/lib/guest-limits/types";
 import {
@@ -37,13 +37,28 @@ interface UseGuestLimitRequestControllerOptions {
   hasCurrentScopeData: boolean;
   hasVerifiedCurrentQuota: boolean;
   isCurrentScopeFetching: boolean;
-  currentScopeKeyRef: RefObject<string>;
   invalidatePolling: () => void;
   loadGuests: (options?: { silent?: boolean }) => Promise<boolean | undefined>;
   setError: (message: string | null) => void;
   translate: GuestLimitRequestTranslate;
   commonTranslate: GuestLimitRequestTranslate;
   dependencies: GuestLimitRequestControllerDependencies;
+}
+
+interface RequestScopeOwner {
+  scopeKey: string;
+}
+
+interface ActiveRequestOperation {
+  scopeKey: string;
+  owner: RequestScopeOwner;
+  draftRevision: number;
+  shouldRestoreFocus: boolean;
+}
+
+interface RequestFocusIntent {
+  scopeKey: string;
+  owner: RequestScopeOwner;
 }
 
 export default function useGuestLimitRequestController({
@@ -55,7 +70,6 @@ export default function useGuestLimitRequestController({
   hasCurrentScopeData,
   hasVerifiedCurrentQuota,
   isCurrentScopeFetching,
-  currentScopeKeyRef,
   invalidatePolling,
   loadGuests,
   setError,
@@ -69,16 +83,34 @@ export default function useGuestLimitRequestController({
   const [requestingScopeKeys, setRequestingScopeKeys] = useState<
     ReadonlySet<string>
   >(() => new Set());
+  const [focusIntent, setFocusIntent] = useState<RequestFocusIntent | null>(
+    null,
+  );
   const requestSummaryRefs = useRef(new Map<string, HTMLElement>());
   const pendingRequestStatusRefs = useRef(new Map<string, HTMLDivElement>());
+  const draftRevisionsRef = useRef(new Map<string, number>());
+  const activeOperationsRef = useRef(new Map<string, ActiveRequestOperation>());
+  const committedScopeOwnersRef = useRef(new Map<string, RequestScopeOwner>());
+  const scopeOwner = useMemo<RequestScopeOwner>(
+    () => ({ scopeKey: requestScopeKey }),
+    [requestScopeKey],
+  );
+  const committedScopeOwnerRef = useRef(scopeOwner);
+  const translateRef = useRef(t);
+  translateRef.current = t;
+
+  useLayoutEffect(() => {
+    committedScopeOwnerRef.current = scopeOwner;
+    committedScopeOwnersRef.current.set(requestScopeKey, scopeOwner);
+  }, [requestScopeKey, scopeOwner]);
 
   const isGuestLimitRequestEligible = Boolean(
     user &&
-      canRequestGuestLimit({
-        role: user.role,
-        accountKind: user.account_kind,
-        doorAccessEnabled: user.door_access_enabled,
-      }),
+    canRequestGuestLimit({
+      role: user.role,
+      accountKind: user.account_kind,
+      doorAccessEnabled: user.door_access_enabled,
+    }),
   );
   const requestSectionState = getGuestLimitRequestSectionState({
     isEligible: isGuestLimitRequestEligible,
@@ -86,9 +118,8 @@ export default function useGuestLimitRequestController({
     canRequestExtra: quota?.canRequestExtra === true,
     hasPendingRequest: Boolean(quota?.pendingRequest),
   });
-  const isRequestDisclosureDisabled = !canEditGuestLimitRequestDraft(
-    requestSectionState,
-  );
+  const isRequestDisclosureDisabled =
+    !canEditGuestLimitRequestDraft(requestSectionState);
   const isRequestSubmissionDisabled = !canSubmitGuestLimitRequest({
     sectionState: requestSectionState,
     hasVerifiedQuota: hasVerifiedCurrentQuota,
@@ -108,7 +139,9 @@ export default function useGuestLimitRequestController({
     requestDrafts,
     requestScopeKey,
   );
-  const isRequestingExtra = requestingScopeKeys.has(requestScopeKey);
+  const isRequestingExtra =
+    requestingScopeKeys.has(requestScopeKey) ||
+    activeOperationsRef.current.has(requestScopeKey);
 
   const setRequestSummaryElement = useCallback(
     (scopeKey: string, element: HTMLElement | null) => {
@@ -133,6 +166,10 @@ export default function useGuestLimitRequestController({
 
   const updateRequestDraft = useCallback(
     (patch: Partial<GuestLimitRequestDraft>) => {
+      draftRevisionsRef.current.set(
+        requestScopeKey,
+        (draftRevisionsRef.current.get(requestScopeKey) ?? 0) + 1,
+      );
       setRequestDrafts((current) => ({
         ...current,
         [requestScopeKey]: {
@@ -145,21 +182,32 @@ export default function useGuestLimitRequestController({
   );
 
   const handleExtraRequest = useCallback(async () => {
-    if (isRequestingExtra || isRequestSubmissionDisabled) return;
+    if (
+      isRequestSubmissionDisabled ||
+      activeOperationsRef.current.has(requestScopeKey)
+    ) {
+      return;
+    }
 
-    const operationScopeKey = requestScopeKey;
-    const requestSummaryRef = requestSummaryRefs.current.get(operationScopeKey);
-    const shouldRestoreRequestFocus = Boolean(
-      requestSummaryRef?.parentElement?.contains(document.activeElement),
-    );
+    const requestSummaryRef = requestSummaryRefs.current.get(requestScopeKey);
+    const operation: ActiveRequestOperation = {
+      scopeKey: requestScopeKey,
+      owner: scopeOwner,
+      draftRevision: draftRevisionsRef.current.get(requestScopeKey) ?? 0,
+      shouldRestoreFocus: Boolean(
+        requestSummaryRef?.parentElement?.contains(document.activeElement),
+      ),
+    };
+    activeOperationsRef.current.set(requestScopeKey, operation);
     invalidatePolling();
     const extra = Number.parseInt(requestDraft.requestedExtra, 10);
     setRequestingScopeKeys((current) => {
       const next = new Set(current);
-      next.add(operationScopeKey);
+      next.add(operation.scopeKey);
       return next;
     });
     setError(null);
+    let hasPublishedPendingError = false;
     try {
       const { error: requestError } = await dependencies.createRequest({
         date: selectedDate,
@@ -167,53 +215,80 @@ export default function useGuestLimitRequestController({
         requestedExtra: extra,
         reason: requestDraft.requestReason,
       });
-      if (!requestError) {
+      const isLatestScopeEpoch =
+        committedScopeOwnersRef.current.get(operation.scopeKey) ===
+        operation.owner;
+      if (
+        !requestError &&
+        isLatestScopeEpoch &&
+        draftRevisionsRef.current.get(operation.scopeKey) ===
+          operation.draftRevision
+      ) {
         setRequestDrafts((current) =>
-          resetScopedGuestLimitRequestDraft(current, operationScopeKey),
+          resetScopedGuestLimitRequestDraft(current, operation.scopeKey),
         );
       }
-      if (currentScopeKeyRef.current !== operationScopeKey) return;
+      if (
+        !isLatestScopeEpoch ||
+        committedScopeOwnerRef.current !== operation.owner
+      ) {
+        return;
+      }
       if (requestError) {
         setError(
           requestError === "PENDING_REQUEST_EXISTS"
-            ? t("requestAlreadyPending")
-            : t("requestFailed"),
+            ? translateRef.current("requestAlreadyPending")
+            : translateRef.current("requestFailed"),
         );
+        if (requestError === "PENDING_REQUEST_EXISTS") {
+          hasPublishedPendingError = true;
+          await loadGuests({ silent: true });
+        }
       } else {
         await loadGuests({ silent: true });
       }
-    } catch (requestError) {
-      if (currentScopeKeyRef.current === operationScopeKey) {
-        console.error("Failed to request additional guests:", requestError);
-        setError(t("requestFailed"));
+      if (
+        committedScopeOwnersRef.current.get(operation.scopeKey) !==
+          operation.owner ||
+        committedScopeOwnerRef.current !== operation.owner
+      ) {
+        return;
       }
-    } finally {
-      setRequestingScopeKeys((current) => {
-        const next = new Set(current);
-        next.delete(operationScopeKey);
-        return next;
-      });
-      if (shouldRestoreRequestFocus) {
-        requestAnimationFrame(() => {
-          if (currentScopeKeyRef.current !== operationScopeKey) return;
-          if (
-            document.activeElement &&
-            document.activeElement !== document.body
-          ) {
-            return;
-          }
-          (
-            pendingRequestStatusRefs.current.get(operationScopeKey) ??
-            requestSummaryRefs.current.get(operationScopeKey)
-          )?.focus();
+      if (operation.shouldRestoreFocus) {
+        setFocusIntent({
+          scopeKey: operation.scopeKey,
+          owner: operation.owner,
         });
       }
+    } catch (requestError) {
+      const isCurrentScopeOperation =
+        committedScopeOwnersRef.current.get(operation.scopeKey) ===
+          operation.owner && committedScopeOwnerRef.current === operation.owner;
+      if (isCurrentScopeOperation) {
+        if (!hasPublishedPendingError) {
+          console.error("Failed to request additional guests:", requestError);
+          setError(translateRef.current("requestFailed"));
+        }
+        if (operation.shouldRestoreFocus) {
+          setFocusIntent({
+            scopeKey: operation.scopeKey,
+            owner: operation.owner,
+          });
+        }
+      }
+    } finally {
+      if (activeOperationsRef.current.get(operation.scopeKey) === operation) {
+        activeOperationsRef.current.delete(operation.scopeKey);
+      }
+      setRequestingScopeKeys((current) => {
+        const next = new Set(current);
+        next.delete(operation.scopeKey);
+        return next;
+      });
     }
   }, [
-    currentScopeKeyRef,
     dependencies,
     invalidatePolling,
-    isRequestingExtra,
     isRequestSubmissionDisabled,
     loadGuests,
     requestDraft,
@@ -221,8 +296,34 @@ export default function useGuestLimitRequestController({
     selectedDate,
     selectedEventId,
     setError,
-    t,
+    scopeOwner,
   ]);
+
+  useLayoutEffect(() => {
+    if (!focusIntent) return;
+    if (
+      committedScopeOwnersRef.current.get(focusIntent.scopeKey) !==
+        focusIntent.owner ||
+      committedScopeOwnerRef.current !== focusIntent.owner
+    ) {
+      setFocusIntent((current) => (current === focusIntent ? null : current));
+      return;
+    }
+    const requestSummaryRef = requestSummaryRefs.current.get(
+      focusIntent.scopeKey,
+    );
+    const activeElement = document.activeElement;
+    const canRestoreFocus =
+      activeElement === document.body || activeElement === requestSummaryRef;
+
+    if (canRestoreFocus) {
+      (
+        pendingRequestStatusRefs.current.get(focusIntent.scopeKey) ??
+        requestSummaryRef
+      )?.focus();
+    }
+    setFocusIntent(null);
+  }, [focusIntent, requestSectionState, requestScopeKey]);
 
   return {
     isRequestDisclosureDisabled,

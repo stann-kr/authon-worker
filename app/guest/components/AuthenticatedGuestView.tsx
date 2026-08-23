@@ -258,7 +258,6 @@ export default function AuthenticatedGuestView({ user }: AuthenticatedGuestViewP
     hasCurrentScopeData,
     hasVerifiedCurrentQuota: verifiedQuotaScopeKey === requestScopeKey,
     isCurrentScopeFetching,
-    currentScopeKeyRef,
     invalidatePolling: pollingGuard.invalidateRequests,
     loadGuests,
     setError,
