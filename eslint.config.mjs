@@ -19,6 +19,14 @@ const parsedTsconfig = ts.parseJsonConfigFileContent(
 );
 const appPath = path.join(projectRoot, "app");
 const apiTypesPath = path.join(projectRoot, "lib/api/types.ts");
+const moduleResolutionHost = {
+  ...ts.sys,
+  fileExists(fileName) {
+    return (
+      path.resolve(fileName) === apiTypesPath || ts.sys.fileExists(fileName)
+    );
+  },
+};
 const moduleResolutionCache = ts.createModuleResolutionCache(
   projectRoot,
   (fileName) => fileName,
@@ -30,7 +38,7 @@ function resolveModulePath(specifier, containingFile) {
     specifier,
     containingFile,
     parsedTsconfig.options,
-    ts.sys,
+    moduleResolutionHost,
     moduleResolutionCache,
   ).resolvedModule?.resolvedFileName;
 }
@@ -173,31 +181,12 @@ const eslintConfig = [
     },
   },
   {
-    files: ["lib/**/*.{ts,tsx}"],
-    ignores: ["lib/api/**/*.{ts,tsx}"],
+    files: ["**/*.{ts,tsx}"],
     plugins: {
       "authon-boundaries": capabilityBoundaryPlugin,
     },
     rules: {
       "authon-boundaries/no-api-types-facade": "error",
-    },
-  },
-  {
-    files: ["lib/api/types.ts"],
-    rules: {
-      "no-restricted-syntax": [
-        "error",
-        {
-          selector: "Program > :not(ExportNamedDeclaration[source])",
-          message:
-            "The compatibility facade may contain only explicit type-only re-exports.",
-        },
-        {
-          selector:
-            'Program > ExportNamedDeclaration[source]:not([exportKind="type"]) > ExportSpecifier:not([exportKind="type"])',
-          message: "The compatibility facade must not re-export runtime values.",
-        },
-      ],
     },
   },
   {
