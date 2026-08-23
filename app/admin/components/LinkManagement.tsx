@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef, useMemo } from "react";
+import { useState, useCallback } from "react";
 import VenueSelector, {
   useVenueSelector,
 } from "../../../components/VenueSelector";
@@ -15,16 +15,8 @@ import OperationsLayout from "../../../components/OperationsLayout";
 import OperationalSectionNav from "../../../components/OperationalSectionNav";
 import ConfirmDialog from "../../../components/ConfirmDialog";
 import Button from "../../../components/Button";
-import { useSectionLoadingTask } from "../../../components/RouteTransitionProvider";
-import {
-  useLatestRequestGuard,
-  useScopedOperationGuard,
-} from "../../../lib/hooks";
 import { formatDateDisplay } from "../../../lib/date";
-import {
-  deriveAsyncListState,
-  shouldShowEmptyState,
-} from "../../../lib/ui/async-list-state";
+import { shouldShowEmptyState } from "../../../lib/ui/async-list-state";
 import {
   fetchExternalLinksByDate,
   fetchRecentExternalLinks,
@@ -38,18 +30,13 @@ import type { ExternalDJLink } from "@/lib/external-links/types";
 import {
   MAX_EXTERNAL_LINK_EVENT_LENGTH,
   shareExternalLink,
-  toExternalLinkShareData,
   toExternalLinkTemplateDraft,
-  type ExternalLinkShareResult,
 } from "../../../lib/external-links/domain";
 import { useLocale, useTranslations } from "next-intl";
 import {
   deriveLinkStatus,
-  filterLinksByManageFilter,
   formatRelativeExpiry,
   formatTimestamp,
-  getDashboardStats,
-  sortLinks,
   type ManageFilter,
   type ManageSort,
 } from "./linkStatus";
@@ -58,19 +45,24 @@ import {
   useLinkCreateController,
   type LinkCreateControllerActions,
 } from "./useLinkCreateController";
+import {
+  useLinkManageController,
+  type LinkManageControllerActions,
+} from "./useLinkManageController";
 
-const EMPTY_LINKS: ExternalDJLink[] = [];
 const LINK_CREATE_ACTIONS: LinkCreateControllerActions = Object.freeze({
   fetchDirectory: fetchExternalDjDirectory,
   createLink: createExternalLink,
   shareLink: shareExternalLink,
 });
-
-interface LinkActionFeedback {
-  id: string;
-  operationId: number;
-  result: Extract<ExternalLinkShareResult, "shared" | "copied">;
-}
+const LINK_MANAGE_ACTIONS: LinkManageControllerActions = Object.freeze({
+  fetchByDate: fetchExternalLinksByDate,
+  fetchRecent: fetchRecentExternalLinks,
+  deleteLink: deleteExternalLink,
+  deactivateLink: deactivateExternalLink,
+  activateLink: activateExternalLink,
+  shareLink: shareExternalLink,
+});
 
 export type LinkManagementSection = "create" | "manage";
 
@@ -109,39 +101,6 @@ export default function LinkManagement({
     },
     [onActiveSectionChange],
   );
-  const [manageScope, setManageScope] = useState<"date" | "recent">("date");
-  const [recentLimit, setRecentLimit] = useState<5 | 10>(5);
-  const [manageFilter, setManageFilter] = useState<ManageFilter>("all");
-  const [manageSort, setManageSort] = useState<ManageSort>("newest");
-  const [now, setNow] = useState(() => Date.now());
-  const [links, setLinks] = useState<ExternalDJLink[]>([]);
-  const [isFetching, setIsFetching] = useState(false);
-  const [loadedScopeKey, setLoadedScopeKey] = useState("");
-  const [loadOutcome, setLoadOutcome] = useState<
-    "idle" | "success" | "partial" | "error"
-  >("idle");
-  const [linkActionFeedback, setLinkActionFeedback] =
-    useState<LinkActionFeedback | null>(null);
-  const [visibleLinkId, setVisibleLinkId] = useState<string | null>(null);
-  const [loadingStates, setLoadingStates] = useState<{
-    [key: string]: boolean;
-  }>({});
-  const [error, setError] = useState<string | null>(null);
-  const [errorScopeKey, setErrorScopeKey] = useState("");
-  const [success, setSuccess] = useState<string | null>(null);
-  const [successScopeKey, setSuccessScopeKey] = useState("");
-  const [manageLinkActionToast, setManageLinkActionToast] = useState<string | null>(null);
-  const [pendingDeleteLink, setPendingDeleteLink] = useState<ExternalDJLink | null>(null);
-  const [pendingDeactivateLink, setPendingDeactivateLink] =
-    useState<ExternalDJLink | null>(null);
-  const manageLinkActionToastOwnerRef = useRef<number | null>(null);
-
-  // 로딩 중 이전 데이터를 유지하여 화면 깜빡임 방지
-  const displayCacheRef = useRef<{ scopeKey: string; links: ExternalDJLink[] }>({
-    scopeKey: "",
-    links: [],
-  });
-
   const {
     venueId,
     venues,
@@ -151,22 +110,20 @@ export default function LinkManagement({
     currentVenue,
   } = useVenueSelector();
 
-  const requestScopeKey = `${venueId}:${manageScope}:${
-    manageScope === "recent" ? recentLimit : selectedDate
-  }:${eventId ?? "general"}`;
-  const requestGuard = useLatestRequestGuard();
-  const linkMutationGuard = useScopedOperationGuard();
-  const shareOperationGuard = useScopedOperationGuard();
-  const currentRequestScopeKeyRef = useRef(requestScopeKey);
-  currentRequestScopeKeyRef.current = requestScopeKey;
-  const scopedManageError = errorScopeKey === requestScopeKey ? error : null;
-  const scopedSuccess = successScopeKey === requestScopeKey ? success : null;
   const create = useLinkCreateController({
     selectedDate,
     venueId,
     eventId,
     isActive: activeTab === "create",
     actions: LINK_CREATE_ACTIONS,
+  });
+  const manage = useLinkManageController({
+    selectedDate,
+    venueId,
+    eventId,
+    isActive: activeTab === "manage",
+    locale,
+    actions: LINK_MANAGE_ACTIONS,
   });
   const {
     formData,
@@ -192,324 +149,48 @@ export default function LinkManagement({
     handleDjChange,
     handleSubmit,
   } = create;
+  const {
+    manageScope,
+    setManageScope,
+    recentLimit,
+    setRecentLimit,
+    manageFilter,
+    setManageFilter,
+    manageSort,
+    setManageSort,
+    now,
+    dashboardStats,
+    sortedLinks,
+    listState,
+    isCurrentScopeFetching,
+    scopedManageError,
+    scopedSuccess,
+    linkActionFeedback,
+    visibleLinkId,
+    setVisibleLinkId,
+    loadingStates,
+    linkActionToast: manageLinkActionToast,
+    pendingDeleteLink,
+    setPendingDeleteLink,
+    pendingDeactivateLink,
+    setPendingDeactivateLink,
+    loadLinks,
+    handleDeleteLink,
+    requestDeleteLink,
+    handleDeactivateLink,
+    handleActivateLink,
+    shareOrCopyManagedLink,
+    clearFeedbackForTemplateHandoff,
+    getGuestPageUrl,
+  } = manage;
   const linkActionToast = create.linkActionToast ?? manageLinkActionToast;
-
-  useEffect(() => {
-    requestGuard.invalidateRequests();
-    linkMutationGuard.invalidateOperations();
-    shareOperationGuard.invalidateOperations();
-    setLoadingStates({});
-    setPendingDeleteLink(null);
-    setPendingDeactivateLink(null);
-    setLinkActionFeedback(null);
-    setError(null);
-    setErrorScopeKey("");
-    setSuccess(null);
-    setSuccessScopeKey("");
-    setLoadOutcome("idle");
-  }, [linkMutationGuard, requestGuard, requestScopeKey, shareOperationGuard]);
-
-  useEffect(() => {
-    if (!isFetching && loadedScopeKey === requestScopeKey) {
-      displayCacheRef.current = { scopeKey: requestScopeKey, links };
-    }
-  }, [isFetching, links, loadedScopeKey, requestScopeKey]);
-
-  const hasCurrentScopeData = loadedScopeKey === requestScopeKey;
-  const isCurrentScopeFetching = isFetching || !hasCurrentScopeData;
-  useSectionLoadingTask(activeTab === "manage" && isCurrentScopeFetching);
-  const displayLinks = !hasCurrentScopeData
-    ? EMPTY_LINKS
-    : isFetching && displayCacheRef.current.scopeKey === requestScopeKey
-      ? displayCacheRef.current.links
-      : links;
-
-  const loadLinks = useCallback(async () => {
-    if (currentRequestScopeKeyRef.current !== requestScopeKey) return;
-    const isLatestRequest = requestGuard.beginRequest();
-    if (!venueId) {
-      setLinks([]);
-      setLoadedScopeKey(requestScopeKey);
-      setLoadOutcome("success");
-      setIsFetching(false);
-      return;
-    }
-    setIsFetching(true);
-    setError(null);
-    try {
-      const { data, error } =
-        manageScope === "recent"
-          ? await fetchRecentExternalLinks(venueId, recentLimit, eventId)
-          : await fetchExternalLinksByDate(venueId, selectedDate, eventId);
-      if (
-        !isLatestRequest() ||
-        currentRequestScopeKeyRef.current !== requestScopeKey
-      ) return;
-      if (error) {
-        console.error("Failed to load links:", error);
-        setError(t("loadFailed"));
-        setErrorScopeKey(requestScopeKey);
-        setLoadOutcome(data ? "partial" : "error");
-      } else {
-        setLoadOutcome("success");
-      }
-      setLinks(data ?? []);
-      setLoadedScopeKey(requestScopeKey);
-    } catch (err) {
-      if (
-        !isLatestRequest() ||
-        currentRequestScopeKeyRef.current !== requestScopeKey
-      ) return;
-      console.error("Failed to load links:", err);
-      setLinks([]);
-      setLoadedScopeKey(requestScopeKey);
-      setError(t("loadFailed"));
-      setErrorScopeKey(requestScopeKey);
-      setLoadOutcome("error");
-    } finally {
-      if (
-        isLatestRequest() &&
-        currentRequestScopeKeyRef.current === requestScopeKey
-      ) setIsFetching(false);
-    }
-  }, [eventId, manageScope, recentLimit, requestGuard, requestScopeKey, selectedDate, t, venueId]);
-
-  useEffect(() => {
-    if (activeTab === "manage") {
-      loadLinks();
-    }
-  }, [activeTab, loadLinks]);
-
-  useEffect(() => {
-    const intervalId = window.setInterval(() => setNow(Date.now()), 30 * 1000);
-    return () => window.clearInterval(intervalId);
-  }, []);
-
-  const getGuestPageUrl = (token: string, guestUrl?: string | null) => {
-    if (guestUrl) return guestUrl;
-    if (typeof window === "undefined") return "";
-    return `${window.location.origin}/guest?token=${token}`;
-  };
-
-  const shareOrCopyManagedLink = async (url: string, id: string) => {
-    const operation = shareOperationGuard.beginOperation(
-      requestScopeKey,
-      `share:${id}`,
-    );
-    setLoadingStates((prev) => ({ ...prev, [`share_${id}`]: true }));
-    setError(null);
-
-    const shareData = toExternalLinkShareData(url);
-    const result = await shareExternalLink(shareData, {
-      share:
-        typeof navigator.share === "function"
-          ? (data) => navigator.share(data)
-          : undefined,
-      canShare:
-        typeof navigator.canShare === "function"
-          ? (data) => navigator.canShare(data)
-          : undefined,
-      copy: async (value) => {
-        if (!navigator.clipboard?.writeText) {
-          throw new Error("Clipboard API is unavailable");
-        }
-        await navigator.clipboard.writeText(value);
-      },
-    });
-
-    if (!operation.isCurrent(currentRequestScopeKeyRef.current)) return;
-    if (result === "shared" || result === "copied") {
-      setLinkActionFeedback({ id, operationId: operation.id, result });
-      window.setTimeout(() => {
-        setLinkActionFeedback((current) =>
-          current?.id === id && current.operationId === operation.id
-            ? null
-            : current,
-        );
-      }, 2000);
-      manageLinkActionToastOwnerRef.current = operation.id;
-      setManageLinkActionToast(
-        result === "shared" ? t("guestLinkShared") : t("guestLinkCopied"),
-      );
-      window.setTimeout(() => {
-        if (manageLinkActionToastOwnerRef.current === operation.id) {
-          manageLinkActionToastOwnerRef.current = null;
-          setManageLinkActionToast(null);
-        }
-      }, 2200);
-    } else if (result === "failed") {
-      setError(t("shareFailed"));
-      setErrorScopeKey(operation.scopeKey);
-    }
-
-    if (operation.finish(currentRequestScopeKeyRef.current)) {
-      setLoadingStates((prev) => ({ ...prev, [`share_${id}`]: false }));
-    }
-  };
 
   const handleUseAsTemplate = (link: ExternalDJLink) => {
     const draft = toExternalLinkTemplateDraft(link, selectedDate);
+    clearFeedbackForTemplateHandoff();
     create.applyTemplate(draft);
-    setError(null);
-    setSuccess(null);
-    setLinkActionFeedback(null);
-    setManageLinkActionToast(null);
     setActiveTab("create");
   };
-
-  const handleDeleteLink = async (id: string) => {
-    const operation = linkMutationGuard.beginOperation(
-      requestScopeKey,
-      `delete:${id}`,
-    );
-    requestGuard.invalidateRequests();
-    setIsFetching(false);
-    setError(null);
-    setSuccess(null);
-    setLoadingStates((prev) => ({ ...prev, [`delete_${id}`]: true }));
-    try {
-      const { error } = await deleteExternalLink(id);
-      if (!operation.isCurrent(currentRequestScopeKeyRef.current)) return;
-      if (error) {
-        console.error("Failed to delete link:", error);
-        setError(t("deleteFailed"));
-        setErrorScopeKey(operation.scopeKey);
-      } else {
-        requestGuard.invalidateRequests();
-        setIsFetching(false);
-        setLinks((prev) => prev.filter((link) => link.id !== id));
-        setSuccess(t("deleted"));
-        setSuccessScopeKey(operation.scopeKey);
-      }
-    } catch (deleteError) {
-      if (!operation.isCurrent(currentRequestScopeKeyRef.current)) return;
-      console.error("Failed to delete link:", deleteError);
-      setError(t("deleteFailed"));
-      setErrorScopeKey(operation.scopeKey);
-    } finally {
-      if (operation.finish(currentRequestScopeKeyRef.current)) {
-        setLoadingStates((prev) => ({ ...prev, [`delete_${id}`]: false }));
-        setPendingDeleteLink(null);
-      }
-    }
-  };
-
-  const requestDeleteLink = (link: ExternalDJLink) => {
-    setError(null);
-    setSuccess(null);
-    setPendingDeleteLink(link);
-  };
-
-  const handleDeactivateLink = async (id: string) => {
-    const operation = linkMutationGuard.beginOperation(
-      requestScopeKey,
-      `deactivate:${id}`,
-    );
-    requestGuard.invalidateRequests();
-    setIsFetching(false);
-    setError(null);
-    setSuccess(null);
-
-    setLoadingStates((prev) => ({ ...prev, [`deactivate_${id}`]: true }));
-    try {
-      const { error } = await deactivateExternalLink(id);
-      if (!operation.isCurrent(currentRequestScopeKeyRef.current)) return;
-      if (error) {
-        console.error("Failed to deactivate link:", error);
-        setError(t("deactivateFailed"));
-        setErrorScopeKey(operation.scopeKey);
-      } else {
-        setLinks((prev) =>
-          prev.map((link) =>
-            link.id === id ? { ...link, active: false } : link,
-          ),
-        );
-        setSuccess(t("deactivated"));
-        setSuccessScopeKey(operation.scopeKey);
-      }
-    } catch (deactivateError) {
-      if (!operation.isCurrent(currentRequestScopeKeyRef.current)) return;
-      console.error("Failed to deactivate link:", deactivateError);
-      setError(t("deactivateFailed"));
-      setErrorScopeKey(operation.scopeKey);
-    } finally {
-      if (operation.finish(currentRequestScopeKeyRef.current)) {
-        setLoadingStates((prev) => ({
-          ...prev,
-          [`deactivate_${id}`]: false,
-        }));
-        setPendingDeactivateLink(null);
-      }
-    }
-  };
-
-  const handleActivateLink = async (id: string) => {
-    const operation = linkMutationGuard.beginOperation(
-      requestScopeKey,
-      `activate:${id}`,
-    );
-    requestGuard.invalidateRequests();
-    setIsFetching(false);
-    setError(null);
-    setSuccess(null);
-
-    setLoadingStates((prev) => ({ ...prev, [`activate_${id}`]: true }));
-    try {
-      const { error } = await activateExternalLink(id);
-      if (!operation.isCurrent(currentRequestScopeKeyRef.current)) return;
-      if (error) {
-        console.error("Failed to activate link:", error);
-        setError(t("reactivateFailed"));
-        setErrorScopeKey(operation.scopeKey);
-      } else {
-        setLinks((prev) =>
-          prev.map((link) =>
-            link.id === id ? { ...link, active: true } : link,
-          ),
-        );
-        setSuccess(t("reactivated"));
-        setSuccessScopeKey(operation.scopeKey);
-      }
-    } catch (activateError) {
-      if (!operation.isCurrent(currentRequestScopeKeyRef.current)) return;
-      console.error("Failed to activate link:", activateError);
-      setError(t("reactivateFailed"));
-      setErrorScopeKey(operation.scopeKey);
-    } finally {
-      if (operation.finish(currentRequestScopeKeyRef.current)) {
-        setLoadingStates((prev) => ({
-          ...prev,
-          [`activate_${id}`]: false,
-        }));
-      }
-    }
-  };
-
-  const dashboardStats = useMemo(
-    () => getDashboardStats(displayLinks, now),
-    [displayLinks, now],
-  );
-
-  const filteredLinks = useMemo(
-    () => filterLinksByManageFilter(displayLinks, manageFilter, now),
-    [displayLinks, manageFilter, now],
-  );
-
-  const sortedLinks = useMemo(
-    () => sortLinks(
-      filteredLinks,
-      manageScope === "recent" ? "newest" : manageSort,
-      locale === "ko" ? "ko-KR" : "en-US",
-    ),
-    [filteredLinks, locale, manageScope, manageSort],
-  );
-  const listState = deriveAsyncListState({
-    hasStarted: isFetching || loadOutcome !== "idle",
-    isLoading: isCurrentScopeFetching,
-    itemCount: sortedLinks.length,
-    hasError: loadOutcome === "error",
-    isPartial: loadOutcome === "partial",
-  });
 
   return (
     <>
