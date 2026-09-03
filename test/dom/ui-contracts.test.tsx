@@ -1,8 +1,9 @@
 import assert from "node:assert/strict";
 import { afterEach, test } from "node:test";
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { NextIntlClientProvider } from "next-intl";
 import {
+  act,
   cleanup,
   fireEvent,
   render,
@@ -20,9 +21,19 @@ import ConfirmDialog from "@/components/ConfirmDialog";
 import GuestListCard from "@/components/GuestListCard";
 import OperationalSectionNav from "@/components/OperationalSectionNav";
 import GuestBulkEntry from "@/components/GuestBulkEntry";
+import {
+  RouteTransitionProvider,
+  useRouteTransition,
+} from "@/components/RouteTransitionProvider";
 import useMobileDockInset from "@/app/door/components/useMobileDockInset";
 import { EMPTY_ANALYTICS_DTO_FIXTURE } from "@/lib/analytics/test-fixtures";
 import { useLatestRef } from "@/lib/hooks";
+import messages from "@/messages/en.json";
+
+if (!window.requestAnimationFrame) {
+  window.requestAnimationFrame = (callback) => window.setTimeout(callback, 0);
+  window.cancelAnimationFrame = (frame) => window.clearTimeout(frame);
+}
 
 afterEach(() => {
   cleanup();
@@ -537,6 +548,87 @@ test("busy dialog reports aria-busy and ignores Escape", () => {
   assert.ok(screen.getByRole("alertdialog"));
 });
 
+test("dialog falls back to main when confirmation removes its opener", () => {
+  function Harness() {
+    const [open, setOpen] = useState(false);
+    const [showOpener, setShowOpener] = useState(true);
+    return (
+      <>
+        {showOpener && (
+          <button type="button" onClick={() => setOpen(true)}>
+            Remove opener
+          </button>
+        )}
+        <ConfirmDialog
+          open={open}
+          title="Remove opener"
+          description="The opener will no longer exist."
+          confirmLabel="Confirm removal"
+          cancelLabel="Cancel"
+          onConfirm={() => {
+            setShowOpener(false);
+            setOpen(false);
+          }}
+          onCancel={() => setOpen(false)}
+        />
+      </>
+    );
+  }
+
+  render(<Harness />);
+  const opener = screen.getByRole("button", { name: "Remove opener" });
+  opener.focus();
+  fireEvent.click(opener);
+  const confirmButton = screen.getByRole("button", {
+    name: "Confirm removal",
+  });
+  confirmButton.focus();
+  fireEvent.click(confirmButton);
+
+  assert.equal(screen.queryByRole("button", { name: "Remove opener" }), null);
+  assert.equal(document.activeElement, document.getElementById("main-content"));
+});
+
+test("dialog cleanup preserves focus already moved outside", () => {
+  let closeDialog: (() => void) | null = null;
+  function Harness() {
+    const [open, setOpen] = useState(false);
+    closeDialog = () => setOpen(false);
+    return (
+      <>
+        <button type="button" onClick={() => setOpen(true)}>
+          Open focus guard
+        </button>
+        <ConfirmDialog
+          open={open}
+          title="Focus guard"
+          description="Preserve a newer focus target."
+          confirmLabel="Confirm"
+          cancelLabel="Cancel"
+          onConfirm={() => {}}
+          onCancel={() => setOpen(false)}
+        />
+      </>
+    );
+  }
+
+  render(<Harness />);
+  const opener = screen.getByRole("button", { name: "Open focus guard" });
+  opener.focus();
+  fireEvent.click(opener);
+  const externalButton = document.createElement("button");
+  externalButton.textContent = "External focus";
+  document.body.append(externalButton);
+
+  try {
+    externalButton.focus();
+    act(() => closeDialog?.());
+    assert.equal(document.activeElement, externalButton);
+  } finally {
+    externalButton.remove();
+  }
+});
+
 test("guest deletion dialog explains that analytics will change", () => {
   render(
     <NextIntlClientProvider
@@ -600,4 +692,218 @@ test("CSV mapping and line preview controls keep native labels and file boundari
   assert.equal(fileInput.getAttribute("type"), "file");
   assert.match(fileInput.getAttribute("accept") ?? "", /text\/csv/);
   assert.equal(screen.getByLabelText("Names to paste").tagName, "TEXTAREA");
+});
+
+test("bulk guest submit uses a synchronous ref latch for same-tick clicks", async () => {
+  let resolve!: (value: {
+    data: {
+      items: Array<{ index: number; status: "created"; guest: unknown }>;
+    };
+    error: null;
+  }) => void;
+  const submission = new Promise<{
+    data: {
+      items: Array<{ index: number; status: "created"; guest: unknown }>;
+    };
+    error: null;
+  }>((done) => {
+    resolve = done;
+  });
+  let calls = 0;
+  render(
+    <NextIntlClientProvider locale="en" messages={messages}>
+      <GuestBulkEntry
+        existingNames={[]}
+        remaining={10}
+        onSubmitChunk={async () => {
+          calls += 1;
+          return submission;
+        }}
+      />
+    </NextIntlClientProvider>,
+  );
+
+  await act(async () => {
+    fireEvent.change(screen.getByLabelText("Names to paste"), {
+      target: { value: "Guest A" },
+    });
+  });
+  const submit = screen.getByRole("button", { name: "Add 1" });
+  await act(async () => {
+    fireEvent.click(submit);
+    fireEvent.click(submit);
+    await Promise.resolve();
+  });
+  assert.equal(calls, 1);
+
+  await act(async () => {
+    resolve({
+      data: { items: [{ index: 0, status: "created", guest: {} }] },
+      error: null,
+    });
+    await submission;
+  });
+});
+
+test("bulk submit reports completion after unmount while its request is pending", async () => {
+  let resolve!: (value: {
+    data: {
+      items: Array<{ index: number; status: "created"; guest: unknown }>;
+    };
+    error: null;
+  }) => void;
+  const submission = new Promise<{
+    data: {
+      items: Array<{ index: number; status: "created"; guest: unknown }>;
+    };
+    error: null;
+  }>((done) => {
+    resolve = done;
+  });
+  const submittingStates: boolean[] = [];
+  const view = render(
+    <NextIntlClientProvider locale="en" messages={messages}>
+      <GuestBulkEntry
+        existingNames={[]}
+        remaining={10}
+        onSubmitChunk={async () => submission}
+        onSubmittingChange={(isSubmitting) =>
+          submittingStates.push(isSubmitting)
+        }
+      />
+    </NextIntlClientProvider>,
+  );
+
+  await act(async () => {
+    fireEvent.change(screen.getByLabelText("Names to paste"), {
+      target: { value: "Guest A" },
+    });
+  });
+  await act(async () => {
+    fireEvent.click(screen.getByRole("button", { name: "Add 1" }));
+    await Promise.resolve();
+  });
+  assert.deepEqual(submittingStates, [true]);
+  view.unmount();
+
+  await act(async () => {
+    resolve({
+      data: { items: [{ index: 0, status: "created", guest: {} }] },
+      error: null,
+    });
+    await submission;
+  });
+  assert.deepEqual(submittingStates, [true, false]);
+});
+
+test("a cancelled route-owned target restore falls back to main after overlay removal", async () => {
+  const originalRequestAnimationFrame = window.requestAnimationFrame;
+  const originalCancelAnimationFrame = window.cancelAnimationFrame;
+  const setupMain = document.getElementById("main-content");
+  setupMain?.removeAttribute("id");
+  let nextFrame = 0;
+  const frames = new Map<number, FrameRequestCallback>();
+  window.requestAnimationFrame = (callback) => {
+    const id = ++nextFrame;
+    frames.set(id, callback);
+    return id;
+  };
+  window.cancelAnimationFrame = (id) => {
+    frames.delete(id);
+  };
+
+  try {
+    function Target({ label }: { label: string }) {
+      const targetRef = useRef<HTMLHeadingElement>(null);
+      const { requestFocusRestore } = useRouteTransition();
+      useEffect(() => {
+        const cancel = requestFocusRestore(targetRef);
+        return cancel;
+      }, [requestFocusRestore]);
+      return (
+        <h1 ref={targetRef} tabIndex={-1}>
+          {label}
+        </h1>
+      );
+    }
+
+    function Harness() {
+      const { registerRouteLoadingTask } = useRouteTransition();
+      const releaseRef = useRef<(() => void) | null>(null);
+      const [target, setTarget] = useState<"A" | "B" | null>(null);
+      return (
+        <>
+          <button
+            type="button"
+            onClick={() => {
+              releaseRef.current = registerRouteLoadingTask();
+              setTarget("A");
+            }}
+          >
+            Start route
+          </button>
+          <button type="button" onClick={() => releaseRef.current?.()}>
+            Release route
+          </button>
+          <button type="button" onClick={() => setTarget("B")}>
+            Latest target
+          </button>
+          <button type="button" onClick={() => setTarget(null)}>
+            Unmount target
+          </button>
+          <main id="main-content" tabIndex={-1}>
+            Main fallback
+          </main>
+          {target && <Target key={target} label={`${target} target`} />}
+        </>
+      );
+    }
+
+    render(
+      <NextIntlClientProvider locale="en" messages={messages}>
+        <RouteTransitionProvider>
+          <Harness />
+        </RouteTransitionProvider>
+      </NextIntlClientProvider>,
+    );
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Start route" }));
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByText("Release route"));
+    });
+    await waitFor(() => {
+      assert.equal(
+        document.querySelector(".route-transition-overlay") === null,
+        true,
+      );
+    });
+    await waitFor(() => {
+      assert.equal(frames.size > 0, true);
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByText("Latest target"));
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByText("Unmount target"));
+    });
+    await act(async () => {
+      for (const callback of [...frames.values()]) callback(performance.now());
+      frames.clear();
+    });
+
+    const main = screen.getByText("Main fallback");
+    assert.equal(document.activeElement === main, true);
+    assert.equal(main.dataset.routeFocus, "true");
+    assert.equal(main.closest("[inert]") === null, true);
+    assert.equal(
+      document.querySelector(".route-transition-overlay") === null,
+      true,
+    );
+  } finally {
+    window.requestAnimationFrame = originalRequestAnimationFrame;
+    window.cancelAnimationFrame = originalCancelAnimationFrame;
+    setupMain?.setAttribute("id", "main-content");
+  }
 });

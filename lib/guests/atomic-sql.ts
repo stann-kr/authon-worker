@@ -1,3 +1,36 @@
+export type GuestWriteAccess = "guest" | "door" | "admin";
+
+export function currentGuestActorPredicate(
+  access: GuestWriteAccess,
+  targetVenue: string,
+  verifyGuestLimit = true,
+): string {
+  const accessPredicate = access === "admin"
+    ? "mutation_actor.role IN ('super_admin', 'venue_admin')"
+    : access === "door"
+      ? "(mutation_actor.role IN ('super_admin', 'venue_admin', 'door_staff') OR (mutation_actor.account_kind = 'shared' AND mutation_actor.door_access_enabled = 1))"
+      : "mutation_actor.role IN ('super_admin', 'venue_admin', 'door_staff', 'staff', 'dj')";
+
+  return `EXISTS (
+    SELECT 1
+    FROM users AS mutation_actor
+    WHERE mutation_actor.id = ?
+      AND mutation_actor.role = ?
+      AND mutation_actor.account_kind = ?
+      AND mutation_actor.door_access_enabled = ?
+      AND mutation_actor.venue_id IS ?
+      ${verifyGuestLimit ? "AND mutation_actor.guest_limit IS ?" : ""}
+      AND mutation_actor.session_version = ?
+      AND mutation_actor.active = 1
+      AND mutation_actor.deleted_at IS NULL
+      AND ${accessPredicate}
+      AND (
+        mutation_actor.role = 'super_admin'
+        OR mutation_actor.venue_id = ${targetVenue}
+      )
+  )`;
+}
+
 export const INTERNAL_BULK_GUEST_INSERT_SQL = `INSERT INTO guests (
   id, venue_id, name, external_link_id, created_by_user_id, registered_by_name,
   event_id, date, status, created_at, updated_at
@@ -5,6 +38,13 @@ export const INTERNAL_BULK_GUEST_INSERT_SQL = `INSERT INTO guests (
 SELECT ?, ?, ?, NULL, ?, ?, ?, ?, 'pending', ?, ?
 WHERE EXISTS (
   SELECT 1 FROM venues WHERE id = ? AND active = 1
+)
+AND EXISTS (
+  SELECT 1 FROM events
+  WHERE id = ?
+    AND venue_id = ?
+    AND business_date = ?
+    AND state IN ('draft', 'open')
 )
 AND (
   ? = 1 OR NOT EXISTS (
@@ -19,16 +59,26 @@ AND (
 AND (
   ? IS NULL OR (
     SELECT count(*) FROM guests
-    WHERE created_by_user_id = ?
+    WHERE venue_id = ?
+      AND created_by_user_id = ?
       AND status != 'deleted'
       AND (event_id = ? OR (? = 1 AND event_id IS NULL AND date = ?))
   ) < ? + coalesce((
     SELECT sum(approved_extra) FROM guest_limit_requests
-    WHERE user_id = ?
+    WHERE venue_id = ?
+      AND user_id = ?
       AND status = 'approved'
       AND (event_id = ? OR (? = 1 AND event_id IS NULL AND date = ?))
   ), 0)
 )
+AND EXISTS (
+  SELECT 1 FROM event_contributor_limits AS configured_limit
+  WHERE configured_limit.event_id = ?
+    AND configured_limit.venue_id = ?
+    AND configured_limit.user_id = ?
+    AND configured_limit.guest_limit IS ?
+)
+AND ${currentGuestActorPredicate("guest", "?", false)}
 RETURNING id`;
 
 export function buildExternalGuestReservationSql(
@@ -59,6 +109,14 @@ WHERE id = ?
   AND (expires_at IS NULL OR expires_at > ?)
   AND date = ?
   AND used_guests + ? <= max_guests
+  AND (external_dj_links.event_id IS NULL OR external_dj_links.event_id = ?)
+  AND EXISTS (
+    SELECT 1 FROM events
+    WHERE events.id = ?
+      AND events.venue_id = external_dj_links.venue_id
+      AND events.business_date = external_dj_links.date
+      AND events.state IN ('draft', 'open')
+  )
   ${duplicateGuards}
 RETURNING id`;
 }
@@ -81,10 +139,18 @@ WHERE id = ?
   AND (expires_at IS NULL OR expires_at > ?)
   AND date = ?
   AND used_guests < max_guests
+  AND (external_dj_links.event_id IS NULL OR external_dj_links.event_id = ?)
   AND EXISTS (
     SELECT 1 FROM venues
     WHERE venues.id = external_dj_links.venue_id
       AND venues.active = 1
+  )
+  AND EXISTS (
+    SELECT 1 FROM events
+    WHERE events.id = ?
+      AND events.venue_id = external_dj_links.venue_id
+      AND events.business_date = external_dj_links.date
+      AND events.state IN ('draft', 'open')
   )
   AND NOT EXISTS (
     SELECT 1
@@ -123,6 +189,7 @@ WHERE id = ?
       AND events.state IN ('draft', 'open')
   )
   AND (? = 1 OR created_by_user_id = ?)
+  AND ${currentGuestActorPredicate("guest", "guests.venue_id")}
 RETURNING id`;
 
 export const UPDATE_ACTIVE_GUEST_STATUS_SQL = `UPDATE guests
@@ -154,6 +221,7 @@ WHERE id = ?
       AND events.state IN ('draft', 'open')
   )
   AND (? = 1 OR created_by_user_id = ?)
+  AND ${currentGuestActorPredicate("guest", "guests.venue_id")}
 RETURNING id`;
 
 export const RESTORE_DELETED_GUEST_SQL = `UPDATE guests
@@ -174,6 +242,7 @@ WHERE id = ?
       AND events.business_date = guests.date
       AND events.state IN ('draft', 'open')
   )
+  AND ${currentGuestActorPredicate("admin", "guests.venue_id")}
 RETURNING id`;
 
 export const DECREMENT_EXTERNAL_LINK_FOR_PENDING_GUEST_SQL = `UPDATE external_dj_links
@@ -265,7 +334,18 @@ WHERE id = ?
       AND link.active = 1
       AND link.deleted_at IS NULL
       AND (link.expires_at IS NULL OR link.expires_at > ?)
+      AND link.venue_id = guests.venue_id
+      AND link.date = guests.date
+      AND (link.event_id IS NULL OR link.event_id = ?)
+      AND (guests.event_id IS NULL OR guests.event_id = ?)
       AND venue.active = 1
+      AND EXISTS (
+        SELECT 1 FROM events
+        WHERE events.id = ?
+          AND events.venue_id = link.venue_id
+          AND events.business_date = link.date
+          AND events.state IN ('draft', 'open')
+      )
   )
 RETURNING id`;
 
@@ -295,6 +375,7 @@ WHERE id = ?
       AND venue_id = ?
       AND status != 'deleted'
   )
+  AND ${currentGuestActorPredicate("admin", "external_dj_links.venue_id")}
 RETURNING id`;
 
 export const PERMANENT_DELETE_GUEST_SQL = `DELETE FROM guests
@@ -305,4 +386,5 @@ WHERE id = ?
     WHERE venues.id = guests.venue_id
       AND venues.active = 1
   )
+  AND ${currentGuestActorPredicate("admin", "guests.venue_id")}
 RETURNING id`;

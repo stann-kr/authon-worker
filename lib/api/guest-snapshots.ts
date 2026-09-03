@@ -9,16 +9,16 @@ import { requireAccess, type SessionUser } from "../auth/server";
 import { requireActiveVenueId } from "../tenant/active-server";
 import { canRequestGuestLimit, isAccountKind, isRole } from "@/lib/users/policy";
 import { resolveSnapshotVenueId } from "@/lib/guest-snapshot-policy";
+import type { ApiResponse } from "./response";
+import type { Event } from "@/lib/events/types";
+import type { ExternalLinkDirectoryEntry } from "@/lib/external-links/types";
+import type { GuestQuota } from "@/lib/guest-limits/types";
 import type {
-  ApiResponse,
-  ExternalLinkDirectoryEntry,
-  Guest,
   GuestOperationsSnapshot,
-  GuestQuota,
   GuestWorkspaceSnapshot,
-  UserDirectoryEntry,
-  Event,
-} from "./types";
+} from "@/lib/guest-snapshots/types";
+import type { Guest } from "@/lib/guests/types";
+import type { UserDirectoryEntry } from "@/lib/users/types";
 import {
   eventIncludesLegacyDateRows,
   findCompatibilityEvent,

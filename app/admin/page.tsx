@@ -1,8 +1,14 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import dynamic from "next/dynamic";
-import { useLocalStorage } from "../../lib/hooks";
 import GuestList from "./components/GuestList";
 import LinkManagement, {
   type LinkManagementSection,
@@ -24,7 +30,6 @@ import AuthGuard from "../../components/AuthGuard";
 import WorkspaceShell from "../../components/WorkspaceShell";
 import VenueLoadNotice from "../../components/VenueLoadNotice";
 import { getBusinessDate } from "../../lib/date";
-import { isBusinessDate } from "../../lib/events/domain";
 import { useTranslations } from "next-intl";
 import { useAuthSession } from "../../components/AuthSessionProvider";
 import { useVenueSelector } from "../../components/VenueSelector";
@@ -32,15 +37,11 @@ import {
   useRouteLoadingTask,
   useRouteTransition,
 } from "../../components/RouteTransitionProvider";
-import {
-  getAdminShortcutTask,
-  getAdminTaskSearch,
-  isAdminTaskAvailable,
-  parseAdminTask,
-  type AdminTask,
-  type AdminTaskGroup,
-} from "../../lib/admin-navigation";
+import { type AdminTaskGroup } from "../../lib/admin-navigation";
 import { fetchPendingPasswordResetRequestCount } from "@/lib/api/password-reset-requests";
+import useAdminWorkspaceNavigation, {
+  focusAdminWorkspaceAfterTaskChange,
+} from "./useAdminWorkspaceNavigation";
 
 const AdminAnalytics = dynamic(() => import("./components/AdminAnalytics"));
 
@@ -67,91 +68,33 @@ function AdminPageContent() {
     refreshVenues,
   } = useVenueSelector();
   const businessDate = getBusinessDate(currentVenue ?? {});
-  const [selectedDate, setSelectedDate] = useLocalStorage(
-    "admin:selectedDate",
-    getBusinessDate(),
-  );
-  const [activeTask, setActiveTask] = useState<AdminTask>("guest-list");
-  const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
-  const pendingEventScopeRef = useRef<{
-    eventId: string;
-    businessDate: string;
-    venueId: string;
-  } | null>(null);
   const [eventRefreshKey, setEventRefreshKey] = useState(0);
   const isSuperAdmin = user?.role === "super_admin";
-  const [isRoleReady, setIsRoleReady] = useState(false);
+  const {
+    activeTask,
+    changeTask,
+    isRoleReady,
+    onAnalyticsEventOpen,
+    selectedDate,
+    selectedEventId,
+    setSelectedDate,
+    setSelectedEventId,
+    workspaceFocusRequestId,
+  } = useAdminWorkspaceNavigation({
+    businessDate,
+    hasCurrentVenue: Boolean(currentVenue),
+    isRouteTransitionActive,
+    isSuperAdmin,
+    venueId,
+  });
   const [pendingPasswordResetCount, setPendingPasswordResetCount] = useState(0);
+  const workspaceRef = useRef<HTMLElement>(null);
   useRouteLoadingTask(!isRoleReady);
 
-  useEffect(() => {
-    if (!currentVenue) return;
-    const search = new URLSearchParams(window.location.search);
-    const requestedDate = search.get("date");
-    const hasCurrentVenueEventScope =
-      parseAdminTask(search) === "event-manage" &&
-      search.get("venue") === venueId &&
-      requestedDate !== null &&
-      isBusinessDate(requestedDate);
-    if (!hasCurrentVenueEventScope) setSelectedDate(businessDate);
-  }, [businessDate, currentVenue, setSelectedDate, venueId]);
-
-  useEffect(() => {
-    const pendingScope = pendingEventScopeRef.current;
-    if (
-      pendingScope &&
-      pendingScope.businessDate === selectedDate &&
-      pendingScope.venueId === venueId
-    ) {
-      setSelectedEventId(pendingScope.eventId);
-      pendingEventScopeRef.current = null;
-      return;
-    }
-    setSelectedEventId(null);
-  }, [selectedDate, venueId]);
-
-  useEffect(() => {
-    const requestedTask = parseAdminTask(
-      new URLSearchParams(window.location.search),
-    );
-    const nextTask =
-      requestedTask && isAdminTaskAvailable(requestedTask, isSuperAdmin)
-        ? requestedTask
-        : "guest-list";
-    setActiveTask(nextTask);
-
-    if (nextTask === "event-manage") {
-      const requestedEventId = new URLSearchParams(window.location.search).get("eventId");
-      const requestedDate = new URLSearchParams(window.location.search).get("date");
-      const requestedVenueId = new URLSearchParams(window.location.search).get("venue");
-      if (
-        requestedVenueId === venueId &&
-        requestedEventId &&
-        requestedDate &&
-        isBusinessDate(requestedDate)
-      ) {
-        pendingEventScopeRef.current = {
-          eventId: requestedEventId,
-          businessDate: requestedDate,
-          venueId,
-        };
-        setSelectedDate(requestedDate);
-        setSelectedEventId(requestedEventId);
-      }
-    }
-
-    const nextSearch =
-      nextTask === "analytics" ||
-      (nextTask === "event-manage" &&
-        new URLSearchParams(window.location.search).has("eventId") &&
-        new URLSearchParams(window.location.search).get("venue") === venueId)
-        ? window.location.search
-        : getAdminTaskSearch(nextTask);
-    if (window.location.search !== nextSearch) {
-      window.history.replaceState(null, "", `/admin${nextSearch}`);
-    }
-    setIsRoleReady(true);
-  }, [isSuperAdmin, setSelectedDate, venueId]);
+  useLayoutEffect(() => {
+    if (workspaceFocusRequestId === 0) return;
+    focusAdminWorkspaceAfterTaskChange(workspaceRef.current);
+  }, [workspaceFocusRequestId]);
 
   useEffect(() => {
     if (!isRoleReady) return;
@@ -206,110 +149,6 @@ function AdminPageContent() {
     [isSuperAdmin, linkT, pendingPasswordResetCount, t, userT, venueT],
   );
 
-  const changeTask = useCallback(
-    (task: AdminTask, historyMode: "push" | "replace" = "push") => {
-      if (
-        task === activeTask ||
-        !isAdminTaskAvailable(task, isSuperAdmin)
-      ) {
-        return;
-      }
-      setActiveTask(task);
-      const nextUrl = `/admin${getAdminTaskSearch(task)}`;
-      if (historyMode === "replace") {
-        window.history.replaceState(null, "", nextUrl);
-      } else {
-        window.history.pushState(null, "", nextUrl);
-      }
-    },
-    [activeTask, isSuperAdmin],
-  );
-
-  useEffect(() => {
-    if (!isRoleReady) return;
-    if (!isAdminTaskAvailable(activeTask, isSuperAdmin)) {
-      changeTask("guest-list", "replace");
-    }
-  }, [activeTask, changeTask, isRoleReady, isSuperAdmin]);
-
-  useEffect(() => {
-    if (!isRoleReady) return;
-    const handlePopState = () => {
-      const requestedTask = parseAdminTask(
-        new URLSearchParams(window.location.search),
-      );
-      if (
-        requestedTask &&
-        isAdminTaskAvailable(requestedTask, isSuperAdmin)
-      ) {
-        if (requestedTask === "event-manage") {
-          const search = new URLSearchParams(window.location.search);
-          const requestedEventId = search.get("eventId");
-          const requestedDate = search.get("date");
-          const requestedVenueId = search.get("venue");
-          if (
-            requestedVenueId === venueId &&
-            requestedEventId &&
-            requestedDate &&
-            isBusinessDate(requestedDate)
-          ) {
-            pendingEventScopeRef.current = {
-              eventId: requestedEventId,
-              businessDate: requestedDate,
-              venueId,
-            };
-            setSelectedDate(requestedDate);
-            setSelectedEventId(requestedEventId);
-          }
-        }
-        setActiveTask(requestedTask);
-      } else {
-        setActiveTask("guest-list");
-      }
-    };
-    window.addEventListener("popstate", handlePopState);
-    return () => window.removeEventListener("popstate", handlePopState);
-  }, [isRoleReady, isSuperAdmin, setSelectedDate, venueId]);
-
-  // Keyboard shortcut listener for tab switching & home return
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (
-        isRouteTransitionActive ||
-        e.defaultPrevented ||
-        e.metaKey ||
-        e.ctrlKey ||
-        e.altKey ||
-        e.shiftKey ||
-        document.querySelector('[role="alertdialog"][aria-modal="true"]')
-      ) {
-        return;
-      }
-
-      const target = e.target as HTMLElement | null;
-      if (
-        target &&
-        (target.tagName === "INPUT" ||
-          target.tagName === "TEXTAREA" ||
-          target.tagName === "SELECT" ||
-          target.isContentEditable)
-      ) {
-        return;
-      }
-
-      const shortcutTask = getAdminShortcutTask(e.key, isSuperAdmin);
-      if (shortcutTask) {
-        changeTask(shortcutTask);
-      }
-    };
-
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [
-    changeTask,
-    isRouteTransitionActive,
-    isSuperAdmin,
-  ]);
 
   const groupLabels: Record<AdminTaskGroup, string> = {
     guests: t("guests"),
@@ -334,27 +173,6 @@ function AdminPageContent() {
     (section: VenueManagementSection) =>
       changeTask(section === "create" ? "venue-create" : "venue-list"),
     [changeTask],
-  );
-  const handleAnalyticsEventOpen = useCallback(
-    (eventId: string, eventBusinessDate: string) => {
-      pendingEventScopeRef.current = {
-        eventId,
-        businessDate: eventBusinessDate,
-        venueId,
-      };
-      setSelectedDate(eventBusinessDate);
-      setSelectedEventId(eventId);
-      setActiveTask("event-manage");
-      const search = new URLSearchParams({
-        tab: "events",
-        view: "manage",
-        venue: venueId,
-        eventId,
-        date: eventBusinessDate,
-      });
-      window.history.pushState(null, "", `/admin?${search.toString()}`);
-    },
-    [setSelectedDate, venueId],
   );
   const activeTaskLabel =
     taskOptions.find((option) => option.id === activeTask)?.label ?? t("title");
@@ -392,9 +210,11 @@ function AdminPageContent() {
         </aside>
 
         <section
+          ref={workspaceRef}
           id="admin-workspace"
           aria-labelledby="admin-active-task-title"
-          className="min-h-0"
+          tabIndex={-1}
+          className="min-h-0 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-border-focus"
         >
         <h2 id="admin-active-task-title" className="sr-only">
           {activeTaskLabel}
@@ -468,7 +288,7 @@ function AdminPageContent() {
           />
         )}
         {activeTask === "analytics" && (
-          <AdminAnalytics onOpenEvent={handleAnalyticsEventOpen} />
+          <AdminAnalytics onOpenEvent={onAnalyticsEventOpen} />
         )}
         {(activeTask === "venue-list" || activeTask === "venue-create") && (
           <VenueManagement

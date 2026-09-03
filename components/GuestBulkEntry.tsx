@@ -4,12 +4,11 @@ import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import Button from "./Button";
 import DisclosureSection from "./DisclosureSection";
+import type { ApiResponse } from "@/lib/api/response";
 import type {
-  ApiResponse,
   BulkGuestCreateInput,
-  BulkGuestCreateResult,
   BulkGuestCreateStatus,
-} from "@/lib/api/types";
+} from "@/lib/guests/types";
 import {
   MAX_BULK_INPUT_CHARACTERS,
   parseBulkGuestInput,
@@ -29,9 +28,17 @@ interface GuestBulkEntryProps {
   disabled?: boolean;
   onSubmitChunk: (
     guests: BulkGuestCreateInput[],
-  ) => Promise<ApiResponse<BulkGuestCreateResult>>;
+  ) => Promise<ApiResponse<GuestBulkSubmissionResult>>;
   onSubmissionComplete?: () => Promise<void> | void;
   onSubmittingChange?: (isSubmitting: boolean) => void;
+}
+
+interface GuestBulkSubmissionResult {
+  items: Array<{
+    index: number;
+    status: BulkGuestCreateStatus;
+    guest: unknown | null;
+  }>;
 }
 
 type FeedbackTone = "success" | "warning" | "error";
@@ -76,6 +83,7 @@ export default function GuestBulkEntry({
     () => new Set(),
   );
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const isSubmittingRef = useRef(false);
   const [feedback, setFeedback] = useState<FeedbackState | null>(null);
   const [csvDocument, setCsvDocument] = useState<ParsedGuestCsv | null>(null);
   const [csvColumnIndex, setCsvColumnIndex] = useState<number | null>(null);
@@ -128,6 +136,7 @@ export default function GuestBulkEntry({
   const heldForCapacity = Math.max(0, confirmedLines.length - submittableLines.length);
 
   const setSubmittingState = (value: boolean) => {
+    isSubmittingRef.current = value;
     setIsSubmitting(value);
     onSubmittingChange?.(value);
   };
@@ -198,8 +207,9 @@ export default function GuestBulkEntry({
   };
 
   const handleSubmit = async () => {
-    if (submittableLines.length === 0 || isSubmitting || disabled) return;
+    if (submittableLines.length === 0 || isSubmittingRef.current || disabled) return;
 
+    isSubmittingRef.current = true;
     textareaRef.current?.focus();
     setSubmittingState(true);
     setFeedback(null);
@@ -326,12 +336,13 @@ export default function GuestBulkEntry({
       }
     } finally {
       if (isMountedRef.current) {
-        setIsSubmitting(false);
         if (shouldRestoreFocusRef.current) {
           shouldRestoreFocusRef.current = false;
           focusTextarea();
         }
       }
+      isSubmittingRef.current = false;
+      if (isMountedRef.current) setIsSubmitting(false);
       onSubmittingChange?.(false);
     }
   };

@@ -2,7 +2,7 @@
 
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { requireAccess } from "@/lib/auth/server";
-import type { ApiResponse } from "@/lib/api/types";
+import type { ApiResponse } from "@/lib/api/response";
 import {
   parseConnectorPolicyConfig,
   type ConnectorPolicyDecision,

@@ -4,7 +4,8 @@ import { reportServerError } from "@/lib/observability/structured-log";
 
 import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import { users, venueDomains, venues } from "../db/schema";
-import { type Venue, type ApiResponse } from "./types";
+import type { ApiResponse } from "./response";
+import type { Venue } from "@/lib/venues/types";
 import { requireRole } from "../auth/server";
 import { getDb } from "../db/client";
 import { isPlatformHostname, normalizeHostname } from "../tenant/host";

@@ -1,4 +1,4 @@
-import type { ExternalDJLink } from "../api/types";
+import type { ExternalDJLink } from "./types";
 import {
   isUrlShareCancellation,
   shareUrl,

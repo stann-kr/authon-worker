@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import AdminHeader from "@/app/admin/components/AdminHeader";
+import AuthenticatedHeader from "@/components/AuthenticatedHeader";
 import Footer from "@/components/Footer";
 
 interface WorkspaceShellProps {
@@ -24,7 +24,7 @@ export default function WorkspaceShell({
 }: WorkspaceShellProps) {
   return (
     <div className="page-shell">
-      <AdminHeader />
+      <AuthenticatedHeader />
       <div className={`page-scroll ${bottomInsetClassName}`}>
         <main
           id="main-content"

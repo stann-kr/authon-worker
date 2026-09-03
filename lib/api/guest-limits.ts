@@ -2,22 +2,24 @@
 
 import { reportServerError } from "@/lib/observability/structured-log";
 
-import { and, desc, eq, isNull, ne, or, sql } from "drizzle-orm";
+import { and, desc, eq, isNull, or, sql } from "drizzle-orm";
 import {
-  eventContributorLimits,
-  events,
   guestLimitRequests,
-  guests,
   users,
 } from "../db/schema";
 import {
-  type ApiResponse,
   type GuestLimitRequest,
   type GuestLimitRequestStatus,
   type GuestLimitRequestView,
   type GuestQuota,
-} from "./types";
-import { requireAccess, requireAuth, requireRole } from "../auth/server";
+} from "@/lib/guest-limits/types";
+import type { ApiResponse } from "./response";
+import {
+  requireAccess,
+  requireAuth,
+  requireRole,
+  type SessionUser,
+} from "../auth/server";
 import { getDb } from "../db/client";
 import { requireActiveVenueId } from "../tenant/active-server";
 import { canRequestGuestLimit, isRole } from "@/lib/users/policy";
@@ -27,7 +29,15 @@ import {
   loadEventById,
   resolveEventForRosterWrite,
 } from "@/lib/events/server";
-import type { Event } from "./types";
+import type { Event } from "@/lib/events/types";
+import { loadGuestQuotaState } from "@/lib/guest-limits/quota-persistence";
+import { createGuestLimitMutationPersistence } from "@/lib/guest-limits/persistence";
+import {
+  createGuestLimitRequestService,
+  decideGuestLimitRequestService,
+  GuestLimitMutationError,
+} from "@/lib/guest-limits/service";
+import type { GuestLimitMutationActor } from "@/lib/guest-limits/mutation-types";
 
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -43,6 +53,18 @@ function toRequest(row: typeof guestLimitRequests.$inferSelect): GuestLimitReque
     throw new Error("Invalid guest limit request status");
   }
   return { ...row, status: row.status as GuestLimitRequestStatus };
+}
+
+function toGuestLimitMutationActor(user: SessionUser): GuestLimitMutationActor {
+  return {
+    id: user.id,
+    role: user.role,
+    accountKind: user.accountKind,
+    doorAccessEnabled: user.doorAccessEnabled,
+    venueId: user.venueId,
+    guestLimit: user.guestLimit,
+    sessionVersion: user.sessionVersion,
+  };
 }
 
 export async function fetchMyGuestQuota(
@@ -69,93 +91,35 @@ export async function fetchMyGuestQuota(
       event = await findCompatibilityEvent(actor.venueId, date);
     }
     const includeLegacyRows = event ? eventIncludesLegacyDateRows(event) : true;
-    const guestScope = event
-      ? includeLegacyRows
-        ? or(
-            eq(guests.eventId, event.id),
-            and(isNull(guests.eventId), eq(guests.date, date)),
-          )
-        : eq(guests.eventId, event.id)
-      : and(isNull(guests.eventId), eq(guests.date, date));
-    const requestScope = event
-      ? includeLegacyRows
-        ? or(
-            eq(guestLimitRequests.eventId, event.id),
-            and(
-              isNull(guestLimitRequests.eventId),
-              eq(guestLimitRequests.date, date),
-            ),
-          )
-        : eq(guestLimitRequests.eventId, event.id)
-      : and(
-          isNull(guestLimitRequests.eventId),
-          eq(guestLimitRequests.date, date),
-        );
+    const quota = await loadGuestQuotaState(db, {
+      venueId: actor.venueId,
+      userId: actor.id,
+      date,
+      eventId: event?.id ?? null,
+      includeLegacyRows,
+    });
 
-    const [usage, extra, pending, configuredLimit] = await Promise.all([
-      db
-        .select({ used: sql<number>`count(*)` })
-        .from(guests)
-        .where(
-          and(
-            eq(guests.createdByUserId, actor.id),
-            guestScope,
-            ne(guests.status, "deleted"),
-          ),
-        ),
-      db
-        .select({ approvedExtra: sql<number>`coalesce(sum(${guestLimitRequests.approvedExtra}), 0)` })
-        .from(guestLimitRequests)
-        .where(
-          and(
-            eq(guestLimitRequests.userId, actor.id),
-            requestScope,
-            eq(guestLimitRequests.status, "approved"),
-          ),
-        ),
-      db
-        .select()
-        .from(guestLimitRequests)
-        .where(
-          and(
-            eq(guestLimitRequests.userId, actor.id),
-            requestScope,
-            eq(guestLimitRequests.status, "pending"),
-          ),
-        )
-        .limit(1),
-      event
-        ? db
-            .select({ guestLimit: eventContributorLimits.guestLimit })
-            .from(eventContributorLimits)
-            .where(
-              and(
-                eq(eventContributorLimits.eventId, event.id),
-                eq(eventContributorLimits.userId, actor.id),
-                eq(eventContributorLimits.venueId, actor.venueId),
-              ),
-            )
-            .limit(1)
-        : Promise.resolve([]),
-    ]);
-
-    const used = Number(usage[0]?.used ?? 0);
-    const approvedExtra = Number(extra[0]?.approvedExtra ?? 0);
-    const baseLimit = configuredLimit[0]
-      ? configuredLimit[0].guestLimit
+    const baseLimit = quota.configuredLimit !== undefined
+      ? quota.configuredLimit
       : actor.guestLimit;
-    const effectiveLimit = baseLimit === null ? null : baseLimit + approvedExtra;
+    const effectiveLimit = baseLimit === null
+      ? null
+      : baseLimit + quota.approvedExtra;
 
     return {
       data: {
         date,
         baseLimit,
-        approvedExtra,
+        approvedExtra: quota.approvedExtra,
         effectiveLimit,
-        used,
-        remaining: effectiveLimit === null ? null : Math.max(0, effectiveLimit - used),
+        used: quota.used,
+        remaining: effectiveLimit === null
+          ? null
+          : Math.max(0, effectiveLimit - quota.used),
         canRequestExtra: canRequestGuestLimit(actor) && baseLimit !== null,
-        pendingRequest: pending[0] ? toRequest(pending[0]) : null,
+        pendingRequest: quota.pendingRequest
+          ? toRequest(quota.pendingRequest)
+          : null,
       },
       error: null,
     };
@@ -173,76 +137,28 @@ export async function createGuestLimitRequest(params: {
 }): Promise<ApiResponse<GuestLimitRequest>> {
   try {
     const actor = await requireAuth();
-    if (!canRequestGuestLimit(actor) || !actor.venueId) {
-      return { data: null, error: "REQUEST_NOT_ALLOWED" };
-    }
-    if (!isValidDate(params.date)) return { data: null, error: "INVALID_DATE" };
-    if (!Number.isInteger(params.requestedExtra) || params.requestedExtra < 1 || params.requestedExtra > 10) {
-      return { data: null, error: "INVALID_EXTRA" };
-    }
-
-    const reason = params.reason?.trim() || null;
-    if (reason && reason.length > 200) return { data: null, error: "INVALID_REASON" };
-
     const db = getDb();
-    const event = await resolveEventForRosterWrite({
-      venueId: actor.venueId,
-      businessDate: params.date,
-      eventId: params.eventId,
-      actorUserId: actor.id,
-      purpose: "register",
-    });
-    await db
-      .insert(eventContributorLimits)
-      .values({
-        eventId: event.id,
-        venueId: actor.venueId,
-        userId: actor.id,
-        guestLimit: actor.guestLimit,
-        sourceEventId: event.templateSourceEventId,
-        createdByUserId: actor.id,
-        createdAt: new Date().toISOString(),
-      })
-      .onConflictDoNothing();
-    const [configuredLimit] = await db
-      .select({ guestLimit: eventContributorLimits.guestLimit })
-      .from(eventContributorLimits)
-      .where(
-        and(
-          eq(eventContributorLimits.eventId, event.id),
-          eq(eventContributorLimits.userId, actor.id),
-          eq(eventContributorLimits.venueId, actor.venueId),
-        ),
-      )
-      .limit(1);
-    const baseLimit = configuredLimit
-      ? configuredLimit.guestLimit
-      : actor.guestLimit;
-    if (baseLimit === null) {
-      return { data: null, error: "REQUEST_NOT_ALLOWED" };
-    }
-    const now = new Date().toISOString();
-    const id = crypto.randomUUID();
-    await db.insert(guestLimitRequests).values({
-      id,
-      venueId: actor.venueId,
-      userId: actor.id,
-      date: params.date,
-      eventId: event.id,
-      requestedExtra: params.requestedExtra,
-      approvedExtra: 0,
-      reason,
-      status: "pending",
-      createdAt: now,
-      updatedAt: now,
-    });
-
-    const [created] = await db.select().from(guestLimitRequests).where(eq(guestLimitRequests.id, id));
-    return { data: created ? toRequest(created) : null, error: null };
+    return {
+      data: await createGuestLimitRequestService(
+        { actor: toGuestLimitMutationActor(actor), params },
+        {
+          persistence: createGuestLimitMutationPersistence(),
+          requireActiveVenueId,
+          resolveEventForRosterWrite: (input) =>
+            resolveEventForRosterWrite(input),
+          findCompatibilityEvent,
+          loadEventById: (eventId) => loadEventById(db, eventId),
+        },
+      ),
+      error: null,
+    };
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "";
     if (message.includes("UNIQUE constraint failed")) {
       return { data: null, error: "PENDING_REQUEST_EXISTS" };
+    }
+    if (error instanceof GuestLimitMutationError) {
+      return { data: null, error: error.code };
     }
     await reportServerError("guest_limit.request.create", error);
     return { data: null, error: "REQUEST_FAILED" };
@@ -347,70 +263,21 @@ export async function decideGuestLimitRequest(params: {
     }
     const actor = await requireRole(["super_admin", "venue_admin"]);
     const db = getDb();
-    const [request] = await db
-      .select()
-      .from(guestLimitRequests)
-      .where(eq(guestLimitRequests.id, params.requestId))
-      .limit(1);
-
-    if (!request || (actor.role !== "super_admin" && request.venueId !== actor.venueId)) {
-      return { data: null, error: "FORBIDDEN" };
-    }
-    await requireActiveVenueId(request.venueId);
-    if (request.status !== "pending") return { data: null, error: "REQUEST_ALREADY_DECIDED" };
-    if (request.eventId) {
-      const event = await loadEventById(db, request.eventId);
-      if (
-        !event ||
-        event.venueId !== request.venueId ||
-        (event.state !== "draft" && event.state !== "open")
-      ) {
-        return { data: null, error: "EVENT_NOT_ACTIVE" };
-      }
-    }
-
-    const approvedExtra = params.decision === "approve" ? params.approvedExtra : 0;
-    if (
-      params.decision === "approve" &&
-      (!Number.isInteger(approvedExtra) || approvedExtra === undefined || approvedExtra < 1 || approvedExtra > request.requestedExtra)
-    ) {
-      return { data: null, error: "INVALID_APPROVED_EXTRA" };
-    }
-    const decisionNote = params.decisionNote?.trim() || null;
-    if (decisionNote && decisionNote.length > 200) {
-      return { data: null, error: "INVALID_DECISION_NOTE" };
-    }
-
-    const now = new Date().toISOString();
-    const updated = await db
-      .update(guestLimitRequests)
-      .set({
-        status: params.decision === "approve" ? "approved" : "rejected",
-        approvedExtra: approvedExtra ?? 0,
-        decidedByUserId: actor.id,
-        decidedAt: now,
-        decisionNote,
-        updatedAt: now,
-      })
-      .where(
-        and(
-          eq(guestLimitRequests.id, request.id),
-          eq(guestLimitRequests.status, "pending"),
-          request.eventId
-            ? sql`EXISTS (
-                SELECT 1 FROM ${events}
-                WHERE ${events.id} = ${request.eventId}
-                  AND ${events.venueId} = ${request.venueId}
-                  AND ${events.state} IN ('draft', 'open')
-              )`
-            : sql`1 = 1`,
-        ),
-      )
-      .returning();
-
-    if (!updated[0]) return { data: null, error: "REQUEST_ALREADY_DECIDED" };
-    return { data: toRequest(updated[0]), error: null };
+    return {
+      data: await decideGuestLimitRequestService(
+        { actor: toGuestLimitMutationActor(actor), params },
+        {
+          persistence: createGuestLimitMutationPersistence(),
+          requireActiveVenueId,
+          loadEventById: (eventId) => loadEventById(db, eventId),
+        },
+      ),
+      error: null,
+    };
   } catch (error: unknown) {
+    if (error instanceof GuestLimitMutationError) {
+      return { data: null, error: error.code };
+    }
     await reportServerError("guest_limit.request.decide", error);
     return { data: null, error: "DECISION_FAILED" };
   }

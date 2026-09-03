@@ -13,12 +13,12 @@ import {
   users,
 } from "@/lib/db/schema";
 import { requireActiveVenueId } from "@/lib/tenant/active-server";
+import type { ApiResponse } from "@/lib/api/response";
 import type {
-  ApiResponse,
   Event,
   EventCreationResult,
   EventState,
-} from "@/lib/api/types";
+} from "@/lib/events/types";
 import {
   canTransitionEventState,
   isBusinessDate,

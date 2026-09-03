@@ -22,7 +22,7 @@ import {
 } from "@/lib/door/offline-sync";
 import { requireActiveVenueId } from "@/lib/tenant/active-server";
 import { reportServerError } from "@/lib/observability/structured-log";
-import type { ApiResponse } from "@/lib/api/types";
+import type { ApiResponse } from "@/lib/api/response";
 import {
   parseDoorGuestCode,
   type OfflineDoorGuest,
@@ -220,6 +220,15 @@ export async function syncOfflineDoorMutations(params: {
         businessDate: event.businessDate,
         guestId: item.guestId,
         action,
+        actor: {
+          id: actor.id,
+          role: actor.role,
+          venueId: actor.venueId,
+          guestLimit: actor.guestLimit,
+          accountKind: actor.accountKind,
+          doorAccessEnabled: actor.doorAccessEnabled,
+          sessionVersion: actor.sessionVersion,
+        },
         actorUserId: actor.id,
         channel: "door",
         idempotencyKey: item.idempotencyKey,

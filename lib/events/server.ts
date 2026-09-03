@@ -1,16 +1,21 @@
 import "server-only";
 
 import { and, eq } from "drizzle-orm";
+import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { getDb } from "@/lib/db/client";
 import { events } from "@/lib/db/schema";
 import { requireActiveVenueId } from "@/lib/tenant/active-server";
-import type { Event } from "@/lib/api/types";
+import type { Event } from "@/lib/events/types";
 import {
   canCheckInToEvent,
   canRegisterForEvent,
   getCompatibilityEventKey,
   isEventState,
 } from "@/lib/events/domain";
+import {
+  resolveGuardedCompatibilityEvent,
+  type CompatibilityEventActorGuard,
+} from "@/lib/events/compatibility-persistence";
 
 type Db = ReturnType<typeof getDb>;
 type EventRow = typeof events.$inferSelect;
@@ -26,6 +31,24 @@ export async function loadEventById(
 ): Promise<Event | null> {
   const [row] = await db.select().from(events).where(eq(events.id, eventId)).limit(1);
   return row ? toEvent(row) : null;
+}
+
+export async function loadEventForRosterReadById(input: {
+  eventId: string;
+  businessDate: string;
+  venueId?: string | null;
+}): Promise<Event> {
+  const db = getDb();
+  const event = await loadEventById(db, input.eventId);
+  if (
+    !event ||
+    event.businessDate !== input.businessDate ||
+    (input.venueId && event.venueId !== input.venueId)
+  ) {
+    throw new Error("EVENT_NOT_FOUND");
+  }
+  await requireActiveVenueId(event.venueId);
+  return event;
 }
 
 export function eventIncludesLegacyDateRows(event: Event): boolean {
@@ -66,6 +89,7 @@ export async function resolveEventForRosterWrite(params: {
   businessDate: string;
   eventId?: string | null;
   actorUserId?: string | null;
+  actorGuard?: CompatibilityEventActorGuard;
   purpose: "register" | "check_in";
 }): Promise<Event> {
   const venueId = await requireActiveVenueId(params.venueId);
@@ -96,32 +120,58 @@ export async function resolveEventForRosterWrite(params: {
   const compatibilityKey = getCompatibilityEventKey(venueId, params.businessDate);
   const now = new Date().toISOString();
   const proposedId = crypto.randomUUID();
-  await db
-    .insert(events)
-    .values({
-      id: proposedId,
-      venueId,
-      businessDate: params.businessDate,
-      name: params.businessDate,
-      state: "open",
-      compatibilityKey,
-      createdByUserId: params.actorUserId ?? null,
-      updatedByUserId: params.actorUserId ?? null,
-      createdAt: now,
-      updatedAt: now,
-      openedAt: now,
-    })
-    .onConflictDoNothing();
+  let event: Event | null;
+  if (params.actorGuard) {
+    if (
+      params.actorUserId !== undefined &&
+      params.actorUserId !== null &&
+      params.actorUserId !== params.actorGuard.id
+    ) {
+      throw new Error("EVENT_NOT_FOUND");
+    }
+    event = await resolveGuardedCompatibilityEvent(
+      getCloudflareContext().env.DB,
+      {
+        proposedId,
+        venueId,
+        businessDate: params.businessDate,
+        compatibilityKey,
+        actor: params.actorGuard,
+        createdAt: now,
+      },
+    );
+  } else {
+    await db
+      .insert(events)
+      .values({
+        id: proposedId,
+        venueId,
+        businessDate: params.businessDate,
+        name: params.businessDate,
+        state: "open",
+        compatibilityKey,
+        createdByUserId: params.actorUserId ?? null,
+        updatedByUserId: params.actorUserId ?? null,
+        createdAt: now,
+        updatedAt: now,
+        openedAt: now,
+      })
+      .onConflictDoNothing();
 
-  const [row] = await db
-    .select()
-    .from(events)
-    .where(eq(events.compatibilityKey, compatibilityKey))
-    .limit(1);
-  if (!row || row.venueId !== venueId || row.businessDate !== params.businessDate) {
+    const [row] = await db
+      .select()
+      .from(events)
+      .where(eq(events.compatibilityKey, compatibilityKey))
+      .limit(1);
+    event = row ? toEvent(row) : null;
+  }
+  if (
+    !event ||
+    event.venueId !== venueId ||
+    event.businessDate !== params.businessDate
+  ) {
     throw new Error("EVENT_NOT_FOUND");
   }
-  const event = toEvent(row);
   const allowed =
     params.purpose === "check_in"
       ? canCheckInToEvent(event.state)

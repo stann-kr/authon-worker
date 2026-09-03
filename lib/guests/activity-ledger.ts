@@ -1,4 +1,9 @@
 import type { D1Database } from "@cloudflare/workers-types";
+import {
+  currentGuestActorPredicate,
+  type GuestWriteAccess,
+} from "./atomic-sql.ts";
+import type { GuestWriteActor } from "./actor";
 
 export type GuestActivityAction =
   | "check_in"
@@ -36,6 +41,52 @@ interface GuestActivityLedgerRow {
   previousStatus: string | null;
   nextStatus: string | null;
   occurredAt: string;
+}
+
+function actorBindings(
+  actor: GuestWriteActor,
+  verifyGuestLimit = true,
+) {
+  return [
+    actor.id,
+    actor.role,
+    actor.accountKind,
+    actor.doorAccessEnabled ? 1 : 0,
+    actor.venueId,
+    ...(verifyGuestLimit ? [actor.guestLimit] : []),
+    actor.sessionVersion,
+  ] as const;
+}
+
+function withCurrentActorPredicate(
+  sql: string,
+  access: GuestWriteAccess,
+  targetVenue: string,
+  verifyGuestLimit = true,
+): string {
+  const predicate = `\n  AND ${currentGuestActorPredicate(access, targetVenue, verifyGuestLimit)}`;
+  const guardedSql = sql.includes("\n  ON CONFLICT")
+    ? sql.replace("\n  ON CONFLICT", `${predicate}\n  ON CONFLICT`)
+    : sql.replace(
+      /\n\s*RETURNING/,
+      `${predicate}\n  RETURNING`,
+    );
+  if (guardedSql === sql) {
+    throw new Error("Guest activity actor guard requires ON CONFLICT or RETURNING");
+  }
+  return guardedSql;
+}
+
+async function hasCurrentDoorActor(
+  db: D1Database,
+  actor: GuestWriteActor,
+  venueId: string,
+): Promise<boolean> {
+  const row = await db
+    .prepare(SELECT_CURRENT_DOOR_ACTOR_SQL)
+    .bind(...actorBindings(actor), venueId)
+    .first<{ allowed: number }>();
+  return row?.allowed === 1;
 }
 
 function isBoundedKey(value: unknown, maximum: number): value is string {
@@ -227,6 +278,11 @@ export const SELECT_GUEST_ACTIVITY_LEDGER_SQL = `
   LIMIT 1
 `;
 
+const SELECT_CURRENT_DOOR_ACTOR_SQL = `
+  SELECT 1 AS allowed
+  WHERE ${currentGuestActorPredicate("door", "?")}
+`;
+
 export const INSERT_CONFLICT_GUEST_ACTIVITY_SQL = `
   INSERT INTO guest_activity_ledger (
     id, venue_id, event_id, guest_id, action,
@@ -277,9 +333,20 @@ export function prepareGuestActivityAfterChange(
     deviceKeyHash?: string | null;
     sessionKeyHash?: string | null;
     occurredAt: string;
+    finalActor?: GuestWriteActor;
+    finalAccess?: GuestWriteAccess;
+    verifyGuestLimit?: boolean;
   },
 ) {
-  return db.prepare(INSERT_GUEST_ACTIVITY_AFTER_CHANGE_SQL).bind(
+  const sql = params.finalActor
+    ? withCurrentActorPredicate(
+        INSERT_GUEST_ACTIVITY_AFTER_CHANGE_SQL,
+        params.finalAccess ?? "guest",
+        "?",
+        params.verifyGuestLimit,
+      )
+    : INSERT_GUEST_ACTIVITY_AFTER_CHANGE_SQL;
+  const bindings: unknown[] = [
     params.activityId,
     params.venueId,
     params.eventId,
@@ -295,7 +362,14 @@ export function prepareGuestActivityAfterChange(
     params.deviceKeyHash ?? null,
     params.sessionKeyHash ?? null,
     params.occurredAt,
-  );
+  ];
+  if (params.finalActor) {
+    bindings.push(
+      ...actorBindings(params.finalActor, params.verifyGuestLimit),
+      params.venueId,
+    );
+  }
+  return db.prepare(sql).bind(...bindings);
 }
 
 export async function persistGuestStatusActivity(
@@ -314,6 +388,7 @@ export async function persistGuestStatusActivity(
     occurredAt: string;
     deviceKeyHash?: string | null;
     sessionKeyHash?: string | null;
+    actor?: GuestWriteActor;
   },
 ): Promise<GuestActivityMutationResult> {
   if (
@@ -342,6 +417,61 @@ export async function persistGuestStatusActivity(
   const expectedStatus = params.action === "cancel_check_in" ? "checked" : "pending";
   const nextStatus = params.action === "cancel_check_in" ? "pending" : "checked";
   const checkInTime = nextStatus === "checked" ? params.occurredAt : null;
+  if (
+    params.actor &&
+    !(await hasCurrentDoorActor(db, params.actor, params.venueId))
+  ) {
+    return {
+      outcome: "rejected",
+      guestId: null,
+      status: null,
+      checkInTime: null,
+      activityId: null,
+    };
+  }
+  const guarded = params.actor
+    ? {
+        claim: withCurrentActorPredicate(
+          CLAIM_GUEST_ACTIVITY_REQUEST_SQL,
+          "door",
+          "?",
+        ),
+        apply: withCurrentActorPredicate(
+          APPLY_GUEST_ACTIVITY_STATUS_SQL,
+          "door",
+          "guests.venue_id",
+        ),
+        applied: withCurrentActorPredicate(
+          INSERT_APPLIED_GUEST_ACTIVITY_SQL,
+          "door",
+          "?",
+        ),
+        complete: withCurrentActorPredicate(
+          COMPLETE_GUEST_ACTIVITY_REQUEST_SQL,
+          "door",
+          "guest_activity_requests.venue_id",
+        ),
+        rejected: withCurrentActorPredicate(
+          INSERT_REJECTED_GUEST_ACTIVITY_SQL,
+          "door",
+          "request.venue_id",
+        ),
+        reject: withCurrentActorPredicate(
+          REJECT_GUEST_ACTIVITY_REQUEST_SQL,
+          "door",
+          "guest_activity_requests.venue_id",
+        ),
+        conflict: withCurrentActorPredicate(
+          INSERT_CONFLICT_GUEST_ACTIVITY_SQL,
+          "door",
+          "guest.venue_id",
+        ),
+      }
+    : null;
+  const appendActorBindings = (bindings: unknown[], targetVenue?: string) =>
+    params.actor
+      ? [...bindings, ...actorBindings(params.actor), ...(targetVenue ? [targetVenue] : [])]
+      : bindings;
 
   const [claim, mutation, scopeCloseout, ledger, completion, rejection, rejectionCompletion] = await db.batch<{
     activityId?: string;
@@ -351,7 +481,7 @@ export async function persistGuestStatusActivity(
     status?: string;
     checkInTime?: string | null;
   }>([
-    db.prepare(CLAIM_GUEST_ACTIVITY_REQUEST_SQL).bind(
+    db.prepare(guarded?.claim ?? CLAIM_GUEST_ACTIVITY_REQUEST_SQL).bind(...appendActorBindings([
       params.venueId,
       params.idempotencyKey,
       payloadHash,
@@ -360,8 +490,8 @@ export async function persistGuestStatusActivity(
       params.action,
       params.occurredAt,
       params.venueId,
-    ),
-    db.prepare(APPLY_GUEST_ACTIVITY_STATUS_SQL).bind(
+    ], params.venueId)),
+    db.prepare(guarded?.apply ?? APPLY_GUEST_ACTIVITY_STATUS_SQL).bind(...appendActorBindings([
       nextStatus,
       checkInTime,
       params.occurredAt,
@@ -378,13 +508,13 @@ export async function persistGuestStatusActivity(
       payloadHash,
       activityId,
       params.attendanceScopeEventId,
-    ),
+    ])),
     db.prepare(SELECT_ATTENDANCE_SCOPE_CLOSED_SQL).bind(
       params.venueId,
       params.businessDate,
       params.attendanceScopeEventId,
     ),
-    db.prepare(INSERT_APPLIED_GUEST_ACTIVITY_SQL).bind(
+    db.prepare(guarded?.applied ?? INSERT_APPLIED_GUEST_ACTIVITY_SQL).bind(...appendActorBindings([
       activityId,
       params.venueId,
       params.eventId,
@@ -400,8 +530,8 @@ export async function persistGuestStatusActivity(
       params.deviceKeyHash ?? null,
       params.sessionKeyHash ?? null,
       params.occurredAt,
-    ),
-    db.prepare(COMPLETE_GUEST_ACTIVITY_REQUEST_SQL).bind(
+    ], params.venueId)),
+    db.prepare(guarded?.complete ?? COMPLETE_GUEST_ACTIVITY_REQUEST_SQL).bind(...appendActorBindings([
       nextStatus,
       params.occurredAt,
       params.venueId,
@@ -409,8 +539,8 @@ export async function persistGuestStatusActivity(
       payloadHash,
       activityId,
       activityId,
-    ),
-    db.prepare(INSERT_REJECTED_GUEST_ACTIVITY_SQL).bind(
+    ])),
+    db.prepare(guarded?.rejected ?? INSERT_REJECTED_GUEST_ACTIVITY_SQL).bind(...appendActorBindings([
       activityId,
       params.venueId,
       params.eventId,
@@ -429,15 +559,15 @@ export async function persistGuestStatusActivity(
       payloadHash,
       activityId,
       activityId,
-    ),
-    db.prepare(REJECT_GUEST_ACTIVITY_REQUEST_SQL).bind(
+    ])),
+    db.prepare(guarded?.reject ?? REJECT_GUEST_ACTIVITY_REQUEST_SQL).bind(...appendActorBindings([
       params.occurredAt,
       params.venueId,
       params.idempotencyKey,
       payloadHash,
       activityId,
       activityId,
-    ),
+    ])),
   ]);
 
   const claimed = claim.results?.[0]?.activityId === activityId;
@@ -471,6 +601,19 @@ export async function persistGuestStatusActivity(
     }
   }
 
+  if (
+    params.actor &&
+    !(await hasCurrentDoorActor(db, params.actor, params.venueId))
+  ) {
+    return {
+      outcome: "rejected",
+      guestId: null,
+      status: null,
+      checkInTime: null,
+      activityId: null,
+    };
+  }
+
   const existing = await db
     .prepare(SELECT_GUEST_ACTIVITY_REQUEST_SQL)
     .bind(params.venueId, params.idempotencyKey)
@@ -491,7 +634,7 @@ export async function persistGuestStatusActivity(
   ) {
     const conflictActivityId = crypto.randomUUID();
     const [conflict] = await db.batch<{ id?: string }>([
-      db.prepare(INSERT_CONFLICT_GUEST_ACTIVITY_SQL).bind(
+      db.prepare(guarded?.conflict ?? INSERT_CONFLICT_GUEST_ACTIVITY_SQL).bind(...appendActorBindings([
         conflictActivityId,
         params.venueId,
         params.eventId,
@@ -508,7 +651,7 @@ export async function persistGuestStatusActivity(
         params.guestId,
         params.venueId,
         params.venueId,
-      ),
+      ])),
     ]);
     if (conflict.results?.[0]?.id !== conflictActivityId) {
       return {

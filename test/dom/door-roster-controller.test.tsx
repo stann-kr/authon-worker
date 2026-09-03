@@ -1,0 +1,616 @@
+import assert from "node:assert/strict";
+import { afterEach, test } from "node:test";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+
+import useDoorRosterController, {
+  type DoorRosterDependencies,
+} from "@/app/door/useDoorRosterController";
+import type {
+  OfflineDoorMutation,
+  OfflineDoorRosterSnapshot,
+} from "@/lib/door/offline-domain";
+import type { GuestOperationsSnapshot } from "@/lib/guest-snapshots/types";
+import type { Guest } from "@/lib/guests/types";
+
+const GUEST: Guest = {
+  id: "guest-0001",
+  venueId: "venue-0001",
+  eventId: "event-0001",
+  name: "Guest One",
+  status: "pending",
+  checkInTime: null,
+  date: "2026-08-23",
+  createdAt: "2026-08-23T10:00:00.000Z",
+  updatedAt: "2026-08-23T10:00:00.000Z",
+};
+
+const OPERATIONS_SNAPSHOT: GuestOperationsSnapshot = {
+  guests: [GUEST],
+  users: [],
+  externalLinks: [],
+  failedSections: [],
+};
+
+const OFFLINE_SNAPSHOT: OfflineDoorRosterSnapshot = {
+  scope: {
+    venueId: "venue-0001",
+    eventId: "event-0001",
+    businessDate: "2026-08-23",
+  },
+  guests: [
+    {
+      id: GUEST.id,
+      name: GUEST.name,
+      status: "pending",
+      checkInTime: null,
+    },
+  ],
+  cachedAt: "2026-08-23T10:00:00.000Z",
+  expiresAt: "2026-08-23T18:00:00.000Z",
+};
+
+const TRANSLATE = (key: string) => key;
+
+function createDeferred<T>() {
+  let resolve!: (value: T | PromiseLike<T>) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise;
+    reject = rejectPromise;
+  });
+  return { promise, reject, resolve };
+}
+
+function createScopedGuest(eventId: string, name: string): Guest {
+  return {
+    ...GUEST,
+    id: `guest-${eventId}`,
+    eventId,
+    name,
+  };
+}
+
+function createScopedMutation(
+  eventId: string,
+  guestId: string,
+): OfflineDoorMutation {
+  return {
+    idempotencyKey: `offline:device-0001:${eventId}`,
+    deviceId: "device-0001",
+    sequence: 1,
+    scope: {
+      venueId: "venue-0001",
+      eventId,
+      businessDate: "2026-08-23",
+    },
+    guestId,
+    action: "check_in",
+    queuedAt: "2026-08-23T10:05:00.000Z",
+    expiresAt: "2026-08-23T22:05:00.000Z",
+    state: "queued",
+    resolution: null,
+  };
+}
+
+function createScopedSnapshot(
+  eventId: string,
+  guest: Guest,
+): OfflineDoorRosterSnapshot {
+  return {
+    scope: {
+      venueId: "venue-0001",
+      eventId,
+      businessDate: "2026-08-23",
+    },
+    guests: [
+      {
+        id: guest.id,
+        name: guest.name,
+        status: guest.status === "checked" ? "checked" : "pending",
+        checkInTime: guest.checkInTime ?? null,
+      },
+    ],
+    cachedAt: "2026-08-23T10:00:00.000Z",
+    expiresAt: "2026-08-23T18:00:00.000Z",
+  };
+}
+
+function setOnline(value: boolean) {
+  Object.defineProperty(window.navigator, "onLine", {
+    configurable: true,
+    value,
+  });
+}
+
+function createDependencies(
+  overrides: Partial<DoorRosterDependencies> = {},
+): DoorRosterDependencies {
+  return {
+    fetchGuestsByDate: async () => ({ data: [GUEST], error: null }),
+    updateGuestStatus: async (_id, status) => ({
+      data: { ...GUEST, status },
+      error: null,
+    }),
+    deleteGuest: async () => ({
+      data: { ...GUEST, status: "deleted" },
+      error: null,
+    }),
+    fetchGuestOperationsSnapshot: async () => ({
+      data: OPERATIONS_SNAPSHOT,
+      error: null,
+    }),
+    fetchOfflineDoorRoster: async () => ({ data: [], error: null }),
+    syncOfflineDoorMutations: async () => ({ data: [], error: null }),
+    clearResolvedOfflineDoorMutations: async () => {},
+    enqueueOfflineDoorMutation: async () => ({
+      idempotencyKey: "offline:device-0001:1",
+      deviceId: "device-0001",
+      sequence: 1,
+      scope: OFFLINE_SNAPSHOT.scope,
+      guestId: GUEST.id,
+      action: "check_in",
+      queuedAt: "2026-08-23T10:05:00.000Z",
+      expiresAt: "2026-08-23T22:05:00.000Z",
+      state: "queued",
+      resolution: null,
+    }),
+    listOfflineDoorMutations: async () => [],
+    loadOfflineDoorRoster: async () => null,
+    removeOfflineDoorRoster: async () => {},
+    resolveOfflineDoorMutation: async () => {},
+    saveOfflineDoorRoster: async () => {},
+    randomUUID: () => "request-0001",
+    ...overrides,
+  };
+}
+
+function DoorRosterHarness({
+  dependencies,
+  selectedEventId = null,
+}: {
+  dependencies: DoorRosterDependencies;
+  selectedEventId?: string | null;
+}) {
+  const roster = useDoorRosterController({
+    venueId: "venue-0001",
+    selectedDate: "2026-08-23",
+    selectedEventId,
+    translate: TRANSLATE,
+    dependencies,
+  });
+
+  return (
+    <>
+      <output data-testid="outcome">{roster.loadOutcome}</output>
+      <output data-testid="feedback">{roster.feedback ?? ""}</output>
+      <output data-testid="guest-count">{roster.displayData.guests.length}</output>
+      <output data-testid="guest-status">
+        {roster.displayData.guests[0]?.status ?? "none"}
+      </output>
+      <output data-testid="guest-name">
+        {roster.displayData.guests[0]?.name ?? "none"}
+      </output>
+      <output data-testid="has-current-scope-data">
+        {String(roster.hasCurrentScopeData)}
+      </output>
+      <output data-testid="fetching">{String(roster.isFetching)}</output>
+      <output data-testid="offline-mode">{String(roster.isOfflineMode)}</output>
+      <output data-testid="offline-syncing">
+        {String(roster.isOfflineSyncing)}
+      </output>
+      <output data-testid="offline-notice">{roster.offlineNotice ?? ""}</output>
+      <output data-testid="offline-queued">{roster.offlineQueueCounts.queued}</output>
+      <button
+        type="button"
+        onClick={() =>
+          void roster.handleStatusChange(GUEST.id, "checked", "check")
+        }
+      >
+        Check in
+      </button>
+      <button type="button" onClick={() => void roster.syncOfflineQueue()}>
+        Sync offline queue
+      </button>
+    </>
+  );
+}
+
+afterEach(() => {
+  cleanup();
+  setOnline(true);
+});
+
+test("authoritative success publishes the current roster", async () => {
+  render(<DoorRosterHarness dependencies={createDependencies()} />);
+
+  await waitFor(() => {
+    assert.equal(screen.getByTestId("outcome").textContent, "success");
+    assert.equal(screen.getByTestId("guest-count").textContent, "1");
+  });
+  assert.equal(screen.getByTestId("feedback").textContent, "");
+  assert.equal(screen.getByTestId("offline-mode").textContent, "false");
+});
+
+test("an optional offline roster rejection cannot hide authoritative data", async () => {
+  render(
+    <DoorRosterHarness
+      dependencies={createDependencies({
+        fetchOfflineDoorRoster: async () => {
+          throw new Error("offline roster transport failed");
+        },
+      })}
+      selectedEventId="event-0001"
+    />,
+  );
+
+  await waitFor(() => {
+    assert.equal(screen.getByTestId("outcome").textContent, "success");
+    assert.equal(screen.getByTestId("guest-count").textContent, "1");
+    assert.equal(screen.getByTestId("fetching").textContent, "false");
+  });
+  assert.equal(screen.getByTestId("feedback").textContent, "");
+  assert.equal(screen.getByTestId("offline-mode").textContent, "false");
+});
+
+test("a partial authoritative response keeps its roster and scoped feedback", async () => {
+  const dependencies = createDependencies({
+    fetchGuestOperationsSnapshot: async () => ({
+      data: {
+        ...OPERATIONS_SNAPSHOT,
+        failedSections: ["users"],
+      },
+      error: "PARTIAL",
+    }),
+  });
+  render(<DoorRosterHarness dependencies={dependencies} />);
+
+  await waitFor(() => {
+    assert.equal(screen.getByTestId("outcome").textContent, "partial");
+    assert.equal(screen.getByTestId("guest-count").textContent, "1");
+  });
+  assert.equal(
+    screen.getByTestId("feedback").textContent,
+    "partialLoadFailed",
+  );
+});
+
+test("an unavailable authoritative roster falls back to the cached offline roster", async () => {
+  const dependencies = createDependencies({
+    fetchGuestOperationsSnapshot: async () => ({
+      data: null,
+      error: "LOAD_FAILED",
+    }),
+    fetchOfflineDoorRoster: async () => ({
+      data: null,
+      error: "OFFLINE_DOOR_ROSTER_FAILED",
+    }),
+    loadOfflineDoorRoster: async () => OFFLINE_SNAPSHOT,
+  });
+  render(
+    <DoorRosterHarness
+      dependencies={dependencies}
+      selectedEventId="event-0001"
+    />,
+  );
+
+  await waitFor(() => {
+    assert.equal(screen.getByTestId("outcome").textContent, "success");
+    assert.equal(screen.getByTestId("guest-count").textContent, "1");
+    assert.equal(screen.getByTestId("offline-mode").textContent, "true");
+  });
+  assert.equal(screen.getByTestId("feedback").textContent, "");
+});
+
+test("an offline status change queues once and updates the visible roster", async () => {
+  setOnline(false);
+  const mutations: OfflineDoorMutation[] = [];
+  let enqueueCalls = 0;
+  const dependencies = createDependencies({
+    listOfflineDoorMutations: async () => mutations,
+    enqueueOfflineDoorMutation: async (params) => {
+      enqueueCalls += 1;
+      const mutation: OfflineDoorMutation = {
+        idempotencyKey: "offline:device-0001:1",
+        deviceId: "device-0001",
+        sequence: 1,
+        scope: params.scope,
+        guestId: params.guestId,
+        action: params.action,
+        queuedAt: "2026-08-23T10:05:00.000Z",
+        expiresAt: "2026-08-23T22:05:00.000Z",
+        state: "queued",
+        resolution: null,
+      };
+      mutations.push(mutation);
+      return mutation;
+    },
+  });
+  render(
+    <DoorRosterHarness
+      dependencies={dependencies}
+      selectedEventId="event-0001"
+    />,
+  );
+  await waitFor(() => {
+    assert.equal(screen.getByTestId("guest-count").textContent, "1");
+  });
+
+  fireEvent.click(screen.getByRole("button", { name: "Check in" }));
+
+  await waitFor(() => {
+    assert.equal(screen.getByTestId("guest-status").textContent, "checked");
+    assert.equal(screen.getByTestId("offline-queued").textContent, "1");
+    assert.equal(screen.getByTestId("offline-notice").textContent, "queued");
+  });
+  assert.equal(enqueueCalls, 1);
+});
+
+test("a deferred save from the previous scope cannot replace completed current-scope data", async () => {
+  const guestA = createScopedGuest("event-aaaa", "Guest A");
+  const guestB = createScopedGuest("event-bbbb", "Guest B");
+  const saveA = createDeferred<void>();
+  const savedScopes: string[] = [];
+  const dependencies = createDependencies({
+    fetchGuestOperationsSnapshot: async (_date, _venueId, eventId) => ({
+      data: {
+        guests: [eventId === "event-aaaa" ? guestA : guestB],
+        users: [],
+        externalLinks: [],
+        failedSections: [],
+      },
+      error: null,
+    }),
+    fetchOfflineDoorRoster: async (scope) => ({
+      data: [
+        {
+          id: scope.eventId === "event-aaaa" ? guestA.id : guestB.id,
+          name: scope.eventId === "event-aaaa" ? guestA.name : guestB.name,
+          status: "pending",
+          checkInTime: null,
+        },
+      ],
+      error: null,
+    }),
+    saveOfflineDoorRoster: async (snapshot) => {
+      savedScopes.push(snapshot.scope.eventId);
+      if (snapshot.scope.eventId === "event-aaaa") await saveA.promise;
+    },
+  });
+  const view = render(
+    <DoorRosterHarness dependencies={dependencies} selectedEventId="event-aaaa" />,
+  );
+
+  await waitFor(() => assert.deepEqual(savedScopes, ["event-aaaa"]));
+  view.rerender(
+    <DoorRosterHarness dependencies={dependencies} selectedEventId="event-bbbb" />,
+  );
+
+  await waitFor(() => {
+    assert.equal(screen.getByTestId("guest-name").textContent, "Guest B");
+    assert.equal(
+      screen.getByTestId("has-current-scope-data").textContent,
+      "true",
+    );
+    assert.equal(screen.getByTestId("fetching").textContent, "false");
+  });
+
+  saveA.resolve();
+  await waitFor(() =>
+    assert.deepEqual(savedScopes, ["event-aaaa", "event-bbbb"]),
+  );
+  assert.equal(screen.getByTestId("guest-name").textContent, "Guest B");
+  assert.equal(
+    screen.getByTestId("has-current-scope-data").textContent,
+    "true",
+  );
+});
+
+test("a current-scope sync runs once after the previous scope sync and keeps syncing ownership", async () => {
+  const guestA = createScopedGuest("event-aaaa", "Guest A");
+  const guestB = createScopedGuest("event-bbbb", "Guest B");
+  const syncA = createDeferred<{
+    data: [];
+    error: null;
+  }>();
+  const syncB = createDeferred<{
+    data: [];
+    error: null;
+  }>();
+  const syncScopes: string[] = [];
+  const dependencies = createDependencies({
+    fetchGuestOperationsSnapshot: async (_date, _venueId, eventId) => ({
+      data: {
+        guests: [eventId === "event-aaaa" ? guestA : guestB],
+        users: [],
+        externalLinks: [],
+        failedSections: [],
+      },
+      error: null,
+    }),
+    listOfflineDoorMutations: async (scope) => [
+      createScopedMutation(
+        scope.eventId,
+        scope.eventId === "event-aaaa" ? guestA.id : guestB.id,
+      ),
+    ],
+    syncOfflineDoorMutations: async (params) => {
+      syncScopes.push(params.eventId);
+      return params.eventId === "event-aaaa" ? syncA.promise : syncB.promise;
+    },
+  });
+  const view = render(
+    <DoorRosterHarness dependencies={dependencies} selectedEventId="event-aaaa" />,
+  );
+
+  await waitFor(() => {
+    assert.deepEqual(syncScopes, ["event-aaaa"]);
+    assert.equal(screen.getByTestId("offline-syncing").textContent, "true");
+  });
+  view.rerender(
+    <DoorRosterHarness dependencies={dependencies} selectedEventId="event-bbbb" />,
+  );
+  await waitFor(() => {
+    assert.equal(screen.getByTestId("guest-name").textContent, "Guest B");
+  });
+
+  syncA.resolve({ data: [], error: null });
+  await waitFor(() => {
+    assert.deepEqual(syncScopes, ["event-aaaa", "event-bbbb"]);
+    assert.equal(screen.getByTestId("offline-syncing").textContent, "true");
+  });
+
+  syncB.resolve({ data: [], error: null });
+  await waitFor(() => {
+    assert.equal(screen.getByTestId("offline-syncing").textContent, "false");
+  });
+  assert.deepEqual(syncScopes, ["event-aaaa", "event-bbbb"]);
+});
+
+test("a stale cached fallback cannot overwrite the authoritative current-scope roster state", async () => {
+  const guestA = createScopedGuest("event-aaaa", "Cached Guest A");
+  const guestB = createScopedGuest("event-bbbb", "Authoritative Guest B");
+  const loadA = createDeferred<OfflineDoorRosterSnapshot | null>();
+  let didStartLoadA = false;
+  const mutationA = createScopedMutation("event-aaaa", guestA.id);
+  const mutationB = createScopedMutation("event-bbbb", guestB.id);
+  const dependencies = createDependencies({
+    fetchGuestOperationsSnapshot: async (_date, _venueId, eventId) =>
+      eventId === "event-aaaa"
+        ? { data: null, error: "LOAD_FAILED" }
+        : {
+            data: {
+              guests: [guestB],
+              users: [],
+              externalLinks: [],
+              failedSections: ["users"],
+            },
+            error: "PARTIAL",
+          },
+    fetchOfflineDoorRoster: async () => ({
+      data: null,
+      error: "OFFLINE_DOOR_ROSTER_FAILED",
+    }),
+    listOfflineDoorMutations: async (scope) =>
+      scope.eventId === "event-aaaa"
+        ? [
+            mutationA,
+            {
+              ...mutationA,
+              idempotencyKey: "offline:device-0001:event-aaaa-2",
+              sequence: 2,
+            },
+          ]
+        : [mutationB],
+    loadOfflineDoorRoster: async (scope) => {
+      if (scope.eventId !== "event-aaaa") return null;
+      didStartLoadA = true;
+      return loadA.promise;
+    },
+  });
+  const view = render(
+    <DoorRosterHarness dependencies={dependencies} selectedEventId="event-aaaa" />,
+  );
+
+  await waitFor(() => assert.equal(didStartLoadA, true));
+  view.rerender(
+    <DoorRosterHarness dependencies={dependencies} selectedEventId="event-bbbb" />,
+  );
+  await waitFor(() => {
+    assert.equal(
+      screen.getByTestId("guest-name").textContent,
+      "Authoritative Guest B",
+    );
+    assert.equal(screen.getByTestId("outcome").textContent, "partial");
+    assert.equal(screen.getByTestId("offline-mode").textContent, "false");
+  });
+
+  loadA.resolve(createScopedSnapshot("event-aaaa", guestA));
+  await waitFor(() => {
+    assert.equal(screen.getByTestId("offline-queued").textContent, "1");
+  });
+  assert.equal(
+    screen.getByTestId("guest-name").textContent,
+    "Authoritative Guest B",
+  );
+  assert.equal(screen.getByTestId("outcome").textContent, "partial");
+  assert.equal(screen.getByTestId("offline-mode").textContent, "false");
+});
+
+test("offline store tasks wait for completion and continue after a rejection", async () => {
+  const guestA = createScopedGuest("event-aaaa", "Guest A");
+  const guestB = createScopedGuest("event-bbbb", "Guest B");
+  const saveA = createDeferred<void>();
+  const storeEvents: string[] = [];
+  let activeStoreTasks = 0;
+  let maxActiveStoreTasks = 0;
+
+  async function trackStoreTask<T>(name: string, task: () => Promise<T>) {
+    storeEvents.push(`start:${name}`);
+    activeStoreTasks += 1;
+    maxActiveStoreTasks = Math.max(maxActiveStoreTasks, activeStoreTasks);
+    try {
+      return await task();
+    } finally {
+      activeStoreTasks -= 1;
+      storeEvents.push(`end:${name}`);
+    }
+  }
+
+  const dependencies = createDependencies({
+    fetchGuestOperationsSnapshot: async (_date, _venueId, eventId) => ({
+      data: {
+        guests: [eventId === "event-aaaa" ? guestA : guestB],
+        users: [],
+        externalLinks: [],
+        failedSections: [],
+      },
+      error: null,
+    }),
+    fetchOfflineDoorRoster: async (scope) => ({
+      data: [
+        {
+          id: scope.eventId === "event-aaaa" ? guestA.id : guestB.id,
+          name: scope.eventId === "event-aaaa" ? guestA.name : guestB.name,
+          status: "pending",
+          checkInTime: null,
+        },
+      ],
+      error: null,
+    }),
+    listOfflineDoorMutations: async (scope) =>
+      trackStoreTask(`list:${scope.eventId}`, async () => []),
+    saveOfflineDoorRoster: async (snapshot) =>
+      trackStoreTask(`save:${snapshot.scope.eventId}`, async () => {
+        if (snapshot.scope.eventId === "event-aaaa") await saveA.promise;
+      }),
+  });
+  const view = render(
+    <DoorRosterHarness dependencies={dependencies} selectedEventId="event-aaaa" />,
+  );
+
+  await waitFor(() =>
+    assert.ok(storeEvents.includes("start:save:event-aaaa")),
+  );
+  view.rerender(
+    <DoorRosterHarness dependencies={dependencies} selectedEventId="event-bbbb" />,
+  );
+  await waitFor(() => {
+    assert.equal(screen.getByTestId("guest-name").textContent, "Guest B");
+    assert.equal(screen.getByTestId("fetching").textContent, "false");
+  });
+  assert.equal(
+    storeEvents.some((event) => event.includes("event-bbbb")),
+    false,
+  );
+
+  saveA.reject(new Error("OFFLINE_STORAGE_FAILED"));
+  await waitFor(() =>
+    assert.ok(storeEvents.includes("end:save:event-bbbb")),
+  );
+  assert.equal(maxActiveStoreTasks, 1);
+  assert.equal(screen.getByTestId("guest-name").textContent, "Guest B");
+  assert.equal(
+    screen.getByTestId("has-current-scope-data").textContent,
+    "true",
+  );
+});

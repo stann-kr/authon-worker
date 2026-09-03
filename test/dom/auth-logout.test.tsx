@@ -10,7 +10,7 @@ import {
   waitFor,
 } from "@testing-library/react";
 
-import { AdminLogoutControl } from "@/app/admin/components/AdminHeader";
+import LogoutControl from "@/components/LogoutControl";
 import { logout, type LogoutResult } from "@/lib/auth";
 
 afterEach(cleanup);
@@ -192,7 +192,7 @@ test("successful logout clears scoped client state and redirects to login", asyn
   }
 });
 
-test("Admin logout blocks duplicate clicks and exposes a retryable live error", async () => {
+test("Authenticated logout blocks duplicate clicks and exposes a retryable live error", async () => {
   let resolveFirstLogout: ((result: LogoutResult) => void) | undefined;
   let calls = 0;
   const firstLogout = new Promise<LogoutResult>((resolve) => {
@@ -221,7 +221,7 @@ test("Admin logout blocks duplicate clicks and exposes a retryable live error", 
         },
       }}
     >
-      <AdminLogoutControl onLogout={onLogout} />
+      <LogoutControl onLogout={onLogout} />
     </NextIntlClientProvider>,
   );
 

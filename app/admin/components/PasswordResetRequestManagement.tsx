@@ -18,7 +18,7 @@ import {
 import type {
   PasswordResetRequestView,
   PasswordResetVerificationMethod,
-} from "@/lib/api/types";
+} from "@/lib/auth/password-reset-request-types";
 import { useLatestRequestGuard } from "@/lib/hooks";
 import { formatVenueDateTime } from "@/lib/date";
 import { useVenueSelector } from "@/components/VenueSelector";

@@ -5,7 +5,7 @@ import {
 } from "./rate-limit-policy";
 import { reportServerError } from "@/lib/observability/structured-log";
 
-interface RateLimitOptions {
+export interface RateLimitOptions {
   namespace: string;
   identifier: string;
   limit: number;
@@ -91,12 +91,19 @@ export async function consumeRateLimit(options: RateLimitOptions): Promise<RateL
  */
 export async function consumeRateLimitOrDeny(
   options: RateLimitOptions,
+  dependencies: {
+    consumeRateLimit?: typeof consumeRateLimit;
+    reportServerError?: typeof reportServerError;
+  } = {},
 ): Promise<RateLimitResult> {
   try {
-    return await consumeRateLimit(options);
+    return await (dependencies.consumeRateLimit ?? consumeRateLimit)(options);
   } catch (error: unknown) {
     // identifier에는 이메일/IP가 포함될 수 있으므로 로그에 남기지 않는다.
-    await reportServerError("rate_limit.storage", error);
+    await (dependencies.reportServerError ?? reportServerError)(
+      "rate_limit.storage",
+      error,
+    );
     return {
       allowed: false,
       remaining: 0,

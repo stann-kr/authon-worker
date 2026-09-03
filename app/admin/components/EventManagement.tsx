@@ -14,7 +14,7 @@ import {
   fetchEvents,
   transitionEventState,
 } from "@/lib/api/events";
-import type { Event, EventState } from "@/lib/api/types";
+import type { Event, EventState } from "@/lib/events/types";
 import { useLatestRequestGuard } from "@/lib/hooks";
 import { deriveAsyncListState, shouldShowEmptyState } from "@/lib/ui/async-list-state";
 import EventCloseout from "./EventCloseout";
