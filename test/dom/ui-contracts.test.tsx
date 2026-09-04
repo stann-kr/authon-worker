@@ -16,6 +16,7 @@ import AnalyticsAttendance from "@/app/admin/components/analytics/AnalyticsAtten
 import AnalyticsContributors from "@/app/admin/components/analytics/AnalyticsContributors";
 import AnalyticsPeriodBar from "@/app/admin/components/analytics/AnalyticsPeriodBar";
 import ExternalDjCombobox from "@/app/admin/components/ExternalDjCombobox";
+import ExternalEventCombobox from "@/app/admin/components/ExternalEventCombobox";
 import AsyncListContent from "@/components/AsyncListContent";
 import ConfirmDialog from "@/components/ConfirmDialog";
 import GuestListCard from "@/components/GuestListCard";
@@ -483,6 +484,56 @@ test("external DJ autocomplete supports keyboard selection and a new-name fallba
   assert.ok(screen.getByRole("listbox"));
   fireEvent.keyDown(input, { key: "Escape" });
   assert.equal(screen.queryByRole("listbox"), null);
+});
+
+test("external event autocomplete supports keyboard selection and free text", () => {
+  function Harness() {
+    const [value, setValue] = useState("");
+    return (
+      <>
+        <label htmlFor="link-event-name">Event name</label>
+        <ExternalEventCombobox
+          value={value}
+          suggestions={[
+            {
+              eventName: "FRIDAY NIGHT",
+              linkCount: 4,
+              lastUsedDate: "2026-08-16",
+            },
+            {
+              eventName: "SATURDAY NIGHT",
+              linkCount: 2,
+              lastUsedDate: "2026-08-10",
+            },
+          ]}
+          isLoading={false}
+          directoryError={null}
+          disabled={false}
+          hasError={false}
+          onChange={setValue}
+        />
+        <output data-testid="event-value">{value}</output>
+      </>
+    );
+  }
+
+  render(
+    <NextIntlClientProvider locale="en" messages={messages}>
+      <Harness />
+    </NextIntlClientProvider>,
+  );
+
+  const input = screen.getByRole("combobox", { name: "Event name" });
+  fireEvent.focus(input);
+  fireEvent.change(input, { target: { value: "fri" } });
+  assert.ok(screen.getByRole("listbox", { name: "Existing event names" }));
+  fireEvent.keyDown(input, { key: "Enter" });
+  assert.equal(screen.getByTestId("event-value").textContent, "FRIDAY NIGHT");
+  assert.equal(screen.queryByRole("listbox"), null);
+
+  fireEvent.change(input, { target: { value: "NEW EVENT" } });
+  assert.equal(screen.getByTestId("event-value").textContent, "NEW EVENT");
+  assert.equal(input.getAttribute("aria-expanded"), "false");
 });
 
 test("dialog traps the interaction, Escape closes it, and focus returns", async () => {

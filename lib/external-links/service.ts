@@ -8,6 +8,7 @@ import {
   getExternalDjCreatedAuditId,
 } from "../contributors/external-dj.ts";
 import type { ExternalDjSuggestion } from "../contributors/types.ts";
+import type { ExternalLinkCreateSuggestions } from "./types.ts";
 import type {
   ExternalLinkAdminContributor,
   ExternalLinkAdminPersistence,
@@ -20,6 +21,7 @@ import type {
 
 const DEFAULT_EXTERNAL_LINK_TTL_DAYS = 7;
 const MAX_EXTERNAL_DJ_DIRECTORY_ROWS = 500;
+const MAX_EXTERNAL_EVENT_DIRECTORY_ROWS = 500;
 
 export type ExternalLinkLifecycleActor = ExternalLinkMutationActor;
 
@@ -29,13 +31,15 @@ export type ExternalLinkAdminErrorCode =
   | "FORBIDDEN"
   | "VENUE_UNAVAILABLE"
   | "INVALID_CONTRIBUTOR"
-  | "DJ_DIRECTORY_TOO_LARGE";
+  | "DJ_DIRECTORY_TOO_LARGE"
+  | "CREATE_SUGGESTIONS_TOO_LARGE";
 
 const ADMIN_ERROR_MESSAGES: Record<ExternalLinkAdminErrorCode, string> = {
   FORBIDDEN: "Forbidden",
   VENUE_UNAVAILABLE: "Venue unavailable",
   INVALID_CONTRIBUTOR: "INVALID_CONTRIBUTOR",
   DJ_DIRECTORY_TOO_LARGE: "DJ_DIRECTORY_TOO_LARGE",
+  CREATE_SUGGESTIONS_TOO_LARGE: "CREATE_SUGGESTIONS_TOO_LARGE",
 };
 
 export class ExternalLinkAdminError extends Error {
@@ -223,6 +227,37 @@ export async function fetchAdminExternalDjDirectory(
     throw new ExternalLinkAdminError("DJ_DIRECTORY_TOO_LARGE");
   }
   return rows;
+}
+
+export async function fetchAdminExternalLinkCreateSuggestions(
+  input: {
+    actor: ExternalLinkAdminActor;
+    requestedVenueId: string;
+  },
+  dependencies: Pick<ExternalLinkAdminServiceDependencies, "persistence">,
+): Promise<ExternalLinkCreateSuggestions> {
+  const venueId = await requireActiveAdminVenue(
+    input.actor,
+    input.requestedVenueId,
+    dependencies.persistence,
+  );
+  const [djs, events] = await Promise.all([
+    dependencies.persistence.listContributorDirectory(
+      venueId,
+      MAX_EXTERNAL_DJ_DIRECTORY_ROWS + 1,
+    ),
+    dependencies.persistence.listEventDirectory(
+      venueId,
+      MAX_EXTERNAL_EVENT_DIRECTORY_ROWS + 1,
+    ),
+  ]);
+  if (
+    djs.length > MAX_EXTERNAL_DJ_DIRECTORY_ROWS ||
+    events.length > MAX_EXTERNAL_EVENT_DIRECTORY_ROWS
+  ) {
+    throw new ExternalLinkAdminError("CREATE_SUGGESTIONS_TOO_LARGE");
+  }
+  return { djs, events };
 }
 
 export async function createAdminExternalLink(

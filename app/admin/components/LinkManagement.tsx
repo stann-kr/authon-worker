@@ -20,7 +20,7 @@ import { shouldShowEmptyState } from "../../../lib/ui/async-list-state";
 import {
   fetchExternalLinksByDate,
   fetchRecentExternalLinks,
-  fetchExternalDjDirectory,
+  fetchExternalLinkCreateSuggestions,
   createExternalLink,
   deleteExternalLink,
   deactivateExternalLink,
@@ -28,7 +28,6 @@ import {
 } from "../../../lib/api/external-links";
 import type { ExternalDJLink } from "@/lib/external-links/types";
 import {
-  MAX_EXTERNAL_LINK_EVENT_LENGTH,
   shareExternalLink,
   toExternalLinkTemplateDraft,
 } from "../../../lib/external-links/domain";
@@ -41,6 +40,7 @@ import {
   type ManageSort,
 } from "./linkStatus";
 import ExternalDjCombobox from "./ExternalDjCombobox";
+import ExternalEventCombobox from "./ExternalEventCombobox";
 import {
   useLinkCreateController,
   type LinkCreateControllerActions,
@@ -51,7 +51,7 @@ import {
 } from "./useLinkManageController";
 
 const LINK_CREATE_ACTIONS: LinkCreateControllerActions = Object.freeze({
-  fetchDirectory: fetchExternalDjDirectory,
+  fetchSuggestions: fetchExternalLinkCreateSuggestions,
   createLink: createExternalLink,
   shareLink: shareExternalLink,
 });
@@ -131,8 +131,9 @@ export default function LinkManagement({
     isGenerating,
     nativeShareAvailable,
     currentDjSuggestions,
-    isDjDirectoryLoading,
-    djDirectoryError,
+    currentEventSuggestions,
+    isSuggestionsLoading,
+    suggestionsError,
     formValidationError,
     scopedCreateError: scopedError,
     templateNotice,
@@ -392,8 +393,8 @@ export default function LinkManagement({
                       contributorId={formData.contributorId}
                       suggestions={currentDjSuggestions}
                       isDirectoryEnabled={formData.kind === "contributor"}
-                      isDirectoryLoading={isDjDirectoryLoading}
-                      directoryError={djDirectoryError}
+                      isDirectoryLoading={isSuggestionsLoading}
+                      directoryError={suggestionsError}
                       disabled={isGenerating}
                       hasError={formValidationError?.field === "dj"}
                       errorId={
@@ -419,37 +420,26 @@ export default function LinkManagement({
                   <label htmlFor="link-event-name" className="app-label">
                     {t("eventName")}
                   </label>
-                  <input
-                    id="link-event-name"
-                    name="event-name"
+                  <ExternalEventCombobox
                     ref={linkEventInputRef}
-                    type="text"
-                    autoComplete="off"
                     value={formData.event}
+                    suggestions={currentEventSuggestions}
+                    isLoading={isSuggestionsLoading}
+                    directoryError={suggestionsError}
                     disabled={isGenerating}
-                    aria-invalid={
-                      formValidationError?.field === "event" || undefined
-                    }
-                    aria-describedby={
+                    hasError={formValidationError?.field === "event"}
+                    errorId={
                       formValidationError?.field === "event"
                         ? "link-event-name-error"
                         : undefined
                     }
-                    maxLength={MAX_EXTERNAL_LINK_EVENT_LENGTH}
-                    onChange={(e) => {
+                    onChange={(value) => {
                       clearFormFieldError("event");
                       setFormData({
                         ...formData,
-                        event: e.target.value.toUpperCase(),
+                        event: value,
                       });
                     }}
-                    className={`app-field uppercase ${
-                      formValidationError?.field === "event"
-                        ? "border-status-danger"
-                        : "border-border-strong"
-                    }`}
-                    placeholder={t("eventName")}
-                    required
                   />
                   {formValidationError?.field === "event" && (
                     <p

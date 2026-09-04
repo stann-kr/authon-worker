@@ -19,6 +19,7 @@ import type {
 import type { ExternalDjSuggestion } from "@/lib/contributors/types";
 import type {
   ExternalDJLink,
+  ExternalLinkCreateSuggestions,
   ExternalLinkPublicGuest,
   ExternalLinkPublicGuestCreateResult,
   ExternalLinkPublicValidationData,
@@ -46,6 +47,7 @@ import {
   deleteAdminExternalLink,
   ExternalLinkAdminError,
   fetchAdminExternalDjDirectory,
+  fetchAdminExternalLinkCreateSuggestions,
   type ExternalLinkLifecycleActor,
 } from "@/lib/external-links/service";
 import { createExternalLinkPublicPersistence } from "@/lib/external-links/public-persistence";
@@ -258,6 +260,25 @@ export async function fetchExternalDjDirectory(
           ? error.code
           : "DJ_DIRECTORY_UNAVAILABLE",
     };
+  }
+}
+
+export async function fetchExternalLinkCreateSuggestions(
+  venueId: string,
+): Promise<ApiResponse<ExternalLinkCreateSuggestions>> {
+  try {
+    const user = await requireRole(["super_admin", "venue_admin"]);
+    const data = await fetchAdminExternalLinkCreateSuggestions(
+      {
+        actor: toExternalLinkLifecycleActor(user),
+        requestedVenueId: venueId,
+      },
+      { persistence: getExternalLinkAdminPersistence() },
+    );
+    return { data, error: null };
+  } catch (error: unknown) {
+    await reportServerError("external_link.create_suggestions", error);
+    return { data: null, error: "CREATE_SUGGESTIONS_UNAVAILABLE" };
   }
 }
 
