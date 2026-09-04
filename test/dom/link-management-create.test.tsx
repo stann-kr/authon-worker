@@ -39,7 +39,10 @@ function createActions(
   }),
 ): LinkCreateControllerActions {
   return {
-    fetchDirectory: async () => ({ data: [], error: null }),
+    fetchSuggestions: async () => ({
+      data: { djs: [], events: [] },
+      error: null,
+    }),
     createLink,
     shareLink: async () => "copied",
   };
