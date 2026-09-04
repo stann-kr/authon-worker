@@ -1,5 +1,17 @@
 import type { BulkGuestCreateStatus } from "../guests/types";
+import type { ExternalDjSuggestion } from "../contributors/types";
 import type { Venue } from "../venues/types";
+
+export interface ExternalEventSuggestion {
+  eventName: string;
+  linkCount: number;
+  lastUsedDate: string | null;
+}
+
+export interface ExternalLinkCreateSuggestions {
+  djs: ExternalDjSuggestion[];
+  events: ExternalEventSuggestion[];
+}
 
 export interface ExternalDJLink {
   id: string;

@@ -1,5 +1,6 @@
 import type { D1Database } from "@cloudflare/workers-types";
 import type { ExternalDjSuggestion } from "../contributors/types.ts";
+import type { ExternalEventSuggestion } from "./types.ts";
 import type { AccountKind, Role } from "../users/policy.ts";
 
 export interface ExternalLinkMutationActor {
@@ -115,6 +116,10 @@ export interface ExternalLinkAdminPersistence {
     venueId: string,
     limit: number,
   ): Promise<ExternalDjSuggestion[]>;
+  listEventDirectory(
+    venueId: string,
+    limit: number,
+  ): Promise<ExternalEventSuggestion[]>;
   loadContributor(input: {
     venueId: string;
     contributorId: string | null;
@@ -264,15 +269,33 @@ const SELECT_CONTRIBUTOR_DIRECTORY_SQL = `
     count(link.id) AS linkCount,
     max(link.date) AS lastUsedDate
   FROM venue_contributors AS contributor
-  LEFT JOIN external_dj_links AS link
+  INNER JOIN external_dj_links AS link
     ON link.contributor_id = contributor.id
+    AND link.venue_id = contributor.venue_id
     AND link.kind = 'contributor'
+    AND link.deleted_at IS NULL
   WHERE
     contributor.venue_id = ?
     AND contributor.active = 1
     AND contributor.name_key IS NOT NULL
   GROUP BY contributor.id, contributor.display_name
   ORDER BY max(link.date) DESC, contributor.display_name ASC
+  LIMIT ?
+`;
+
+const SELECT_EVENT_DIRECTORY_SQL = `
+  SELECT
+    link.event AS eventName,
+    count(link.id) AS linkCount,
+    max(link.date) AS lastUsedDate
+  FROM external_dj_links AS link
+  WHERE
+    link.venue_id = ?
+    AND link.deleted_at IS NULL
+    AND link.event IS NOT NULL
+    AND trim(link.event) <> ''
+  GROUP BY link.event
+  ORDER BY max(link.date) DESC, link.event ASC
   LIMIT ?
 `;
 
@@ -552,6 +575,17 @@ export function createExternalLinkAdminPersistence(
         .prepare(SELECT_CONTRIBUTOR_DIRECTORY_SQL)
         .bind(venueId, limit)
         .all<ExternalDjSuggestion>();
+      return result.results.map((row) => ({
+        ...row,
+        linkCount: Number(row.linkCount),
+      }));
+    },
+
+    async listEventDirectory(venueId, limit) {
+      const result = await database
+        .prepare(SELECT_EVENT_DIRECTORY_SQL)
+        .bind(venueId, limit)
+        .all<ExternalEventSuggestion>();
       return result.results.map((row) => ({
         ...row,
         linkCount: Number(row.linkCount),

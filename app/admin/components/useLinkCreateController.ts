@@ -17,7 +17,11 @@ import {
   type ExternalLinkShareResult,
   type ExternalLinkCreateDraft,
 } from "@/lib/external-links/domain";
-import type { ExternalDJLink } from "@/lib/external-links/types";
+import type {
+  ExternalDJLink,
+  ExternalEventSuggestion,
+  ExternalLinkCreateSuggestions,
+} from "@/lib/external-links/types";
 import { useLatestRequestGuard, useScopedOperationGuard } from "@/lib/hooks";
 
 export interface LinkCreateFormData {
@@ -44,8 +48,8 @@ export interface LinkCreateFormValidationError {
 }
 
 export interface LinkCreateControllerActions {
-  fetchDirectory: (venueId: string) => Promise<{
-    data: ExternalDjSuggestion[] | null;
+  fetchSuggestions: (venueId: string) => Promise<{
+    data: ExternalLinkCreateSuggestions | null;
     error: string | null;
   }>;
   createLink: (
@@ -98,9 +102,10 @@ export function useLinkCreateController({
     useState(false);
   const [nativeShareAvailable, setNativeShareAvailable] = useState(false);
   const [djSuggestions, setDjSuggestions] = useState<ExternalDjSuggestion[]>([]);
-  const [djDirectoryVenueId, setDjDirectoryVenueId] = useState("");
-  const [isDjDirectoryLoading, setIsDjDirectoryLoading] = useState(false);
-  const [djDirectoryError, setDjDirectoryError] = useState<string | null>(null);
+  const [eventSuggestions, setEventSuggestions] = useState<ExternalEventSuggestion[]>([]);
+  const [suggestionsVenueId, setSuggestionsVenueId] = useState("");
+  const [isSuggestionsLoading, setIsSuggestionsLoading] = useState(false);
+  const [suggestionsError, setSuggestionsError] = useState<string | null>(null);
   const [createError, setCreateError] = useState<string | null>(null);
   const [createErrorScopeKey, setCreateErrorScopeKey] = useState("");
   const [linkActionToast, setLinkActionToast] = useState<string | null>(null);
@@ -118,7 +123,7 @@ export function useLinkCreateController({
   const shouldFocusGeneratedLinkRef = useRef(false);
   const activeCreateOperationIdRef = useRef<number | null>(null);
   const linkActionToastOwnerRef = useRef<number | null>(null);
-  const djDirectoryRequestGuard = useLatestRequestGuard();
+  const suggestionsRequestGuard = useLatestRequestGuard();
   const createOperationGuard = useScopedOperationGuard();
   const shareOperationGuard = useScopedOperationGuard();
   const credentialScopeKey = `${venueId}:create:${formData.date}:${eventId ?? "general"}`;
@@ -138,7 +143,9 @@ export function useLinkCreateController({
   const scopedCreateError =
     createErrorScopeKey === credentialScopeKey ? createError : null;
   const currentDjSuggestions =
-    djDirectoryVenueId === venueId ? djSuggestions : [];
+    suggestionsVenueId === venueId ? djSuggestions : [];
+  const currentEventSuggestions =
+    suggestionsVenueId === venueId ? eventSuggestions : [];
 
   useEffect(() => {
     setNativeShareAvailable(typeof navigator.share === "function");
@@ -152,13 +159,14 @@ export function useLinkCreateController({
   }, [selectedDate]);
 
   useEffect(() => {
-    djDirectoryRequestGuard.invalidateRequests();
+    suggestionsRequestGuard.invalidateRequests();
     setDjSuggestions([]);
-    setDjDirectoryVenueId("");
-    setDjDirectoryError(null);
-    setIsDjDirectoryLoading(false);
+    setEventSuggestions([]);
+    setSuggestionsVenueId("");
+    setSuggestionsError(null);
+    setIsSuggestionsLoading(false);
     setFormData((current) => ({ ...current, contributorId: null }));
-  }, [djDirectoryRequestGuard, venueId]);
+  }, [suggestionsRequestGuard, venueId]);
 
   useEffect(() => {
     createOperationGuard.invalidateOperations();
@@ -178,36 +186,37 @@ export function useLinkCreateController({
 
   useEffect(() => {
     if (isActive) return;
-    djDirectoryRequestGuard.invalidateRequests();
+    suggestionsRequestGuard.invalidateRequests();
     createOperationGuard.invalidateOperations();
     shareOperationGuard.invalidateOperations();
     activeCreateOperationIdRef.current = null;
     linkActionToastOwnerRef.current = null;
-    setIsDjDirectoryLoading(false);
+    setIsSuggestionsLoading(false);
     setIsGenerating(false);
     setIsGeneratedLinkActionPending(false);
   }, [
     createOperationGuard,
-    djDirectoryRequestGuard,
+    suggestionsRequestGuard,
     isActive,
     shareOperationGuard,
   ]);
 
-  const loadDjDirectory = useCallback(async () => {
+  const loadSuggestions = useCallback(async () => {
     const requestedVenueId = venueId;
-    const isLatestRequest = djDirectoryRequestGuard.beginRequest();
+    const isLatestRequest = suggestionsRequestGuard.beginRequest();
     if (!requestedVenueId) {
       setDjSuggestions([]);
-      setDjDirectoryVenueId("");
-      setDjDirectoryError(null);
-      setIsDjDirectoryLoading(false);
+      setEventSuggestions([]);
+      setSuggestionsVenueId("");
+      setSuggestionsError(null);
+      setIsSuggestionsLoading(false);
       return;
     }
 
-    setIsDjDirectoryLoading(true);
-    setDjDirectoryError(null);
+    setIsSuggestionsLoading(true);
+    setSuggestionsError(null);
     try {
-      const { data, error } = await actionsRef.current.fetchDirectory(requestedVenueId);
+      const { data, error } = await actionsRef.current.fetchSuggestions(requestedVenueId);
       if (
         !isLatestRequest() ||
         !isActiveRef.current ||
@@ -215,9 +224,12 @@ export function useLinkCreateController({
       ) {
         return;
       }
-      setDjSuggestions(data ?? []);
-      setDjDirectoryVenueId(requestedVenueId);
-      setDjDirectoryError(error ? tRef.current("djDirectoryUnavailable") : null);
+      setDjSuggestions(data?.djs ?? []);
+      setEventSuggestions(data?.events ?? []);
+      setSuggestionsVenueId(requestedVenueId);
+      setSuggestionsError(
+        error ? tRef.current("createSuggestionsUnavailable") : null,
+      );
     } catch (directoryError) {
       if (
         !isLatestRequest() ||
@@ -226,24 +238,25 @@ export function useLinkCreateController({
       ) {
         return;
       }
-      console.error("Failed to load external DJ directory:", directoryError);
+      console.error("Failed to load external link suggestions:", directoryError);
       setDjSuggestions([]);
-      setDjDirectoryVenueId(requestedVenueId);
-      setDjDirectoryError(tRef.current("djDirectoryUnavailable"));
+      setEventSuggestions([]);
+      setSuggestionsVenueId(requestedVenueId);
+      setSuggestionsError(tRef.current("createSuggestionsUnavailable"));
     } finally {
       if (
         isLatestRequest() &&
         isActiveRef.current &&
         currentVenueIdRef.current === requestedVenueId
       ) {
-        setIsDjDirectoryLoading(false);
+        setIsSuggestionsLoading(false);
       }
     }
-  }, [djDirectoryRequestGuard, venueId]);
+  }, [suggestionsRequestGuard, venueId]);
 
   useEffect(() => {
-    if (isActive) void loadDjDirectory();
-  }, [isActive, loadDjDirectory]);
+    if (isActive) void loadSuggestions();
+  }, [isActive, loadSuggestions]);
 
   useEffect(() => {
     if (!isActive || !shouldFocusTemplateDateRef.current) return;
@@ -382,7 +395,7 @@ export function useLinkCreateController({
         setGeneratedLinkScopeKey(operation.scopeKey);
         setTemplateNotice(null);
         setFormData(EMPTY_FORM_DATA(operationDate));
-        void loadDjDirectory();
+        void loadSuggestions();
       }
     } catch (createError) {
       if (
@@ -485,8 +498,9 @@ export function useLinkCreateController({
     isGenerating,
     nativeShareAvailable,
     currentDjSuggestions,
-    isDjDirectoryLoading,
-    djDirectoryError,
+    currentEventSuggestions,
+    isSuggestionsLoading,
+    suggestionsError,
     formValidationError,
     scopedCreateError,
     templateNotice,
