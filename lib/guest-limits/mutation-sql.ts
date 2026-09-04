@@ -1,3 +1,48 @@
+import { currentGuestActorPredicate } from "../guests/atomic-sql.ts";
+
+export const INSERT_CURRENT_ACTOR_EVENT_CONTRIBUTOR_LIMIT_SQL = `
+  INSERT INTO event_contributor_limits (
+    event_id, venue_id, user_id, guest_limit, source_event_id,
+    created_by_user_id, created_at
+  )
+  SELECT
+    writable_event.id,
+    writable_event.venue_id,
+    mutation_actor.id,
+    mutation_actor.guest_limit,
+    ?,
+    mutation_actor.id,
+    ?
+  FROM events AS writable_event
+  JOIN venues AS mutation_venue
+    ON mutation_venue.id = writable_event.venue_id
+    AND mutation_venue.active = 1
+  JOIN users AS mutation_actor
+    ON mutation_actor.id = ?
+  WHERE writable_event.id = ?
+    AND writable_event.venue_id = ?
+    AND writable_event.business_date = ?
+    AND writable_event.state IN ('draft', 'open')
+    AND ${currentGuestActorPredicate("guest", "writable_event.venue_id", false)}
+  ON CONFLICT(event_id, user_id) DO NOTHING
+  RETURNING guest_limit AS guestLimit
+`;
+
+export const SELECT_CURRENT_ACTOR_EVENT_CONTRIBUTOR_LIMIT_SQL = `
+  SELECT configured_limit.guest_limit AS guestLimit
+  FROM event_contributor_limits AS configured_limit
+  JOIN events AS writable_event
+    ON writable_event.id = configured_limit.event_id
+    AND writable_event.venue_id = configured_limit.venue_id
+    AND writable_event.business_date = ?
+    AND writable_event.state IN ('draft', 'open')
+  WHERE configured_limit.event_id = ?
+    AND configured_limit.venue_id = ?
+    AND configured_limit.user_id = ?
+    AND ${currentGuestActorPredicate("guest", "configured_limit.venue_id", false)}
+  LIMIT 1
+`;
+
 export const INSERT_GUARDED_COMPATIBILITY_EVENT_SQL = `
   INSERT INTO events (
     id, venue_id, business_date, name, state, compatibility_key,
