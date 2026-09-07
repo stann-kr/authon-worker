@@ -1,6 +1,7 @@
 "use client";
 
 import { useLocale, useTranslations } from "next-intl";
+import DisclosureSection from "@/components/DisclosureSection";
 import {
   CartesianGrid,
   Legend,
@@ -65,9 +66,6 @@ export default function AnalyticsAttendance({
         <h3 id="analytics-attendance-title" className="type-panel-title">
           {t("attendance.title")}
         </h3>
-        <p className="mt-1 max-w-[75ch] text-xs leading-relaxed text-text-muted">
-          {t("attendance.description")}
-        </p>
       </div>
 
       <dl className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4">
@@ -109,9 +107,6 @@ export default function AnalyticsAttendance({
         <h4 className="text-sm font-semibold text-text-heading">
           {t("attendance.trendTitle")}
         </h4>
-        <p className="mt-1 text-xs leading-relaxed text-text-muted">
-          {t("attendance.trendDescription")}
-        </p>
 
         {attendance.trend.length === 0 ? (
           <p className="mt-4 border border-border-subtle bg-canvas px-4 py-6 text-center text-sm text-text-muted">
@@ -185,54 +180,52 @@ export default function AnalyticsAttendance({
               </ResponsiveContainer>
             </div>
 
-            <div className="mt-4 overflow-x-auto border border-border-subtle">
-              <table className="w-full min-w-[36rem] border-collapse text-left text-xs">
-                <caption className="sr-only">
-                  {t("attendance.tableTitle")}
-                </caption>
-                <thead className="bg-canvas text-text-dim">
-                  <tr>
-                    <th scope="col" className="px-3 py-2 font-medium">
-                      {t("attendance.date")}
-                    </th>
-                    <th scope="col" className="px-3 py-2 text-right font-medium">
-                      {t("attendance.checkedInGuests")}
-                    </th>
-                    <th scope="col" className="px-3 py-2 text-right font-medium">
-                      {t("attendance.walkIns")}
-                    </th>
-                    <th scope="col" className="px-3 py-2 text-right font-medium">
-                      {t("attendance.totalAttendance")}
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border-subtle bg-surface">
-                  {attendance.trend.map((point) => (
-                    <tr key={point.bucketStartDate}>
-                      <th scope="row" className="px-3 py-2 font-medium text-text-heading">
-                        {formatDate(point.bucketStartDate)}
+            <DisclosureSection title={t("attendance.tableTitle")}>
+              <div className="overflow-x-auto border border-border-subtle">
+                <table className="w-full min-w-[36rem] border-collapse text-left text-xs">
+                  <caption className="sr-only">
+                    {t("attendance.tableTitle")}
+                  </caption>
+                  <thead className="bg-canvas text-text-dim">
+                    <tr>
+                      <th scope="col" className="px-3 py-2 font-medium">
+                        {t("attendance.date")}
                       </th>
-                      <td className="px-3 py-2 text-right font-mono tabular-nums text-text-body">
-                        {numberFormat.format(point.checkedInGuests)}
-                      </td>
-                      <td className="px-3 py-2 text-right font-mono tabular-nums text-text-body">
-                        {numberFormat.format(point.walkIns)}
-                      </td>
-                      <td className="px-3 py-2 text-right font-mono font-semibold tabular-nums text-text-heading">
-                        {numberFormat.format(point.totalAttendance)}
-                      </td>
+                      <th scope="col" className="px-3 py-2 text-right font-medium">
+                        {t("attendance.checkedInGuests")}
+                      </th>
+                      <th scope="col" className="px-3 py-2 text-right font-medium">
+                        {t("attendance.walkIns")}
+                      </th>
+                      <th scope="col" className="px-3 py-2 text-right font-medium">
+                        {t("attendance.totalAttendance")}
+                      </th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                  </thead>
+                  <tbody className="divide-y divide-border-subtle bg-surface">
+                    {attendance.trend.map((point) => (
+                      <tr key={point.bucketStartDate}>
+                        <th scope="row" className="px-3 py-2 font-medium text-text-heading">
+                          {formatDate(point.bucketStartDate)}
+                        </th>
+                        <td className="px-3 py-2 text-right font-mono tabular-nums text-text-body">
+                          {numberFormat.format(point.checkedInGuests)}
+                        </td>
+                        <td className="px-3 py-2 text-right font-mono tabular-nums text-text-body">
+                          {numberFormat.format(point.walkIns)}
+                        </td>
+                        <td className="px-3 py-2 text-right font-mono font-semibold tabular-nums text-text-heading">
+                          {numberFormat.format(point.totalAttendance)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </DisclosureSection>
           </>
         )}
       </div>
-
-      <p className="border-t border-border-subtle px-4 py-3 text-xs leading-relaxed text-text-dim sm:px-5">
-        {t("attendance.definition")}
-      </p>
     </section>
   );
 }

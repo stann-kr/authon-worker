@@ -490,6 +490,20 @@ export function useUserDirectoryController({
     await handleUserUpdate(user.id, { active: !user.active });
   };
 
+  const requestActiveChange = async (user: User) => {
+    const scopeOwner = renderedScopeOwner;
+    if (scopeOwnerRef.current !== scopeOwner) return;
+    if (user.active) {
+      setPendingUserAction({ kind: "toggle", user });
+      return;
+    }
+    const opener = getActiveFocusOwner();
+    const updated = await handleUserUpdate(user.id, { active: true });
+    if (updated && scopeOwnerRef.current === scopeOwner) {
+      setDirectoryFocusIntent({ scopeOwner, opener });
+    }
+  };
+
   const handlePasswordReset = async (user: User) => {
     const lease = beginUserMutation(user.id);
     if (!lease) return;
@@ -728,6 +742,7 @@ export function useUserDirectoryController({
     loadUsers,
     passwordLinkPanelRef,
     pendingUserAction,
+    requestActiveChange,
     roleFilter,
     scopedAuditEvents,
     scopedFeedback,

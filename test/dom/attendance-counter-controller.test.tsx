@@ -125,7 +125,6 @@ function createDependencies(
     listAttendanceMutations: async () => [],
     removeAttendanceMutations: async () => {},
     resolveAttendanceMutation: async () => {},
-    confirm: () => true,
     randomUUID: () => "uuid-0001",
     ...overrides,
   };
@@ -264,7 +263,14 @@ function AttendanceCounterHarness({
             controller.changeAdjustmentReason(event.target.value)
           }
         />
-        <button type="submit">Reconcile</button>
+        {controller.isAdjustmentConfirmationOpen && (
+          <button type="button" onClick={controller.cancelAdjustmentConfirmation}>
+            Cancel reconciliation
+          </button>
+        )}
+        <button type="submit">
+          {controller.isAdjustmentConfirmationOpen ? "Finalize" : "Reconcile"}
+        </button>
       </form>
     </>
   );
@@ -343,6 +349,10 @@ function ReconciliationFocusHarness({
         adjustmentReason="counted at door"
         hasPendingReconciliationMutations={false}
         isAdjusting={false}
+        isAdjustmentConfirmationOpen
+        cancelAdjustmentConfirmation={() => {}}
+        adjustmentSubmitRef={null}
+        adjustmentCancelRef={null}
         isReconciliationTargetInvalid={false}
         isReconciliationBelowCheckedGuests={false}
         isReconciliationDeltaOutOfRange={false}
@@ -665,7 +675,6 @@ test("reconciliation retries the exact payload with one idempotency key", async 
   const calls: Parameters<
     AttendanceCounterDependencies["reconcileDoorAttendance"]
   >[0][] = [];
-  const confirmations: string[] = [];
   let uuidCalls = 0;
   const dependencies = createDependencies({
     reconcileDoorAttendance: async (params) => {
@@ -686,10 +695,6 @@ test("reconciliation retries the exact payload with one idempotency key", async 
         error: null,
       };
     },
-    confirm: (message) => {
-      confirmations.push(message);
-      return true;
-    },
     randomUUID: () => {
       uuidCalls += 1;
       return "uuid-0001";
@@ -708,12 +713,15 @@ test("reconciliation retries the exact payload with one idempotency key", async 
   const form = screen.getByRole("button", { name: "Reconcile" }).closest("form")!;
 
   fireEvent.submit(form);
+  assert.equal(calls.length, 0);
+  fireEvent.click(screen.getByRole("button", { name: "Finalize" }));
   await waitFor(() => {
     assert.equal(calls.length, 1);
     assert.equal(screen.getByTestId("notice").textContent, "adjustmentFailed");
     assert.equal(screen.getByTestId("adjusting").textContent, "false");
   });
   fireEvent.submit(form);
+  fireEvent.click(screen.getByRole("button", { name: "Finalize" }));
   await waitFor(() => {
     assert.equal(calls.length, 2);
     assert.equal(screen.getByTestId("target").textContent, "");
@@ -731,8 +739,60 @@ test("reconciliation retries the exact payload with one idempotency key", async 
     idempotencyKey: "admin-adjustment:uuid-0001",
   };
   assert.deepEqual(calls, [expectedPayload, expectedPayload]);
-  assert.deepEqual(confirmations, ["adjustment.confirm", "adjustment.confirm"]);
   assert.equal(uuidCalls, 1);
+});
+
+test("reconciliation review is cancelled by input, summary, and scope changes", async () => {
+  let checkedInGuests = 5;
+  const calls: Parameters<AttendanceCounterDependencies["reconcileDoorAttendance"]>[0][] = [];
+  const dependencies = createDependencies({
+    fetchDoorAttendanceSummary: async ({ scope }) => ({
+      data: createSummary(scope, { checkedInGuests }),
+      error: null,
+    }),
+    reconcileDoorAttendance: async (params) => {
+      calls.push(params);
+      return { data: createSummary(params.scope), error: null };
+    },
+  });
+  const view = render(<AttendanceCounterHarness scope={SCOPE_A} dependencies={dependencies} />);
+  await waitFor(() => assert.equal(screen.getByTestId("checked-in").textContent, "5"));
+  const fill = (reason: string) => {
+    fireEvent.change(screen.getByRole("textbox", { name: "Target" }), { target: { value: "10" } });
+    fireEvent.change(screen.getByRole("textbox", { name: "Reason" }), { target: { value: reason } });
+  };
+  const review = () => fireEvent.submit(screen.getByRole("button", { name: "Reconcile" }).closest("form")!);
+
+  fill("counted at door");
+  review();
+  assert.equal(calls.length, 0);
+  fireEvent.click(screen.getByRole("button", { name: "Cancel reconciliation" }));
+  assert.equal(screen.queryByRole("button", { name: "Finalize" }), null);
+  assert.equal(screen.getByTestId("target").textContent, "10");
+  review();
+  fill("updated count reason");
+  assert.equal(screen.queryByRole("button", { name: "Finalize" }), null);
+  review();
+
+  checkedInGuests = 6;
+  fireEvent(window, new Event("online"));
+  await waitFor(() => assert.equal(screen.getByTestId("checked-in").textContent, "6"));
+  assert.equal(screen.queryByRole("button", { name: "Finalize" }), null);
+  assert.equal(calls.length, 0);
+  review();
+  view.rerender(<AttendanceCounterHarness scope={SCOPE_B} dependencies={dependencies} />);
+  assert.equal(screen.queryByRole("button", { name: "Finalize" }), null);
+  view.rerender(<AttendanceCounterHarness scope={SCOPE_A} dependencies={dependencies} />);
+  await waitFor(() => assert.equal(screen.getByTestId("scope-event").textContent, SCOPE_A.eventId));
+  assert.equal(screen.queryByRole("button", { name: "Finalize" }), null);
+  fill("confirmed current count");
+  review();
+  assert.equal(calls.length, 0);
+  fireEvent.click(screen.getByRole("button", { name: "Finalize" }));
+  await waitFor(() => assert.equal(calls.length, 1));
+  assert.equal(calls[0].expectedCheckedInGuests, 6);
+  assert.equal(calls[0].scope.eventId, SCOPE_A.eventId);
+  assert.equal(calls[0].reason, "confirmed current count");
 });
 
 test("same-tick duplicate reconciliation submits only once", async () => {
@@ -743,16 +803,11 @@ test("same-tick duplicate reconciliation submits only once", async () => {
   const calls: Parameters<
     AttendanceCounterDependencies["reconcileDoorAttendance"]
   >[0][] = [];
-  let confirmationCalls = 0;
   let uuidCalls = 0;
   const dependencies = createDependencies({
     reconcileDoorAttendance: async (params) => {
       calls.push(params);
       return reconciliation.promise;
-    },
-    confirm: () => {
-      confirmationCalls += 1;
-      return true;
     },
     randomUUID: () => {
       uuidCalls += 1;
@@ -771,13 +826,16 @@ test("same-tick duplicate reconciliation submits only once", async () => {
   });
   const form = screen.getByRole("button", { name: "Reconcile" }).closest("form")!;
 
+  fireEvent.submit(form);
+  assert.equal(calls.length, 0);
+  assert.ok(screen.getByRole("button", { name: "Finalize" }));
+
   await act(async () => {
     form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
     form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
     await Promise.resolve();
   });
 
-  assert.equal(confirmationCalls, 1);
   assert.equal(uuidCalls, 1);
   assert.equal(calls.length, 1);
 
@@ -824,6 +882,7 @@ test("scope adjustment ownership survives A to B to A navigation", async () => {
     target: { value: "scope A count" },
   });
   fireEvent.submit(screen.getByRole("button", { name: "Reconcile" }).closest("form")!);
+  fireEvent.click(screen.getByRole("button", { name: "Finalize" }));
   await waitFor(() => {
     assert.deepEqual(requestedEvents, [SCOPE_A.eventId]);
     assert.equal(screen.getByTestId("adjusting").textContent, "true");
@@ -844,6 +903,7 @@ test("scope adjustment ownership survives A to B to A navigation", async () => {
     target: { value: "scope B count" },
   });
   fireEvent.submit(screen.getByRole("button", { name: "Reconcile" }).closest("form")!);
+  fireEvent.click(screen.getByRole("button", { name: "Finalize" }));
   await waitFor(() => {
     assert.deepEqual(requestedEvents, [SCOPE_A.eventId, SCOPE_B.eventId]);
     assert.equal(screen.getByTestId("adjusting").textContent, "true");
@@ -1332,6 +1392,7 @@ test("the first committed scope frame never exposes the previous scope state", a
     target: { value: "scope A draft" },
   });
   fireEvent.submit(screen.getByRole("button", { name: "Reconcile" }).closest("form")!);
+  fireEvent.click(screen.getByRole("button", { name: "Finalize" }));
   fireEvent.click(screen.getByRole("button", { name: "Undo" }));
   fireEvent.click(screen.getByRole("button", { name: "Clear failed" }));
   await waitFor(() => {

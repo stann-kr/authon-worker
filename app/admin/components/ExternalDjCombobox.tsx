@@ -200,9 +200,6 @@ const ExternalDjCombobox = forwardRef<HTMLInputElement, ExternalDjComboboxProps>
                 }`}
               >
                 <span className="truncate font-medium">{suggestion.displayName}</span>
-                <span className="shrink-0 font-mono text-[11px] opacity-75">
-                  {t("djPreviousLinks", { count: suggestion.linkCount })}
-                </span>
               </li>
             ))}
           </ul>
@@ -211,7 +208,11 @@ const ExternalDjCombobox = forwardRef<HTMLInputElement, ExternalDjComboboxProps>
         {isDirectoryEnabled && (
           <p
             id={statusId}
-            className="mt-1 text-xs text-text-dim"
+            className={
+              !isDirectoryLoading && !directoryError && value
+                ? "sr-only"
+                : "mt-1 text-xs text-text-dim"
+            }
             role="status"
             aria-live="polite"
             aria-atomic="true"
@@ -223,10 +224,9 @@ const ExternalDjCombobox = forwardRef<HTMLInputElement, ExternalDjComboboxProps>
               : selectedSuggestion
                 ? t("existingDjSelected", {
                     name: selectedSuggestion.displayName,
-                    count: selectedSuggestion.linkCount,
                   })
                 : value
-                  ? t("newDjWillBeCreated")
+                  ? ""
                   : t("djAutocompleteHelp")}
           </p>
         )}
