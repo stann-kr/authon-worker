@@ -9,6 +9,7 @@ import {
   render,
   screen,
   waitFor,
+  within,
 } from "@testing-library/react";
 
 import AdminTaskSwitcher from "@/app/admin/components/AdminTaskSwitcher";
@@ -273,7 +274,7 @@ test("analytics period controls expose selection and keyboard-native navigation"
             comparison: "Compared with {start}-{end}",
           },
           coverage: {
-            summary: "{confirmed} confirmed, {days} days, {unconfirmed} unconfirmed",
+            summary: "{days} guest registration days",
           },
         },
       }}
@@ -301,9 +302,10 @@ test("analytics period controls expose selection and keyboard-native navigation"
   assert.equal(nextGranularity, "quarter");
   fireEvent.click(screen.getByRole("button", { name: "Previous period" }));
   assert.equal(previousAnchor, "2026-07-01");
+  assert.ok(screen.getByText(/Compared with 2026-07-01-2026-07-31/));
 });
 
-test("attendance analytics keeps KPI definitions and its empty state visible", () => {
+test("attendance analytics keeps KPIs and its empty state visible", () => {
   render(
     <NextIntlClientProvider
       locale="en"
@@ -339,6 +341,46 @@ test("attendance analytics keeps KPI definitions and its empty state visible", (
   assert.ok(screen.getByText("Walk-ins"));
   assert.ok(screen.getByText("Attendance per operating day"));
   assert.ok(screen.getByText("No attendance was recorded for this period."));
+});
+
+test("attendance chart data remains available through its disclosure", () => {
+  const originalResizeObserver = globalThis.ResizeObserver;
+  globalThis.ResizeObserver = class {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  };
+
+  try {
+    render(
+      <NextIntlClientProvider locale="en" messages={messages}>
+        <AnalyticsAttendance
+          attendance={{
+            ...EMPTY_ANALYTICS_DTO_FIXTURE.attendance,
+            trend: [{
+              bucketStartDate: "2026-08-07",
+              checkedInGuests: 1,
+              walkIns: 3,
+              totalAttendance: 4,
+              operatingDays: 1,
+            }],
+          }}
+        />
+      </NextIntlClientProvider>,
+    );
+
+    const title = messages.AdminAnalytics.attendance.tableTitle;
+    const summary = screen.getByText(title, { selector: "summary span" });
+    const details = summary.closest("details");
+    assert.ok(details);
+    assert.equal(details.open, false);
+    fireEvent.click(summary);
+    assert.equal(details.open, true);
+    assert.ok(screen.getByRole("table", { name: title }));
+    assert.ok(screen.getByRole("cell", { name: "4" }));
+  } finally {
+    globalThis.ResizeObserver = originalResizeObserver;
+  }
 });
 
 test("named unmapped contributors show only their source name", () => {
@@ -451,11 +493,8 @@ test("external DJ autocomplete supports keyboard selection and a new-name fallba
         LinkAdmin: {
           djName: "DJ name",
           djSuggestions: "Existing DJ names",
-          djPreviousLinks: "{count} previous links",
           djSuggestionsLoading: "Loading existing DJ names.",
-          existingDjSelected:
-            "Linking to existing DJ {name}. {count} previous links",
-          newDjWillBeCreated: "A new DJ will be added.",
+          existingDjSelected: "{name} selected",
           djAutocompleteHelp: "Start typing to choose a DJ registered before.",
         },
       }}
@@ -478,7 +517,10 @@ test("external DJ autocomplete supports keyboard selection and a new-name fallba
 
   fireEvent.change(input, { target: { value: "DJ NEW" } });
   assert.equal(screen.getByTestId("selected-dj").textContent, "new");
-  assert.ok(screen.getByText("A new DJ will be added."));
+  assert.equal(
+    document.getElementById(input.getAttribute("aria-describedby")!)?.textContent,
+    "",
+  );
 
   fireEvent.change(input, { target: { value: "DJ STA" } });
   assert.ok(screen.getByRole("listbox"));
@@ -536,7 +578,8 @@ test("external event autocomplete supports keyboard selection and free text", ()
   assert.equal(input.getAttribute("aria-expanded"), "false");
 });
 
-test("dialog traps the interaction, Escape closes it, and focus returns", async () => {
+for (const role of ["alertdialog", "dialog"] as const) {
+test(`${role} traps the interaction, Escape closes it, and focus returns`, async () => {
   function Harness() {
     const [open, setOpen] = useState(false);
     return (
@@ -547,7 +590,8 @@ test("dialog traps the interaction, Escape closes it, and focus returns", async 
         <ConfirmDialog
           open={open}
           title="Confirm action"
-          description="Check before continuing"
+          role={role}
+          description={role === "alertdialog" ? "Check before continuing" : undefined}
           confirmLabel="Confirm"
           cancelLabel="Cancel"
           onConfirm={() => {}}
@@ -562,15 +606,17 @@ test("dialog traps the interaction, Escape closes it, and focus returns", async 
   opener.focus();
   fireEvent.click(opener);
 
-  const dialog = screen.getByRole("alertdialog");
+  const dialog = screen.getByRole(role);
   assert.equal(dialog.getAttribute("aria-modal"), "true");
+  assert.equal(dialog.hasAttribute("aria-describedby"), role === "alertdialog");
   assert.equal(document.getElementById("main-content")?.hasAttribute("inert"), true);
   assert.equal(document.activeElement, screen.getByRole("button", { name: "Cancel" }));
 
   fireEvent.keyDown(document, { key: "Escape" });
-  await waitFor(() => assert.equal(screen.queryByRole("alertdialog"), null));
+  await waitFor(() => assert.equal(screen.queryByRole(role), null));
   assert.equal(document.activeElement, opener);
 });
+}
 
 test("busy dialog reports aria-busy and ignores Escape", () => {
   let cancelled = false;
@@ -680,37 +726,101 @@ test("dialog cleanup preserves focus already moved outside", () => {
   }
 });
 
-test("guest deletion dialog explains that analytics will change", () => {
-  render(
-    <NextIntlClientProvider
-      locale="en"
-      messages={{
-        Common: {
-          waitingStatus: "Status: waiting.",
-          delete: "Delete",
-          deleteGuest: "Delete guest",
-          removeGuestConfirm:
-            "Deleting this guest registration removes it from the guest list and analytics. Continue?",
-          cancel: "Cancel",
-        },
-      }}
-    >
+test("pending guest deletion confirms inline, restores focus, and respects a new disabled state", () => {
+  let deleteCalls = 0;
+  const card = (disabled = false) => (
+    <NextIntlClientProvider locale="en" messages={messages}>
       <GuestListCard
         guest={{ id: "guest-a", name: "Guest A", status: "pending" }}
         index={0}
-        onDelete={() => {}}
+        isDeleteDisabled={disabled}
+        onDelete={() => { deleteCalls += 1; }}
       />
-    </NextIntlClientProvider>,
+    </NextIntlClientProvider>
   );
+  const view = render(card());
+  const trigger = screen.getByRole("button", { name: "Delete" });
+  trigger.focus();
+  fireEvent.click(trigger);
+  assert.equal(deleteCalls, 0);
+  assert.equal(screen.queryByRole("alertdialog"), null);
+  assert.equal(document.getElementById("main-content")?.hasAttribute("inert"), false);
+  const group = screen.getByRole("group", { name: /Guest A/ });
+  assert.equal(document.activeElement, within(group).getByRole("button", { name: "Cancel" }));
+  fireEvent.keyDown(group, { key: "Escape" });
+  assert.equal(screen.queryByRole("group"), null);
+  assert.equal(document.activeElement, trigger);
 
+  fireEvent.click(trigger);
+  view.rerender(card(true));
+  const confirm = within(screen.getByRole("group")).getByRole("button", { name: "Delete" });
+  assert.equal(confirm.hasAttribute("disabled"), true);
+  fireEvent.click(confirm);
+  assert.equal(deleteCalls, 0);
+  view.rerender(card());
+  fireEvent.click(within(screen.getByRole("group")).getByRole("button", { name: "Delete" }));
+  assert.equal(deleteCalls, 1);
+  assert.equal(screen.queryByRole("group"), null);
+});
+
+test("removing a pending guest row returns focus to the main content", () => {
+  function Harness() {
+    const [isRemoved, setIsRemoved] = useState(false);
+    return (
+      <NextIntlClientProvider locale="en" messages={messages}>
+        {!isRemoved && (
+          <GuestListCard
+            guest={{ id: "guest-a", name: "Guest A", status: "pending" }}
+            index={0}
+            onDelete={() => setIsRemoved(true)}
+          />
+        )}
+      </NextIntlClientProvider>
+    );
+  }
+  render(<Harness />);
   fireEvent.click(screen.getByRole("button", { name: "Delete" }));
-  const dialog = screen.getByRole("alertdialog", { name: "Delete guest" });
+  fireEvent.click(within(screen.getByRole("group")).getByRole("button", { name: "Delete" }));
+  assert.equal(screen.queryByRole("article"), null);
+  assert.equal(document.activeElement, document.getElementById("main-content"));
+});
+
+test("checked guest deletion requires a fresh named dialog after the guest status changes", () => {
+  let deleteCalls = 0;
+  const card = (status: "pending" | "checked", disabled = false) => (
+    <NextIntlClientProvider locale="en" messages={messages}>
+      <GuestListCard
+        guest={{ id: "guest-a", name: "Guest A", status }}
+        index={0}
+        mode="operations"
+        isDeleteDisabled={disabled}
+        onDelete={() => { deleteCalls += 1; }}
+      />
+    </NextIntlClientProvider>
+  );
+  const view = render(card("pending"));
+  fireEvent.click(screen.getByRole("button", { name: messages.Common.deleteGuest }));
+  assert.ok(screen.getByRole("group"));
+  view.rerender(card("checked"));
+  assert.equal(screen.queryByRole("group"), null);
+  assert.equal(screen.queryByRole("alertdialog"), null);
+  assert.equal(document.activeElement, screen.getByRole("article"));
+  fireEvent.click(screen.getByRole("button", { name: messages.Common.removeGuest }));
+  const dialog = screen.getByRole("alertdialog", { name: /Guest A/ });
   const descriptionId = dialog.getAttribute("aria-describedby");
   assert.ok(descriptionId);
   assert.equal(
     document.getElementById(descriptionId)?.textContent,
-    "Deleting this guest registration removes it from the guest list and analytics. Continue?",
+    messages.Common.removeGuestConfirm,
   );
+  view.rerender(card("checked", true));
+  const confirm = within(dialog).getByRole("button", { name: "Delete" });
+  assert.equal(confirm.hasAttribute("disabled"), true);
+  fireEvent.click(confirm);
+  assert.equal(deleteCalls, 0);
+  view.rerender(card("checked"));
+  fireEvent.click(within(dialog).getByRole("button", { name: "Delete" }));
+  assert.equal(deleteCalls, 1);
 });
 
 test("CSV mapping and line preview controls keep native labels and file boundaries", () => {

@@ -67,9 +67,6 @@ export default function AnalyticsContributors({
           {t("contributors.title")}
           <span className="ml-2 font-mono text-xs font-normal text-text-dim">{rows.length}</span>
         </h3>
-        <p className="mt-1 text-xs leading-relaxed text-text-muted">
-          {t("contributors.description")}
-        </p>
       </div>
       <div className="border-b border-border-subtle p-4 sm:p-5">
         <div className="grid gap-3">

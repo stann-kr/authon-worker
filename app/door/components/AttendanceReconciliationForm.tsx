@@ -17,6 +17,10 @@ interface AttendanceReconciliationFormProps {
   adjustmentReason: string;
   hasPendingReconciliationMutations: boolean;
   isAdjusting: boolean;
+  isAdjustmentConfirmationOpen: boolean;
+  cancelAdjustmentConfirmation: () => void;
+  adjustmentSubmitRef: Ref<HTMLButtonElement>;
+  adjustmentCancelRef: Ref<HTMLButtonElement>;
   isReconciliationTargetInvalid: boolean;
   isReconciliationBelowCheckedGuests: boolean;
   isReconciliationDeltaOutOfRange: boolean;
@@ -42,6 +46,10 @@ export default function AttendanceReconciliationForm({
   adjustmentReason,
   hasPendingReconciliationMutations,
   isAdjusting,
+  isAdjustmentConfirmationOpen,
+  cancelAdjustmentConfirmation,
+  adjustmentSubmitRef,
+  adjustmentCancelRef,
   isReconciliationTargetInvalid,
   isReconciliationBelowCheckedGuests,
   isReconciliationDeltaOutOfRange,
@@ -83,7 +91,19 @@ export default function AttendanceReconciliationForm({
           {t("adjustment.eventMustBeClosed")}
         </p>
       ) : (
-        <form onSubmit={submitAdjustment} onFocusCapture={markReconciliationFormFocused} onBlurCapture={markReconciliationFormBlurred} className="mt-3 space-y-3">
+        <form
+          onSubmit={submitAdjustment}
+          onFocusCapture={markReconciliationFormFocused}
+          onBlurCapture={markReconciliationFormBlurred}
+          onKeyDown={(event) => {
+            if (event.key === "Escape" && isAdjustmentConfirmationOpen && !isAdjusting) {
+              event.preventDefault();
+              event.stopPropagation();
+              cancelAdjustmentConfirmation();
+            }
+          }}
+          className="mt-3 space-y-3"
+        >
           <p
             id="attendance-reconciliation-help"
             className="text-xs leading-relaxed text-text-dim"
@@ -182,8 +202,26 @@ export default function AttendanceReconciliationForm({
               {t("adjustment.syncFirst")}
             </p>
           )}
+          {isAdjustmentConfirmationOpen && (
+            <p id="attendance-reconciliation-confirm" className="text-sm text-text-muted" role="status">
+              {t("adjustment.confirm", { total: reconciliationTarget })}
+            </p>
+          )}
+          {isAdjustmentConfirmationOpen && (
+            <button
+              ref={adjustmentCancelRef}
+              type="button"
+              onClick={cancelAdjustmentConfirmation}
+              disabled={isAdjusting}
+              className="pressable min-h-11 w-full border border-border-default px-4 py-2 text-sm font-semibold text-text-heading disabled:opacity-50"
+            >
+              {t("adjustment.cancel")}
+            </button>
+          )}
           <button
+            ref={adjustmentSubmitRef}
             type="submit"
+            aria-describedby={isAdjustmentConfirmationOpen ? "attendance-reconciliation-confirm" : undefined}
             disabled={
               isAdjusting ||
               !scopedSummary ||
@@ -197,7 +235,11 @@ export default function AttendanceReconciliationForm({
             }
             className="pressable min-h-11 w-full border border-border-strong bg-surface-raised px-4 py-2 text-sm font-semibold text-text-heading disabled:cursor-not-allowed disabled:opacity-50"
           >
-            {isAdjusting ? t("adjustment.saving") : t("adjustment.save")}
+            {isAdjusting
+              ? t("adjustment.saving")
+              : isAdjustmentConfirmationOpen
+                ? t("adjustment.save")
+                : t("adjustment.review")}
           </button>
         </form>
       )}

@@ -72,9 +72,6 @@ export default function AnalyticsSummary({ summary }: AnalyticsSummaryProps) {
           );
         })}
       </dl>
-      <p className="border-t border-border-subtle px-4 py-3 text-xs leading-relaxed text-text-dim sm:px-5">
-        {t("summary.registrationDefinition")}
-      </p>
     </section>
   );
 }

@@ -17,6 +17,12 @@ interface AnalyticsPeriodBarProps {
   onRefresh: () => void;
 }
 
+function inclusiveEndDate(endDateExclusive: string): string {
+  const date = new Date(`${endDateExclusive}T00:00:00.000Z`);
+  date.setUTCDate(date.getUTCDate() - 1);
+  return date.toISOString().slice(0, 10);
+}
+
 function formatPeriodLabel(
   locale: string,
   view: AdminAnalyticsView,
@@ -126,13 +132,11 @@ export default function AnalyticsPeriodBar({
       {view && (
         <p className="text-xs leading-relaxed text-text-muted" aria-live="polite">
           {t("coverage.summary", {
-            confirmed: view.coverage.confirmedEvents,
             days: view.coverage.operatingDays,
-            unconfirmed: view.coverage.unconfirmedClosedEvents,
           })}{" · "}
           {t("period.comparison", {
             start: view.comparisonPeriod.startDate,
-            end: view.comparisonPeriod.endDateExclusive,
+            end: inclusiveEndDate(view.comparisonPeriod.endDateExclusive),
           })}
         </p>
       )}

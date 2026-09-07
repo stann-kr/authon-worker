@@ -318,13 +318,13 @@ export default function ExternalDJGuestView({ token }: ExternalDJGuestViewProps)
                       className="mb-3"
                     />
                   )}
-                  <p className="mb-3 text-sm leading-relaxed text-text-muted">
-                    {isSelfRsvpLocked
-                      ? t("selfRsvpCheckedHelp")
-                      : ownedGuest
-                        ? t("selfRsvpEditHelp")
+                  {(isSelfRsvpLocked || !ownedGuest) && (
+                    <p className="mb-3 text-sm leading-relaxed text-text-muted">
+                      {isSelfRsvpLocked
+                        ? t("selfRsvpCheckedHelp")
                         : t("selfRsvpCreateHelp")}
-                  </p>
+                    </p>
+                  )}
                 </>
               )}
               {!isAtLimit || Boolean(ownedGuest) ? (

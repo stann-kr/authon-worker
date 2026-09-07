@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import Alert from "@/components/Alert";
 import DatePicker from "@/components/DatePicker";
@@ -53,6 +53,16 @@ export default function EventManagement({
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [pendingTransition, setPendingTransition] = useState<{
+    scope: string;
+    eventId: string;
+    fromState: EventState;
+    nextState: "closed" | "archived";
+  } | null>(null);
+  const transitionTriggerRef = useRef<HTMLButtonElement | null>(null);
+  const cancelTransitionRef = useRef<HTMLButtonElement>(null);
+  const eventCardRefs = useRef(new Map<string, HTMLElement>());
+  const isTransitioningRef = useRef(false);
   const [name, setName] = useState("");
   const [capacity, setCapacity] = useState("");
   const [targetGuests, setTargetGuests] = useState("");
@@ -91,7 +101,12 @@ export default function EventManagement({
   useEffect(() => {
     setFeedback(null);
     setTemplateSourceEventId(null);
+    setPendingTransition(null);
   }, [scope]);
+
+  useEffect(() => {
+    if (pendingTransition) cancelTransitionRef.current?.focus();
+  }, [pendingTransition]);
 
   const scopedEvents = loadedScope === scope ? events : EMPTY_EVENTS;
   const listState = deriveAsyncListState({
@@ -126,10 +141,7 @@ export default function EventManagement({
       setFeedback({
         type: "success",
         message: response.data.event.templateSourceEventId
-          ? t("createdFromTemplate", {
-              contributors: response.data.templateClone.contributors,
-              links: response.data.templateClone.externalLinks,
-            })
+          ? t("createdFromTemplate")
           : t("created"),
       });
       await loadEvents();
@@ -139,6 +151,18 @@ export default function EventManagement({
   };
 
   const transition = async (event: Event, nextState: EventState) => {
+    if (busyId || isTransitioningRef.current) return;
+    if (nextState === "closed" || nextState === "archived") {
+      if (
+        pendingTransition?.scope !== scope ||
+        pendingTransition.eventId !== event.id ||
+        pendingTransition.fromState !== event.state ||
+        pendingTransition.nextState !== nextState
+      ) return;
+    }
+    isTransitioningRef.current = true;
+    setPendingTransition(null);
+    eventCardRefs.current.get(event.id)?.focus({ preventScroll: true });
     setBusyId(event.id);
     setFeedback(null);
     const response = await transitionEventState(event.id, nextState);
@@ -149,6 +173,12 @@ export default function EventManagement({
       await loadEvents();
       onEventsChanged();
     }
+    window.requestAnimationFrame(() => {
+      if (document.activeElement === document.body) {
+        eventCardRefs.current.get(event.id)?.focus({ preventScroll: true });
+      }
+    });
+    isTransitioningRef.current = false;
     setBusyId(null);
   };
 
@@ -156,6 +186,11 @@ export default function EventManagement({
     () => scopedEvents.filter((event) => event.compatibilityKey === null),
     [scopedEvents],
   );
+
+  const cancelTransition = () => {
+    setPendingTransition(null);
+    transitionTriggerRef.current?.focus({ preventScroll: true });
+  };
 
   return (
     <div className="space-y-4">
@@ -263,6 +298,11 @@ export default function EventManagement({
             <div className="grid gap-3 lg:grid-cols-2">
               {explicitEvents.map((event) => {
                 const isSelected = selectedEventId === event.id;
+                const eventTransition = pendingTransition?.scope === scope &&
+                    pendingTransition.eventId === event.id &&
+                    pendingTransition.fromState === event.state
+                  ? pendingTransition
+                  : null;
                 const nextStates: EventState[] =
                   event.state === "draft"
                     ? ["open", "archived"]
@@ -272,7 +312,15 @@ export default function EventManagement({
                         ? ["archived"]
                         : [];
                 return (
-                  <article key={event.id} className="border border-border-default bg-canvas p-4">
+                  <article
+                    key={event.id}
+                    ref={(element) => {
+                      if (element) eventCardRefs.current.set(event.id, element);
+                      else eventCardRefs.current.delete(event.id);
+                    }}
+                    tabIndex={-1}
+                    className="border border-border-default bg-canvas p-4"
+                  >
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
                         <h3 className="type-row-title break-words">{event.name}</h3>
@@ -332,7 +380,22 @@ export default function EventManagement({
                         <button
                           key={state}
                           type="button"
-                          onClick={() => void transition(event, state)}
+                          onClick={(clickEvent) => {
+                            if (state === "closed" || state === "archived") {
+                              transitionTriggerRef.current = clickEvent.currentTarget;
+                              setPendingTransition({
+                                scope,
+                                eventId: event.id,
+                                fromState: event.state,
+                                nextState: state,
+                              });
+                            } else {
+                              void transition(event, state);
+                            }
+                          }}
+                          aria-expanded={state === "closed" || state === "archived"
+                            ? eventTransition?.nextState === state
+                            : undefined}
                           disabled={Boolean(busyId)}
                           className="min-h-11 border border-border-default bg-surface-raised px-3 py-2 text-xs font-semibold text-text-body disabled:opacity-50"
                         >
@@ -340,6 +403,43 @@ export default function EventManagement({
                         </button>
                       ))}
                     </div>
+                    {eventTransition && (
+                      <div
+                        role="group"
+                        aria-label={t(`transition.${eventTransition.nextState}`)}
+                        className="mt-3 border-t border-border-default pt-3"
+                        onKeyDown={(keyEvent) => {
+                          if (keyEvent.key === "Escape") {
+                            keyEvent.preventDefault();
+                            keyEvent.stopPropagation();
+                            cancelTransition();
+                          }
+                        }}
+                      >
+                        <p className="text-sm text-text-muted">
+                          {t(`transitionConfirm.${eventTransition.nextState}`)}
+                        </p>
+                        <div className="mt-2 flex flex-wrap gap-2">
+                          <button
+                            ref={cancelTransitionRef}
+                            type="button"
+                            onClick={cancelTransition}
+                            disabled={Boolean(busyId)}
+                            className="min-h-11 border border-border-default px-3 py-2 text-xs font-semibold text-text-body"
+                          >
+                            {t("cancel")}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => void transition(event, eventTransition.nextState)}
+                            disabled={Boolean(busyId)}
+                            className="min-h-11 border border-status-danger px-3 py-2 text-xs font-semibold text-status-danger disabled:opacity-50"
+                          >
+                            {t(`transition.${eventTransition.nextState}`)}
+                          </button>
+                        </div>
+                      </div>
+                    )}
                   </article>
                 );
               })}

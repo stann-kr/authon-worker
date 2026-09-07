@@ -370,6 +370,47 @@ test("an A-scope response cannot replace the loaded B-scope directory", async ()
   assert.equal(screen.getByTestId("loading").textContent, "false");
 });
 
+test("activation runs directly once while deactivation still requires confirmation", async () => {
+  const activation = createDeferred<{ data: User; error: null }>();
+  const updates: { id: string; active: boolean | undefined }[] = [];
+  let controller: ReturnType<typeof useUserDirectoryController> | undefined;
+  renderHarness({
+    actions: createActions({
+      fetchManagedUsersByVenue: async () => ({
+        data: [USER_A, USER_INACTIVE],
+        error: null,
+      }),
+      updateUserProfile: async (id, update) => {
+        updates.push({ id, active: update.active });
+        return update.active ? activation.promise : { data: USER_A, error: null };
+      },
+    }),
+    onController: (next) => { controller = next; },
+  });
+  await waitFor(() => assert.equal(screen.getByTestId("state").textContent, "success-data"));
+
+  let first!: Promise<void>;
+  let duplicate!: Promise<void>;
+  act(() => {
+    first = controller!.requestActiveChange(USER_INACTIVE);
+    duplicate = controller!.requestActiveChange(USER_INACTIVE);
+  });
+  assert.deepEqual(updates, [{ id: USER_INACTIVE.id, active: true }]);
+  assert.equal(screen.queryByRole("alertdialog"), null);
+  assert.equal(screen.getByTestId("mutation-pending").textContent, "true");
+  await act(async () => {
+    activation.resolve({ data: { ...USER_INACTIVE, active: true }, error: null });
+    await Promise.all([first, duplicate]);
+  });
+  assert.equal(screen.getByTestId("feedback-type").textContent, "success");
+
+  await act(async () => { await controller!.requestActiveChange(USER_A); });
+  assert.ok(screen.getByRole("alertdialog"));
+  assert.equal(updates.length, 1);
+  await act(async () => { await controller!.confirmPendingUserAction(); });
+  assert.deepEqual(updates[1], { id: USER_A.id, active: false });
+});
+
 test("a same-tick mutation duplicate is synchronously latched and refreshes once", async () => {
   const mutationRequest = createDeferred<{ data: User; error: null }>();
   const updateCalls: Array<{
@@ -513,7 +554,7 @@ test("credential confirmation issues the exact user link, refreshes, and focuses
   );
   assert.equal(
     screen.getByTestId("feedback").textContent,
-    "Previous reset credentials revoked and a new one-time link issued.",
+    messages.UserAdmin.passwordResetLinkIssued,
   );
   await waitFor(() =>
     assert.equal(
