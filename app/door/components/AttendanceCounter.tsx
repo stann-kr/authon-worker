@@ -43,7 +43,6 @@ const ATTENDANCE_COUNTER_DEPENDENCIES: AttendanceCounterDependencies =
     listAttendanceMutations,
     removeAttendanceMutations,
     resolveAttendanceMutation,
-    confirm: (message: string) => window.confirm(message),
     randomUUID: () => crypto.randomUUID(),
   });
 
@@ -57,6 +56,8 @@ export default function AttendanceCounter({
   const { user } = useAuthSession();
   const mobileDockRef = useRef<HTMLElement>(null);
   const reconciliationStatusRef = useRef<HTMLParagraphElement>(null);
+  const adjustmentSubmitRef = useRef<HTMLButtonElement>(null);
+  const adjustmentCancelRef = useRef<HTMLButtonElement>(null);
   const reconciliationFormHadFocusRef = useRef(false);
   const reconciliationFormWasVisibleRef = useRef(false);
   const canAdjust = user?.role === "super_admin" || user?.role === "venue_admin";
@@ -64,6 +65,7 @@ export default function AttendanceCounter({
     adjustmentReason,
     announcement,
     canRecord,
+    cancelAdjustmentConfirmation,
     changeAdjustmentReason,
     changeReconciliationTarget,
     clearFailedResults,
@@ -71,6 +73,7 @@ export default function AttendanceCounter({
     failedMutations,
     hasPendingReconciliationMutations,
     isAdjusting,
+    isAdjustmentConfirmationOpen,
     isLoading,
     isReconciliationBelowCheckedGuests,
     isReconciliationDeltaOutOfRange,
@@ -102,6 +105,10 @@ export default function AttendanceCounter({
   });
 
   useMobileDockInset(mobileDockRef);
+
+  useLayoutEffect(() => {
+    if (isAdjustmentConfirmationOpen) adjustmentCancelRef.current?.focus();
+  }, [isAdjustmentConfirmationOpen]);
 
   const isReconciliationFormVisible = Boolean(
     !scopedSummary ||
@@ -232,6 +239,13 @@ export default function AttendanceCounter({
           adjustmentReason={adjustmentReason}
           hasPendingReconciliationMutations={hasPendingReconciliationMutations}
           isAdjusting={isAdjusting}
+          isAdjustmentConfirmationOpen={isAdjustmentConfirmationOpen}
+          adjustmentSubmitRef={adjustmentSubmitRef}
+          adjustmentCancelRef={adjustmentCancelRef}
+          cancelAdjustmentConfirmation={() => {
+            cancelAdjustmentConfirmation();
+            adjustmentSubmitRef.current?.focus({ preventScroll: true });
+          }}
           isReconciliationTargetInvalid={isReconciliationTargetInvalid}
           isReconciliationBelowCheckedGuests={isReconciliationBelowCheckedGuests}
           isReconciliationDeltaOutOfRange={isReconciliationDeltaOutOfRange}

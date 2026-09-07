@@ -14,7 +14,8 @@ import Button from "./Button";
 interface ConfirmDialogProps {
   open: boolean;
   title: string;
-  description: string;
+  description?: string;
+  role?: "alertdialog" | "dialog";
   confirmLabel: string;
   cancelLabel: string;
   onConfirm: () => void;
@@ -40,6 +41,7 @@ export default function ConfirmDialog({
   open,
   title,
   description,
+  role = "alertdialog",
   confirmLabel,
   cancelLabel,
   onConfirm,
@@ -192,20 +194,22 @@ export default function ConfirmDialog({
     >
       <div
         ref={dialogRef}
-        role="alertdialog"
+        role={role}
         aria-modal="true"
         aria-busy={isLoading || isClosing}
         aria-labelledby={titleId}
-        aria-describedby={descriptionId}
+        aria-describedby={description ? descriptionId : undefined}
         tabIndex={-1}
         className="app-dialog-panel max-h-[calc(100dvh-2rem)] w-full max-w-md overscroll-contain overflow-y-auto border border-border-strong bg-canvas p-5 sm:p-6"
       >
         <h2 id={titleId} className="type-panel-title">
           {title}
         </h2>
-        <p id={descriptionId} className="mt-3 text-sm leading-relaxed text-text-muted">
-          {description}
-        </p>
+        {description && (
+          <p id={descriptionId} className="mt-3 text-sm leading-relaxed text-text-muted">
+            {description}
+          </p>
+        )}
         {children && <div className="mt-4">{children}</div>}
         <div className="mt-6 grid grid-cols-1 gap-2 sm:grid-cols-2">
           <Button

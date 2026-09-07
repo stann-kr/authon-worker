@@ -153,7 +153,7 @@ export default function ProfilePage() {
             />
           )}
 
-          {error && <Alert type="error" message={error} className="mb-6" />}
+          {error && <div id="profile-error"><Alert type="error" message={error} className="mb-6" /></div>}
 
           <div className="app-panel overflow-hidden">
             <div className="space-y-4 border-b border-border-default p-4">
@@ -220,12 +220,9 @@ export default function ProfilePage() {
                       autoComplete="name"
                       className="app-field"
                       required
-                      aria-describedby="profile-name-helper"
+                      aria-describedby={error ? "profile-error" : undefined}
                       aria-invalid={error ? "true" : "false"}
                     />
-                    <p id="profile-name-helper" className="app-helper">
-                      {t("nameHelp")}
-                    </p>
                   </div>
 
                   <div>
@@ -334,10 +331,9 @@ function PasswordChangeForm() {
           router.push("/auth/login");
         }, 3000);
       }
-    } catch (err: unknown) {
+    } catch {
       setPasswordError({
-        message:
-          err instanceof Error ? err.message : t("passwordUpdateFailed"),
+        message: t("passwordUpdateFailed"),
         target: "form",
       });
     } finally {
@@ -354,15 +350,9 @@ function PasswordChangeForm() {
       )}
       {passwordSuccess && <Alert type="success" message={passwordSuccess} className="mb-4" />}
 
-      <div className="border border-border-strong bg-surface-raised p-4 space-y-2">
-        <div className="flex items-center gap-2 text-sm font-semibold text-text-heading">
-          <Icon name="warning" size={16} />
-          {t("securityWarning")}
-        </div>
-        <p id="password-warning-msg" className="text-xs leading-relaxed text-text-muted">
-          {t("securityWarningText")}
-        </p>
-      </div>
+      <p id="password-warning-msg" className="text-sm leading-relaxed text-text-muted">
+        {t("securityWarningText")}
+      </p>
 
       <div>
         <label htmlFor="current-password" className="app-label">
@@ -418,18 +408,15 @@ function PasswordChangeForm() {
           disabled={isUpdating || isRedirecting}
           required
           placeholder={t("confirmNewPassword")}
-          aria-describedby={`confirm-password-helper${
+          aria-describedby={
             passwordError?.target === "confirmPassword"
-              ? " profile-password-error"
-              : ""
-          }`}
+              ? "profile-password-error"
+              : undefined
+          }
           aria-invalid={
             passwordError?.target === "confirmPassword" || undefined
           }
         />
-        <p id="confirm-password-helper" className="app-helper">
-          {t("confirmPasswordHelp")}
-        </p>
       </div>
 
       <Button

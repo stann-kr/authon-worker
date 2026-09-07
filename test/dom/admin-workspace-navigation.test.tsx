@@ -185,13 +185,15 @@ test("shortcuts skip editable targets, route transitions, and modal dialogs", as
   await waitFor(() => {
     assert.equal(screen.getByTestId("active-task").textContent, "guest-list");
   });
-  const dialog = document.createElement("div");
-  dialog.setAttribute("role", "alertdialog");
-  dialog.setAttribute("aria-modal", "true");
-  document.body.append(dialog);
-  fireEvent.keyDown(window, { key: "4" });
-  assert.equal(screen.getByTestId("active-task").textContent, "guest-list");
-  dialog.remove();
+  for (const role of ["alertdialog", "dialog"]) {
+    const dialog = document.createElement("div");
+    dialog.setAttribute("role", role);
+    dialog.setAttribute("aria-modal", "true");
+    document.body.append(dialog);
+    fireEvent.keyDown(window, { key: "4" });
+    assert.equal(screen.getByTestId("active-task").textContent, "guest-list");
+    dialog.remove();
+  }
 });
 
 test("task replacement restores only focus lost inside the workspace", async () => {

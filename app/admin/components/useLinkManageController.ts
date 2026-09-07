@@ -95,8 +95,6 @@ export function useLinkManageController({
   const [linkActionToast, setLinkActionToast] = useState<string | null>(null);
   const [pendingDeleteLink, setPendingDeleteLink] =
     useState<ExternalDJLink | null>(null);
-  const [pendingDeactivateLink, setPendingDeactivateLink] =
-    useState<ExternalDJLink | null>(null);
   const displayCacheRef = useRef<{ scopeKey: string; links: ExternalDJLink[] }>(
     { scopeKey: "", links: [] },
   );
@@ -129,7 +127,6 @@ export function useLinkManageController({
     setLoadingStates({});
     setLifecycleBusyIds({});
     setPendingDeleteLink(null);
-    setPendingDeactivateLink(null);
     setLinkActionFeedback(null);
     setLinkActionToast(null);
     setError(null);
@@ -150,7 +147,6 @@ export function useLinkManageController({
     setLoadingStates({});
     setLifecycleBusyIds({});
     setPendingDeleteLink(null);
-    setPendingDeactivateLink(null);
     setLinkActionFeedback(null);
     setLinkActionToast(null);
   }, [isActive, mutationGuard, requestGuard, shareGuard]);
@@ -340,8 +336,6 @@ export function useLinkManageController({
           setLifecycleBusyIds((current) => ({ ...current, [id]: false }));
           setLoadingStates((current) => ({ ...current, [pendingKey]: false }));
           if (operationName === "delete") setPendingDeleteLink(null);
-          if (operationName === "deactivate")
-            setPendingDeactivateLink(null);
         }
       }
     },
@@ -472,10 +466,6 @@ export function useLinkManageController({
     setSuccessScopeKey("");
     setPendingDeleteLink(link);
   }, []);
-  const requestDeactivateLink = useCallback((link: ExternalDJLink) => {
-    if (activeLifecycleLeasesRef.current.has(link.id)) return;
-    setPendingDeactivateLink(link);
-  }, []);
   const getGuestPageUrl = useCallback(
     (token: string, guestUrl?: string | null) =>
       guestUrl ??
@@ -508,12 +498,9 @@ export function useLinkManageController({
     linkActionToast,
     pendingDeleteLink,
     setPendingDeleteLink,
-    pendingDeactivateLink,
-    setPendingDeactivateLink,
     loadLinks,
     handleDeleteLink,
     requestDeleteLink,
-    requestDeactivateLink,
     handleDeactivateLink,
     handleActivateLink,
     shareOrCopyManagedLink,

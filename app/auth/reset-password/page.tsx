@@ -25,34 +25,9 @@ function StepIndicator({
   progressLabel: string;
 }) {
   return (
-    <div className="mb-8">
-      <p className="sr-only" aria-live="polite">
-        {progressLabel}
-      </p>
-      <ol className="grid grid-cols-4 gap-2" aria-label={progressLabel}>
-        {labels.map((label, index) => {
-          const active = index === currentStep;
-          const complete = index < currentStep;
-          return (
-            <li key={label} className="space-y-2" aria-current={active ? "step" : undefined}>
-              <span
-                aria-hidden="true"
-                className={`block h-1 ${
-                  complete || active ? "bg-action-primary" : "bg-border-subtle"
-                }`}
-              />
-              <p
-                className={`font-mono text-xs ${
-                  active ? "text-text-heading" : complete ? "text-text-muted" : "text-text-dim"
-                }`}
-              >
-                {label}
-              </p>
-            </li>
-          );
-        })}
-      </ol>
-    </div>
+    <p className="mb-6 text-sm font-semibold text-text-heading" role="status" aria-label={progressLabel}>
+      {labels[currentStep]}
+    </p>
   );
 }
 
@@ -245,9 +220,7 @@ function ResetPasswordContent() {
             ? t("invalidEmail")
             : code === "RATE_LIMITED"
               ? t("requestRateLimited")
-              : err instanceof Error
-                ? err.message
-                : t("unexpectedError"),
+              : t("requestFailed"),
         target: code === "INVALID_EMAIL" ? "email" : "form",
       });
       if (code === "INVALID_EMAIL") document.getElementById("email")?.focus();
@@ -343,7 +316,11 @@ function ResetPasswordContent() {
         : undefined;
       setMessage({
         type: "error",
-        text: err instanceof Error ? err.message : t("unexpectedError"),
+        text: code === "ACCOUNT_NOT_ELIGIBLE"
+          ? t("approvalNotReady")
+          : code === "RATE_LIMITED"
+            ? t("approvalClaimRateLimited")
+            : t("updateFailed"),
         target: "form",
       });
       if (code === "ACCOUNT_NOT_ELIGIBLE" && resetKind === "admin_approved") {
@@ -419,16 +396,11 @@ function ResetPasswordContent() {
           />
 
           {(step === "request" || (step === "reset" && token)) && (
-            <div className="mb-6 rounded-control border border-border-default bg-canvas p-4">
-              <p className="mb-2 text-sm font-semibold text-text-heading">
-                {token ? t("secureFlow") : t("adminFlow")}
-              </p>
-              <p className="text-xs leading-relaxed text-text-muted">
-                {token
-                  ? t("secureFlowDescription")
-                  : t("adminFlowDescription")}
-              </p>
-            </div>
+            <p className="mb-6 text-sm leading-relaxed text-text-muted">
+              {token
+                ? t("secureFlowDescription")
+                : t("adminFlowDescription")}
+            </p>
           )}
 
           {message && (
@@ -455,20 +427,16 @@ function ResetPasswordContent() {
                   spellCheck={false}
                   className="app-field"
                   placeholder="name@example.com"
-                  aria-describedby={`request-helper${
+                  aria-describedby={
                     message?.type === "error" && message.target === "email"
-                      ? " reset-message"
-                      : ""
-                  }`}
+                      ? "reset-message"
+                      : undefined
+                  }
                   aria-invalid={
                     message?.type === "error" && message.target === "email"
                   }
                 />
               </div>
-
-              <p id="request-helper" className="text-xs leading-relaxed text-text-dim">
-                {t("privacyHelp")}
-              </p>
 
               <Button
                 type="submit"
@@ -597,9 +565,6 @@ function ResetPasswordContent() {
                       ? t("requestCodeCopied")
                       : t("copyRequestCode")}
                   </Button>
-                  <p className="mt-3 text-xs leading-relaxed text-text-muted">
-                    {t("requestChallengeHelp")}
-                  </p>
                 </div>
               )}
 

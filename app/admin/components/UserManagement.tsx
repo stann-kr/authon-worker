@@ -110,6 +110,7 @@ export default function UserManagement({
     loadUsers,
     passwordLinkPanelRef,
     pendingUserAction,
+    requestActiveChange,
     roleFilter,
     scopedAuditEvents,
     scopedFeedback,
@@ -199,7 +200,7 @@ export default function UserManagement({
   const pendingActionDescription = pendingUserAction
     ? pendingUserAction.kind === "toggle"
       ? pendingUserAction.user.active
-        ? t("deactivateConfirm")
+        ? t("deactivateConfirm", { name: pendingUserAction.user.name })
         : t("activateConfirm")
       : pendingUserAction.kind === "reset-password"
         ? isPendingInvitationReissue
@@ -491,9 +492,7 @@ export default function UserManagement({
                         isUserMutationPending || isCurrentScopeLoading
                       }
                       onUpdate={handleUserUpdate}
-                      onToggleActive={async (user) =>
-                        setPendingUserAction({ kind: "toggle", user })
-                      }
+                      onToggleActive={requestActiveChange}
                       onResetPassword={async (user) => {
                         setPendingUserAction({ kind: "reset-password", user });
                       }}
@@ -558,22 +557,7 @@ export default function UserManagement({
               ? "primary"
               : "danger"
           }
-        >
-          {pendingUserAction.kind === "reset-password" && (
-            <div className="border border-border-default bg-surface p-3">
-              <p className="text-sm font-semibold text-text-heading">
-                {isPendingInvitationReissue
-                  ? t("invitationLinkMethod")
-                  : t("passwordResetLinkMethod")}
-              </p>
-              <p className="mt-1 text-xs leading-relaxed text-text-muted">
-                {isPendingInvitationReissue
-                  ? t("reissueInvitationHelp")
-                  : t("issuePasswordResetLinkHelp")}
-              </p>
-            </div>
-          )}
-        </ConfirmDialog>
+        />
       )}
     </>
   );

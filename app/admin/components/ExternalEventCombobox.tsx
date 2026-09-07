@@ -178,9 +178,6 @@ const ExternalEventCombobox = forwardRef<
               }`}
             >
               <span className="truncate font-medium">{suggestion.eventName}</span>
-              <span className="shrink-0 font-mono text-[11px] opacity-75">
-                {t("eventPreviousLinks", { count: suggestion.linkCount })}
-              </span>
             </li>
           ))}
         </ul>

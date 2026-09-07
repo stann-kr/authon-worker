@@ -511,11 +511,6 @@ export default function GuestBulkEntry({
                   {t("invalidCount", { count: invalidLines.length })}
                 </span>
               )}
-              {preview.blankLineCount > 0 && (
-                <span className="text-text-dim">
-                  {t("blankCount", { count: preview.blankLineCount })}
-                </span>
-              )}
             </div>
 
             {preview.overflowCount > 0 && (
@@ -578,7 +573,6 @@ export default function GuestBulkEntry({
                             {line.isDuplicateExisting
                               ? t("duplicateExisting")
                               : t("duplicateInPaste")}
-                            {isConfirmed ? ` ${t("includeConfirmed")}` : ""}
                           </span>
                         </label>
                       ) : null}
