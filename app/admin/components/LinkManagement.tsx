@@ -174,12 +174,9 @@ export default function LinkManagement({
     linkActionToast: manageLinkActionToast,
     pendingDeleteLink,
     setPendingDeleteLink,
-    pendingDeactivateLink,
-    setPendingDeactivateLink,
     loadLinks,
     handleDeleteLink,
     requestDeleteLink,
-    requestDeactivateLink,
     handleDeactivateLink,
     handleActivateLink,
     shareOrCopyManagedLink,
@@ -456,7 +453,9 @@ export default function LinkManagement({
                   aria-invalid={
                     formValidationError?.field === "kind" || undefined
                   }
-                  aria-describedby="link-kind-help"
+                  aria-describedby={
+                    formValidationError?.field === "kind" ? "link-kind-error" : undefined
+                  }
                 >
                   <legend className="app-label">{t("accessType")}</legend>
                   <div className="grid gap-2 sm:grid-cols-2">
@@ -513,11 +512,8 @@ export default function LinkManagement({
                       </label>
                     ))}
                   </div>
-                  <p id="link-kind-help" className="app-helper">
-                    {t("accessTypeHelp")}
-                  </p>
                   {formValidationError?.field === "kind" && (
-                    <p className="mt-1 text-xs text-status-danger" role="alert">
+                    <p id="link-kind-error" className="mt-1 text-xs text-status-danger" role="alert">
                       {formValidationError.message}
                     </p>
                   )}
@@ -934,9 +930,6 @@ export default function LinkManagement({
                                 {t("open")}
                               </a>
                             </div>
-                            <p className="app-helper">
-                              {t("urlHelp")}
-                            </p>
                           </div>
                         )}
 
@@ -997,7 +990,7 @@ export default function LinkManagement({
                           ) : link.active ? (
                             <Button
                               type="button"
-                              onClick={() => requestDeactivateLink(link)}
+                              onClick={() => handleDeactivateLink(link.id)}
                               variant="secondary"
                               size="sm"
                               disabled={Boolean(lifecycleBusyIds[link.id])}
@@ -1045,19 +1038,6 @@ export default function LinkManagement({
             {linkActionToast}
           </p>
         </div>
-      )}
-
-      {pendingDeactivateLink && (
-        <ConfirmDialog
-          open
-          title={t("deactivateTitle")}
-          description={t("deactivateConfirm")}
-          confirmLabel={t("deactivate")}
-          cancelLabel={commonT("cancel")}
-          onConfirm={() => handleDeactivateLink(pendingDeactivateLink.id)}
-          onCancel={() => setPendingDeactivateLink(null)}
-          isLoading={loadingStates[`deactivate_${pendingDeactivateLink.id}`]}
-        />
       )}
 
       {pendingDeleteLink && (

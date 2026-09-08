@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
 import Alert from "@/components/Alert";
 import Button from "@/components/Button";
+import DisclosureSection from "@/components/DisclosureSection";
 import EmptyState from "@/components/EmptyState";
 import Skeleton from "@/components/Skeleton";
 import VenueSelector, { useVenueSelector } from "@/components/VenueSelector";
@@ -165,9 +166,6 @@ export default function AdminAnalytics({
         <p className="mt-2 max-w-[70ch] text-sm leading-relaxed text-text-muted">
           {t("description")}
         </p>
-        <p className="mt-3 max-w-[70ch] border-l-2 border-border-strong pl-3 text-xs leading-relaxed text-text-muted">
-          {t("dataBasis")}
-        </p>
       </header>
 
       <AnalyticsPeriodBar
@@ -203,30 +201,6 @@ export default function AdminAnalytics({
           )}
           <AnalyticsSummary summary={scopedView.summary} />
           <AnalyticsAttendance attendance={scopedView.attendance} />
-          <section className="app-panel" aria-labelledby="analytics-coverage-title">
-            <div className="border-b border-border-subtle px-4 py-3 sm:px-5">
-              <h3 id="analytics-coverage-title" className="type-panel-title">{t("coverage.title")}</h3>
-            </div>
-            <dl className="grid grid-cols-2 gap-px bg-border-subtle sm:grid-cols-3 xl:grid-cols-6">
-              {([
-                ["confirmed", scopedView.coverage.confirmedEvents],
-                ["operatingDays", scopedView.coverage.operatingDays],
-                ["unconfirmed", scopedView.coverage.unconfirmedClosedEvents],
-                ["open", scopedView.coverage.openEvents],
-                ["draft", scopedView.coverage.draftEvents],
-                ["drifted", scopedView.coverage.driftedEvents],
-                ["legacy", scopedView.coverage.legacyEvents],
-                ["mapped", scopedView.coverage.mappedContributorPercent],
-              ] as const).map(([key, value]) => (
-                <div key={key} className="bg-surface p-4 text-center">
-                  <dt className="text-xs leading-tight text-text-muted">{t(`coverage.${key}`)}</dt>
-                  <dd className="mt-2 font-mono text-lg tabular-nums text-text-heading">
-                    {value === null ? "—" : `${value}${key === "mapped" ? "%" : ""}`}
-                  </dd>
-                </div>
-              ))}
-            </dl>
-          </section>
 
           {scopedView.coverage.operatingDays === 0 ? (
             <section className="app-panel">
@@ -255,6 +229,39 @@ export default function AdminAnalytics({
               )}
             </>
           )}
+
+          <div className="app-panel px-4 py-2 sm:px-5">
+            <DisclosureSection title={t("basisTitle")} className="mt-0 border-t-0">
+              <div className="space-y-3 text-xs leading-relaxed text-text-muted">
+                <p>{t("dataBasis")}</p>
+                <p>{t("summary.registrationDefinition")}</p>
+                <p>{t("attendance.definition")}</p>
+                <p>{t("contributors.description")}</p>
+                <p>{t("trend.description")}</p>
+              </div>
+            </DisclosureSection>
+            <DisclosureSection title={t("coverage.title")}>
+              <dl className="grid grid-cols-2 gap-px bg-border-subtle sm:grid-cols-4">
+                {([
+                  ["confirmed", scopedView.coverage.confirmedEvents],
+                  ["operatingDays", scopedView.coverage.operatingDays],
+                  ["unconfirmed", scopedView.coverage.unconfirmedClosedEvents],
+                  ["open", scopedView.coverage.openEvents],
+                  ["draft", scopedView.coverage.draftEvents],
+                  ["drifted", scopedView.coverage.driftedEvents],
+                  ["legacy", scopedView.coverage.legacyEvents],
+                  ["mapped", scopedView.coverage.mappedContributorPercent],
+                ] as const).map(([key, value]) => (
+                  <div key={key} className="bg-surface p-4 text-center">
+                    <dt className="text-xs leading-tight text-text-muted">{t(`coverage.${key}`)}</dt>
+                    <dd className="mt-2 font-mono text-lg tabular-nums text-text-heading">
+                      {value === null ? "—" : `${value}${key === "mapped" ? "%" : ""}`}
+                    </dd>
+                  </div>
+                ))}
+              </dl>
+            </DisclosureSection>
+          </div>
         </>
       )}
     </div>

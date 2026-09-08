@@ -92,7 +92,6 @@ export interface AttendanceCounterDependencies {
     state: Exclude<OfflineAttendanceMutationState, "queued">;
     resolution?: OfflineAttendanceMutation["resolution"];
   }) => Promise<void>;
-  confirm: (message: string) => boolean;
   randomUUID: () => string;
 }
 
@@ -138,6 +137,10 @@ export default function useAttendanceCounterController({
   const [reconciliationTarget, setReconciliationTarget] = useState("");
   const [adjustmentReason, setAdjustmentReason] = useState("");
   const [isAdjusting, setIsAdjusting] = useState(false);
+  const [adjustmentConfirmation, setAdjustmentConfirmation] = useState<{
+    owner: AttendanceScopeOwnerToken;
+    fingerprint: string;
+  } | null>(null);
   const renderedScopeKey = scopeKey(scope);
   const currentScopeKeyRef = useRef(renderedScopeKey);
   const scopeOwnerRef = useRef<AttendanceScopeOwnerToken>({
@@ -228,6 +231,33 @@ export default function useAttendanceCounterController({
     reconciliationDelta !== null && Math.abs(reconciliationDelta) > 500;
   const hasPendingReconciliationMutations =
     queuedMutations.length > 0 || hasPendingGuestMutations;
+  const adjustmentFingerprint = scope && scopedSummary
+    ? JSON.stringify([
+        scope.venueId,
+        scope.businessDate,
+        scope.eventId,
+        reconciliationTarget,
+        adjustmentReason,
+        scopedSummary.checkedInGuests,
+        scopedSummary.walkIns,
+        scopedSummary.sourceActivityCount,
+        scopedSummary.isFinalized,
+        scopedSummary.canFinalize,
+        hasPendingReconciliationMutations,
+        canAdjust,
+      ])
+    : null;
+  const isAdjustmentConfirmationOpen = Boolean(
+    isScopeStateCurrent &&
+      adjustmentConfirmation?.owner === scopeOwnerRef.current &&
+      adjustmentConfirmation?.fingerprint === adjustmentFingerprint,
+  );
+
+  useEffect(() => {
+    if (adjustmentConfirmation && !isAdjustmentConfirmationOpen) {
+      setAdjustmentConfirmation(null);
+    }
+  }, [adjustmentConfirmation, isAdjustmentConfirmationOpen]);
   const queuedReversalTargets = useMemo(
     () => new Set(
       queuedMutations.flatMap((mutation) =>
@@ -464,6 +494,7 @@ export default function useAttendanceCounterController({
     ));
     setReconciliationTarget("");
     setAdjustmentReason("");
+    setAdjustmentConfirmation(null);
     reconciliationAttemptRef.current = null;
     if (!scope) {
       setIsLoading(false);
@@ -586,7 +617,15 @@ export default function useAttendanceCounterController({
     ) return;
     const targetKey = scopeKey(scope);
     if (activeAdjustmentOperationsRef.current.has(targetKey)) return;
-    if (!dependencies.confirm(translate("adjustment.confirm"))) return;
+    if (!adjustmentFingerprint) return;
+    if (!isAdjustmentConfirmationOpen) {
+      setAdjustmentConfirmation({
+        owner: scopeOwnerRef.current,
+        fingerprint: adjustmentFingerprint,
+      });
+      return;
+    }
+    setAdjustmentConfirmation(null);
     const scopeOwner = scopeOwnerRef.current;
     const adjustmentOperationId = ++nextAdjustmentOperationIdRef.current;
     activeAdjustmentOperationsRef.current.set(
@@ -694,12 +733,14 @@ export default function useAttendanceCounterController({
   const changeReconciliationTarget = (value: string) => {
     if (!isScopeStateCurrent) return;
     reconciliationAttemptRef.current = null;
+    setAdjustmentConfirmation(null);
     setReconciliationTarget(value);
   };
 
   const changeAdjustmentReason = (value: string) => {
     if (!isScopeStateCurrent) return;
     reconciliationAttemptRef.current = null;
+    setAdjustmentConfirmation(null);
     setAdjustmentReason(value);
   };
 
@@ -731,12 +772,14 @@ export default function useAttendanceCounterController({
     adjustmentReason: visibleAdjustmentReason,
     announcement: visibleAnnouncement,
     canRecord,
+    cancelAdjustmentConfirmation: () => setAdjustmentConfirmation(null),
     changeAdjustmentReason,
     changeReconciliationTarget,
     clearFailedResults,
     displayedCheckedInGuests,
     failedMutations,
     hasPendingReconciliationMutations,
+    isAdjustmentConfirmationOpen,
     isAdjusting: isScopeStateCurrent && isAdjusting,
     isLoading: isScopeStateCurrent && isLoading,
     isReconciliationBelowCheckedGuests:

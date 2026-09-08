@@ -8,14 +8,36 @@ import {
   fireEvent,
   render,
   screen,
+  waitFor,
   within,
 } from "@testing-library/react";
 
 import messages from "@/messages/en.json";
+import { RouteTransitionProvider } from "@/components/RouteTransitionProvider";
 import type { User } from "@/lib/users/types";
+import type { PasswordResetRequestView } from "@/lib/auth/password-reset-request-types";
+
+if (!window.requestAnimationFrame) {
+  window.requestAnimationFrame = (callback) => window.setTimeout(callback, 0);
+  window.cancelAnimationFrame = (frame) => window.clearTimeout(frame);
+}
+
+const passwordResetTestState = globalThis as typeof globalThis & {
+  adminPasswordResetActions?: {
+    fetch: () => Promise<{ data: PasswordResetRequestView[]; error: null }>;
+    approve: () => Promise<{ data: null; error: string }>;
+    reject: () => Promise<{ error: string | null }>;
+  };
+};
 
 registerHooks({
   resolve(specifier, context, nextResolve) {
+    if (specifier.endsWith("lib/api/password-reset-requests")) {
+      return { url: "mock:user-management-password-reset", shortCircuit: true };
+    }
+    if (specifier.endsWith("components/VenueSelector")) {
+      return { url: "mock:user-management-venue-selector", shortCircuit: true };
+    }
     if (specifier.endsWith("lib/api/users")) {
       return { url: "mock:user-management-actions", shortCircuit: true };
     }
@@ -25,6 +47,27 @@ registerHooks({
     return nextResolve(specifier, context);
   },
   load(url, context, nextLoad) {
+    if (url === "mock:user-management-password-reset") {
+      return {
+        format: "module",
+        source: `
+          export const fetchPasswordResetRequests = () => globalThis.adminPasswordResetActions.fetch();
+          export const startManagedPasswordReset = () => globalThis.adminPasswordResetActions.approve();
+          export const rejectPasswordResetRequest = () => globalThis.adminPasswordResetActions.reject();
+        `,
+        shortCircuit: true,
+      };
+    }
+    if (url === "mock:user-management-venue-selector") {
+      return {
+        format: "module",
+        source: `
+          export const useVenueSelector = () => ({ venues: [], currentVenue: null });
+          export default function VenueSelector() { return null; }
+        `,
+        shortCircuit: true,
+      };
+    }
     if (url === "mock:user-management-actions") {
       return {
         format: "module",
@@ -51,7 +94,10 @@ registerHooks({
   },
 });
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  delete passwordResetTestState.adminPasswordResetActions;
+});
 
 const USER_A: User = {
   id: "user-a",
@@ -78,6 +124,88 @@ const USER_B: User = {
   name: "Beta Door",
   role: "door_staff",
 };
+
+test("password approval keeps its proof form and rejection confirms inline with focus recovery", async () => {
+  const request: PasswordResetRequestView = {
+    id: "request-a", userId: USER_A.id, venueId: "venue-a",
+    userName: USER_A.name, userEmail: USER_A.email, userRole: USER_A.role,
+    userAccountKind: "personal", venueName: "Test venue", codeFreeEligible: true,
+    source: "self_service", status: "pending", setupMethod: null,
+    decidedByUserId: null, decidedAt: null, expiresAt: null, completedAt: null,
+    createdAt: "2026-09-08T00:00:00.000Z", updatedAt: "2026-09-08T00:00:00.000Z",
+  };
+  const rejection = createDeferred<{ error: string | null }>();
+  let isRejected = false;
+  let rejectCalls = 0;
+  passwordResetTestState.adminPasswordResetActions = {
+    fetch: async () => ({ data: isRejected ? [] : [request], error: null }),
+    approve: async () => ({ data: null, error: "VERIFICATION_FAILED" }),
+    reject: async () => {
+      rejectCalls += 1;
+      if (rejectCalls === 1) return { error: "FORBIDDEN" };
+      const result = await rejection.promise;
+      isRejected = !result.error;
+      return result;
+    },
+  };
+  const { default: PasswordResetRequestManagement } = await import(
+    "@/app/admin/components/PasswordResetRequestManagement"
+  );
+  render(
+    <NextIntlClientProvider locale="en" messages={messages}>
+      <RouteTransitionProvider>
+        <PasswordResetRequestManagement />
+      </RouteTransitionProvider>
+    </NextIntlClientProvider>,
+  );
+  const process = await screen.findByRole("button", { name: messages.PasswordResetAdmin.process });
+  fireEvent.click(process);
+  const dialog = screen.getByRole("dialog");
+  assert.equal(screen.queryByRole("alertdialog"), null);
+  const approve = within(dialog).getByRole("button", { name: messages.PasswordResetAdmin.approve });
+  assert.equal((approve as HTMLButtonElement).disabled, true);
+  fireEvent.click(within(dialog).getByRole("radio", { name: messages.PasswordResetAdmin.verification_in_person }));
+  const challenge = within(dialog).getByLabelText(messages.PasswordResetAdmin.verificationChallenge);
+  fireEvent.change(challenge, { target: { value: "1234" } });
+  assert.equal((approve as HTMLButtonElement).disabled, true);
+  fireEvent.click(within(dialog).getByRole("checkbox"));
+  assert.equal((approve as HTMLButtonElement).disabled, false);
+  fireEvent.click(approve);
+  await waitFor(() => assert.equal(document.activeElement === challenge, true));
+  assert.equal(within(dialog).getByRole("alert").textContent?.includes(messages.PasswordResetAdmin.verificationFailed), true);
+  fireEvent.click(within(dialog).getByRole("button", { name: messages.Common.cancel }));
+  await waitFor(() => assert.equal(screen.queryByRole("dialog"), null));
+
+  const getReject = () => screen.getByRole("button", { name: messages.PasswordResetAdmin.reject });
+  fireEvent.click(getReject());
+  const confirmation = screen.getByRole("group");
+  assert.equal(screen.queryByRole("dialog"), null);
+  const cancel = within(confirmation).getByRole("button", { name: messages.Common.cancel });
+  await waitFor(() => assert.equal(document.activeElement === cancel, true));
+  fireEvent.keyDown(cancel, { key: "Escape" });
+  await waitFor(() => assert.equal(document.activeElement === getReject(), true));
+  assert.equal(rejectCalls, 0);
+
+  fireEvent.click(getReject());
+  fireEvent.click(getReject());
+  const failure = await screen.findByRole("alert");
+  assert.equal(failure.textContent?.includes(messages.PasswordResetAdmin.forbidden), true);
+  assert.ok(screen.getByRole("group"));
+  fireEvent.click(getReject());
+  fireEvent.click(getReject());
+  assert.equal(rejectCalls, 2);
+  assert.equal((screen.getByRole("button", { name: messages.Common.cancel }) as HTMLButtonElement).disabled, true);
+  await act(async () => {
+    rejection.resolve({ error: null });
+    await rejection.promise;
+  });
+  await waitFor(() => assert.equal(screen.queryByRole("group"), null));
+  const panel = screen.getByRole("region", {
+    name: (name) => name.startsWith(messages.PasswordResetAdmin.title),
+  });
+  await waitFor(() => assert.equal(document.activeElement === panel, true));
+  assert.ok(screen.getByText(messages.PasswordResetAdmin.rejected).closest('[role="status"]'));
+});
 
 function createDeferred<T>() {
   let resolve!: (value: T) => void;

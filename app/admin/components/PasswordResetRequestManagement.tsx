@@ -83,6 +83,10 @@ export default function PasswordResetRequestManagement({
   const verificationChallengeRef = useRef<HTMLInputElement>(null);
   const verificationAttestationRef = useRef<HTMLInputElement>(null);
   const resultPanelRef = useRef<HTMLDivElement>(null);
+  const requestsPanelRef = useRef<HTMLElement>(null);
+  const rejectButtonsRef = useRef(new Map<string, HTMLButtonElement>());
+  const rejectCancelRef = useRef<HTMLButtonElement>(null);
+  const activeDecisionRef = useRef<symbol | null>(null);
   const shouldFocusResultRef = useRef(false);
   const requestGuard = useLatestRequestGuard();
   useSectionLoadingTask(isLoading);
@@ -132,6 +136,21 @@ export default function PasswordResetRequestManagement({
   useEffect(() => {
     void loadRequests();
   }, [loadRequests]);
+
+  useEffect(
+    () => () => {
+      activeDecisionRef.current = null;
+    },
+    [],
+  );
+
+  useEffect(() => {
+    if (pendingAction?.kind !== "reject") return;
+    const frameId = window.requestAnimationFrame(() => {
+      rejectCancelRef.current?.focus();
+    });
+    return () => window.cancelAnimationFrame(frameId);
+  }, [pendingAction]);
 
   useEffect(() => {
     if (!resetResult || pendingAction || !shouldFocusResultRef.current) return;
@@ -194,10 +213,20 @@ export default function PasswordResetRequestManagement({
   const closePendingAction = () => {
     setActionError(null);
     setPendingAction(null);
+    if (pendingAction?.kind === "reject") {
+      const requestId = pendingAction.request.id;
+      window.requestAnimationFrame(() => {
+        const target =
+          rejectButtonsRef.current.get(requestId) ?? requestsPanelRef.current;
+        target?.focus({ preventScroll: true });
+      });
+    }
   };
 
   const handlePendingAction = async () => {
-    if (!pendingAction) return;
+    if (!pendingAction || activeDecisionRef.current) return;
+    const decision = Symbol("password-reset-decision");
+    activeDecisionRef.current = decision;
     const { request, kind } = pendingAction;
     setBusyRequestId(request.id);
     setActionError(null);
@@ -205,12 +234,14 @@ export default function PasswordResetRequestManagement({
     try {
       if (kind === "reject") {
         const { error } = await rejectPasswordResetRequest(request.id);
+        if (activeDecisionRef.current !== decision) return;
         if (error) {
           showActionError(getActionError(error));
           return;
         }
         setFeedback({ type: "success", message: t("rejected") });
         await loadRequests();
+        if (activeDecisionRef.current !== decision) return;
         closePendingAction();
         return;
       }
@@ -222,6 +253,7 @@ export default function PasswordResetRequestManagement({
         verificationChallenge,
         verificationAttested,
       });
+      if (activeDecisionRef.current !== decision) return;
       if (error || !data) {
         const errorCode = error ?? "UPDATE_FAILED";
         const focusTarget: ActionErrorFocusTarget =
@@ -249,12 +281,17 @@ export default function PasswordResetRequestManagement({
         message: t("approvedDirect"),
       });
       await loadRequests();
+      if (activeDecisionRef.current !== decision) return;
       closePendingAction();
     } catch (error: unknown) {
+      if (activeDecisionRef.current !== decision) return;
       console.error("Failed to decide password reset request:", error);
       showActionError(t("decisionFailed"));
     } finally {
-      setBusyRequestId(null);
+      if (activeDecisionRef.current === decision) {
+        activeDecisionRef.current = null;
+        setBusyRequestId(null);
+      }
     }
   };
 
@@ -287,7 +324,12 @@ export default function PasswordResetRequestManagement({
 
   return (
     <>
-      <section className="app-panel" aria-labelledby="password-reset-requests-title">
+      <section
+        ref={requestsPanelRef}
+        tabIndex={-1}
+        className="app-panel focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-border-focus"
+        aria-labelledby="password-reset-requests-title"
+      >
         <PanelHeader
           title={t("title")}
           headingId="password-reset-requests-title"
@@ -378,46 +420,101 @@ export default function PasswordResetRequestManagement({
                       </dd>
                     </div>
                   </dl>
-                  <div className="mt-4 grid grid-cols-2 gap-2">
-                    <Button
-                      type="button"
-                      size="sm"
-                      fullWidth
-                      onClick={() => {
-                        setActionError(null);
-                        setFeedback(null);
-                        setVerificationMethod(null);
-                        setVerificationChallenge("");
-                        setVerificationAttested(false);
-                        setPendingAction({ kind: "approve", request });
+                  {pendingAction?.kind === "reject" &&
+                  pendingAction.request.id === request.id ? (
+                    <div
+                      className="mt-4 space-y-3"
+                      role="group"
+                      aria-labelledby={`reject-request-${request.id}`}
+                      onKeyDown={(event) => {
+                        if (event.key === "Escape" && !activeDecisionRef.current) {
+                          event.preventDefault();
+                          event.stopPropagation();
+                          closePendingAction();
+                        }
                       }}
-                      disabled={
-                        busyRequestId === request.id ||
-                        !request.codeFreeEligible
-                      }
-                      title={
-                        !request.codeFreeEligible
-                          ? t("directNotAllowed")
-                          : undefined
-                      }
                     >
-                      {t("process")}
-                    </Button>
-                    <Button
-                      type="button"
-                      size="sm"
-                      fullWidth
-                      variant="outline"
-                      onClick={() => {
-                        setActionError(null);
-                        setFeedback(null);
-                        setPendingAction({ kind: "reject", request });
-                      }}
-                      disabled={busyRequestId === request.id}
-                    >
-                      {t("reject")}
-                    </Button>
-                  </div>
+                      <p
+                        id={`reject-request-${request.id}`}
+                        className="text-sm text-text-heading"
+                      >
+                        {t("rejectTitle", { name: request.userName })}
+                      </p>
+                      {actionError && (
+                        <div
+                          ref={actionErrorRef}
+                          id={`reject-request-error-${request.id}`}
+                          tabIndex={-1}
+                        >
+                          <Alert type="error" message={actionError.message} />
+                        </div>
+                      )}
+                      <div className="grid grid-cols-2 gap-2">
+                        <Button
+                          ref={rejectCancelRef}
+                          size="sm"
+                          variant="outline"
+                          onClick={() => {
+                            if (!activeDecisionRef.current) closePendingAction();
+                          }}
+                          disabled={busyRequestId !== null}
+                        >
+                          {commonT("cancel")}
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="danger"
+                          onClick={handlePendingAction}
+                          aria-describedby={
+                            actionError ? `reject-request-error-${request.id}` : undefined
+                          }
+                          isLoading={busyRequestId === request.id}
+                        >
+                          {t("reject")}
+                        </Button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="mt-4 grid grid-cols-2 gap-2">
+                      <Button
+                        type="button"
+                        size="sm"
+                        fullWidth
+                        onClick={() => {
+                          if (activeDecisionRef.current) return;
+                          setActionError(null);
+                          setFeedback(null);
+                          setVerificationMethod(null);
+                          setVerificationChallenge("");
+                          setVerificationAttested(false);
+                          setPendingAction({ kind: "approve", request });
+                        }}
+                        disabled={busyRequestId !== null || !request.codeFreeEligible}
+                        title={!request.codeFreeEligible ? t("directNotAllowed") : undefined}
+                      >
+                        {t("process")}
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        fullWidth
+                        variant="outline"
+                        ref={(button) => {
+                          if (button) rejectButtonsRef.current.set(request.id, button);
+                          else rejectButtonsRef.current.delete(request.id);
+                        }}
+                        onClick={() => {
+                          if (activeDecisionRef.current) return;
+                          setActionError(null);
+                          setFeedback(null);
+                          setPendingAction({ kind: "reject", request });
+                        }}
+                        disabled={busyRequestId !== null}
+                      >
+                        {t("reject")}
+                      </Button>
+                    </div>
+                  )}
                 </article>
               ))}
             </div>
@@ -448,33 +545,25 @@ export default function PasswordResetRequestManagement({
         </div>
       </section>
 
-      {pendingAction && (
+      {pendingAction?.kind === "approve" && (
         <ConfirmDialog
           open
-          title={
-            pendingAction.kind === "approve"
-              ? t("approveTitle", { name: pendingAction.request.userName })
-              : t("rejectTitle", { name: pendingAction.request.userName })
-          }
-          description={
-            pendingAction.kind === "approve"
-              ? t("approveDescription")
-              : t("rejectDescription")
-          }
-          confirmLabel={
-            pendingAction.kind === "approve" ? t("approve") : t("reject")
-          }
+          role="dialog"
+          title={t("approveTitle", { name: pendingAction.request.userName })}
+          description={t("approveDescription")}
+          confirmLabel={t("approve")}
           cancelLabel={commonT("cancel")}
           onConfirm={handlePendingAction}
-          onCancel={closePendingAction}
+          onCancel={() => {
+            if (!activeDecisionRef.current) closePendingAction();
+          }}
           isLoading={busyRequestId === pendingAction.request.id}
           confirmDisabled={
-            pendingAction.kind === "approve" &&
-            (!verificationMethod ||
-              !verificationAttested ||
-              !/^\d{4}$/.test(verificationChallenge.trim()))
+            !verificationMethod ||
+            !verificationAttested ||
+            !/^\d{4}$/.test(verificationChallenge.trim())
           }
-          tone={pendingAction.kind === "approve" ? "primary" : "danger"}
+          tone="primary"
         >
           {actionError && (
             <div
@@ -486,11 +575,7 @@ export default function PasswordResetRequestManagement({
               <Alert type="error" message={actionError.message} />
             </div>
           )}
-          {pendingAction.kind === "approve" && (
-            <div className="space-y-4">
-              <p className="rounded-control border border-border-default bg-surface-raised p-3 text-xs leading-relaxed text-text-muted">
-                {t("approvalSteps")}
-              </p>
+          <div className="space-y-4">
               <fieldset
                 aria-describedby={
                   actionError?.focusTarget === "verification-method"
@@ -605,8 +690,7 @@ export default function PasswordResetRequestManagement({
                   {t("verificationAttestation")}
                 </span>
               </label>
-            </div>
-          )}
+          </div>
         </ConfirmDialog>
       )}
     </>

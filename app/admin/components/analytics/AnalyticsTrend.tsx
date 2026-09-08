@@ -1,6 +1,7 @@
 "use client";
 
 import { useLocale, useTranslations } from "next-intl";
+import DisclosureSection from "@/components/DisclosureSection";
 import {
   CartesianGrid,
   Legend,
@@ -32,9 +33,6 @@ export default function AnalyticsTrend({ points }: { points: AnalyticsTrendPoint
         <h3 id="analytics-trend-title" className="type-panel-title">
           {t("trend.title")}
         </h3>
-        <p className="mt-1 text-xs leading-relaxed text-text-muted">
-          {t("trend.description")}
-        </p>
       </div>
       <div className="p-3 sm:p-5">
         <div aria-hidden="true" className="h-64 w-full min-w-0">
@@ -91,10 +89,7 @@ export default function AnalyticsTrend({ points }: { points: AnalyticsTrendPoint
             </LineChart>
           </ResponsiveContainer>
         </div>
-        <div className="mt-4 border-t border-border-subtle pt-3">
-          <p className="mb-2 text-xs font-medium text-text-muted">
-            {t("trend.tableTitle")}
-          </p>
+        <DisclosureSection title={t("trend.tableTitle")}>
           <div className="mb-px grid grid-cols-3 bg-canvas px-3 py-2 text-xs font-medium text-text-dim">
             <span>{t("trend.date")}</span>
             <span className="text-right">{t("summary.registered")}</span>
@@ -118,7 +113,7 @@ export default function AnalyticsTrend({ points }: { points: AnalyticsTrendPoint
               </dl>
             ))}
           </div>
-        </div>
+        </DisclosureSection>
       </div>
     </section>
   );

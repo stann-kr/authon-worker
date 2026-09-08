@@ -130,7 +130,7 @@ export default function Home() {
         event.ctrlKey ||
         event.altKey ||
         event.shiftKey ||
-        document.querySelector('[role="alertdialog"][aria-modal="true"]')
+        document.querySelector('[aria-modal="true"]:is([role="alertdialog"], [role="dialog"])')
       ) {
         return;
       }
