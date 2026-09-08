@@ -1,6 +1,6 @@
 import "server-only";
 
-import { getCloudflareContext } from "@opennextjs/cloudflare";
+import { getD1Database } from "@/lib/db/client";
 import type { D1Database } from "@cloudflare/workers-types";
 
 import type { Event } from "../events/types";
@@ -38,7 +38,7 @@ export async function getOrCreateEventContributorGuestLimit(input: {
   ) {
     throw new Error("EVENT_NOT_FOUND");
   }
-  const d1 = getCloudflareContext().env.DB as D1Database;
+  const d1 = getD1Database() as D1Database;
   await d1.prepare(INSERT_CURRENT_ACTOR_EVENT_CONTRIBUTOR_LIMIT_SQL).bind(
     input.event.templateSourceEventId,
     input.createdAt,

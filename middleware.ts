@@ -1,3 +1,5 @@
+import { createPerformanceTrace, type PerformanceTrace } from "@/lib/observability/performance";
+import { instrumentD1 } from "@/lib/observability/d1-performance";
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { jwtVerify, SignJWT } from "jose";
@@ -27,9 +29,25 @@ import {
 
 export async function middleware(request: NextRequest) {
   const requestId = getRequestId(request);
+  const trace = createPerformanceTrace("server.middleware", requestId);
+  const startedAt = performance.now();
+  let outcome: "success" | "failure" | "denied" = "failure";
+  try {
+    const response = await handleMiddleware(request, requestId, trace);
+    outcome = response.status >= 400 ? "failure" : response.status >= 300 ? "denied" : "success";
+    response.headers.set("x-request-id", requestId);
+    response.headers.append("Server-Timing", `middleware;dur=${(performance.now() - startedAt).toFixed(2)}, request;desc="${requestId}"`);
+    return response;
+  } finally {
+    await trace.finish(outcome);
+  }
+}
+
+async function handleMiddleware(request: NextRequest, requestId: string, trace: PerformanceTrace) {
   const { pathname, searchParams } = request.nextUrl;
   const explicitLocale = searchParams.get("lang");
   const requestHeaders = new Headers(request.headers);
+  requestHeaders.set("x-request-id", requestId);
   if (isLocale(explicitLocale)) {
     requestHeaders.set(REQUEST_LOCALE_HEADER, explicitLocale);
   }
@@ -57,7 +75,7 @@ export async function middleware(request: NextRequest) {
   }
 
   const { env } = getCloudflareContext();
-  const db = drizzle(env.DB);
+  const db = drizzle(instrumentD1(env.DB, trace));
   const hostname = normalizeHostname(request.headers.get("host"));
   let requestVenueId: string | null = null;
 
@@ -134,7 +152,7 @@ export async function middleware(request: NextRequest) {
     }
 
     // ─── KV 세션 존재 및 JWT subject 바인딩 확인 ───────────────
-    const sessionRaw = await env.SESSIONS.get(`session:${sessionId}`);
+    const sessionRaw = await trace.measure<string | null>("kv", () => env.SESSIONS.get(`session:${sessionId}`, "text"));
     const session = sessionRaw ? parseStoredSession(sessionRaw) : null;
     if (!session?.userId || session.userId !== userId) {
       return NextResponse.redirect(new URL("/auth/login", request.url));

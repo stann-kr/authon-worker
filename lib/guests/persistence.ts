@@ -1,5 +1,5 @@
 import type { D1Database } from "@cloudflare/workers-types";
-import { getCloudflareContext } from "@opennextjs/cloudflare";
+import { getD1Database } from "@/lib/db/client";
 import { and, desc, eq, inArray, isNull, ne, or } from "drizzle-orm";
 
 import { getDb } from "../db/client";
@@ -172,8 +172,7 @@ function eventScope(input: {
 
 export function createGuestPersistence(): GuestPersistence {
   const db = getDb();
-  const { env } = getCloudflareContext();
-  const d1 = env.DB as D1Database;
+  const d1 = getD1Database() as D1Database;
 
   return {
     async listByDate({

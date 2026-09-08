@@ -2,6 +2,49 @@
 
 재발 가능성이 있는 이슈의 증상-원인-해결-검증 레시피를 정리한다. 항목 제목의 날짜는 최초 확인 시점이며, 최신순으로 정렬한다.
 
+## 메뉴 이동·새로고침·게스트 등록이 느릴 때
+
+서버의 `server.*` 구조화 로그와 브라우저의 선택적 진단 기록으로 처리 구간을 비교할 수 있습니다. 브라우저 진단은 현재 탭의 Console에만 출력하며 수집 API로 전송하지 않습니다.
+
+### 진단 켜기
+
+브라우저 개발자 도구 Console에서 다음을 실행하고 새로고침한 뒤 메뉴 이동·등록을 재현합니다. 새로고침 전 Console의 Preserve log를 켜면 기록을 유지하기 쉽습니다.
+
+```js
+sessionStorage.setItem("authon:performance", "1");
+location.reload();
+```
+
+종료할 때는 `sessionStorage.removeItem("authon:performance")`를 실행하고 새로고침합니다. 저장소나 PerformanceObserver를 지원하지 않는 환경에서는 진단만 생략됩니다.
+
+| 기록 | 의미 |
+| --- | --- |
+| `browser.document` | 새 문서 탐색·새로고침의 요청/응답 시간. 초기 hydration과 화면 데이터 준비 완료 시각은 포함하지 않습니다. |
+| `browser.request` | 같은 origin의 fetch/RSC 요청 왕복 시간, 첫 응답까지의 시간(`ttfbMs`), 응답 수신 시간, 전송량. Server Action 이름·성공 여부는 서버 로그로 확인합니다. |
+| `browser.loading` | 공통 로딩 표시 시작부터 제거까지의 시간. 최소 표시·퇴장 애니메이션 시간이 포함됩니다. `ready`는 등록된 로딩 작업의 종료이며 업무 성공을 뜻하지 않습니다. `timeout`·`interrupted`는 정상 완료와 구분합니다. |
+| `server.middleware` | 도메인 확인·접근 검사·세션 갱신을 포함한 middleware 처리시간. 전체 SSR/Server Action 시간은 아닙니다. |
+| `server.layout` | 루트 layout의 tenant·locale·메시지·현재 사용자 준비 시간. 전체 React 렌더링 시간은 아닙니다. |
+| `server.guest_create` / `server.external_guest_create` | 내부/외부 게스트 일괄 등록 함수 처리시간. 단일 등록도 이 경로를 사용합니다. |
+| `server.guest_checkin` | 온라인 게스트 입장 상태 변경 함수 처리시간. |
+| 기타 `server.*` | Door/Guest snapshot, 게스트 목록, 오프라인 명단, 입장 합계, 행사·베뉴·사용자·외부 링크 목록, 외부 링크 검증, 통계 조회 함수 처리시간. |
+
+### 서버 로그 읽기
+
+Worker 로그에서 `event`와 `requestId`로 필터링합니다. middleware가 정상 반환한 응답은 `x-request-id`와 `Server-Timing`의 `request` 항목에 같은 ID를 제공하므로 Network/Console에서 찾은 요청을 서버 로그와 대조할 수 있습니다. middleware의 `Server-Timing`에는 middleware 시간만 노출됩니다. 동일 HTTP 요청에 layout·작업 로그가 함께 있을 수 있습니다.
+
+- `performance.durationMs`: 해당 함수의 실제 경과시간. 서버 작업 로그는 middleware, 요청/응답 전송, 직렬화와 클라이언트 화면 갱신 시간을 포함하지 않습니다.
+- `authMs` / `authCount`: Server Action/layout의 `requireAuth` 검증에 든 누적 시간과 횟수. 인증 내부의 KV·D1 시간이 포함됩니다.
+- `kvMs` / `kvCount`: 계측된 세션 KV 읽기 시간과 횟수. 모든 KV 작업의 합계가 아닙니다.
+- `d1Ms` / `d1Count` / `d1Statements`: 계측된 D1 호출의 누적 대기시간, 호출 횟수, 실행에 제출한 statement 수. batch는 호출 한 번과 여러 statement로 기록합니다. DB 내부 SQL 실행시간만 측정하는 값은 아닙니다.
+- `d1RowsRead` / `d1RowsWritten` / `d1MetaCount`: 반환된 D1 metadata의 행 수 합계와 metadata를 제공한 statement 수. Drizzle의 `raw()` 등은 metadata를 주지 않으므로 `d1MetaCount < d1Statements`라면 행 수는 일부 집계입니다. 0을 전체 DB 읽기 없음으로 해석하지 않습니다.
+- `d1Failures`: throw된 D1 호출 수. `outcome=failure`는 함수 예외 또는 응답의 `error`를 뜻합니다. 일괄 등록의 개별 거절 항목까지 성공/실패율로 집계하는 지표는 아닙니다.
+
+단계는 중첩되거나 병렬로 실행되므로 `authMs + kvMs + d1Ms`를 총시간으로 더하지 않습니다. 업무·함수별로 샘플을 나누고 호출 수와 p50/p95를 비교합니다. 폴링 조회와 등록 요청을 같은 집계에 섞지 않습니다.
+
+브라우저 요청만 길면 전송·요청 대기·계측 범위 밖 렌더링을, 서버 작업이 길면 인증과 D1 시간을, `browser.loading`만 길면 연속 요청·클라이언트 준비 작업을 다음 조사 대상으로 삼습니다. 이 값만으로 원인을 확정하거나 운영 성능을 개선했다고 판단하지 않습니다.
+
+서버 진단은 계측된 호출마다 작은 구조화 로그 한 건을 남깁니다. SQL·bind 값·이름·token·URL query·등록 입력은 기록하지 않습니다. 브라우저도 고정 경로 분류와 수치만 출력합니다. 개발 Worker가 운영 DB를 공유하는 환경에서 실제 등록·삭제를 테스트하려면 해당 데이터 변경 권한을 별도로 확인해야 합니다.
+
 ## 2026-08-04
 
 ### 외부 게스트 링크 언어 변경 후 로딩이 종료되지 않음

@@ -1,5 +1,7 @@
 "use server";
 
+import { measureServerOperation } from "@/lib/observability/server-performance";
+
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { and, asc, desc, eq, isNull, ne } from "drizzle-orm";
 import { reportServerError } from "@/lib/observability/structured-log";
@@ -67,26 +69,28 @@ export async function fetchEvents(params: {
   businessDate?: string | null;
   includeArchived?: boolean;
 } = {}): Promise<ApiResponse<Event[]>> {
-  try {
-    const actor = await requireAuth();
-    const venueId = await resolveActorVenueId(actor, params.venueId);
-    if (params.businessDate && !isBusinessDate(params.businessDate)) {
-      return { data: null, error: "INVALID_BUSINESS_DATE" };
-    }
-    const conditions = [eq(events.venueId, venueId)];
-    if (params.businessDate) conditions.push(eq(events.businessDate, params.businessDate));
-    if (!params.includeArchived) conditions.push(ne(events.state, "archived"));
+  return measureServerOperation("server.event_list", async (): Promise<ApiResponse<Event[]>> => {
+    try {
+      const actor = await requireAuth();
+      const venueId = await resolveActorVenueId(actor, params.venueId);
+      if (params.businessDate && !isBusinessDate(params.businessDate)) {
+        return { data: null, error: "INVALID_BUSINESS_DATE" };
+      }
+      const conditions = [eq(events.venueId, venueId)];
+      if (params.businessDate) conditions.push(eq(events.businessDate, params.businessDate));
+      if (!params.includeArchived) conditions.push(ne(events.state, "archived"));
 
-    const rows = await getDb()
-      .select()
-      .from(events)
-      .where(and(...conditions))
-      .orderBy(desc(events.businessDate), asc(events.doorOpensAt), asc(events.createdAt));
-    return { data: rows.map(toEvent), error: null };
-  } catch (error: unknown) {
-    await reportServerError("event.list", error);
-    return { data: null, error: "EVENT_LIST_FAILED" };
-  }
+      const rows = await getDb()
+        .select()
+        .from(events)
+        .where(and(...conditions))
+        .orderBy(desc(events.businessDate), asc(events.doorOpensAt), asc(events.createdAt));
+      return { data: rows.map(toEvent), error: null };
+    } catch (error: unknown) {
+      await reportServerError("event.list", error);
+      return { data: null, error: "EVENT_LIST_FAILED" };
+    }
+  });
 }
 
 export async function createEvent(params: EventDraftInput & {

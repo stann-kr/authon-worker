@@ -973,6 +973,10 @@ test("a cancelled route-owned target restore falls back to main after overlay re
     frames.delete(id);
   };
 
+  const originalInfo = console.info;
+  const performanceRecords: { event: string; outcome: string; durationMs: number }[] = [];
+  window.sessionStorage.setItem("authon:performance", "1");
+  console.info = (value: string) => { performanceRecords.push(JSON.parse(value)); };
   try {
     function Target({ label }: { label: string }) {
       const targetRef = useRef<HTMLHeadingElement>(null);
@@ -1062,7 +1066,12 @@ test("a cancelled route-owned target restore falls back to main after overlay re
       document.querySelector(".route-transition-overlay") === null,
       true,
     );
+    const loadingRecord = performanceRecords.find((record) => record.event === "browser.loading");
+    assert.equal(loadingRecord?.outcome, "ready");
+    assert.equal((loadingRecord?.durationMs ?? -1) >= 0, true);
   } finally {
+    console.info = originalInfo;
+    window.sessionStorage.removeItem("authon:performance");
     window.requestAnimationFrame = originalRequestAnimationFrame;
     window.cancelAnimationFrame = originalCancelAnimationFrame;
     setupMain?.setAttribute("id", "main-content");

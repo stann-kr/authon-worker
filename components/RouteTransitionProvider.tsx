@@ -19,6 +19,7 @@ import {
 } from "@/lib/route-loading";
 import { announceRouteTransitionStart } from "@/lib/route-transition-events";
 import Spinner from "./Spinner";
+import { beginBrowserLoading, observeBrowserPerformance } from "@/lib/observability/browser-performance";
 
 type TransitionPhase = "idle" | "visible" | "leaving";
 
@@ -47,6 +48,8 @@ export function RouteTransitionProvider({ children }: { children: ReactNode }) {
   const previousPathnameRef = useRef(pathname);
   const phaseRef = useRef<TransitionPhase>("idle");
   const visibleAtRef = useRef(0);
+  const finishPerformanceRef = useRef<ReturnType<typeof beginBrowserLoading> | null>(null);
+  const didTransitionTimeoutRef = useRef(false);
   const completionTimerRef = useRef<number | null>(null);
   const exitTimerRef = useRef<number | null>(null);
   const safetyTimerRef = useRef<number | null>(null);
@@ -159,6 +162,8 @@ export function RouteTransitionProvider({ children }: { children: ReactNode }) {
   const finishTransition = useCallback(() => {
     updatePhase("leaving");
     exitTimerRef.current = window.setTimeout(() => {
+      finishPerformanceRef.current?.(didTransitionTimeoutRef.current ? "timeout" : "ready");
+      finishPerformanceRef.current = null;
       updatePhase("idle");
       exitTimerRef.current = null;
     }, EXIT_DURATION_MS);
@@ -169,6 +174,9 @@ export function RouteTransitionProvider({ children }: { children: ReactNode }) {
 
     if (phaseRef.current === "idle" || phaseRef.current === "leaving") {
       clearTimer(exitTimerRef);
+      finishPerformanceRef.current?.("interrupted");
+      finishPerformanceRef.current = beginBrowserLoading();
+      didTransitionTimeoutRef.current = false;
       visibleAtRef.current = performance.now();
       updatePhase("visible");
     }
@@ -250,6 +258,7 @@ export function RouteTransitionProvider({ children }: { children: ReactNode }) {
       reconcileLoading();
       safetyTimerRef.current = window.setTimeout(() => {
         safetyTimerRef.current = null;
+        didTransitionTimeoutRef.current = true;
         loadingTracker.commitRoute();
         reconcileLoading();
       }, TRANSITION_TIMEOUT_MS);
@@ -267,8 +276,12 @@ export function RouteTransitionProvider({ children }: { children: ReactNode }) {
     reconcileLoading();
   }, [clearTimer, loadingTracker, pathname, reconcileLoading]);
 
+  useEffect(observeBrowserPerformance, []);
+
   useEffect(
     () => () => {
+      finishPerformanceRef.current?.("interrupted");
+      finishPerformanceRef.current = null;
       clearTimers();
       clearFocusFrame();
     },

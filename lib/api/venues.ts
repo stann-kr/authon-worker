@@ -1,5 +1,7 @@
 "use server";
 
+import { measureServerOperation } from "@/lib/observability/server-performance";
+
 import { reportServerError } from "@/lib/observability/structured-log";
 
 import { and, asc, eq, inArray, sql } from "drizzle-orm";
@@ -136,56 +138,58 @@ async function setPrimaryDomain(
 }
 
 export async function fetchVenues(includeInactive = false): Promise<ApiResponse<Venue[]>> {
-  try {
-    const actor = await requireRole(["super_admin", "venue_admin", "door_staff", "staff", "dj"]);
-    const db = getDb();
-    let query = db.select().from(venues).$dynamic();
-    if (actor.role !== "super_admin") {
-      if (!actor.venueId) throw new Error("Forbidden");
-      query = query.where(
-        includeInactive
-          ? eq(venues.id, actor.venueId)
-          : and(eq(venues.id, actor.venueId), eq(venues.active, true)),
-      );
-    } else if (!includeInactive) {
-      query = query.where(eq(venues.active, true));
-    }
-
-    const rows = await query.orderBy(asc(venues.name));
-    const venueIds = rows.map((row) => row.id);
-    const domains = venueIds.length
-      ? await db
-          .select({
-            venueId: venueDomains.venueId,
-            hostname: venueDomains.hostname,
-            defaultLocale: venueDomains.defaultLocale,
-          })
-          .from(venueDomains)
-          .where(
-            and(
-              inArray(venueDomains.venueId, venueIds),
-              eq(venueDomains.isPrimary, true),
-              eq(venueDomains.active, true),
-            ),
-          )
-      : [];
-    const domainByVenue = new Map(domains.map((domain) => [domain.venueId, domain]));
-
-    return {
-      data: rows.map((row) => {
-        const domain = domainByVenue.get(row.id);
-        return toVenue(
-          row,
-          domain?.hostname || null,
-          isLocale(domain?.defaultLocale) ? domain.defaultLocale : null,
+  return measureServerOperation("server.venue_list", async (): Promise<ApiResponse<Venue[]>> => {
+    try {
+      const actor = await requireRole(["super_admin", "venue_admin", "door_staff", "staff", "dj"]);
+      const db = getDb();
+      let query = db.select().from(venues).$dynamic();
+      if (actor.role !== "super_admin") {
+        if (!actor.venueId) throw new Error("Forbidden");
+        query = query.where(
+          includeInactive
+            ? eq(venues.id, actor.venueId)
+            : and(eq(venues.id, actor.venueId), eq(venues.active, true)),
         );
-      }),
-      error: null,
-    };
-  } catch (error: unknown) {
-    await reportServerError("venue.list", error);
-    return { data: null, error: "Unable to load venues right now." };
-  }
+      } else if (!includeInactive) {
+        query = query.where(eq(venues.active, true));
+      }
+
+      const rows = await query.orderBy(asc(venues.name));
+      const venueIds = rows.map((row) => row.id);
+      const domains = venueIds.length
+        ? await db
+            .select({
+              venueId: venueDomains.venueId,
+              hostname: venueDomains.hostname,
+              defaultLocale: venueDomains.defaultLocale,
+            })
+            .from(venueDomains)
+            .where(
+              and(
+                inArray(venueDomains.venueId, venueIds),
+                eq(venueDomains.isPrimary, true),
+                eq(venueDomains.active, true),
+              ),
+            )
+        : [];
+      const domainByVenue = new Map(domains.map((domain) => [domain.venueId, domain]));
+
+      return {
+        data: rows.map((row) => {
+          const domain = domainByVenue.get(row.id);
+          return toVenue(
+            row,
+            domain?.hostname || null,
+            isLocale(domain?.defaultLocale) ? domain.defaultLocale : null,
+          );
+        }),
+        error: null,
+      };
+    } catch (error: unknown) {
+      await reportServerError("venue.list", error);
+      return { data: null, error: "Unable to load venues right now." };
+    }
+  });
 }
 
 export async function createVenue(venue: {
