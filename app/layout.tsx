@@ -1,3 +1,4 @@
+import { measureServerOperation } from "@/lib/observability/server-performance";
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
@@ -43,13 +44,13 @@ export default async function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  const [tenant, locale, messages, t, sessionUser] = await Promise.all([
+  const [tenant, locale, messages, t, sessionUser] = await measureServerOperation("server.layout", () => Promise.all([
     getRequestTenantContext(),
     getLocale(),
     getMessages(),
     getTranslations("Common"),
     getCurrentUser(),
-  ]);
+  ]));
 
   return (
     <html lang={locale} suppressHydrationWarning={true}>

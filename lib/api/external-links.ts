@@ -1,8 +1,10 @@
 "use server";
 
+import { measureServerOperation } from "@/lib/observability/server-performance";
+
 import { reportServerError } from "@/lib/observability/structured-log";
 
-import { getCloudflareContext } from "@opennextjs/cloudflare";
+import { getD1Database } from "@/lib/db/client";
 import { headers } from "next/headers";
 import {
   eq,
@@ -86,19 +88,16 @@ function toExternalLinkLifecycleActor(
 }
 
 function getExternalLinkLifecyclePersistence() {
-  const { env } = getCloudflareContext();
-  return createExternalLinkLifecyclePersistence(env.DB);
+  return createExternalLinkLifecyclePersistence(getD1Database());
 }
 
 function getExternalLinkAdminPersistence() {
-  const { env } = getCloudflareContext();
-  return createExternalLinkAdminPersistence(env.DB);
+  return createExternalLinkAdminPersistence(getD1Database());
 }
 
 function getExternalLinkPublicDependencies() {
-  const { env } = getCloudflareContext();
   return {
-    persistence: createExternalLinkPublicPersistence(env.DB),
+    persistence: createExternalLinkPublicPersistence(getD1Database()),
     getTenantContext: getRequestTenantContext,
     async getRequestIp() {
       return getRequestIpFromHeaders(await headers());
@@ -134,23 +133,25 @@ async function addGuestUrls(
 }
 
 export async function fetchExternalLinks(venueId: string): Promise<ApiResponse<ExternalDJLink[]>> {
-  try {
-    const user = await requireRole(["super_admin", "venue_admin"]);
-    const db = getDb();
-    const effectiveVenueId = await scopedVenueId(user, venueId);
-    const result = await db.select().from(externalDjLinks)
-      .where(
-        and(
-          eq(externalDjLinks.venueId, effectiveVenueId),
-          isNull(externalDjLinks.deletedAt),
-        ),
-      )
-      .orderBy(desc(externalDjLinks.createdAt), desc(externalDjLinks.date));
-    return { data: await addGuestUrls(effectiveVenueId, result), error: null };
-  } catch (error: unknown) {
-    await reportServerError("external_link.list", error);
-    return { data: null, error: "Unable to load external links right now." };
-  }
+  return measureServerOperation("server.external_link_list", async (): Promise<ApiResponse<ExternalDJLink[]>> => {
+    try {
+      const user = await requireRole(["super_admin", "venue_admin"]);
+      const db = getDb();
+      const effectiveVenueId = await scopedVenueId(user, venueId);
+      const result = await db.select().from(externalDjLinks)
+        .where(
+          and(
+            eq(externalDjLinks.venueId, effectiveVenueId),
+            isNull(externalDjLinks.deletedAt),
+          ),
+        )
+        .orderBy(desc(externalDjLinks.createdAt), desc(externalDjLinks.date));
+      return { data: await addGuestUrls(effectiveVenueId, result), error: null };
+    } catch (error: unknown) {
+      await reportServerError("external_link.list", error);
+      return { data: null, error: "Unable to load external links right now." };
+    }
+  });
 }
 
 export async function fetchExternalLinksByDate(
@@ -379,15 +380,17 @@ export async function validateExternalToken(
   token: string,
   ownerKey?: string | null,
 ): Promise<ApiResponse<ExternalLinkPublicValidationData>> {
-  try {
-    return await validatePublicExternalToken(
-      { token, ownerKey },
-      getExternalLinkPublicDependencies(),
-    );
-  } catch (error: unknown) {
-    await reportServerError("external_link.validate", error);
-    return { data: null, error: "EXTERNAL_LINK_UNAVAILABLE" };
-  }
+  return measureServerOperation("server.external_validate", async (): Promise<ApiResponse<ExternalLinkPublicValidationData>> => {
+    try {
+      return await validatePublicExternalToken(
+        { token, ownerKey },
+        getExternalLinkPublicDependencies(),
+      );
+    } catch (error: unknown) {
+      await reportServerError("external_link.validate", error);
+      return { data: null, error: "EXTERNAL_LINK_UNAVAILABLE" };
+    }
+  });
 }
 
 export async function createGuestsViaExternalLink(params: {
@@ -395,18 +398,20 @@ export async function createGuestsViaExternalLink(params: {
   date: string;
   items: BulkGuestCreateInput[];
 }): Promise<ApiResponse<ExternalLinkPublicGuestCreateResult>> {
-  try {
-    return await createPublicGuestsViaExternalLink(
-      params,
-      getExternalLinkPublicDependencies(),
-    );
-  } catch (error: unknown) {
-    await reportServerError("external_link.guest_create", error);
-    return {
-      data: null,
-      error: "Unable to register guests right now. Please try again.",
-    };
-  }
+  return measureServerOperation("server.external_guest_create", async (): Promise<ApiResponse<ExternalLinkPublicGuestCreateResult>> => {
+    try {
+      return await createPublicGuestsViaExternalLink(
+        params,
+        getExternalLinkPublicDependencies(),
+      );
+    } catch (error: unknown) {
+      await reportServerError("external_link.guest_create", error);
+      return {
+        data: null,
+        error: "Unable to register guests right now. Please try again.",
+      };
+    }
+  });
 }
 
 /**

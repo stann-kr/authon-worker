@@ -1,3 +1,4 @@
+import { measureServerStage } from "@/lib/observability/performance-scope";
 import { cookies } from "next/headers";
 import { jwtVerify } from "jose";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
@@ -34,100 +35,102 @@ export interface SessionUser {
 
 /** JWT + KV 세션 + DB 사용자 상태 검증. 실패 시 Error throw. */
 export async function requireAuth(): Promise<SessionUser> {
-  const cookieStore = await cookies();
-  const token = cookieStore.get("token")?.value;
-  const sessionId = cookieStore.get("sessionId")?.value;
+  return measureServerStage("auth", async (): Promise<SessionUser> => {
+    const cookieStore = await cookies();
+    const token = cookieStore.get("token")?.value;
+    const sessionId = cookieStore.get("sessionId")?.value;
 
-  if (!token || !sessionId) throw new Error("Unauthorized");
+    if (!token || !sessionId) throw new Error("Unauthorized");
 
-  const { env } = getCloudflareContext();
-  if (!env.JWT_SECRET) throw new Error("Server configuration error");
+    const { env } = getCloudflareContext();
+    if (!env.JWT_SECRET) throw new Error("Server configuration error");
 
-  let payload: { sub?: string; email?: string; role?: string; venueId?: string | null; sv?: number };
-  try {
-    const result = await jwtVerify(token, new TextEncoder().encode(env.JWT_SECRET));
-    payload = result.payload as typeof payload;
-  } catch {
-    throw new Error("Unauthorized");
-  }
+    let payload: { sub?: string; email?: string; role?: string; venueId?: string | null; sv?: number };
+    try {
+      const result = await jwtVerify(token, new TextEncoder().encode(env.JWT_SECRET));
+      payload = result.payload as typeof payload;
+    } catch {
+      throw new Error("Unauthorized");
+    }
 
-  if (!payload.sub || !isRole(payload.role)) throw new Error("Unauthorized");
+    if (!payload.sub || !isRole(payload.role)) throw new Error("Unauthorized");
 
-  const sessionRaw = await env.SESSIONS.get(`session:${sessionId}`);
-  if (!sessionRaw) throw new Error("Session expired");
+    const sessionRaw = await measureServerStage<string | null>("kv", () => env.SESSIONS.get(`session:${sessionId}`, "text"));
+    if (!sessionRaw) throw new Error("Session expired");
 
-  const session = parseStoredSession(sessionRaw);
-  if (!session?.userId || session.userId !== payload.sub) {
-    throw new Error("Session expired");
-  }
+    const session = parseStoredSession(sessionRaw);
+    if (!session?.userId || session.userId !== payload.sub) {
+      throw new Error("Session expired");
+    }
 
-  const db = getDb();
-  const userRows = await db
-    .select({
-      id: users.id,
-      email: users.email,
-      name: users.name,
-      role: users.role,
-      accountKind: users.accountKind,
-      doorAccessEnabled: users.doorAccessEnabled,
-      venueId: users.venueId,
-      guestLimit: users.guestLimit,
-      active: users.active,
-      deletedAt: users.deletedAt,
-      sessionVersion: users.sessionVersion,
-      preferredLocale: users.preferredLocale,
-      venueActive: venues.active,
-    })
-    .from(users)
-    .leftJoin(venues, eq(users.venueId, venues.id))
-    .where(eq(users.id, payload.sub))
-    .limit(1);
-  const user = userRows[0];
+    const db = getDb();
+    const userRows = await db
+      .select({
+        id: users.id,
+        email: users.email,
+        name: users.name,
+        role: users.role,
+        accountKind: users.accountKind,
+        doorAccessEnabled: users.doorAccessEnabled,
+        venueId: users.venueId,
+        guestLimit: users.guestLimit,
+        active: users.active,
+        deletedAt: users.deletedAt,
+        sessionVersion: users.sessionVersion,
+        preferredLocale: users.preferredLocale,
+        venueActive: venues.active,
+      })
+      .from(users)
+      .leftJoin(venues, eq(users.venueId, venues.id))
+      .where(eq(users.id, payload.sub))
+      .limit(1);
+    const user = userRows[0];
 
-  if (
-    !user ||
-    !user.active ||
-    user.deletedAt ||
-    !isRole(user.role) ||
-    !isAccountKind(user.accountKind) ||
-    !hasActiveVenueAccess({
+    if (
+      !user ||
+      !user.active ||
+      user.deletedAt ||
+      !isRole(user.role) ||
+      !isAccountKind(user.accountKind) ||
+      !hasActiveVenueAccess({
+        role: user.role,
+        venueId: user.venueId,
+        venueActive: user.venueActive,
+      })
+    ) {
+      throw new Error("Unauthorized");
+    }
+
+    const expectedSessionVersion = user.sessionVersion ?? 0;
+    if (payload.sv !== expectedSessionVersion || session.sessionVersion !== expectedSessionVersion) {
+      throw new Error("Session expired");
+    }
+
+    const sessionUser: SessionUser = {
+      id: user.id,
+      email: user.email,
+      name: user.name,
       role: user.role,
-      venueId: user.venueId,
-      venueActive: user.venueActive,
-    })
-  ) {
-    throw new Error("Unauthorized");
-  }
+      accountKind: user.accountKind,
+      doorAccessEnabled: user.doorAccessEnabled,
+      venueId: user.venueId ?? null,
+      guestLimit: user.guestLimit ?? null,
+      sessionVersion: expectedSessionVersion,
+      preferredLocale: isLocale(user.preferredLocale) ? user.preferredLocale : null,
+    };
 
-  const expectedSessionVersion = user.sessionVersion ?? 0;
-  if (payload.sv !== expectedSessionVersion || session.sessionVersion !== expectedSessionVersion) {
-    throw new Error("Session expired");
-  }
+    const tenant = await getRequestTenantContext();
+    if (!tenant.resolved) throw new Error("Unknown venue");
+    if (
+      tenant.scope === "venue" &&
+      sessionUser.role !== "super_admin" &&
+      sessionUser.venueId !== tenant.venueId
+    ) {
+      throw new Error("Forbidden");
+    }
 
-  const sessionUser: SessionUser = {
-    id: user.id,
-    email: user.email,
-    name: user.name,
-    role: user.role,
-    accountKind: user.accountKind,
-    doorAccessEnabled: user.doorAccessEnabled,
-    venueId: user.venueId ?? null,
-    guestLimit: user.guestLimit ?? null,
-    sessionVersion: expectedSessionVersion,
-    preferredLocale: isLocale(user.preferredLocale) ? user.preferredLocale : null,
-  };
-
-  const tenant = await getRequestTenantContext();
-  if (!tenant.resolved) throw new Error("Unknown venue");
-  if (
-    tenant.scope === "venue" &&
-    sessionUser.role !== "super_admin" &&
-    sessionUser.venueId !== tenant.venueId
-  ) {
-    throw new Error("Forbidden");
-  }
-
-  return sessionUser;
+    return sessionUser;
+  });
 }
 
 /** requireAuth 후 role 검증. 권한 없으면 Error throw. */

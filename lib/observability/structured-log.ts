@@ -1,4 +1,10 @@
+import type { PerformanceMetrics } from "./performance.ts";
+
 const SAFE_IDENTIFIER_PATTERN = /^[A-Za-z0-9][A-Za-z0-9:._-]{0,127}$/;
+const PERFORMANCE_FIELDS = [
+  "durationMs", "authMs", "authCount", "kvMs", "kvCount", "d1Ms", "d1Count",
+  "d1Statements", "d1Failures", "d1RowsRead", "d1RowsWritten", "d1MetaCount",
+] as const;
 const SAFE_EVENT_PATTERN = /^[a-z][a-z0-9._-]{2,95}$/;
 const SAFE_ERROR_KINDS = new Set([
   "AbortError",
@@ -31,6 +37,7 @@ export type StructuredLogInput = {
   outcome: StructuredLogOutcome;
   error?: unknown;
   errorKind?: string;
+  performance?: Partial<PerformanceMetrics>;
 };
 
 export type StructuredLogRecord = {
@@ -40,6 +47,7 @@ export type StructuredLogRecord = {
   venueId?: string;
   outcome: StructuredLogOutcome;
   errorKind?: string;
+  performance?: Partial<PerformanceMetrics>;
 };
 
 function safeIdentifier(value: string | null | undefined): string | null {
@@ -67,7 +75,7 @@ async function actorSurrogate(actorId: string | null | undefined): Promise<strin
   return `sha256:${prefix}`;
 }
 
-export function getRequestId(request?: Request): string {
+export function getRequestId(request?: { headers: Pick<Headers, "get"> }): string {
   const headerId = request
     ? safeIdentifier(request.headers.get("cf-ray"))
       ?? safeIdentifier(request.headers.get("x-request-id"))
@@ -93,6 +101,15 @@ export async function createStructuredLogRecord(
   if (actor) record.actor = actor;
   if (venueId) record.venueId = venueId;
   if (errorKind) record.errorKind = errorKind;
+  if (input.performance) {
+    record.performance = {};
+    for (const field of PERFORMANCE_FIELDS) {
+      const value = input.performance[field];
+      if (typeof value === "number" && Number.isFinite(value) && value >= 0 && value <= Number.MAX_SAFE_INTEGER) {
+        record.performance[field] = Math.round(value * 100) / 100;
+      }
+    }
+  }
   return record;
 }
 
