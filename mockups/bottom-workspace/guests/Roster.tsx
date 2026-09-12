@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useId, useLayoutEffect, useRef, useState } from "react";
 import {
   useMock,
   activeGuests,
@@ -53,6 +53,12 @@ export function Roster() {
     busy,
   } = useMock();
   const searchRef = useRef<HTMLInputElement>(null);
+  const searchToggleRef = useRef<HTMLButtonElement>(null);
+  const searchId = useId();
+  const [searchOpen, setSearchOpen] = useState(false);
+  useLayoutEffect(() => {
+    if (searchOpen) searchRef.current?.focus({ preventScroll: true });
+  }, [searchOpen]);
   const [query, setQuery] = useState(""),
     [status, setStatus] = useState("all"),
     [owner, setOwner] = useState("all"),
@@ -71,11 +77,20 @@ export function Roster() {
   const quota = quotaFor(data, user.id, event.id);
   const checked = all.filter((g) => g.status === "checked").length;
   const filtered = query.trim() !== "" || status !== "all" || owner !== "all";
+  const closeSearch = () => {
+    setQuery("");
+    setSearchOpen(false);
+    searchToggleRef.current?.focus({ preventScroll: true });
+  };
+  const focusSearchControl = () =>
+    (searchOpen ? searchRef.current : searchToggleRef.current)?.focus({
+      preventScroll: true,
+    });
   const resetFilters = () => {
     setQuery("");
     setStatus("all");
     setOwner("all");
-    searchRef.current?.focus();
+    focusSearchControl();
   };
   const ownerLabel =
     data.users.find((u) => u.id === owner)?.name ??
@@ -160,30 +175,75 @@ export function Roster() {
         </span>
       </section>
       <div className="roster-controls">
-        <label className="roster-search">
-          <Icon name="search" />
-          <span className="sr-only">{t("게스트 이름 검색...")}</span>
-          <input
-            aria-label={t("게스트 이름 검색...")}
-            ref={searchRef}
-            type="search"
-            autoComplete="off"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder={t("게스트 이름 검색...")}
-          />
-          {query && (
-            <button
-              aria-label={t("지우기")}
-              onClick={() => {
-                setQuery("");
-                searchRef.current?.focus();
+        <div className="roster-controlbar">
+          <div className="roster-result-heading" hidden={searchOpen}>
+            <h2 className="list-header">
+              {t(
+                isDoor
+                  ? "게스트 목록"
+                  : isAdmin
+                    ? "전체 게스트"
+                    : "내 게스트 명단",
+              )}
+            </h2>
+            <span>{t("{count}명", { count: list.length })}</span>
+          </div>
+          <div className="roster-search" id={searchId} hidden={!searchOpen}>
+            <label className="sr-only" htmlFor={`${searchId}-input`}>
+              {t("게스트 이름 검색...")}
+            </label>
+            <input
+              id={`${searchId}-input`}
+              aria-label={t("게스트 이름 검색...")}
+              ref={searchRef}
+              type="search"
+              autoComplete="off"
+              enterKeyHint="search"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.nativeEvent.isComposing) return;
+                if (e.key === "Escape") {
+                  e.preventDefault();
+                  if (query) setQuery("");
+                  else closeSearch();
+                } else if (e.key === "Enter") e.currentTarget.blur();
               }}
-            >
-              <Icon name="close" size={15} />
-            </button>
-          )}
-        </label>
+              placeholder={t("이름·담당자 검색")}
+            />
+            {query && (
+              <button
+                type="button"
+                aria-label={t("지우기")}
+                onClick={() => {
+                  setQuery("");
+                  searchRef.current?.focus();
+                }}
+              >
+                <Icon name="close" size={15} />
+              </button>
+            )}
+          </div>
+          <button
+            ref={searchToggleRef}
+            type="button"
+            className={`roster-icon-button ${searchOpen ? "active" : ""}`}
+            aria-label={t(searchOpen ? "검색 닫기" : "검색 열기")}
+            aria-expanded={searchOpen}
+            aria-controls={searchId}
+            onClick={() => (searchOpen ? closeSearch() : setSearchOpen(true))}
+          >
+            <Icon name={searchOpen ? "close" : "search"} size={19} />
+          </button>
+          <button
+            className={`roster-icon-button ${owner !== "all" || sort !== "registered" || waiting ? "active" : ""}`}
+            aria-label={t("필터·정렬")}
+            aria-haspopup="dialog"
+            onClick={() => setPanel("filter")}
+          >
+            <Icon name="sliders" size={19} />
+          </button>
+        </div>
         <div className="roster-filter-row">
           <div
             className="roster-status-filters"
@@ -205,14 +265,6 @@ export function Roster() {
               </button>
             ))}
           </div>
-          <button
-            className={`roster-filter-button ${owner !== "all" || sort !== "registered" || waiting ? "active" : ""}`}
-            aria-label={t("필터·정렬")}
-            aria-haspopup="dialog"
-            onClick={() => setPanel("filter")}
-          >
-            <Icon name="sliders" size={18} />
-          </button>
         </div>
         {(owner !== "all" || sort !== "registered" || waiting) && (
           <div className="roster-applied" aria-label={t("적용한 조건")}>
@@ -264,17 +316,15 @@ export function Roster() {
           </Notice>
         </div>
       )}
-      <div className="roster-result-heading">
-        <h2 className="list-header">
-          {t(
-            isDoor ? "게스트 목록" : isAdmin ? "전체 게스트" : "내 게스트 명단",
-          )}
-        </h2>
-        <span role="status">
-          {t("{count}명", { count: list.length })}
-          {filtered && ` / ${t("전체 {count}명", { count: all.length })}`}
-        </span>
-      </div>
+      <p
+        className={`roster-results ${filtered ? "" : "sr-only"}`}
+        role="status"
+      >
+        {t("{count}명 표시 · 전체 {total}명", {
+          count: list.length,
+          total: all.length,
+        })}
+      </p>
       <ul className="guest-list">
         {list.map((g) => (
           <li key={g.id}>
@@ -306,7 +356,7 @@ export function Roster() {
                   const keyboard = event.detail === 0;
                   void check(g).then((ok) => {
                     if (ok && keyboard && status === "pending")
-                      requestAnimationFrame(() => searchRef.current?.focus());
+                      requestAnimationFrame(focusSearchControl);
                   });
                 }}
               >
@@ -474,7 +524,10 @@ export function Roster() {
             secondary
             onClick={() => {
               close();
-              requestAnimationFrame(() => searchRef.current?.focus());
+              setSearchOpen(true);
+              requestAnimationFrame(() =>
+                searchRef.current?.focus({ preventScroll: true }),
+              );
             }}
           >
             이름으로 검색

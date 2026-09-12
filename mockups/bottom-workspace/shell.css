@@ -179,6 +179,7 @@ svg {
 }
 .app-shell {
   position: relative;
+  min-width: 0;
   height: 100%;
   display: flex;
   flex-direction: column;
@@ -188,7 +189,10 @@ svg {
 }
 .workspace-scroll {
   flex: 1;
-  overflow: auto;
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: hidden;
+  overflow-y: auto;
   overscroll-behavior: contain;
   scrollbar-width: none;
   min-height: 0;
@@ -201,6 +205,10 @@ svg {
 .app-shell.public .workspace-scroll {
   padding-bottom: 24px;
   scroll-padding-bottom: 24px;
+}
+.workspace-scroll > div {
+  min-width: 0;
+  max-width: 100%;
 }
 .workspace-scroll::-webkit-scrollbar {
   display: none;
@@ -229,12 +237,17 @@ svg {
   font-size: 14px;
   font-weight: 500;
 }
+.scope-button > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
 .scope-button::after {
   content: "";
   position: absolute;
   inset: 0;
 }
 .live-dot {
+  flex-shrink: 0;
   width: 6px;
   height: 6px;
   display: inline-block;
@@ -316,49 +329,6 @@ svg {
 }
 .filter-pill.active {
   background: var(--pill-active);
-}
-.roster-search {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 12px 16px;
-  margin: 0 20px 10px;
-  background: var(--bg-secondary);
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  color: var(--muted);
-}
-.roster-search input {
-  padding: 0;
-  width: 100%;
-  min-width: 0;
-  font-size: 15px;
-  color: var(--text);
-  border: 0;
-  outline: none;
-  background: none;
-}
-.roster-search input::placeholder {
-  color: var(--muted);
-}
-.roster-search:focus-within {
-  border-color: var(--blue);
-}
-.roster-search button {
-  display: grid;
-  place-items: center;
-  padding: 0;
-  width: 22px;
-  height: 22px;
-  position: relative;
-  border: 0;
-  background: none;
-  color: var(--muted);
-}
-.roster-search button::after {
-  content: "";
-  position: absolute;
-  inset: -11px;
 }
 .primary-workspace {
   min-width: 0;
@@ -784,9 +754,6 @@ svg {
     max-width: none;
     border-radius: 0;
     border-width: 1px 0 0;
-  }
-  .roster-search input {
-    font-size: 16px;
   }
 }
 @media (prefers-reduced-motion: reduce) {

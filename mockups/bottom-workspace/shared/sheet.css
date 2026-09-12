@@ -32,6 +32,10 @@
   padding: 20px 0 16px;
   border-bottom: 1px solid var(--line);
 }
+.sheet-header > div {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
 .sheet-header h2 {
   font-size: 20px;
   font-weight: 600;
@@ -45,8 +49,11 @@
 }
 .sheet-body {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  min-width: 0;
   gap: 20px;
-  overflow: auto;
+  overflow-x: hidden;
+  overflow-y: auto;
   min-height: 0;
   overscroll-behavior: contain;
   padding: 20px 2px max(16px, env(safe-area-inset-bottom));
@@ -77,10 +84,14 @@
 }
 .sheet form {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  min-width: 0;
   gap: 20px;
 }
 .field {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  min-width: 0;
   gap: 8px;
   font-size: 12px;
 }
@@ -93,6 +104,8 @@
 .field input,
 .field select,
 .field textarea {
+  min-width: 0;
+  max-width: 100%;
   width: 100%;
   min-height: 49px;
   padding: 14px 16px;
@@ -134,7 +147,7 @@
 }
 .form-duo {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
 }
 .sheet-options {
@@ -154,6 +167,8 @@
 }
 .sheet-option > div {
   flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 .sheet-option strong {
   display: block;
@@ -216,6 +231,8 @@
 }
 .sheet-menu button > span {
   flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 .sheet-menu small {
   color: var(--muted);

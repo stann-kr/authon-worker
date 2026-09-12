@@ -16,6 +16,10 @@ function collect(k: unknown, e: unknown) {
 }
 collect(ko, en);
 const extra: Record<string, string> = {
+  "검색 열기": "Open search",
+  "검색 닫기": "Close search",
+  "이름·담당자 검색": "Search guests or contributors",
+  "{count}명 표시 · 전체 {total}명": "Showing {count} of {total} guests",
   "검토 설정": "Preview settings",
   "대기 {count}건": "{count} pending",
   "집계 마감": "Attendance finalized",

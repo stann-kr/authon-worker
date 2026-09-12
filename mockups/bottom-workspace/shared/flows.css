@@ -1,6 +1,8 @@
 .flow-form,
 .flow-fields {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  min-width: 0;
   gap: 20px;
 }
 .flow-fields {
@@ -100,6 +102,8 @@
 .flow-copy,
 .flow-qr {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  min-width: 0;
   gap: 14px;
 }
 .flow-copy textarea {
@@ -122,6 +126,8 @@
   padding: 20px;
 }
 .flow-qr img {
+  max-width: 100%;
+  height: auto;
   border-radius: 8px;
 }
 .flow-qr code {
@@ -151,6 +157,8 @@
 }
 .flow-toolbar {
   display: flex;
+  flex-wrap: wrap;
+  min-width: 0;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
@@ -164,13 +172,18 @@
 }
 .flow-stack {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  min-width: 0;
   gap: 14px;
 }
 .flow-stack .primary {
   width: 100%;
 }
 .flow-table-wrap {
-  overflow: auto;
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
   margin: 16px 0;
 }
 .flow-table {
@@ -191,7 +204,7 @@
 }
 .flow-inline-fields {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
 }
 .flow-inline-fields .field {
@@ -257,6 +270,10 @@
   font-size: 13px;
   padding: 12px 0;
   border-bottom: 1px solid var(--line);
+}
+.flow-pair > * {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 .flow-pair span {
   color: var(--muted);
@@ -331,7 +348,7 @@
 }
 .flow-chart-row {
   display: grid;
-  grid-template-columns: 75px 1fr 50px;
+  grid-template-columns: minmax(0, 75px) minmax(0, 1fr) minmax(0, 50px);
   gap: 8px;
   align-items: center;
   font-size: 11px;
@@ -351,6 +368,7 @@
   background: var(--accent);
 }
 .flow-chart-row strong {
+  overflow-wrap: anywhere;
   text-align: right;
   font-weight: 500;
 }
