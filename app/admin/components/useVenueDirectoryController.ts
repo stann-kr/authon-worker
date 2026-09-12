@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
-import { useSectionLoadingTask } from "@/components/RouteTransitionProvider";
 import { useLatestRequestGuard } from "@/lib/hooks";
 import { deriveAsyncListState } from "@/lib/ui/async-list-state";
 import type { Venue } from "@/lib/venues/types";
@@ -90,7 +89,6 @@ export default function useVenueDirectoryController({
   const [isMutating, setIsMutating] = useState(false);
   const activeMutationOwnerRef = useRef<symbol | null>(null);
   const requestGuard = useLatestRequestGuard();
-  useSectionLoadingTask(isLoading);
 
   const loadVenues = useCallback(async (): Promise<VenueDirectoryLoadResult> => {
     const isLatestRequest = requestGuard.beginRequest();

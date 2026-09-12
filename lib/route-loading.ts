@@ -6,13 +6,6 @@ export interface RouteLoadingTracker {
   startRoute: () => void;
 }
 
-export function shouldRegisterRouteLoadingTask(
-  startWhenIdle: boolean,
-  isRouteLoadingVisible: boolean,
-): boolean {
-  return startWhenIdle || isRouteLoadingVisible;
-}
-
 /**
  * 로딩 표시의 최소 노출 시간만 보장합니다.
  * 완료 후 새 작업이 실제 등록되면 tracker가 종료를 취소하므로 별도 고정 유예는 두지 않습니다.

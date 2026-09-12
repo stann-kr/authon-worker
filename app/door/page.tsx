@@ -29,7 +29,6 @@ import useDoorRosterController, {
 import useDoorCodeLookup, {
   type DoorCodeLookupDependencies,
 } from "./useDoorCodeLookup";
-import { useSectionLoadingTask } from "../../components/RouteTransitionProvider";
 import { getBusinessDate } from "../../lib/date";
 import { orderGuestDisplayList } from "../../lib/guests/display-order";
 import {
@@ -156,7 +155,6 @@ function DoorPageContent() {
         : null,
     [selectedDate, selectedEventId, venueId],
   );
-  useSectionLoadingTask(isCurrentScopeFetching);
 
   useEffect(() => {
     if (currentVenue) setSelectedDate(businessDate);

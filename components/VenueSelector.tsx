@@ -17,7 +17,7 @@ import type { Venue } from "@/lib/venues/types";
 import Icon from "./Icon";
 import { useAuthSession } from "./AuthSessionProvider";
 import { useTranslations } from "next-intl";
-import { useSectionLoadingTask } from "./RouteTransitionProvider";
+import { useRouteLoadingTask } from "./RouteTransitionProvider";
 
 type VenueDataStatus = "idle" | "loading" | "ready" | "error";
 
@@ -153,7 +153,9 @@ export function useVenueSelector() {
     ensureVenues,
     refreshVenues,
   } = context;
-  useSectionLoadingTask(status === "idle" || status === "loading");
+  useRouteLoadingTask(
+    status === "idle" || (status === "loading" && venues.length === 0),
+  );
 
   useEffect(() => {
     void ensureVenues();

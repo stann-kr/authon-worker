@@ -8,7 +8,6 @@ import DisclosureSection from "@/components/DisclosureSection";
 import EmptyState from "@/components/EmptyState";
 import Skeleton from "@/components/Skeleton";
 import VenueSelector, { useVenueSelector } from "@/components/VenueSelector";
-import { useSectionLoadingTask } from "@/components/RouteTransitionProvider";
 import { fetchAdminAnalytics } from "@/lib/api/analytics";
 import { getBusinessDate } from "@/lib/date";
 import { useLatestRequestGuard } from "@/lib/hooks";
@@ -52,9 +51,6 @@ export default function AdminAnalytics({
   const [loadError, setLoadError] = useState<string | null>(null);
   const requestGuard = useLatestRequestGuard();
   const scope = `${venueId}:${urlState.granularity}:${urlState.anchorDate}`;
-  useSectionLoadingTask(
-    isLoadingVenues || (Boolean(venueId) && (isLoading || !isUrlReady)),
-  );
 
   const applyUrlState = useCallback(
     (nextState: AdminAnalyticsUrlState, mode: "push" | "replace") => {

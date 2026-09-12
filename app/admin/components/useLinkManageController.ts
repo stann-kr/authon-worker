@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import { useLatestRequestGuard, useScopedOperationGuard } from "@/lib/hooks";
-import { useSectionLoadingTask } from "@/components/RouteTransitionProvider";
 import { deriveAsyncListState } from "@/lib/ui/async-list-state";
 import {
   toExternalLinkShareData,
@@ -232,7 +231,6 @@ export function useLinkManageController({
 
   const hasCurrentScopeData = loadedScopeKey === requestScopeKey;
   const isCurrentScopeFetching = isFetching || !hasCurrentScopeData;
-  useSectionLoadingTask(isActive && isCurrentScopeFetching);
   const displayLinks = !hasCurrentScopeData
     ? EMPTY_LINKS
     : isFetching && displayCacheRef.current.scopeKey === requestScopeKey

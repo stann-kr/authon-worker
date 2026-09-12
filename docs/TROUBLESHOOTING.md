@@ -21,7 +21,7 @@ location.reload();
 | --- | --- |
 | `browser.document` | 새 문서 탐색·새로고침의 요청/응답 시간. 초기 hydration과 화면 데이터 준비 완료 시각은 포함하지 않습니다. |
 | `browser.request` | 같은 origin의 fetch/RSC 요청 왕복 시간, 첫 응답까지의 시간(`ttfbMs`), 응답 수신 시간, 전송량. Server Action 이름·성공 여부는 서버 로그로 확인합니다. |
-| `browser.loading` | 공통 로딩 표시 시작부터 제거까지의 시간. 최소 표시·퇴장 애니메이션 시간이 포함됩니다. `ready`는 등록된 로딩 작업의 종료이며 업무 성공을 뜻하지 않습니다. `timeout`·`interrupted`는 정상 완료와 구분합니다. |
+| `browser.loading` | 공통 로딩 표시 시작부터 제거까지의 시간. 인증·최초 베뉴 준비와 최소 표시·퇴장 애니메이션 시간이 포함됩니다. 목록·상세 조회는 각 영역의 스켈레톤으로 처리하므로 포함하지 않습니다. `ready`는 화면 진입 준비의 종료이며 데이터 조회·업무 성공을 뜻하지 않습니다. `timeout`·`interrupted`는 정상 완료와 구분합니다. |
 | `server.middleware` | 도메인 확인·접근 검사·세션 갱신을 포함한 middleware 처리시간. 전체 SSR/Server Action 시간은 아닙니다. |
 | `server.layout` | 루트 layout의 tenant·locale·메시지·현재 사용자 준비 시간. 전체 React 렌더링 시간은 아닙니다. |
 | `server.guest_create` / `server.external_guest_create` | 내부/외부 게스트 일괄 등록 함수 처리시간. 단일 등록도 이 경로를 사용합니다. |

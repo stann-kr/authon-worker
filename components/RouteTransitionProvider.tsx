@@ -15,7 +15,6 @@ import { useTranslations } from "next-intl";
 import {
   createRouteLoadingTracker,
   getRouteLoadingCompletionDelay,
-  shouldRegisterRouteLoadingTask,
 } from "@/lib/route-loading";
 import { announceRouteTransitionStart } from "@/lib/route-transition-events";
 import Spinner from "./Spinner";
@@ -25,9 +24,7 @@ type TransitionPhase = "idle" | "visible" | "leaving";
 
 interface RouteTransitionContextValue {
   isRouteTransitionActive: boolean;
-  registerRouteLoadingTask: (options?: {
-    startWhenIdle?: boolean;
-  }) => () => void;
+  registerRouteLoadingTask: () => () => void;
   startRouteTransition: (href?: string) => boolean;
   requestFocusRestore: (
     targetRef: { current: HTMLElement | null },
@@ -217,16 +214,7 @@ export function RouteTransitionProvider({ children }: { children: ReactNode }) {
     scheduleCompletion();
   }, [loadingTracker, scheduleCompletion, showLoading]);
 
-  const registerRouteLoadingTask = useCallback((options?: {
-    startWhenIdle?: boolean;
-  }) => {
-    if (!shouldRegisterRouteLoadingTask(
-      options?.startWhenIdle ?? true,
-      phaseRef.current === "visible",
-    )) {
-      return () => {};
-    }
-
+  const registerRouteLoadingTask = useCallback(() => {
     const releaseTask = loadingTracker.beginTask();
     reconcileLoading();
 
@@ -348,27 +336,14 @@ export function useRouteTransition() {
 }
 
 /**
- * 인증, 베뉴 준비, 운영 데이터 조회처럼 화면 준비에 필요한 작업을
- * 현재 route loading cycle에 등록합니다.
+ * 인증과 최초 베뉴 준비처럼 화면 진입에 필수인 작업만 등록합니다.
+ * 목록·상세 조회는 각 영역의 skeleton을 사용하며 route 전환을 기다리게 하지 않습니다.
  */
 export function useRouteLoadingTask(isLoading: boolean) {
-  useLoadingTask(isLoading, true);
-}
-
-/**
- * 목록처럼 화면 내부에서 다시 조회할 수 있는 작업입니다.
- * route loading 중에는 목적지 준비에 합류하고, 화면이 열린 뒤에는
- * 전체 overlay를 새로 띄우지 않아 section 자체의 loading UI를 유지합니다.
- */
-export function useSectionLoadingTask(isLoading: boolean) {
-  useLoadingTask(isLoading, false);
-}
-
-function useLoadingTask(isLoading: boolean, startWhenIdle: boolean) {
   const { registerRouteLoadingTask } = useRouteTransition();
 
   useLayoutEffect(() => {
     if (!isLoading) return;
-    return registerRouteLoadingTask({ startWhenIdle });
-  }, [isLoading, registerRouteLoadingTask, startWhenIdle]);
+    return registerRouteLoadingTask();
+  }, [isLoading, registerRouteLoadingTask]);
 }
