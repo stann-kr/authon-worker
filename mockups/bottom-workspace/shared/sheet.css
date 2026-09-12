@@ -1,4 +1,4 @@
-/* Reference react-app (5): edge-attached sheet, 24px upper corners, green submit. */
+/* Frame-aligned sheets keep editing controls accessible within the visible viewport. */
 .sheet {
   position: fixed;
   inset: auto auto var(--sheet-bottom, 0) var(--sheet-left, 0);
@@ -6,32 +6,31 @@
   width: var(--sheet-width, 100%);
   max-width: none;
   max-height: var(--sheet-max-height, calc(100dvh - 24px));
-  overflow: auto;
+  overflow: hidden;
   border: 0;
-  border-radius: 24px;
-  padding: 12px 20px 40px;
+  border-radius: 24px 24px 0 0;
+  padding: 0 20px;
   background: var(--card-bg);
   color: var(--text);
   box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.5);
-  animation: sheet-in 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  animation: sheet-in 0.2s cubic-bezier(0.16, 1, 0.3, 1);
 }
 .sheet::backdrop {
   background: rgba(0, 0, 0, 0.6);
   backdrop-filter: blur(10px);
 }
-.sheet-handle {
-  width: 40px;
-  height: 4px;
-  background: var(--pill-active);
-  border-radius: 2px;
-  margin: 0 auto 24px;
+.sheet[open] {
+  display: flex;
+  flex-direction: column;
 }
 .sheet-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  margin-bottom: 24px;
+  flex-shrink: 0;
+  padding: 20px 0 16px;
+  border-bottom: 1px solid var(--line);
 }
 .sheet-header h2 {
   font-size: 20px;
@@ -47,6 +46,34 @@
 .sheet-body {
   display: grid;
   gap: 20px;
+  overflow: auto;
+  min-height: 0;
+  overscroll-behavior: contain;
+  padding: 20px 2px max(16px, env(safe-area-inset-bottom));
+  scroll-padding-block: 16px 90px;
+}
+.sheet-body[hidden] {
+  display: none;
+}
+.sheet-discard {
+  display: grid;
+  gap: 12px;
+  padding: 16px 0 max(16px, env(safe-area-inset-bottom));
+  overflow: auto;
+}
+.sheet-discard p {
+  font-size: 14px;
+  color: var(--muted);
+}
+.sheet-header .icon-button {
+  width: 44px;
+  height: 44px;
+}
+.sheet-header .icon-button::after {
+  inset: 0;
+}
+.sheet-header h2:focus {
+  outline: none;
 }
 .sheet form {
   display: grid;
@@ -199,7 +226,8 @@
 }
 @keyframes sheet-in {
   from {
-    transform: translateY(100%);
+    transform: translateY(24px);
+    opacity: 0;
   }
   to {
     transform: translateY(0);
@@ -208,7 +236,7 @@
 @media (max-width: 700px) {
   .sheet {
     border-radius: 24px 24px 0 0;
-    padding-bottom: calc(40px + env(safe-area-inset-bottom));
+    padding-bottom: 0;
   }
   .field input,
   .field select,

@@ -47,7 +47,11 @@ export function Venues() {
       ))}
       {!data.venues.length && <Empty text="베뉴가 없습니다" />}
       {panel && (
-        <Sheet title={t(venue ? "베뉴 수정" : "베뉴 생성")} onClose={close}>
+        <Sheet
+          protectEdits
+          title={t(venue ? "베뉴 수정" : "베뉴 생성")}
+          onClose={close}
+        >
           <VenueForm
             key={panel}
             venue={venue}

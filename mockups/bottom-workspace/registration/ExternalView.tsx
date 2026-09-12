@@ -226,12 +226,16 @@ export function ExternalView() {
         />
       </details>
       {panel === "add" && link && (
-        <Sheet title={t("게스트 추가")} onClose={close}>
+        <Sheet protectEdits title={t("게스트 추가")} onClose={close}>
           <GuestEntry externalLinkId={link.id} onDone={close} />
         </Sheet>
       )}
       {panel === "self" && link && event && (
-        <Sheet title={t(own ? "RSVP 수정" : "RSVP 등록")} onClose={close}>
+        <Sheet
+          protectEdits
+          title={t(own ? "RSVP 수정" : "RSVP 등록")}
+          onClose={close}
+        >
           {error && <Notice error>{error}</Notice>}
           <Form
             submit={own ? "RSVP 수정" : "RSVP 등록"}

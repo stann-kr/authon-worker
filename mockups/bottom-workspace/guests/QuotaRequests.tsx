@@ -85,7 +85,11 @@ export function QuotaRequests() {
         <Empty text="승인 대기 중인 추가 게스트 요청이 없습니다." />
       )}
       {panel === "create" && canRequest && (
-        <Sheet title={t("추가 인원 요청")} onClose={() => setPanel(null)}>
+        <Sheet
+          protectEdits
+          title={t("추가 인원 요청")}
+          onClose={() => setPanel(null)}
+        >
           <Form
             submit="요청 보내기"
             disabled={!!ownPending}

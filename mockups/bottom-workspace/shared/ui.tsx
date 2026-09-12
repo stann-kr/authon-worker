@@ -37,8 +37,9 @@ export function Notice({
 }
 export function Field({
   label,
+  error,
   ...props
-}: InputHTMLAttributes<HTMLInputElement> & { label: string }) {
+}: InputHTMLAttributes<HTMLInputElement> & { label: string; error?: string }) {
   const { t } = useMock();
   const generated = useId();
   const [revealed, setRevealed] = useState(false);
@@ -47,6 +48,10 @@ export function Field({
       {...props}
       type={props.type === "password" && revealed ? "text" : props.type}
       id={props.id ?? generated}
+      aria-invalid={error ? true : props["aria-invalid"]}
+      aria-describedby={
+        error ? `${generated}-error` : props["aria-describedby"]
+      }
       placeholder={
         props.placeholder
           ? t(props.placeholder.replaceAll("\\n", "\n"))
@@ -74,6 +79,11 @@ export function Field({
         </div>
       ) : (
         input
+      )}
+      {error && (
+        <small id={`${generated}-error`} className="form-error" role="alert">
+          {t(error)}
+        </small>
       )}
     </label>
   );
@@ -182,10 +192,12 @@ export function Form({
       <fieldset disabled={busy} className="flow-fields">
         {children}
       </fieldset>
-      {notice && <Notice>{notice}</Notice>}
-      <Action type="submit" disabled={disabled}>
-        {busy ? t("저장 중입니다.") : t(submit)}
-      </Action>
+      <div className="flow-form-actions">
+        {notice && <Notice>{notice}</Notice>}
+        <Action type="submit" disabled={disabled}>
+          {busy ? t("저장 중입니다.") : t(submit)}
+        </Action>
+      </div>
     </form>
   );
 }

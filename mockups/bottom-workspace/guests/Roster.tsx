@@ -1,10 +1,11 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import {
   useMock,
   activeGuests,
   attendanceFor,
   id,
   useIntent,
+  quotaFor,
 } from "../data/MockData";
 import { MOCK_DATE, MOCK_NOW, type MockGuest } from "../data/types";
 import { contributorName } from "../events/Reports";
@@ -49,7 +50,9 @@ export function Roster() {
     notice,
     setScenario,
     operator,
+    busy,
   } = useMock();
+  const searchRef = useRef<HTMLInputElement>(null);
   const [query, setQuery] = useState(""),
     [status, setStatus] = useState("all"),
     [owner, setOwner] = useState("all"),
@@ -65,12 +68,25 @@ export function Roster() {
   const all = activeGuests(data, event.id).filter((g) =>
     isAdmin || isDoor ? true : g.ownerId === user.id && !g.externalLinkId,
   );
+  const quota = quotaFor(data, user.id, event.id);
+  const checked = all.filter((g) => g.status === "checked").length;
+  const filtered = query.trim() !== "" || status !== "all" || owner !== "all";
+  const resetFilters = () => {
+    setQuery("");
+    setStatus("all");
+    setOwner("all");
+    searchRef.current?.focus();
+  };
+  const ownerLabel =
+    data.users.find((u) => u.id === owner)?.name ??
+    data.links.find((l) => l.id === owner)?.ownerName ??
+    "";
   const list = all
     .filter(
       (g) =>
         `${g.name} ${contributorName(data, g.ownerId, g.externalLinkId)} ${g.operator}`
           .toLowerCase()
-          .includes(query.toLowerCase()) &&
+          .includes(query.trim().toLowerCase()) &&
         (status === "all" || g.status === status) &&
         (owner === "all" || g.ownerId === owner || g.externalLinkId === owner),
     )
@@ -99,13 +115,13 @@ export function Roster() {
       queued(g.id) ||
       (scenario === "offline" && event.general)
     )
-      return;
+      return false;
     if (g.status === "checked") {
       setPanel(g.id);
       setConfirm("undo");
-      return;
+      return false;
     }
-    await mutate(
+    return await mutate(
       (d) => {
         if (scenario === "offline") {
           d.queue.push({
@@ -123,26 +139,122 @@ export function Roster() {
       },
       scenario === "offline"
         ? "이 기기에 저장했습니다. 동기화 전에는 확정되지 않습니다."
-        : "입장 완료",
+        : t("{name} · 입장 완료", { name: g.name }),
     );
   };
   return (
     <>
-      <label className="roster-search">
-        <Icon name="search" />
-        <span className="sr-only">{t("게스트 이름 검색...")}</span>
-        <input
-          aria-label={t("게스트 이름 검색...")}
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder={t("게스트 이름 검색...")}
-        />
-        {query && (
-          <button aria-label={t("지우기")} onClick={() => setQuery("")}>
-            <Icon name="close" size={15} />
+      <section className="stat-strip" aria-label={t("선택한 행사 요약")}>
+        <div className="stat">
+          <strong>{isAdmin || isDoor ? checked : quota.used}</strong>
+          <span>{t(isAdmin || isDoor ? "입장 완료" : "내 등록")}</span>
+        </div>
+        <div className="stat">
+          <strong>
+            {isAdmin || isDoor ? all.length : (quota.remaining ?? "∞")}
+          </strong>
+          <span>{t(isAdmin || isDoor ? "등록 게스트" : "남은 한도")}</span>
+        </div>
+        <span className="roster-summary">
+          {t("미입장 {count}명", { count: all.length - checked })}
+        </span>
+      </section>
+      <div className="roster-controls">
+        <label className="roster-search">
+          <Icon name="search" />
+          <span className="sr-only">{t("게스트 이름 검색...")}</span>
+          <input
+            aria-label={t("게스트 이름 검색...")}
+            ref={searchRef}
+            type="search"
+            autoComplete="off"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder={t("게스트 이름 검색...")}
+          />
+          {query && (
+            <button
+              aria-label={t("지우기")}
+              onClick={() => {
+                setQuery("");
+                searchRef.current?.focus();
+              }}
+            >
+              <Icon name="close" size={15} />
+            </button>
+          )}
+        </label>
+        <div className="roster-filter-row">
+          <div
+            className="roster-status-filters"
+            role="group"
+            aria-label={t("입장 상태")}
+          >
+            {[
+              ["all", "전체", all.length],
+              ["pending", "미입장", all.length - checked],
+              ["checked", "입장 완료", checked],
+            ].map(([value, label, count]) => (
+              <button
+                key={value}
+                aria-pressed={status === value}
+                onClick={() => setStatus(String(value))}
+              >
+                <span>{t(String(label))}</span>
+                <small>{count}</small>
+              </button>
+            ))}
+          </div>
+          <button
+            className={`roster-filter-button ${owner !== "all" || sort !== "registered" || waiting ? "active" : ""}`}
+            aria-label={t("필터·정렬")}
+            aria-haspopup="dialog"
+            onClick={() => setPanel("filter")}
+          >
+            <Icon name="sliders" size={18} />
           </button>
+        </div>
+        {(owner !== "all" || sort !== "registered" || waiting) && (
+          <div className="roster-applied" aria-label={t("적용한 조건")}>
+            {owner !== "all" && (
+              <button
+                aria-label={t("{name} 필터 해제", { name: ownerLabel })}
+                onClick={() => setOwner("all")}
+              >
+                {ownerLabel}
+                <Icon name="close" size={12} />
+              </button>
+            )}
+            {sort !== "registered" && (
+              <button
+                aria-label={t("{name} 필터 해제", { name: t("이름순") })}
+                onClick={() => setSort("registered")}
+              >
+                {t("이름순")}
+                <Icon name="close" size={12} />
+              </button>
+            )}
+            {waiting && (
+              <button
+                aria-label={t("{name} 필터 해제", {
+                  name: t("입장 대기 우선"),
+                })}
+                onClick={() => setWaiting(false)}
+              >
+                {t("입장 대기 우선")}
+                <Icon name="close" size={12} />
+              </button>
+            )}
+          </div>
         )}
-      </label>
+      </div>
+      {event.date !== MOCK_DATE && canCheck && (
+        <p className="roster-hint">
+          {t(
+            "선택한 운영일의 명단입니다. 입장 처리는 현재 운영일에서 가능합니다.",
+          )}
+        </p>
+      )}
       {!event.general && ["offline", "syncing"].includes(scenario) && (
         <div className="flow-state-banner">
           <Notice>
@@ -152,9 +264,17 @@ export function Roster() {
           </Notice>
         </div>
       )}
-      <h2 className="list-header">
-        {t(isDoor ? "게스트 목록" : isAdmin ? "전체 게스트" : "내 게스트 명단")}
-      </h2>
+      <div className="roster-result-heading">
+        <h2 className="list-header">
+          {t(
+            isDoor ? "게스트 목록" : isAdmin ? "전체 게스트" : "내 게스트 명단",
+          )}
+        </h2>
+        <span role="status">
+          {t("{count}명", { count: list.length })}
+          {filtered && ` / ${t("전체 {count}명", { count: all.length })}`}
+        </span>
+      </div>
       <ul className="guest-list">
         {list.map((g) => (
           <li key={g.id}>
@@ -173,10 +293,22 @@ export function Roster() {
             </button>
             {canCheck ? (
               <button
-                className="check-button"
+                className={`check-button ${g.status === "checked" ? "is-checked" : "is-pending"}`}
                 aria-label={`${g.name} ${t(g.status === "checked" ? "입장 취소" : "입장 처리")}`}
-                disabled={!writable || event.date !== MOCK_DATE || queued(g.id)}
-                onClick={() => void check(g)}
+                disabled={
+                  busy ||
+                  !writable ||
+                  event.date !== MOCK_DATE ||
+                  queued(g.id) ||
+                  (scenario === "offline" && event.general)
+                }
+                onClick={(event) => {
+                  const keyboard = event.detail === 0;
+                  void check(g).then((ok) => {
+                    if (ok && keyboard && status === "pending")
+                      requestAnimationFrame(() => searchRef.current?.focus());
+                  });
+                }}
               >
                 <span
                   className={`status-badge ${g.status === "checked" ? "green" : ""}`}
@@ -186,7 +318,7 @@ export function Roster() {
                       ? "기기 저장"
                       : g.status === "checked"
                         ? "입장 완료"
-                        : "미입장",
+                        : "입장 처리",
                   )}
                 </span>
               </button>
@@ -201,16 +333,37 @@ export function Roster() {
         ))}
       </ul>
       {!list.length && (
-        <Empty
-          text={
-            query
-              ? "검색 결과가 없습니다"
-              : "이 운영일에 등록된 게스트가 없습니다"
-          }
-        />
+        <div className="roster-empty">
+          <Empty
+            text={
+              filtered
+                ? "조건에 맞는 게스트가 없습니다"
+                : "이 운영일에 등록된 게스트가 없습니다"
+            }
+          />
+          {filtered ? (
+            <>
+              <p>{t("검색어나 적용한 필터를 바꿔보세요.")}</p>
+              <Action secondary onClick={resetFilters}>
+                검색·필터 초기화
+              </Action>
+            </>
+          ) : (
+            canRegister &&
+            ["draft", "open"].includes(event.state) &&
+            !attendanceFor(data, event.id).finalized && (
+              <Action onClick={() => setPanel("add")}>첫 게스트 등록</Action>
+            )
+          )}
+        </div>
       )}
       {panel === "add" && canRegister && (
-        <Sheet title={t("게스트 등록")} onClose={close}>
+        <Sheet
+          title={t("게스트 등록")}
+          subtitle={`${event.name} · ${event.date}`}
+          protectEdits
+          onClose={close}
+        >
           <GuestEntry onDone={close} />
         </Sheet>
       )}
@@ -272,6 +425,16 @@ export function Roster() {
           <Action onClick={close}>
             {t("{count}명 보기", { count: list.length })}
           </Action>
+          <Action
+            secondary
+            onClick={() => {
+              resetFilters();
+              setSort("registered");
+              setWaiting(false);
+            }}
+          >
+            모든 조건 초기화
+          </Action>
         </Sheet>
       )}
       {panel === "code" && (
@@ -307,7 +470,13 @@ export function Roster() {
               : "코드를 확인하지 못했습니다. 이름으로 검색하거나 다시 시도하세요."}
           </Notice>
           <Action onClick={() => setPanel("code")}>다시 시도</Action>
-          <Action secondary onClick={close}>
+          <Action
+            secondary
+            onClick={() => {
+              close();
+              requestAnimationFrame(() => searchRef.current?.focus());
+            }}
+          >
             이름으로 검색
           </Action>
         </Sheet>
@@ -387,12 +556,17 @@ export function Roster() {
               {canCheck && (
                 <Action
                   disabled={
-                    !writable || event.date !== MOCK_DATE || queued(selected.id)
+                    !writable ||
+                    event.date !== MOCK_DATE ||
+                    queued(selected.id) ||
+                    (scenario === "offline" && event.general)
                   }
                   onClick={() =>
                     selected.status === "checked"
                       ? setConfirm("undo")
-                      : void check(selected).then(close)
+                      : void check(selected).then((ok) => {
+                          if (ok) close();
+                        })
                   }
                 >
                   {selected.status === "checked" ? "입장 취소" : "입장 처리"}
@@ -412,6 +586,7 @@ export function Roster() {
               </Action>
             </div>
           )}
+          {!confirm && notice && <Notice>{notice}</Notice>}
           {scenario === "unknown-result" && (
             <Action secondary onClick={() => setScenario("normal")}>
               최신 명단 확인

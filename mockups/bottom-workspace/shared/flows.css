@@ -361,14 +361,37 @@
   .preview-toolbar {
     height: auto;
     min-height: 46px;
-    flex-wrap: wrap;
-    padding-top: 8px;
-    padding-bottom: 8px;
+    flex-wrap: nowrap;
+    padding-top: 4px;
+    padding-bottom: 4px;
   }
   .preview-controls {
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
     justify-content: flex-end;
+    flex: 1;
+    min-width: 0;
   }
+  .preview-brand {
+    flex-shrink: 0;
+  }
+  .role-select {
+    flex: 1;
+    min-width: 0;
+    max-width: 210px;
+  }
+  .role-select select {
+    width: 100%;
+    text-overflow: ellipsis;
+    padding-inline: 8px;
+  }
+  .preview-map {
+    padding-inline: 6px;
+  }
+  .preview-settings summary {
+    padding-inline: 6px;
+    white-space: nowrap;
+  }
+
   .flow-status-tools select {
     max-width: 110px;
   }
@@ -418,4 +441,23 @@
   background: none;
   color: var(--muted);
   font-size: 11px;
+}
+
+.flow-form-actions {
+  display: grid;
+  gap: 10px;
+}
+.sheet .flow-form-actions {
+  position: sticky;
+  bottom: calc(-1 * max(16px, env(safe-area-inset-bottom)));
+  z-index: 1;
+  padding: 12px 0 max(16px, env(safe-area-inset-bottom));
+  background: var(--card-bg);
+  border-top: 1px solid var(--line);
+}
+.flow-form-actions .flow-notice {
+  margin: 0;
+}
+.flow-form-actions .primary {
+  width: 100%;
 }

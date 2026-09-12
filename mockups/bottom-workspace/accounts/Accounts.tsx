@@ -213,7 +213,12 @@ export function Accounts() {
         비밀번호 재설정 요청
       </Action>
       {panel === "create" && (
-        <Sheet title={t("계정 생성")} subtitle={venue.name} onClose={close}>
+        <Sheet
+          protectEdits
+          title={t("계정 생성")}
+          subtitle={venue.name}
+          onClose={close}
+        >
           <AccountForm
             roles={roles}
             onSubmit={async (form) => {
@@ -261,6 +266,7 @@ export function Accounts() {
       )}
       {selected && (
         <Sheet
+          protectEdits
           title={selected.deleted ? t("삭제된 계정") : selected.name}
           subtitle={t(roleLabels[selected.role])}
           onClose={close}

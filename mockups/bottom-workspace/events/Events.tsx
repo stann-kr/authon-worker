@@ -109,6 +109,7 @@ export function Events() {
       </details>
       {panel === "create" && (
         <Sheet
+          protectEdits
           title={t("행사 만들기")}
           subtitle={
             template ? `${t("템플릿으로 사용")} · ${template.name}` : venue.name

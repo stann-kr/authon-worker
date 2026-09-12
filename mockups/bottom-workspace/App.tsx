@@ -3,7 +3,6 @@ import { useEffect, useRef, useState } from "react";
 import {
   MockProvider,
   useMock,
-  activeGuests,
   attendanceFor,
   quotaFor,
   id,
@@ -32,6 +31,7 @@ import { QuotaRequests } from "./guests/QuotaRequests";
 import { DoorAttendance } from "./door/DoorAttendance";
 import { ExternalView } from "./registration/ExternalView";
 import { Analytics } from "./analytics/Analytics";
+import { WorkspaceMenu } from "./workspace/WorkspaceMenu";
 import "./shell.css";
 import "./guests/guests.css";
 import "./shared/flows.css";
@@ -111,11 +111,6 @@ function Workspace() {
   }, [locale]);
   const isPublic = view === "auth" || view === "external";
   const isRoster = view === "roster" || view === "door";
-  const everyone = isAdmin || view === "door";
-  const guests = activeGuests(data, event.id).filter(
-    (g) => everyone || (g.ownerId === user.id && !g.externalLinkId),
-  );
-  const checked = guests.filter((g) => g.status === "checked").length;
   const quota = quotaFor(data, user.id, event.id);
   const canRequest =
     user.accountKind === "personal" &&
@@ -139,7 +134,7 @@ function Workspace() {
     view !== "auth";
   const nav: { view: View | "more"; label: string; icon: IconName }[] = isAdmin
     ? [
-        { view: "roster", label: "운영", icon: "home" },
+        { view: "roster", label: "명단", icon: "people" },
         { view: "door", label: "도어", icon: "door" },
         { view: "events", label: "행사", icon: "calendar" },
         { view: "more", label: "더보기", icon: "more" },
@@ -186,19 +181,18 @@ function Workspace() {
           !["draft", "open"].includes(event.state) ||
           attendanceFor(data, event.id).finalized,
       },
-      {
-        label: isAdmin ? "코드 조회" : "인원 요청",
-        icon: isAdmin ? "code" : "bell",
-        color: "blue",
-        action: () => (isAdmin ? setIntent("guest-code") : go("requests")),
-        disabled: !isAdmin && !canRequest,
-      },
-      {
-        label: "필터·정렬",
-        icon: "sliders",
-        color: "gray",
-        action: () => setIntent("guest-filter"),
-      },
+      ...(isAdmin || canRequest
+        ? [
+            {
+              label: isAdmin ? "코드 조회" : "인원 요청",
+              icon: isAdmin ? "code" : "bell",
+              color: "blue",
+              action: () =>
+                isAdmin ? setIntent("guest-code") : go("requests"),
+              disabled: !isAdmin && !canRequest,
+            } as Tool,
+          ]
+        : []),
     ];
   else if (view === "door")
     tools = [
@@ -214,12 +208,6 @@ function Workspace() {
         icon: "code",
         color: "blue",
         action: () => setIntent("guest-code"),
-      },
-      {
-        label: "필터·정렬",
-        icon: "sliders",
-        color: "gray",
-        action: () => setIntent("guest-filter"),
       },
     ];
   else if (view === "attendance")
@@ -336,22 +324,40 @@ function Workspace() {
         action: () => go("roster"),
       },
     ];
-  else
+  else if (view === "home")
     tools = [
       {
-        label: "명단 보기",
-        icon: "people",
+        label: "게스트 등록",
+        icon: "plus",
         color: "green",
-        action: () => go("roster"),
+        action: () => go("roster", "guest-add"),
       },
-      {
-        label: "행사 선택",
-        icon: "calendar",
-        color: "blue",
-        action: () => open("scope"),
-      },
-      { label: "홈", icon: "home", color: "gray", action: () => go("home") },
     ];
+  // Door starts with lookup; walk-ins remain the adjacent secondary action.
+  if (view === "door") tools.reverse();
+  const pendingCount =
+    data.requests.filter(
+      (r) =>
+        r.eventId === event.id &&
+        r.state === "pending" &&
+        (isAdmin || r.userId === user.id),
+    ).length +
+    (isAdmin
+      ? data.resetRequests.filter(
+          (r) =>
+            r.state === "pending" &&
+            data.users.find((u) => u.id === r.userId)?.venueId === venue.id,
+        ).length
+      : 0);
+  const scopeState = attendanceFor(data, event.id).finalized
+    ? "집계 마감"
+    : event.state === "open"
+      ? "운영 중"
+      : event.state === "draft"
+        ? "준비 중"
+        : event.state === "archived"
+          ? "보관됨"
+          : "운영 종료";
   const renderView = () => {
     switch (view) {
       case "auth":
@@ -445,34 +451,39 @@ function Workspace() {
               <option value="external">{t("외부 등록")}</option>
             </select>
           </label>
-          <div className="flow-status-tools">
-            <select
-              aria-label={t("목업 상태")}
-              value={scenario}
-              onChange={(e) => setScenario(e.target.value as Scenario)}
-            >
-              {Object.entries(scenarioLabels).map(([value, label]) => (
-                <option value={value} key={value}>
-                  {t(label)}
-                </option>
-              ))}
-            </select>
-            <select
-              aria-label={t("미리보기 언어")}
-              value={locale}
-              onChange={(e) => setLocale(e.target.value as "ko" | "en")}
-            >
-              <option value="ko">KO</option>
-              <option value="en">EN</option>
-            </select>
-          </div>
-          <button
-            className="preview-device"
-            aria-pressed={mobile}
-            onClick={() => setMobile((v) => !v)}
-          >
-            {t(mobile ? "전체 폭" : "모바일 폭")}
-          </button>
+          <details className="preview-settings">
+            <summary>{t("검토 설정")}</summary>
+            <div className="preview-settings-panel">
+              <div className="flow-status-tools">
+                <select
+                  aria-label={t("목업 상태")}
+                  value={scenario}
+                  onChange={(e) => setScenario(e.target.value as Scenario)}
+                >
+                  {Object.entries(scenarioLabels).map(([value, label]) => (
+                    <option value={value} key={value}>
+                      {t(label)}
+                    </option>
+                  ))}
+                </select>
+                <select
+                  aria-label={t("미리보기 언어")}
+                  value={locale}
+                  onChange={(e) => setLocale(e.target.value as "ko" | "en")}
+                >
+                  <option value="ko">KO</option>
+                  <option value="en">EN</option>
+                </select>
+              </div>
+              <button
+                className="preview-device"
+                aria-pressed={mobile}
+                onClick={() => setMobile((v) => !v)}
+              >
+                {t(mobile ? "전체 폭" : "모바일 폭")}
+              </button>
+            </div>
+          </details>
           <button className="preview-map" onClick={() => open("coverage")}>
             {t("기능 목록")}
           </button>
@@ -486,72 +497,47 @@ function Workspace() {
       </div>
       <div className={`preview-frame ${mobile ? "mobile" : ""}`}>
         <div className="app-shell">
-          <main className="workspace-scroll" id="workspace-content">
-            {!isPublic && (
-              <>
-                <header className="workspace-header">
-                  <div className="header-title">
-                    <button
-                      className="scope-button"
-                      onClick={() => open("scope")}
-                      aria-label={t("베뉴와 행사 선택")}
-                    >
-                      <span
-                        className={`live-dot ${!writable ? "inactive" : ""}`}
-                      />
-                      <span>
-                        {venue.brandName || venue.name} ·{" "}
-                        {event.date.slice(5).replace("-", ".")}{" "}
-                      </span>
-                      <Icon name="down" size={12} />
-                    </button>
-                    <h1>{isRoster ? event.name : t(viewLabels[view])}</h1>
-                  </div>
+          {!isPublic && (
+            <>
+              <header className="workspace-header">
+                <div className="header-title">
                   <button
-                    className="account-button"
-                    onClick={() => open("account")}
-                    aria-label={t("내 계정 열기")}
+                    className="scope-button"
+                    onClick={() => open("scope")}
+                    aria-label={t("베뉴와 행사 선택")}
                   >
-                    <Icon name="user" size={21} />
+                    <span
+                      className={`live-dot ${!writable ? "inactive" : ""}`}
+                    />
+                    <span>
+                      {venue.brandName || venue.name} ·{" "}
+                      {event.date.slice(5).replace("-", ".")}{" "}
+                    </span>
+                    <Icon name="down" size={12} />
                   </button>
-                </header>
-                <section
-                  className="stat-strip"
-                  aria-label={t("선택한 행사 요약")}
+                  <h1>{isRoster ? event.name : t(viewLabels[view])}</h1>
+                </div>
+                <button
+                  className="account-button"
+                  onClick={() => open("account")}
+                  aria-label={t("내 계정 열기")}
                 >
-                  <div className="stat">
-                    <strong>
-                      {scenario === "loading"
-                        ? "—"
-                        : everyone
-                          ? checked
-                          : quota.used}
-                    </strong>
-                    <span>{t(everyone ? "입장 완료" : "내 등록")}</span>
-                  </div>
-                  <div className="stat">
-                    <strong>
-                      {scenario === "loading"
-                        ? "—"
-                        : everyone
-                          ? guests.length
-                          : (quota.remaining ?? "∞")}
-                    </strong>
-                    <span>{t(everyone ? "등록 게스트" : "남은 한도")}</span>
-                  </div>
-                  <button
-                    className="filter-pill"
-                    onClick={() =>
-                      isRoster ? setIntent("guest-filter") : open("scope")
-                    }
-                    aria-label={t(isRoster ? "명단 필터" : "행사 선택")}
-                  >
-                    <span>{t(isRoster ? "전체" : "행사")}</span>
-                    <Icon name="down" size={14} />
-                  </button>
-                </section>
-              </>
-            )}
+                  <Icon name="user" size={21} />
+                </button>
+              </header>
+              <div className="workspace-context">
+                <span>{isRoster ? t(viewLabels[view]) : event.name}</span>
+                <span className={`scope-status ${writable ? "live" : ""}`}>
+                  {t(scopeState)}
+                </span>
+              </div>
+            </>
+          )}
+          <main
+            className="workspace-scroll"
+            id="workspace-content"
+            aria-label={t(viewLabels[view])}
+          >
             {scenario === "loading" ? (
               <div
                 className="flow-section"
@@ -637,7 +623,10 @@ function Workspace() {
           {!isPublic && (
             <div className="dock-region">
               {notice && (
-                <div className="toast" role="status">
+                <div
+                  className={`toast ${ctx.noticeError ? "error" : ""}`}
+                  role={ctx.noticeError ? "alert" : "status"}
+                >
                   <span>{t(notice)}</span>
                   <button
                     aria-label={t("알림 닫기")}
@@ -647,32 +636,10 @@ function Workspace() {
                   </button>
                 </div>
               )}
-              <div className="nav-handle" aria-hidden="true" />
-              <nav className="dock-nav" aria-label={t("주요 메뉴")}>
-                {nav.map((item) => (
-                  <button
-                    key={item.view}
-                    className={
-                      view === item.view ||
-                      (item.view === "more" &&
-                        !nav.some((n) => n.view === view))
-                        ? "active"
-                        : ""
-                    }
-                    aria-current={view === item.view ? "page" : undefined}
-                    onClick={() =>
-                      item.view === "more" ? open("more") : go(item.view)
-                    }
-                  >
-                    <Icon name={item.icon} size={18} />
-                    <span>{t(item.label)}</span>
-                  </button>
-                ))}
-              </nav>
               <div className="dock-tools" aria-label={t("현재 화면 작업")}>
-                {tools.map((tool) => (
+                {tools.map((tool, index) => (
                   <button
-                    className="action-pill"
+                    className={`action-pill ${index === 0 ? "main-action" : ""}`}
                     key={tool.label}
                     disabled={tool.disabled || busy || forbidden || inactive}
                     onClick={tool.action}
@@ -684,6 +651,55 @@ function Workspace() {
                   </button>
                 ))}
               </div>
+              <nav className="dock-nav" aria-label={t("주요 메뉴")}>
+                {nav.map((item) => (
+                  <button
+                    key={item.view}
+                    className={
+                      view === item.view ||
+                      (item.view === "more" &&
+                        !nav.some((n) => n.view === view))
+                        ? "active"
+                        : ""
+                    }
+                    aria-current={
+                      view === item.view ||
+                      (item.view === "more" &&
+                        !nav.some((n) => n.view === view))
+                        ? "page"
+                        : undefined
+                    }
+                    aria-label={t(item.label)}
+                    aria-describedby={
+                      pendingCount > 0 &&
+                      ((item.view === "more" && isAdmin) ||
+                        item.view === "requests")
+                        ? "workspace-pending-count"
+                        : undefined
+                    }
+                    aria-haspopup={item.view === "more" ? "dialog" : undefined}
+                    onClick={() =>
+                      item.view === "more" ? open("more") : go(item.view)
+                    }
+                  >
+                    <Icon name={item.icon} size={18} />
+                    <span>{t(item.label)}</span>
+                    {pendingCount > 0 &&
+                      ((item.view === "more" && isAdmin) ||
+                        item.view === "requests") && (
+                        <span
+                          className="nav-count"
+                          id="workspace-pending-count"
+                          aria-label={t("대기 {count}건", {
+                            count: pendingCount,
+                          })}
+                        >
+                          {pendingCount}
+                        </span>
+                      )}
+                  </button>
+                ))}
+              </nav>
             </div>
           )}
           {isPublic && notice && (
@@ -814,51 +830,32 @@ function Workspace() {
               )}
             </>
           )}
-          <div className="sheet-menu">
-            {(modal === "account"
-              ? (["profile", "home"] as View[])
-              : allowedViews
-            ).map((v) => (
-              <button key={v} onClick={() => go(v)}>
-                <Icon
-                  name={
-                    v === "profile"
-                      ? "user"
-                      : v === "home"
-                        ? "home"
-                        : v === "links"
-                          ? "link"
-                          : v === "events"
-                            ? "calendar"
-                            : v === "venues"
-                              ? "venue"
-                              : v === "analytics"
-                                ? "chart"
-                                : "file"
-                  }
-                />
-                <span>{t(viewLabels[v])}</span>
-                <Icon name="chevron" size={16} />
-              </button>
-            ))}
-          </div>
-          <Select
-            label="언어"
-            value={locale}
-            onChange={(e) => setLocale(e.target.value as "ko" | "en")}
-          >
-            <option value="ko">한국어</option>
-            <option value="en">English</option>
-          </Select>
-          <Action
-            secondary
-            onClick={() => {
-              setAuthPage("login");
-              go("auth");
-            }}
-          >
-            로그아웃
-          </Action>
+          <WorkspaceMenu
+            views={modal === "account" ? ["profile", "home"] : allowedViews}
+            onNavigate={go}
+            searchable={modal === "more"}
+          />
+          {modal === "account" && (
+            <>
+              <Select
+                label="언어"
+                value={locale}
+                onChange={(e) => setLocale(e.target.value as "ko" | "en")}
+              >
+                <option value="ko">한국어</option>
+                <option value="en">English</option>
+              </Select>
+              <Action
+                secondary
+                onClick={() => {
+                  setAuthPage("login");
+                  go("auth");
+                }}
+              >
+                로그아웃
+              </Action>
+            </>
+          )}
         </Sheet>
       )}
       {modal === "coverage" && (

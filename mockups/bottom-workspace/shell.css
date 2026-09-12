@@ -1,4 +1,4 @@
-/* Reference react-app (6): black canvas, compact header, flat list, two independent pill rows. */
+/* Authon workspace: neutral reference palette with persistent context and task hierarchy. */
 :root {
   color-scheme: dark;
   --bg: #000000;
@@ -73,7 +73,7 @@ svg {
 }
 .preview-root {
   height: 100dvh;
-  min-height: 400px;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   padding: 0 20px 16px;
@@ -86,7 +86,7 @@ svg {
   justify-content: space-between;
   gap: 12px;
   width: 100%;
-  max-width: 1200px;
+  max-width: 900px;
   margin: 0 auto;
 }
 .preview-brand {
@@ -153,7 +153,7 @@ svg {
   display: flex;
   justify-content: space-between;
   gap: 12px;
-  max-width: 1200px;
+  max-width: 900px;
   width: 100%;
   margin: 0 auto 8px;
   color: #777;
@@ -167,7 +167,7 @@ svg {
   min-height: 0;
   position: relative;
   width: 100%;
-  max-width: 1200px;
+  max-width: 900px;
   margin: 0 auto;
   border: 1px solid var(--line);
   border-radius: 24px;
@@ -191,14 +191,15 @@ svg {
   overflow: auto;
   overscroll-behavior: contain;
   scrollbar-width: none;
-  padding-bottom: 180px;
-  scroll-padding-bottom: 180px;
+  min-height: 0;
+  padding-bottom: 24px;
+  scroll-padding-bottom: 24px;
 }
 .workspace-scroll::-webkit-scrollbar {
   display: none;
 }
 .workspace-header {
-  padding: 24px 20px 12px;
+  padding: 14px 20px 6px;
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
@@ -212,7 +213,7 @@ svg {
   align-items: center;
   gap: 6px;
   padding: 0;
-  min-height: 20px;
+  min-height: 36px;
   position: relative;
   border: 0;
   background: none;
@@ -224,7 +225,7 @@ svg {
 .scope-button::after {
   content: "";
   position: absolute;
-  inset: -8px 0;
+  inset: 0;
 }
 .live-dot {
   width: 6px;
@@ -237,7 +238,7 @@ svg {
   background: var(--muted);
 }
 .header-title h1 {
-  font-size: 22px;
+  font-size: 21px;
   font-weight: 600;
   line-height: 1.4;
   letter-spacing: -0.5px;
@@ -247,8 +248,8 @@ svg {
 .account-button {
   display: grid;
   place-items: center;
-  width: 40px;
-  height: 40px;
+  width: 44px;
+  height: 44px;
   border-radius: 50%;
   border: 0;
   background: var(--pill-bg);
@@ -262,10 +263,10 @@ svg {
 }
 .stat-strip {
   display: grid;
-  grid-template-columns: 1fr 1fr auto;
+  grid-template-columns: 1fr 1fr;
   align-items: center;
   gap: 16px;
-  padding: 12px 20px;
+  padding: 14px 20px 16px;
   border-bottom: 1px solid var(--line);
 }
 .stat {
@@ -358,133 +359,191 @@ svg {
 .detail-workspace {
   padding: 20px;
 }
-.dock-region {
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  z-index: 5;
+.workspace-context {
   display: flex;
-  flex-direction: column;
+  justify-content: space-between;
+  align-items: center;
   gap: 12px;
-  padding: 20px 12px calc(34px + env(safe-area-inset-bottom));
-  background: linear-gradient(to top, var(--bg) 80%, transparent);
-  pointer-events: none;
+  padding: 4px 20px 12px;
+  border-bottom: 1px solid var(--line);
+  font-size: 12px;
+  color: var(--muted);
 }
-.nav-handle {
-  width: 32px;
-  height: 3px;
-  background: var(--pill-active);
-  border-radius: 99px;
-  margin: 0 auto 8px;
+.workspace-context > span:first-child {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
-.dock-nav,
-.dock-tools {
-  display: flex;
-  gap: 8px;
-  padding: 0 4px;
-  overflow-x: auto;
-  scrollbar-width: none;
-  pointer-events: auto;
+.scope-status {
+  flex-shrink: 0;
 }
-.dock-nav::-webkit-scrollbar,
-.dock-tools::-webkit-scrollbar {
-  display: none;
+.scope-status.live {
+  color: var(--accent);
 }
-.dock-nav > button {
+.dock-region {
+  position: relative;
+  z-index: 5;
   flex-shrink: 0;
   display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 16px max(12px, env(safe-area-inset-bottom));
+  background: var(--bg);
+  border-top: 1px solid var(--line);
+}
+.dock-nav {
+  display: flex;
+  gap: 4px;
+  order: 2;
+}
+.dock-nav > button {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 8px;
-  padding: 10px 18px;
-  min-height: 40px;
-  position: relative;
-  background: var(--pill-bg);
+  gap: 4px;
+  padding: 8px 3px;
+  min-height: 58px;
   border: 0;
-  border-radius: 99px;
-  white-space: nowrap;
+  border-radius: 14px;
+  background: none;
   color: var(--muted);
-  font-size: 14px;
+  font-size: 12px;
   font-weight: 500;
 }
 .dock-nav > button.active {
-  background: var(--pill-active);
+  background: var(--pill-bg);
   color: var(--text);
 }
-.dock-nav > button::after {
-  content: "";
+.nav-count {
   position: absolute;
-  inset: -2px 0;
-}
-.nav-dot {
-  width: 4px;
-  height: 4px;
-  border-radius: 50%;
+  top: 4px;
+  right: 8px;
+  border-radius: 99px;
+  padding: 1px 5px;
+  font-size: 10px;
+  min-width: 16px;
   background: var(--accent);
+  color: #001b13;
+}
+.dock-tools {
+  display: flex;
+  gap: 8px;
+  order: 1;
+}
+.dock-tools:empty {
+  display: none;
 }
 .action-pill {
+  flex: 1;
+  min-width: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 10px;
-  flex: 1 0 auto;
-  min-height: 44px;
-  padding: 10px 20px 10px 12px;
+  gap: 8px;
+  min-height: 48px;
+  padding: 10px 12px;
   background: var(--pill-bg);
-  border: 0;
-  border-radius: 99px;
-  white-space: nowrap;
+  border: 1px solid var(--line);
+  border-radius: 14px;
   font-size: 14px;
   font-weight: 500;
+}
+.action-pill.main-action {
+  flex-grow: 1.35;
+  background: var(--accent);
+  color: #001b13;
+  border-color: transparent;
+  font-weight: 650;
 }
 .circle-icon {
   display: grid;
   place-items: center;
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
-  color: white;
   flex-shrink: 0;
 }
 .circle-icon svg {
-  stroke-width: 2.5;
-}
-.circle-icon.green {
-  background: var(--accent);
-}
-.circle-icon.blue {
-  background: var(--blue);
-}
-.circle-icon.gray {
-  background: #4b5563;
+  width: 18px;
+  height: 18px;
+  stroke-width: 2;
 }
 .toast {
-  position: absolute;
-  bottom: 100%;
-  left: 20px;
-  right: 20px;
   display: flex;
+  order: 0;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
+  padding: 8px 12px;
   border: 1px solid var(--line);
-  background: var(--card-bg);
-  color: var(--text);
-  font-size: 13px;
-  padding: 12px 16px;
   border-radius: 12px;
-  pointer-events: auto;
+  background: var(--card-bg);
+  font-size: 13px;
+}
+.toast.error {
+  color: #fb7185;
 }
 .toast button {
   display: grid;
   place-items: center;
-  min-width: 32px;
-  min-height: 32px;
+  min-width: 44px;
+  min-height: 44px;
   border: 0;
-  background: var(--pill-bg);
   border-radius: 50%;
+  background: none;
   color: var(--muted);
+}
+.preview-settings {
+  position: relative;
+}
+.preview-settings summary {
+  display: flex;
+  align-items: center;
+  min-height: 36px;
+  padding: 6px 10px;
+  color: var(--muted);
+  font-size: 11px;
+  cursor: pointer;
+  list-style: none;
+}
+.preview-settings summary::-webkit-details-marker {
+  display: none;
+}
+.preview-settings summary:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: 2px;
+}
+.preview-settings-panel {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + 8px);
+  right: 0;
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+  min-width: 240px;
+  border-radius: 14px;
+  border: 1px solid var(--line);
+  background: var(--card-bg);
+  box-shadow: 0 12px 32px #0008;
+}
+.preview-settings-panel .preview-device {
+  display: flex;
+  justify-content: center;
+}
+@container workspace (max-width: 350px) {
+  .dock-region {
+    padding-inline: 10px;
+  }
+  .action-pill {
+    font-size: 13px;
+    padding-inline: 8px;
+    gap: 6px;
+  }
+  .dock-nav > button {
+    font-size: 11px;
+  }
 }
 /* Shared controls retain the reference's neutral surfaces and semantic accents. */
 .eyebrow {
@@ -533,7 +592,7 @@ svg {
 }
 .primary {
   background: var(--accent);
-  color: white;
+  color: #001b13;
 }
 .secondary {
   background: var(--pill-bg);

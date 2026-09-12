@@ -2,10 +2,8 @@
   min-width: 0;
 }
 .list-header {
-  padding: 20px 20px 12px;
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
+  padding: 0;
+  font-size: 12px;
   color: var(--muted);
   font-weight: 600;
   margin: 0;
@@ -19,8 +17,8 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: 16px;
-  padding: 16px 20px;
+  gap: 12px;
+  padding: 12px 20px;
   border-bottom: 1px solid var(--line);
 }
 .guest-person {
@@ -28,7 +26,7 @@
   min-width: 0;
   display: flex;
   align-items: center;
-  min-height: 40px;
+  min-height: 44px;
   position: relative;
   background: none;
   border: 0;
@@ -57,7 +55,7 @@
   align-items: center;
   justify-content: flex-end;
   align-self: stretch;
-  min-height: 40px;
+  min-height: 44px;
   background: none;
   border: 0;
   padding: 0;
@@ -66,7 +64,7 @@
 .check-button::after {
   content: "";
   position: absolute;
-  inset: -2px -4px;
+  inset: 0;
 }
 .quota-line {
   display: flex;
@@ -129,4 +127,165 @@
 .form-toggle input:focus-visible + .switch-track {
   outline: 2px solid var(--blue);
   outline-offset: 4px;
+}
+
+.roster-summary {
+  grid-column: 1 / -1;
+  color: var(--muted);
+  font-size: 12px;
+  margin-top: -8px;
+}
+.roster-controls {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--bg);
+  padding: 12px 20px 10px;
+  border-bottom: 1px solid var(--line);
+}
+.roster-controls .roster-search {
+  margin: 0 0 8px;
+  padding: 0 12px;
+  gap: 8px;
+}
+.roster-controls .roster-search input {
+  min-height: 48px;
+  font-size: 16px;
+}
+.roster-controls .roster-search button {
+  width: 44px;
+  height: 44px;
+  flex-shrink: 0;
+}
+.roster-controls .roster-search button::after {
+  inset: 0;
+}
+.roster-controls input::-webkit-search-cancel-button {
+  appearance: none;
+}
+.roster-filter-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.roster-status-filters {
+  display: flex;
+  flex: 1;
+  gap: 2px;
+  min-width: 0;
+}
+.roster-status-filters button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  flex: 1;
+  min-height: 44px;
+  padding: 6px;
+  border: 0;
+  border-radius: 10px;
+  color: var(--muted);
+  background: none;
+  font-size: 12px;
+  white-space: nowrap;
+}
+.roster-status-filters button[aria-pressed="true"] {
+  background: var(--pill-active);
+  color: var(--text);
+}
+.roster-status-filters small {
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  opacity: 0.7;
+}
+.roster-filter-button {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  min-height: 44px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--bg-secondary);
+  flex-shrink: 0;
+}
+.roster-filter-button.active {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.roster-applied {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  padding-top: 8px;
+}
+.roster-applied button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--bg-secondary);
+  color: var(--muted);
+  font-size: 12px;
+  padding: 8px 10px;
+  min-height: 36px;
+}
+.roster-result-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 14px 20px 2px;
+}
+.roster-result-heading > span {
+  font-size: 12px;
+  color: var(--muted);
+}
+.check-button .status-badge {
+  min-width: 80px;
+  min-height: 44px;
+  border-radius: 12px;
+  font-size: 12px;
+}
+.check-button.is-pending .status-badge {
+  background: #10b98114;
+  border: 1px solid #10b98140;
+  color: #31d9a1;
+}
+.check-button.is-checked .status-badge {
+  background: none;
+  color: var(--muted);
+}
+.check-button:disabled {
+  opacity: 0.65;
+}
+.roster-empty {
+  display: grid;
+  justify-items: center;
+  gap: 12px;
+  padding: 24px 20px;
+}
+.roster-empty .empty-state {
+  padding: 12px 0 0;
+}
+.roster-empty > p,
+.roster-hint {
+  font-size: 12px;
+  color: var(--muted);
+  margin: 0;
+}
+.roster-hint {
+  padding: 12px 20px;
+}
+@container workspace (max-width: 350px) {
+  .roster-controls {
+    padding-inline: 12px;
+  }
+  .roster-status-filters button {
+    font-size: 11px;
+    gap: 3px;
+  }
+  .guest-list li {
+    padding-inline: 16px;
+  }
 }

@@ -51,11 +51,14 @@ export function GuestEntry({
     ? data.events.find((e) => e.id === link.eventId)!
     : event;
   const [bulk, setBulk] = useState(false),
-    [raw, setRaw] = useState(""),
+    [singleRaw, setSingleRaw] = useState(""),
+    [bulkRaw, setBulkRaw] = useState(""),
     [confirmed, setConfirmed] = useState<number[]>([]),
     [csv, setCsv] = useState<ParsedGuestCsv | null>(null),
     [column, setColumn] = useState<number | null>(null),
     [localError, setError] = useState("");
+  const raw = bulk ? bulkRaw : singleRaw;
+  const setRaw = bulk ? setBulkRaw : setSingleRaw;
   const existing = activeGuests(data, targetEvent.id)
     .filter((g) => (link ? g.externalLinkId === link.id : true))
     .map((g) => g.name);
@@ -205,6 +208,8 @@ export function GuestEntry({
       ) : (
         <Field
           label="게스트 이름"
+          error={localError}
+          autoComplete="off"
           value={raw}
           onChange={(e) => changeRaw(e.target.value)}
           maxLength={100}
@@ -217,9 +222,10 @@ export function GuestEntry({
         label="여러 명 한 번에 등록"
         checked={bulk}
         onChange={(e) => {
+          if (e.target.checked && !bulkRaw) setBulkRaw(singleRaw);
           setBulk(e.target.checked);
-          changeRaw("");
-          setCsv(null);
+          setConfirmed([]);
+          setError("");
         }}
       />
       <div className="quota-line">
@@ -236,7 +242,7 @@ export function GuestEntry({
       {!allowed && (
         <Notice error>이 행사에는 게스트를 등록할 수 없습니다.</Notice>
       )}
-      {localError && <Notice error>{localError}</Notice>}
+      {bulk && localError && <Notice error>{localError}</Notice>}
       {scenario === "unknown-result" && (
         <Action secondary onClick={() => setScenario("normal")}>
           최신 명단 확인
@@ -297,7 +303,7 @@ export function GuestEntry({
                           "선택한 셀 {count}개에 줄바꿈이 있습니다. 파일을 수정한 뒤 다시 적용해주세요.",
                           { count: csvPreview.multilineCellCount },
                         )
-                      : t("이름 {count}명을 입력란에 불러왔습니다.", {
+                      : t("이름 {count}명을 불러올 수 있습니다.", {
                           count: csvPreview.bulk.lines.length,
                         })}
                   </Notice>

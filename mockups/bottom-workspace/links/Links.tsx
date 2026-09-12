@@ -172,6 +172,7 @@ export function Links() {
       {!items.length && <Empty text="이 필터에 해당하는 링크가 없습니다" />}
       {panel === "create" && (
         <Sheet
+          protectEdits
           title={t("링크 생성")}
           subtitle={
             template
