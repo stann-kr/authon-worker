@@ -10,18 +10,10 @@ import {
 } from "react";
 import dynamic from "next/dynamic";
 import GuestList from "./components/GuestList";
-import LinkManagement, {
-  type LinkManagementSection,
-} from "./components/LinkManagement";
-import UserManagement, {
-  type UserManagementSection,
-} from "./components/UserManagement";
-import VenueManagement, {
-  type VenueManagementSection,
-} from "./components/VenueManagement";
-import GuestLimitRequestManagement from "./components/GuestLimitRequestManagement";
-import PasswordResetRequestManagement from "./components/PasswordResetRequestManagement";
-import EventManagement from "./components/EventManagement";
+import type { LinkManagementSection } from "./components/LinkManagement";
+import type { UserManagementSection } from "./components/UserManagement";
+import type { VenueManagementSection } from "./components/VenueManagement";
+import Skeleton from "@/components/Skeleton";
 import EventScopeSelector from "@/components/EventScopeSelector";
 import AdminTaskSwitcher, {
   type AdminTaskOption,
@@ -43,7 +35,31 @@ import useAdminWorkspaceNavigation, {
   focusAdminWorkspaceAfterTaskChange,
 } from "./useAdminWorkspaceNavigation";
 
-const AdminAnalytics = dynamic(() => import("./components/AdminAnalytics"));
+function AdminTaskLoading() {
+  return <div className="app-panel"><Skeleton rows={5} /></div>;
+}
+
+const LinkManagement = dynamic(() => import("./components/LinkManagement"), {
+  loading: AdminTaskLoading,
+});
+const UserManagement = dynamic(() => import("./components/UserManagement"), {
+  loading: AdminTaskLoading,
+});
+const VenueManagement = dynamic(() => import("./components/VenueManagement"), {
+  loading: AdminTaskLoading,
+});
+const GuestLimitRequestManagement = dynamic(() => import("./components/GuestLimitRequestManagement"), {
+  loading: AdminTaskLoading,
+});
+const PasswordResetRequestManagement = dynamic(() => import("./components/PasswordResetRequestManagement"), {
+  loading: AdminTaskLoading,
+});
+const EventManagement = dynamic(() => import("./components/EventManagement"), {
+  loading: AdminTaskLoading,
+});
+const AdminAnalytics = dynamic(() => import("./components/AdminAnalytics"), {
+  loading: AdminTaskLoading,
+});
 
 export default function AdminPage() {
   return (
@@ -219,6 +235,8 @@ function AdminPageContent() {
         <h2 id="admin-active-task-title" className="sr-only">
           {activeTaskLabel}
         </h2>
+        {!isRoleReady && <AdminTaskLoading />}
+        {isRoleReady && <>
         {[
           "guest-list",
           "guest-requests",
@@ -297,6 +315,7 @@ function AdminPageContent() {
             showSectionNavigation={false}
           />
         )}
+        </>}
         </section>
       </div>
     </WorkspaceShell>
