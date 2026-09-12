@@ -1,5 +1,7 @@
 "use client";
 
+import { fetchEvents } from "@/lib/events/client";
+
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import Alert from "@/components/Alert";
@@ -11,7 +13,6 @@ import VenueSelector, { useVenueSelector } from "@/components/VenueSelector";
 import { formatVenueDateTime } from "@/lib/date";
 import {
   createEvent,
-  fetchEvents,
   transitionEventState,
 } from "@/lib/api/events";
 import type { Event, EventState } from "@/lib/events/types";

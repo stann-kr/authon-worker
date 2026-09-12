@@ -23,6 +23,7 @@ import ConfirmDialog from "@/components/ConfirmDialog";
 import GuestListCard from "@/components/GuestListCard";
 import OperationalSectionNav from "@/components/OperationalSectionNav";
 import GuestBulkEntry from "@/components/GuestBulkEntry";
+import EventScopeSelector from "@/components/EventScopeSelector";
 import {
   RouteTransitionProvider,
   useRouteTransition,
@@ -40,6 +41,60 @@ if (!window.requestAnimationFrame) {
 afterEach(() => {
   cleanup();
   document.getElementById("main-content")?.removeAttribute("inert");
+});
+
+test("event selection and parent renders reuse the loaded event list", async () => {
+  const originalFetch = globalThis.fetch;
+  let calls = 0;
+  globalThis.fetch = async () => {
+    calls += 1;
+    return Response.json({ data: [
+      { id: "event-a", name: "Event A", state: "open", compatibilityKey: null },
+      { id: "event-b", name: "Event B", state: "open", compatibilityKey: null },
+    ], error: null });
+  };
+  function Harness({ revision }: { revision: number }) {
+    const [value, setValue] = useState<string | null>(null);
+    return <NextIntlClientProvider locale="en" messages={messages}>
+      <EventScopeSelector venueId="venue-a" businessDate="2026-09-12" value={value}
+        onChange={(id) => setValue(id)} />
+      <output>{revision}</output>
+    </NextIntlClientProvider>;
+  }
+  try {
+    const view = render(<Harness revision={0} />);
+    const select = screen.getByRole("combobox") as HTMLSelectElement;
+    await waitFor(() => assert.equal(select.disabled, false));
+    fireEvent.change(select, { target: { value: "event-a" } });
+    view.rerender(<Harness revision={1} />);
+    await act(async () => {});
+    assert.equal(select.value, "event-a");
+    assert.equal(select.disabled, false);
+    assert.equal(calls, 1);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("event list network failure releases loading and supports retry", async () => {
+  const originalFetch = globalThis.fetch;
+  let calls = 0;
+  globalThis.fetch = async () => {
+    if (++calls === 1) throw new TypeError("Network failed");
+    return Response.json({ data: [], error: null });
+  };
+  try {
+    render(<NextIntlClientProvider locale="en" messages={messages}>
+      <EventScopeSelector venueId="venue-a" businessDate="2026-09-12" value={null} onChange={() => {}} />
+    </NextIntlClientProvider>);
+    const retry = await screen.findByRole("button", { name: messages.EventScope.retry });
+    assert.equal((screen.getByRole("combobox") as HTMLSelectElement).disabled, false);
+    fireEvent.click(retry);
+    await waitFor(() => assert.equal(screen.queryByRole("button", { name: messages.EventScope.retry }), null));
+    assert.equal(calls, 2);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });
 
 test("latest ref keeps a loader stable while reading the latest translator", () => {

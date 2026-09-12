@@ -1,5 +1,7 @@
 "use client";
 
+import { fetchGuestsByDate } from "@/lib/guests/client";
+
 import { useState, useEffect, useCallback, useRef } from "react";
 import {
   useLocalStorage,
@@ -28,11 +30,10 @@ import {
   shouldShowEmptyState,
 } from "../../../lib/ui/async-list-state";
 import {
-  fetchGuestsByDate,
   updateGuestStatus,
   deleteGuest,
 } from "../../../lib/api/guests";
-import { fetchGuestOperationsSnapshot } from "../../../lib/api/guest-snapshots";
+import { fetchGuestOperationsSnapshot } from "@/lib/guest-snapshots/client";
 import type { ExternalLinkDirectoryEntry } from "@/lib/external-links/types";
 import type { Guest } from "@/lib/guests/types";
 import type { UserDirectoryEntry } from "@/lib/users/types";
@@ -196,7 +197,7 @@ export default function GuestList({
     }
   }, [eventId, loadedScopeKey, pollingGuard, requestScopeKey, selectedDate, venueId]);
 
-  const pollingCoordinator = useGuestPolling(pollGuests, 15000, !!venueId);
+  const pollingCoordinator = useGuestPolling(pollGuests, 15000, !!venueId && !isFetching);
 
   useEffect(() => {
     mutationGuard.invalidateOperations();

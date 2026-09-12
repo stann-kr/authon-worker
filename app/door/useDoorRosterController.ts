@@ -668,7 +668,7 @@ export default function useDoorRosterController({
   const pollingCoordinator = useGuestPolling(
     pollData,
     15000,
-    !!venueId && !isOfflineMode,
+    !!venueId && !isOfflineMode && !isFetching,
   );
 
   useEffect(() => {

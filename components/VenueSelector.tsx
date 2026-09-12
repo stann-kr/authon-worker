@@ -12,7 +12,7 @@ import {
   type ReactNode,
 } from "react";
 import { useLocalStorage } from "@/lib/hooks";
-import { fetchVenues } from "@/lib/api/venues";
+import { fetchVenues } from "@/lib/venues/client";
 import type { Venue } from "@/lib/venues/types";
 import Icon from "./Icon";
 import { useAuthSession } from "./AuthSessionProvider";
