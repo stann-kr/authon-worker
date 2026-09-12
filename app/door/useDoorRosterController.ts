@@ -196,6 +196,32 @@ export default function useDoorRosterController({
     [],
   );
 
+  const resolveOfflineRoster = useCallback(async (
+    scope: OfflineDoorScope,
+    snapshot: GuestOperationsSnapshot | null,
+  ): Promise<ApiResponse<OfflineDoorGuest[]>> => {
+    // Preserve compatibility with an older server during a rolling deployment.
+    if (!snapshot?.offlineRosterStatus) return dependencies.fetchOfflineDoorRoster(scope);
+    if (snapshot.offlineRosterStatus === "unavailable") {
+      return { data: null, error: "OFFLINE_DOOR_EVENT_UNAVAILABLE" };
+    }
+    if (snapshot.failedSections.includes("guests")) {
+      return { data: null, error: "OFFLINE_DOOR_ROSTER_FAILED" };
+    }
+    const roster: OfflineDoorGuest[] = [];
+    for (const guest of snapshot.guests) {
+      if (guest.venueId !== scope.venueId || guest.eventId !== scope.eventId ||
+          (guest.status !== "pending" && guest.status !== "checked")) continue;
+      roster.push({
+        id: guest.id,
+        name: guest.name,
+        status: guest.status,
+        checkInTime: guest.checkInTime ?? null,
+      });
+    }
+    return { data: roster, error: null };
+  }, [dependencies]);
+
   useEffect(() => {
     if (!isFetching && loadedScopeKey === requestScopeKey) {
       displayCacheRef.current = {
@@ -373,12 +399,6 @@ export default function useDoorRosterController({
           return next;
         });
         try {
-          const cacheableRosterRequest = dependencies
-            .fetchOfflineDoorRoster(offlineScope)
-            .catch((error: unknown) => {
-              console.error("Failed to refresh offline door roster:", error);
-              return null;
-            });
           const authoritative =
             await dependencies.fetchGuestOperationsSnapshot(
               offlineScope.businessDate,
@@ -392,7 +412,7 @@ export default function useDoorRosterController({
             setExternalLinks(authoritative.data.externalLinks);
             setIsOfflineMode(false);
           }
-          const cacheableRoster = await cacheableRosterRequest;
+          const cacheableRoster = await resolveOfflineRoster(offlineScope, authoritative.data);
           if (!isCurrent()) return;
           if (cacheableRoster?.data) {
             try {
@@ -441,6 +461,7 @@ export default function useDoorRosterController({
       dependencies,
       loadCachedOfflineRoster,
       refreshOfflineMutations,
+      resolveOfflineRoster,
       runOfflineStoreTask,
     ],
   );
@@ -509,12 +530,6 @@ export default function useDoorRosterController({
     setIsFetching(true);
     setFeedback(null);
     try {
-      const offlineRosterRequest = offlineScope
-        ? dependencies.fetchOfflineDoorRoster(offlineScope).catch((error: unknown) => {
-            console.error("Failed to load offline door roster:", error);
-            return null;
-          })
-        : Promise.resolve(null);
       const operationsResponse =
         await dependencies.fetchGuestOperationsSnapshot(
           selectedDate,
@@ -551,7 +566,7 @@ export default function useDoorRosterController({
         if (offlineScope) {
           void (async () => {
             try {
-              const offlineRosterResponse = await offlineRosterRequest;
+              const offlineRosterResponse = await resolveOfflineRoster(offlineScope, data);
               if (!isCurrent()) return;
               if (offlineRosterResponse?.data) {
                 await runOfflineStoreTask(isCurrent, () =>
@@ -612,6 +627,7 @@ export default function useDoorRosterController({
     refreshOfflineMutations,
     requestGuard,
     requestScopeKey,
+    resolveOfflineRoster,
     runOfflineStoreTask,
     selectedDate,
     selectedEventId,

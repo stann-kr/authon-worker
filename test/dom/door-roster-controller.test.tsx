@@ -231,6 +231,53 @@ test("authoritative success publishes the current roster", async () => {
   assert.equal(screen.getByTestId("offline-mode").textContent, "false");
 });
 
+test("an eligible operations snapshot supplies the offline roster without another fetch", async () => {
+  const saved: OfflineDoorRosterSnapshot[] = [];
+  let extraReads = 0;
+  const dependencies = createDependencies({
+    fetchGuestOperationsSnapshot: async () => ({
+      data: { ...OPERATIONS_SNAPSHOT, offlineRosterStatus: "available", guests: [
+        GUEST,
+        { ...GUEST, id: "deleted-0001", status: "deleted" },
+        { ...GUEST, id: "foreign-0001", venueId: "venue-0002" },
+        { ...GUEST, id: "foreign-0002", eventId: "event-0002" },
+      ] },
+      error: null,
+    }),
+    fetchOfflineDoorRoster: async () => { extraReads += 1; return { data: [], error: null }; },
+    saveOfflineDoorRoster: async (snapshot) => { saved.push(snapshot); },
+  });
+  render(<DoorRosterHarness dependencies={dependencies} selectedEventId="event-0001" />);
+  await waitFor(() => assert.equal(saved.length, 1));
+  assert.equal(extraReads, 0);
+  assert.deepEqual(saved[0].guests, OFFLINE_SNAPSHOT.guests);
+  assert.deepEqual(Object.keys(saved[0].guests[0]).sort(), ["checkInTime", "id", "name", "status"]);
+});
+
+test("closed snapshots clear the offline cache while failed guest sections preserve it", async () => {
+  for (const unavailable of [false, true]) {
+    let saves = 0;
+    let removals = 0;
+    let extraReads = 0;
+    const dependencies = createDependencies({
+      fetchGuestOperationsSnapshot: async () => ({
+        data: { ...OPERATIONS_SNAPSHOT, offlineRosterStatus: unavailable ? "unavailable" : "available", failedSections: ["guests"] },
+        error: "PARTIAL",
+      }),
+      fetchOfflineDoorRoster: async () => { extraReads += 1; return { data: [], error: null }; },
+      saveOfflineDoorRoster: async () => { saves += 1; },
+      removeOfflineDoorRoster: async () => { removals += 1; },
+    });
+    const view = render(<DoorRosterHarness dependencies={dependencies} selectedEventId="event-0001" />);
+    await waitFor(() => assert.equal(screen.getByTestId("fetching").textContent, "false"));
+    if (unavailable) await waitFor(() => assert.equal(removals, 1));
+    assert.equal(saves, 0);
+    assert.equal(removals, unavailable ? 1 : 0);
+    assert.equal(extraReads, 0);
+    view.unmount();
+  }
+});
+
 test("an optional offline roster rejection cannot hide authoritative data", async () => {
   render(
     <DoorRosterHarness
