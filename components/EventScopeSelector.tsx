@@ -3,9 +3,9 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
 import Icon from "@/components/Icon";
-import { fetchEvents } from "@/lib/api/events";
+import { fetchEvents } from "@/lib/events/client";
 import type { Event } from "@/lib/events/types";
-import { useLatestRequestGuard } from "@/lib/hooks";
+import { useLatestRef, useLatestRequestGuard } from "@/lib/hooks";
 
 interface EventScopeSelectorProps {
   venueId: string | null | undefined;
@@ -31,6 +31,8 @@ export default function EventScopeSelector({
   const [isLoading, setIsLoading] = useState(false);
   const [hasError, setHasError] = useState(false);
   const requestGuard = useLatestRequestGuard();
+  const valueRef = useLatestRef(value);
+  const onChangeRef = useLatestRef(onChange);
 
   const loadEvents = useCallback(async () => {
     const isLatest = requestGuard.beginRequest();
@@ -38,28 +40,30 @@ export default function EventScopeSelector({
       setEvents([]);
       setHasError(false);
       setIsLoading(false);
-      onChange(null);
+      onChangeRef.current(null);
       return;
     }
     setIsLoading(true);
     setHasError(false);
-    const response = await fetchEvents({ venueId, businessDate });
-    if (!isLatest()) return;
-    if (response.error || !response.data) {
+    try {
+      const response = await fetchEvents({ venueId, businessDate });
+      if (!isLatest()) return;
+      if (response.error || !response.data) throw new Error("EVENT_LIST_FAILED");
+      const explicitEvents = response.data.filter(
+        (event) => event.compatibilityKey === null,
+      );
+      setEvents(explicitEvents);
+      if (valueRef.current && !explicitEvents.some((event) => event.id === valueRef.current)) {
+        onChangeRef.current(null);
+      }
+    } catch {
+      if (!isLatest()) return;
       setEvents([]);
       setHasError(true);
-      setIsLoading(false);
-      return;
+    } finally {
+      if (isLatest()) setIsLoading(false);
     }
-    const explicitEvents = response.data.filter(
-      (event) => event.compatibilityKey === null,
-    );
-    setEvents(explicitEvents);
-    if (value && !explicitEvents.some((event) => event.id === value)) {
-      onChange(null);
-    }
-    setIsLoading(false);
-  }, [businessDate, onChange, requestGuard, venueId, value]);
+  }, [businessDate, onChangeRef, requestGuard, valueRef, venueId]);
 
   useEffect(() => {
     void loadEvents();

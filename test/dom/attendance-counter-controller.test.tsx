@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { afterEach, test } from "node:test";
+import { afterEach, beforeEach, test } from "node:test";
 import { useLayoutEffect, useRef, useState, type FocusEvent, type FormEvent } from "react";
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 
@@ -137,6 +137,15 @@ function setOnline(value: boolean) {
   });
 }
 
+function setVisible(visible: boolean) {
+  Object.defineProperty(document, "visibilityState", {
+    configurable: true,
+    value: visible ? "visible" : "hidden",
+  });
+}
+
+beforeEach(() => setVisible(true));
+
 interface AttendanceCounterCommit {
   scopeEventId: string | null;
   notice: string;
@@ -169,18 +178,20 @@ function AttendanceCounterHarness({
   scope = SCOPE_A,
   dependencies,
   checkedInGuests = 0,
+  hasPendingGuestMutations = false,
   onLayoutCommit,
 }: {
   scope?: AttendanceScope | null;
   dependencies: AttendanceCounterDependencies;
   checkedInGuests?: number;
+  hasPendingGuestMutations?: boolean;
   onLayoutCommit?: (commit: AttendanceCounterCommit) => void;
 }) {
   const controller = useAttendanceCounterController({
     scope,
     currentBusinessDate: "2026-08-23",
     checkedInGuests,
-    hasPendingGuestMutations: false,
+    hasPendingGuestMutations,
     canAdjust: true,
     translate: (key, values) =>
       values?.count === undefined ? key : `${key}:${values.count}`,
@@ -242,6 +253,9 @@ function AttendanceCounterHarness({
         onClick={() => void controller.queueUndo()}
       >
         Undo
+      </button>
+      <button type="button" onClick={() => scope && void controller.loadSummary(scope)}>
+        Refresh summary
       </button>
       <button type="button" onClick={() => void controller.clearFailedResults()}>
         Clear failed
@@ -1473,4 +1487,141 @@ test("the first committed scope frame never exposes the previous scope state", a
     firstReturnedScopeACommit,
     neutralScopeCommit(SCOPE_A.eventId),
   );
+});
+
+
+test("summary refresh shares slow reads, skips inactive polling, and retries failures", async (t) => {
+  let tick!: () => void;
+  t.mock.method(window, "setInterval", (callback: () => void) => {
+    tick = callback;
+    return 999;
+  });
+  t.mock.method(window, "clearInterval", () => {});
+  const first = createDeferred<Awaited<ReturnType<AttendanceCounterDependencies["fetchDoorAttendanceSummary"]>>>();
+  let reads = 0;
+  const dependencies = createDependencies({
+    fetchDoorAttendanceSummary: async () => {
+      reads += 1;
+      if (reads === 1) return first.promise;
+      if (reads === 2) throw new Error("temporary network error");
+      return { data: createSummary(SCOPE_A, { checkedInGuests: 9 }), error: null };
+    },
+  });
+  render(<AttendanceCounterHarness dependencies={dependencies} />);
+  await waitFor(() => assert.equal(reads, 1));
+  await act(async () => {
+    fireEvent.click(screen.getByRole("button", { name: "Refresh summary" }));
+    fireEvent(window, new Event("online"));
+    tick();
+  });
+  assert.equal(reads, 1);
+  await act(async () => first.resolve({ data: createSummary(SCOPE_A), error: null }));
+  await waitFor(() => assert.equal(screen.getByTestId("checked-in").textContent, "5"));
+  await act(async () => {
+    setVisible(false);
+    fireEvent(document, new Event("visibilitychange"));
+    tick();
+    fireEvent(window, new Event("online"));
+  });
+  assert.equal(reads, 1);
+  await act(async () => {
+    setOnline(false);
+    setVisible(true);
+    fireEvent(document, new Event("visibilitychange"));
+    tick();
+  });
+  assert.equal(reads, 1);
+  await act(async () => {
+    setOnline(true);
+    fireEvent(window, new Event("online"));
+  });
+  await waitFor(() => assert.equal(screen.getByTestId("notice").textContent, "loadFailed"));
+  assert.equal(reads, 2);
+  await act(async () => tick());
+  await waitFor(() => assert.equal(screen.getByTestId("checked-in").textContent, "9"));
+  assert.equal(reads, 3);
+  assert.equal(screen.getByTestId("notice").textContent, "");
+});
+
+test("a guest mutation invalidates a slow summary and releases one fresh read", async () => {
+  const stale = createDeferred<Awaited<ReturnType<AttendanceCounterDependencies["fetchDoorAttendanceSummary"]>>>();
+  let reads = 0;
+  const dependencies = createDependencies({
+    fetchDoorAttendanceSummary: async () => {
+      reads += 1;
+      return reads === 1 ? stale.promise : {
+        data: createSummary(SCOPE_A, { checkedInGuests: 8 }), error: null,
+      };
+    },
+  });
+  const view = render(<AttendanceCounterHarness dependencies={dependencies} />);
+  await waitFor(() => assert.equal(reads, 1));
+  view.rerender(<AttendanceCounterHarness dependencies={dependencies} hasPendingGuestMutations />);
+  await act(async () => {
+    fireEvent.click(screen.getByRole("button", { name: "Refresh summary" }));
+    fireEvent(window, new Event("online"));
+    stale.resolve({ data: createSummary(SCOPE_A, { checkedInGuests: 1 }), error: null });
+  });
+  assert.equal(reads, 1);
+  assert.equal(screen.getByTestId("scope-event").textContent, "none");
+  view.rerender(<AttendanceCounterHarness dependencies={dependencies} />);
+  await waitFor(() => assert.equal(screen.getByTestId("checked-in").textContent, "8"));
+  assert.equal(reads, 2);
+});
+
+test("overlapping online refreshes use the sync summary without a redundant read", async () => {
+  const sync = createDeferred<Awaited<ReturnType<AttendanceCounterDependencies["syncDoorAttendanceMutations"]>>>();
+  let mutations: OfflineAttendanceMutation[] = [];
+  let reads = 0;
+  let syncs = 0;
+  const dependencies = createDependencies({
+    fetchDoorAttendanceSummary: async () => {
+      reads += 1;
+      return { data: createSummary(SCOPE_A), error: null };
+    },
+    listAttendanceMutations: async () => [...mutations],
+    syncDoorAttendanceMutations: async () => { syncs += 1; return sync.promise; },
+    removeAttendanceMutations: async () => { mutations = []; },
+  });
+  render(<AttendanceCounterHarness dependencies={dependencies} />);
+  await waitFor(() => assert.equal(screen.getByTestId("walk-ins").textContent, "2"));
+  mutations = [createMutation({ idempotencyKey: "attendance:online-sync", sequence: 1, action: "walk_in" })];
+  await act(async () => fireEvent(window, new Event("online")));
+  await waitFor(() => assert.equal(syncs, 1));
+  await act(async () => {
+    fireEvent(window, new Event("online"));
+    fireEvent(window, new Event("online"));
+    fireEvent.click(screen.getByRole("button", { name: "Refresh summary" }));
+  });
+  assert.equal(reads, 1);
+  await act(async () => sync.resolve({
+    data: {
+      items: [{ idempotencyKey: "attendance:online-sync", state: "confirmed", activityId: "activity-online" }],
+      summary: createSummary(SCOPE_A, { walkIns: 3 }),
+    }, error: null,
+  }));
+  await waitFor(() => assert.equal(screen.getByTestId("walk-ins").textContent, "3"));
+  assert.equal(reads, 1);
+  assert.equal(syncs, 1);
+  assert.equal(screen.getByTestId("syncing").textContent, "false");
+});
+
+test("an unmounted online refresh cannot start a follow-up summary request", async () => {
+  const queued = createDeferred<OfflineAttendanceMutation[]>();
+  let lists = 0;
+  let reads = 0;
+  const dependencies = createDependencies({
+    fetchDoorAttendanceSummary: async () => {
+      reads += 1;
+      return { data: createSummary(SCOPE_A), error: null };
+    },
+    listAttendanceMutations: async () => ++lists === 1 ? [] : queued.promise,
+  });
+  const view = render(<AttendanceCounterHarness dependencies={dependencies} />);
+  await waitFor(() => assert.equal(screen.getByTestId("walk-ins").textContent, "2"));
+  await act(async () => fireEvent(window, new Event("online")));
+  await waitFor(() => assert.equal(lists, 2));
+  view.unmount();
+  await act(async () => queued.resolve([]));
+  assert.equal(reads, 1);
 });

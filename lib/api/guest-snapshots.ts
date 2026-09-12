@@ -11,6 +11,7 @@ import { requireAccess, type SessionUser } from "../auth/server";
 import { requireActiveVenueId } from "../tenant/active-server";
 import { canRequestGuestLimit, isAccountKind, isRole } from "@/lib/users/policy";
 import { resolveSnapshotVenueId } from "@/lib/guest-snapshot-policy";
+import { loadSnapshotGuests } from "@/lib/guest-snapshots/persistence";
 import type { ApiResponse } from "./response";
 import type { Event } from "@/lib/events/types";
 import type { ExternalLinkDirectoryEntry } from "@/lib/external-links/types";
@@ -48,33 +49,13 @@ async function loadGuestsByDate(
   createdByUserId?: string,
   event?: Event | null,
 ): Promise<Guest[]> {
-  const eventScope = event
-    ? eventIncludesLegacyDateRows(event)
-      ? or(
-          eq(guests.eventId, event.id),
-          and(isNull(guests.eventId), eq(guests.date, date)),
-        )
-      : eq(guests.eventId, event.id)
-    : and(isNull(guests.eventId), eq(guests.date, date));
-  const conditions = [
-    eq(guests.venueId, venueId),
-    eventScope,
-    ne(guests.status, "deleted"),
-  ];
-  if (createdByUserId) {
-    conditions.push(eq(guests.createdByUserId, createdByUserId));
-  }
-
-  const rows = await db
-    .select()
-    .from(guests)
-    .where(and(...conditions))
-    .orderBy(desc(guests.createdAt));
-
-  return rows.map((guest) => ({
-    ...guest,
-    status: guest.status as Guest["status"],
-  }));
+  return loadSnapshotGuests(db, {
+    venueId,
+    date,
+    eventId: event?.id ?? null,
+    includeLegacyDateRows: event ? eventIncludesLegacyDateRows(event) : false,
+    createdByUserId,
+  });
 }
 
 async function loadUserDirectory(
@@ -268,6 +249,8 @@ export async function fetchGuestOperationsSnapshot(
           users: userResult.status === "fulfilled" ? userResult.value : [],
           externalLinks: linkResult.status === "fulfilled" ? linkResult.value : [],
           failedSections,
+          offlineRosterStatus: eventId && event?.compatibilityKey === null && event.state === "open"
+            ? "available" : "unavailable",
         },
         error: failedSections.length > 0
           ? "Unable to load some guest operations data right now."

@@ -26,6 +26,7 @@ import type { ExternalLinkDirectoryEntry } from "@/lib/external-links/types";
 import type { GuestOperationsSnapshot } from "@/lib/guest-snapshots/types";
 import type { Guest } from "@/lib/guests/types";
 import type { UserDirectoryEntry } from "@/lib/users/types";
+import { subscribeToRouteTransitionStart } from "@/lib/route-transition-events";
 
 const EMPTY_DISPLAY_DATA = {
   guests: [] as Guest[],
@@ -40,6 +41,18 @@ type OwnershipCheck = () => boolean;
 
 interface DoorScopeToken {
   key: string;
+}
+
+interface DoorRefreshOwner {
+  scopeToken: DoorScopeToken;
+  revision: number;
+  mutations: Set<number>;
+  queued: "foreground" | "background" | null;
+  inFlight: { revision: number; background: boolean; promise: Promise<void> } | null;
+}
+
+function createRefreshOwner(scopeToken: DoorScopeToken): DoorRefreshOwner {
+  return { scopeToken, revision: 0, mutations: new Set(), queued: null, inFlight: null };
 }
 
 interface OfflineSyncRequest {
@@ -175,6 +188,18 @@ export default function useDoorRosterController({
   }
   const currentScopeToken = currentScopeOwnerRef.current;
   currentScopeKeyRef.current = requestScopeKey;
+  const refreshOwnerRef = useRef(createRefreshOwner(currentScopeToken));
+  if (refreshOwnerRef.current.scopeToken !== currentScopeToken) {
+    refreshOwnerRef.current = createRefreshOwner(currentScopeToken);
+  }
+  useEffect(() => {
+    const cancelRefresh = () => {
+      refreshOwnerRef.current.queued = null;
+      refreshOwnerRef.current = createRefreshOwner(currentScopeOwnerRef.current);
+    };
+    const unsubscribe = subscribeToRouteTransitionStart(cancelRefresh);
+    return () => { unsubscribe(); cancelRefresh(); };
+  }, []);
 
   const runOfflineStoreTask = useCallback(
     <T,>(
@@ -195,6 +220,32 @@ export default function useDoorRosterController({
     },
     [],
   );
+
+  const resolveOfflineRoster = useCallback(async (
+    scope: OfflineDoorScope,
+    snapshot: GuestOperationsSnapshot | null,
+  ): Promise<ApiResponse<OfflineDoorGuest[]>> => {
+    // Preserve compatibility with an older server during a rolling deployment.
+    if (!snapshot?.offlineRosterStatus) return dependencies.fetchOfflineDoorRoster(scope);
+    if (snapshot.offlineRosterStatus === "unavailable") {
+      return { data: null, error: "OFFLINE_DOOR_EVENT_UNAVAILABLE" };
+    }
+    if (snapshot.failedSections.includes("guests")) {
+      return { data: null, error: "OFFLINE_DOOR_ROSTER_FAILED" };
+    }
+    const roster: OfflineDoorGuest[] = [];
+    for (const guest of snapshot.guests) {
+      if (guest.venueId !== scope.venueId || guest.eventId !== scope.eventId ||
+          (guest.status !== "pending" && guest.status !== "checked")) continue;
+      roster.push({
+        id: guest.id,
+        name: guest.name,
+        status: guest.status,
+        checkInTime: guest.checkInTime ?? null,
+      });
+    }
+    return { data: roster, error: null };
+  }, [dependencies]);
 
   useEffect(() => {
     if (!isFetching && loadedScopeKey === requestScopeKey) {
@@ -373,12 +424,6 @@ export default function useDoorRosterController({
           return next;
         });
         try {
-          const cacheableRosterRequest = dependencies
-            .fetchOfflineDoorRoster(offlineScope)
-            .catch((error: unknown) => {
-              console.error("Failed to refresh offline door roster:", error);
-              return null;
-            });
           const authoritative =
             await dependencies.fetchGuestOperationsSnapshot(
               offlineScope.businessDate,
@@ -392,7 +437,7 @@ export default function useDoorRosterController({
             setExternalLinks(authoritative.data.externalLinks);
             setIsOfflineMode(false);
           }
-          const cacheableRoster = await cacheableRosterRequest;
+          const cacheableRoster = await resolveOfflineRoster(offlineScope, authoritative.data);
           if (!isCurrent()) return;
           if (cacheableRoster?.data) {
             try {
@@ -441,6 +486,7 @@ export default function useDoorRosterController({
       dependencies,
       loadCachedOfflineRoster,
       refreshOfflineMutations,
+      resolveOfflineRoster,
       runOfflineStoreTask,
     ],
   );
@@ -490,12 +536,14 @@ export default function useDoorRosterController({
     runOfflineSync,
   ]);
 
-  const loadData = useCallback(async () => {
+  const readData = useCallback(async (background: boolean, owner: DoorRefreshOwner, revision: number) => {
     pollingGuard.invalidateRequests();
     const isLatestRequest = requestGuard.beginRequest();
-    const isCurrent = () =>
+    const ownsRequest = () =>
       isLatestRequest() &&
+      refreshOwnerRef.current === owner &&
       currentScopeOwnerRef.current === currentScopeToken;
+    const isCurrent = () => ownsRequest() && owner.revision === revision && owner.mutations.size === 0;
     if (!venueId) {
       if (!isCurrent()) return;
       setGuests([]);
@@ -506,15 +554,11 @@ export default function useDoorRosterController({
       setIsFetching(false);
       return;
     }
-    setIsFetching(true);
-    setFeedback(null);
+    if (!background) {
+      setIsFetching(true);
+      setFeedback(null);
+    }
     try {
-      const offlineRosterRequest = offlineScope
-        ? dependencies.fetchOfflineDoorRoster(offlineScope).catch((error: unknown) => {
-            console.error("Failed to load offline door roster:", error);
-            return null;
-          })
-        : Promise.resolve(null);
       const operationsResponse =
         await dependencies.fetchGuestOperationsSnapshot(
           selectedDate,
@@ -524,6 +568,11 @@ export default function useDoorRosterController({
       const { data, error } = operationsResponse;
       if (!isCurrent()) return;
       if (!data) {
+        if (background) {
+          setFeedback(translateRef.current("loadFailed"));
+          setLoadOutcome("partial");
+          return;
+        }
         const usedCache = offlineScope
           ? await loadCachedOfflineRoster(offlineScope, isCurrent)
           : false;
@@ -541,17 +590,18 @@ export default function useDoorRosterController({
           setFeedback(translateRef.current("partialLoadFailed"));
           setLoadOutcome("partial");
         } else {
+          setFeedback(null);
           setLoadOutcome("success");
         }
-        setGuests(data.guests);
-        setUsers(data.users);
-        setExternalLinks(data.externalLinks);
+        if (!background || !data.failedSections.includes("guests")) setGuests(data.guests);
+        if (!background || !data.failedSections.includes("users")) setUsers(data.users);
+        if (!background || !data.failedSections.includes("externalLinks")) setExternalLinks(data.externalLinks);
         setIsOfflineMode(false);
         setLoadedScopeKey(requestScopeKey);
         if (offlineScope) {
           void (async () => {
             try {
-              const offlineRosterResponse = await offlineRosterRequest;
+              const offlineRosterResponse = await resolveOfflineRoster(offlineScope, data);
               if (!isCurrent()) return;
               if (offlineRosterResponse?.data) {
                 await runOfflineStoreTask(isCurrent, () =>
@@ -587,6 +637,11 @@ export default function useDoorRosterController({
     } catch (error) {
       if (!isCurrent()) return;
       console.error("Failed to load data:", error);
+      if (background) {
+        setFeedback(translateRef.current("loadFailed"));
+        setLoadOutcome("partial");
+        return;
+      }
       const usedCache = offlineScope
         ? await loadCachedOfflineRoster(offlineScope, isCurrent)
         : false;
@@ -601,7 +656,7 @@ export default function useDoorRosterController({
         setIsOfflineMode(false);
       }
     } finally {
-      if (isCurrent()) setIsFetching(false);
+      if (ownsRequest() && !background) setIsFetching(false);
     }
   }, [
     currentScopeToken,
@@ -612,6 +667,7 @@ export default function useDoorRosterController({
     refreshOfflineMutations,
     requestGuard,
     requestScopeKey,
+    resolveOfflineRoster,
     runOfflineStoreTask,
     selectedDate,
     selectedEventId,
@@ -619,6 +675,33 @@ export default function useDoorRosterController({
     translateRef,
     venueId,
   ]);
+
+  const requestRefresh = useCallback(async (background: boolean) => {
+    const owner = refreshOwnerRef.current;
+    if (owner.scopeToken !== currentScopeToken) return;
+    if (owner.inFlight?.revision === owner.revision && owner.mutations.size === 0) {
+      return owner.inFlight.promise;
+    }
+    owner.queued = !background || owner.queued === "foreground" ? "foreground" : "background";
+    if (owner.inFlight || owner.mutations.size > 0) return;
+    const running = { revision: owner.revision, background, promise: Promise.resolve() };
+    owner.inFlight = running;
+    running.promise = (async () => {
+      try {
+        while (refreshOwnerRef.current === owner && owner.queued && owner.mutations.size === 0) {
+          running.background = owner.queued === "background";
+          running.revision = owner.revision;
+          owner.queued = null;
+          await readData(running.background, owner, running.revision);
+        }
+      } finally {
+        owner.inFlight = null;
+      }
+    })();
+    return running.promise;
+  }, [currentScopeToken, readData]);
+
+  const loadData = useCallback(() => requestRefresh(false), [requestRefresh]);
 
   useEffect(() => {
     void loadData();
@@ -646,6 +729,7 @@ export default function useDoorRosterController({
 
   const pollData = useCallback(async () => {
     if (!venueId || loadedScopeKey !== requestScopeKey) return;
+    if (refreshOwnerRef.current.inFlight || refreshOwnerRef.current.mutations.size > 0) return;
     const isLatestRequest = pollingGuard.beginRequest();
     const { data } = await dependencies.fetchGuestsByDate(
       selectedDate,
@@ -668,7 +752,7 @@ export default function useDoorRosterController({
   const pollingCoordinator = useGuestPolling(
     pollData,
     15000,
-    !!venueId && !isOfflineMode,
+    !!venueId && !isOfflineMode && !isFetching,
   );
 
   useEffect(() => {
@@ -738,9 +822,16 @@ export default function useDoorRosterController({
       operationScopeKey,
       busyKey,
     );
+    const refreshOwner = refreshOwnerRef.current;
+    refreshOwner.mutations.add(operation.id);
+    refreshOwner.revision += 1;
+    if (refreshOwner.inFlight) {
+      refreshOwner.queued = refreshOwner.inFlight.background ? "background" : "foreground";
+    }
     const releasePolling = pollingCoordinator.suspend();
     pollingGuard.invalidateRequests();
     setLoadingStates((prev) => ({ ...prev, [busyKey]: true }));
+    let queuedOffline = false;
 
     try {
       if (
@@ -749,7 +840,7 @@ export default function useDoorRosterController({
         (isOfflineMode ||
           (typeof navigator !== "undefined" && !navigator.onLine))
       ) {
-        await queueOfflineStatusChange(id, newStatus);
+        queuedOffline = await queueOfflineStatusChange(id, newStatus);
         return;
       }
       const { data, error } =
@@ -767,7 +858,7 @@ export default function useDoorRosterController({
           prev.map((guest) => (guest.id === id ? data : guest)),
         );
         setFeedback(null);
-        await loadData();
+        refreshOwner.queued ??= "background";
       } else {
         console.error("Failed to update guest status:", error);
         setFeedback(
@@ -783,13 +874,19 @@ export default function useDoorRosterController({
         newStatus !== "deleted" && offlineScope
           ? await queueOfflineStatusChange(id, newStatus)
           : false;
+      queuedOffline = Boolean(queued);
       if (!queued && operation.isCurrent(currentScopeKeyRef.current)) {
         setFeedback(translate("updateFailed"));
       }
     } finally {
+      refreshOwner.mutations.delete(operation.id);
+      if (queuedOffline) refreshOwner.queued = null;
       releasePolling();
       if (operation.finish(currentScopeKeyRef.current)) {
         setLoadingStates((prev) => ({ ...prev, [busyKey]: false }));
+      }
+      if (refreshOwnerRef.current === refreshOwner && refreshOwner.queued && refreshOwner.mutations.size === 0) {
+        void requestRefresh(refreshOwner.queued === "background");
       }
     }
   };
@@ -854,6 +951,7 @@ export default function useDoorRosterController({
     handleClearResolvedOfflineMutations,
     handleStatusChange,
     hasCurrentScopeData,
+    hasPendingGuestMutations: refreshOwnerRef.current.mutations.size > 0 || offlineQueueCounts.queued > 0,
     hasResolvedOfflineMutations,
     isCurrentScopeFetching,
     isFetching,

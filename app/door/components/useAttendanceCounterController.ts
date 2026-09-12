@@ -47,6 +47,10 @@ type CounterNotice =
   | "scopeClosed"
   | null;
 
+function canRefreshAutomatically() {
+  return navigator.onLine !== false && document.visibilityState === "visible";
+}
+
 export interface AttendanceCounterDependencies {
   fetchDoorAttendanceSummary: (params: {
     scope: AttendanceScope;
@@ -115,6 +119,16 @@ interface AttendanceScopeOwnerToken {
   scopeKey: string;
 }
 
+interface SummaryReadOwner {
+  scopeOwner: AttendanceScopeOwnerToken;
+  pending: boolean;
+  inFlight: { generation: number; promise: Promise<void> } | null;
+}
+
+function createSummaryReadOwner(scopeOwner: AttendanceScopeOwnerToken): SummaryReadOwner {
+  return { scopeOwner, pending: false, inFlight: null };
+}
+
 export default function useAttendanceCounterController({
   scope,
   currentBusinessDate,
@@ -168,6 +182,17 @@ export default function useAttendanceCounterController({
     scopeOwnerRef.current = { scopeKey: renderedScopeKey };
   }
   currentScopeKeyRef.current = renderedScopeKey;
+  const summaryReadOwnerRef = useRef(createSummaryReadOwner(scopeOwnerRef.current));
+  const summaryWritesRef = useRef(new Map<AttendanceScopeOwnerToken, number>());
+  const pendingGuestMutationsRef = useRef(hasPendingGuestMutations);
+  pendingGuestMutationsRef.current = hasPendingGuestMutations;
+  if (summaryReadOwnerRef.current.scopeOwner !== scopeOwnerRef.current) {
+    summaryReadOwnerRef.current = createSummaryReadOwner(scopeOwnerRef.current);
+  }
+  useEffect(() => () => {
+    summaryReadOwnerRef.current = createSummaryReadOwner(scopeOwnerRef.current);
+    invalidateAttendanceSummaries(summaryAuthorityRef.current);
+  }, []);
   const isScopeStateCurrent = scopeStateOwner === scopeOwnerRef.current;
 
   const scopedSummary =
@@ -296,64 +321,123 @@ export default function useAttendanceCounterController({
     return next;
   }, [dependencies]);
 
-  const loadSummaryForOwner = useCallback(async (
+  const loadSummaryForOwner = useCallback(async function readSummary(
     targetScope: AttendanceScope,
     scopeOwner: AttendanceScopeOwnerToken,
-  ) => {
+  ): Promise<void> {
     const targetKey = scopeKey(targetScope);
     if (currentScopeKeyRef.current !== targetKey) return;
     if (scopeOwnerRef.current !== scopeOwner) return;
+    const reader = summaryReadOwnerRef.current;
+    if (
+      pendingGuestMutationsRef.current ||
+      summaryWritesRef.current.has(scopeOwner)
+    ) {
+      reader.pending = true;
+      return;
+    }
+    if (reader.inFlight) {
+      reader.pending = reader.inFlight.generation !== summaryAuthorityRef.current.generation;
+      return reader.inFlight.promise;
+    }
+    reader.pending = false;
     const requestToken = beginAttendanceSummaryRead(summaryAuthorityRef.current);
     const isCurrentRequest = () =>
+      summaryReadOwnerRef.current === reader &&
       scopeOwnerRef.current === scopeOwner &&
       isAttendanceSummaryReadCurrent(
         summaryAuthorityRef.current,
         requestToken,
       );
+    const read = { generation: requestToken.generation, promise: Promise.resolve() };
+    reader.inFlight = read;
     setIsLoading(true);
-    try {
-      let deviceId: string | null = null;
+    read.promise = (async () => {
       try {
-        deviceId = await dependencies.getAttendanceDeviceId();
-        if (scopeOwnerRef.current === scopeOwner) {
-          setIsStorageAvailable(true);
+        let deviceId: string | null = null;
+        try {
+          deviceId = await dependencies.getAttendanceDeviceId();
+          if (scopeOwnerRef.current === scopeOwner) {
+            setIsStorageAvailable(true);
+          }
+        } catch {
+          if (scopeOwnerRef.current === scopeOwner) {
+            setIsStorageAvailable(false);
+          }
+        }
+        if (!isCurrentRequest()) return;
+        if (summaryWritesRef.current.has(scopeOwner) || pendingGuestMutationsRef.current) {
+          reader.pending = true;
+          return;
+        }
+        const response = await dependencies.fetchDoorAttendanceSummary({
+          scope: targetScope,
+          deviceId,
+        });
+        if (!isCurrentRequest()) return;
+        if (response.error || !response.data) {
+          setNotice("loadFailed");
+        } else {
+          const nextSummary = response.data;
+          setSummary(nextSummary);
+          setNotice((current) => current === "loadFailed" ? null : current);
         }
       } catch {
-        if (scopeOwnerRef.current === scopeOwner) {
-          setIsStorageAvailable(false);
+        if (isCurrentRequest()) setNotice("loadFailed");
+      } finally {
+        if (isCurrentRequest()) setIsLoading(false);
+        reader.inFlight = null;
+        if (summaryReadOwnerRef.current === reader && reader.pending &&
+          canRefreshAutomatically()) {
+          await readSummary(targetScope, scopeOwner);
         }
       }
-      const response = await dependencies.fetchDoorAttendanceSummary({
-        scope: targetScope,
-        deviceId,
-      });
-      if (!isCurrentRequest()) return;
-      if (response.error || !response.data) {
-        setNotice("loadFailed");
-      } else {
-        const nextSummary = response.data;
-        setSummary(nextSummary);
-        setNotice((current) => current === "loadFailed" ? null : current);
-      }
-    } catch {
-      if (isCurrentRequest()) setNotice("loadFailed");
-    } finally {
-      if (isCurrentRequest()) setIsLoading(false);
-    }
+    })();
+    return read.promise;
   }, [dependencies]);
+
+  const suspendSummaryReads = useCallback((
+    targetScope: AttendanceScope,
+    scopeOwner: AttendanceScopeOwnerToken,
+  ) => {
+    const writes = summaryWritesRef.current;
+    writes.set(scopeOwner, (writes.get(scopeOwner) ?? 0) + 1);
+    return (published: boolean) => {
+      const remaining = (writes.get(scopeOwner) ?? 1) - 1;
+      if (remaining) writes.set(scopeOwner, remaining);
+      else writes.delete(scopeOwner);
+      const reader = summaryReadOwnerRef.current;
+      if (reader.scopeOwner !== scopeOwner) return;
+      if (published && !pendingGuestMutationsRef.current) reader.pending = false;
+      if (!remaining && reader.pending && canRefreshAutomatically()) {
+        void loadSummaryForOwner(targetScope, scopeOwner);
+      }
+    };
+  }, [loadSummaryForOwner]);
 
   const loadSummary = useCallback(async (targetScope: AttendanceScope) => {
     await loadSummaryForOwner(targetScope, scopeOwnerRef.current);
   }, [loadSummaryForOwner]);
 
+  useEffect(() => {
+    if (!scope) return;
+    if (hasPendingGuestMutations) {
+      invalidateAttendanceSummaries(summaryAuthorityRef.current);
+      summaryReadOwnerRef.current.pending = true;
+      setIsLoading(false);
+    } else if (summaryReadOwnerRef.current.pending && canRefreshAutomatically()) {
+      void loadSummary(scope);
+    }
+  }, [hasPendingGuestMutations, loadSummary, scope]);
+
   const syncQueue = useCallback(async function coordinateAttendanceSync(
     targetScope: AttendanceScope,
     inheritedVisibleSync = false,
-  ) {
+  ): Promise<boolean> {
     const requestedScopeKey = scopeKey(targetScope);
     if (currentScopeKeyRef.current !== requestedScopeKey) {
       if (inheritedVisibleSync) setIsSyncing(false);
-      return;
+      return false;
     }
     const requestedSync = {
       targetScope,
@@ -361,20 +445,22 @@ export default function useAttendanceCounterController({
     };
     if (syncingRef.current) {
       pendingSyncScopeRef.current = requestedSync;
-      return;
+      return false;
     }
     if (typeof navigator !== "undefined" && !navigator.onLine) {
       if (inheritedVisibleSync) setIsSyncing(false);
-      return;
+      return false;
     }
     syncingRef.current = true;
+    const releaseSummaryReads = suspendSummaryReads(targetScope, requestedSync.scopeOwner);
+    let publishedSummary = false;
     let hasVisibleSync = inheritedVisibleSync;
     let hasScopeVisibleSync = false;
     try {
       const pending = (
         await dependencies.listAttendanceMutations(targetScope)
       ).filter((mutation) => mutation.state === "queued");
-      if (pending.length === 0) return;
+      if (pending.length === 0) return false;
       hasScopeVisibleSync = true;
       hasVisibleSync = true;
       setIsSyncing(true);
@@ -441,6 +527,7 @@ export default function useAttendanceCounterController({
             )
           ) {
             setSummary(response.data.summary);
+            publishedSummary = true;
           }
         }
       }
@@ -457,23 +544,30 @@ export default function useAttendanceCounterController({
         }
       }
     } finally {
-      const pendingSync = pendingSyncScopeRef.current;
-      pendingSyncScopeRef.current = null;
-      if (
-        pendingSync &&
-        scopeOwnerRef.current === pendingSync.scopeOwner
-      ) {
+      try {
+        const pendingSync = pendingSyncScopeRef.current;
+        pendingSyncScopeRef.current = null;
+        if (
+          pendingSync &&
+          scopeOwnerRef.current === pendingSync.scopeOwner
+        ) {
+          syncingRef.current = false;
+          const nextPublished = await coordinateAttendanceSync(
+            pendingSync.targetScope,
+            hasVisibleSync,
+          );
+          return nextPublished || (
+            pendingSync.scopeOwner === requestedSync.scopeOwner && publishedSummary
+          );
+        }
         syncingRef.current = false;
-        await coordinateAttendanceSync(
-          pendingSync.targetScope,
-          hasVisibleSync,
-        );
-        return;
+        if (hasVisibleSync) setIsSyncing(false);
+      } finally {
+        releaseSummaryReads(publishedSummary);
       }
-      syncingRef.current = false;
-      if (hasVisibleSync) setIsSyncing(false);
     }
-  }, [dependencies, refreshLocalMutations]);
+    return publishedSummary;
+  }, [dependencies, refreshLocalMutations, suspendSummaryReads]);
 
   useEffect(() => {
     const scopeOwner = scopeOwnerRef.current;
@@ -520,22 +614,26 @@ export default function useAttendanceCounterController({
   useEffect(() => {
     if (!scope) return;
     const targetScope = scope;
-    const handleOnline = () => {
-      void syncQueue(targetScope);
-      void loadSummary(targetScope);
+    const scopeOwner = scopeOwnerRef.current;
+    let active = true;
+    const refresh = async () => {
+      if (!canRefreshAutomatically()) return;
+      const published = await syncQueue(targetScope);
+      if (!active || scopeOwnerRef.current !== scopeOwner ||
+        !canRefreshAutomatically()) return;
+      if (!published) await loadSummaryForOwner(targetScope, scopeOwner);
     };
+    const handleOnline = () => { void refresh(); };
     window.addEventListener("online", handleOnline);
-    const interval = window.setInterval(() => {
-      if (document.visibilityState === "visible") {
-        void syncQueue(targetScope);
-        void loadSummary(targetScope);
-      }
-    }, 15_000);
+    document.addEventListener("visibilitychange", handleOnline);
+    const interval = window.setInterval(handleOnline, 15_000);
     return () => {
+      active = false;
       window.removeEventListener("online", handleOnline);
+      document.removeEventListener("visibilitychange", handleOnline);
       window.clearInterval(interval);
     };
-  }, [loadSummary, scope, syncQueue]);
+  }, [loadSummaryForOwner, scope, syncQueue]);
 
   const queueWalkIn = async () => {
     if (!scope || !canRecord) return;
@@ -652,6 +750,8 @@ export default function useAttendanceCounterController({
       idempotencyKey,
     };
     setIsAdjusting(true);
+    const releaseSummaryReads = suspendSummaryReads(scope, scopeOwner);
+    let publishedSummary = false;
     const reconciliationToken = beginAttendanceSummaryMutation(
       summaryAuthorityRef.current,
     );
@@ -689,6 +789,7 @@ export default function useAttendanceCounterController({
         return;
       }
       setSummary(response.data);
+      publishedSummary = true;
       setReconciliationTarget("");
       setAdjustmentReason("");
       reconciliationAttemptRef.current = null;
@@ -706,6 +807,7 @@ export default function useAttendanceCounterController({
         setNotice("adjustmentFailed");
       }
     } finally {
+      releaseSummaryReads(publishedSummary);
       if (
         activeAdjustmentOperationsRef.current.get(targetKey) ===
           adjustmentOperationId

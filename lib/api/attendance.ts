@@ -15,7 +15,6 @@ import {
 import { getBusinessDate } from "@/lib/date";
 import { getCompatibilityEventKey } from "@/lib/events/domain";
 import { loadEventById, findCompatibilityEvent } from "@/lib/events/server";
-import { requireActiveVenueId } from "@/lib/tenant/active-server";
 import { reportServerError } from "@/lib/observability/structured-log";
 import { hashOpaqueIdentifier } from "@/lib/guests/activity-ledger";
 import {
@@ -70,7 +69,6 @@ async function loadAttendanceScope(params: {
     throw new AttendanceActionError("INVALID_ATTENDANCE_SCOPE");
   }
   const venueId = resolveRequestedVenueId(params.actor, params.scope.venueId);
-  await requireActiveVenueId(venueId);
   const [venue] = await getDb()
     .select({
       id: venues.id,

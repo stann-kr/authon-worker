@@ -381,13 +381,12 @@ export async function updateManagedGuestStatus(
     venueId: current.venueId,
     idempotencyKey: input.idempotencyKey,
   });
-  const readableEvent = await dependencies.resolveEventForRosterRead({
-    venueId: current.venueId,
-    businessDate: current.date,
-    eventId: current.eventId,
-  });
   const event = existingRequest
-    ? readableEvent
+    ? await dependencies.resolveEventForRosterRead({
+        venueId: current.venueId,
+        businessDate: current.date,
+        eventId: current.eventId,
+      })
     : await dependencies.resolveEventForRosterWrite({
         venueId: current.venueId,
         businessDate: current.date,

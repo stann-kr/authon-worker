@@ -37,7 +37,7 @@ import {
 import type { BulkGuestCreateInput, Guest } from "@/lib/guests/types";
 import type { GuestQuota } from "@/lib/guest-limits/types";
 import { createGuestLimitRequest } from "@/lib/api/guest-limits";
-import { fetchGuestWorkspaceSnapshot } from "@/lib/api/guest-snapshots";
+import { fetchGuestWorkspaceSnapshot } from "@/lib/guest-snapshots/client";
 import { type User as AuthUser } from "@/lib/auth";
 import {
   mergeGuestWorkspaceDisplay,
@@ -247,7 +247,7 @@ export default function AuthenticatedGuestView({ user }: AuthenticatedGuestViewP
     }
   }, [effectiveVenueId, loadedScopeKey, pollingGuard, requestScopeKey, selectedDate, selectedEventId]);
 
-  useGuestPolling(pollGuests, 15000, !!effectiveVenueId);
+  useGuestPolling(pollGuests, 15000, !!effectiveVenueId && !isFetching && !isLoading && !isBulkSubmitting);
 
   const guestLimitRequestController = useGuestLimitRequestController({
     user,

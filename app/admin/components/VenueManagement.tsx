@@ -1,8 +1,9 @@
 "use client";
 
+import { fetchVenues } from "@/lib/venues/client";
+
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
-  fetchVenues,
   createVenue,
   updateVenue,
 } from "../../../lib/api/venues";

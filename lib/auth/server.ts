@@ -1,5 +1,6 @@
 import { measureServerStage } from "@/lib/observability/performance-scope";
 import { cookies } from "next/headers";
+import { cache } from "react";
 import { jwtVerify } from "jose";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { eq } from "drizzle-orm";
@@ -155,3 +156,7 @@ export async function getCurrentUser(): Promise<SessionUser | null> {
     return null;
   }
 }
+
+// Shared only within one React server render. Mutations and Route Handlers
+// continue to call the uncached auth functions above for current credentials.
+export const getRenderUser = cache(getCurrentUser);

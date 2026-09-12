@@ -1,10 +1,11 @@
 "use client";
 
+import { fetchDoorAttendanceSummary } from "@/lib/attendance/client";
+
 import { useLayoutEffect, useRef } from "react";
 import { useTranslations } from "next-intl";
 import { useAuthSession } from "@/components/AuthSessionProvider";
 import {
-  fetchDoorAttendanceSummary,
   reconcileDoorAttendance,
   syncDoorAttendanceMutations,
 } from "@/lib/api/attendance";
