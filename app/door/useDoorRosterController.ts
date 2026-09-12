@@ -951,6 +951,7 @@ export default function useDoorRosterController({
     handleClearResolvedOfflineMutations,
     handleStatusChange,
     hasCurrentScopeData,
+    hasPendingGuestMutations: refreshOwnerRef.current.mutations.size > 0 || offlineQueueCounts.queued > 0,
     hasResolvedOfflineMutations,
     isCurrentScopeFetching,
     isFetching,

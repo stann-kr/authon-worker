@@ -201,6 +201,7 @@ function DoorRosterHarness({
       </output>
       <output data-testid="offline-notice">{roster.offlineNotice ?? ""}</output>
       <output data-testid="offline-queued">{roster.offlineQueueCounts.queued}</output>
+      <output data-testid="pending-guest-mutations">{String(roster.hasPendingGuestMutations)}</output>
       <output data-testid="busy">{String(Object.values(roster.loadingStates).some(Boolean))}</output>
       <output data-testid="guest-statuses">{roster.displayData.guests.map((guest) => guest.status).join(",")}</output>
       <button
@@ -256,11 +257,14 @@ test("concurrent saves finish before one coalesced background roster refresh", a
   await waitFor(() => assert.equal(screen.getByTestId("guest-count").textContent, "2"));
   fireEvent.click(screen.getByRole("button", { name: /^Check in$/ }));
   fireEvent.click(screen.getByRole("button", { name: "Check in second" }));
+  assert.equal(screen.getByTestId("pending-guest-mutations").textContent, "true");
   await act(async () => { saves[0].resolve({ data: { ...GUEST, status: "checked" }, error: null }); });
   assert.equal(reads, 1);
+  assert.equal(screen.getByTestId("pending-guest-mutations").textContent, "true");
   await act(async () => { saves[1].resolve({ data: { ...secondGuest, status: "checked" }, error: null }); });
   await waitFor(() => assert.equal(reads, 2));
   assert.equal(screen.getByTestId("busy").textContent, "false");
+  assert.equal(screen.getByTestId("pending-guest-mutations").textContent, "false");
   assert.equal(screen.getByTestId("fetching").textContent, "false");
   assert.equal(screen.getByTestId("guest-statuses").textContent, "checked,checked");
   fireEvent.click(screen.getByRole("button", { name: "Refresh roster" }));
@@ -473,6 +477,7 @@ test("an offline status change queues once and updates the visible roster", asyn
   await waitFor(() => {
     assert.equal(screen.getByTestId("guest-status").textContent, "checked");
     assert.equal(screen.getByTestId("offline-queued").textContent, "1");
+    assert.equal(screen.getByTestId("pending-guest-mutations").textContent, "true");
     assert.equal(screen.getByTestId("offline-notice").textContent, "queued");
   });
   assert.equal(enqueueCalls, 1);

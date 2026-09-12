@@ -124,6 +124,7 @@ function DoorPageContent() {
     handleClearResolvedOfflineMutations,
     handleStatusChange,
     hasCurrentScopeData,
+    hasPendingGuestMutations,
     hasResolvedOfflineMutations,
     isCurrentScopeFetching,
     isFetching,
@@ -271,7 +272,7 @@ function DoorPageContent() {
               scope={attendanceScope}
               currentBusinessDate={businessDate}
               checkedInGuests={scopeCheckedInGuests}
-              hasPendingGuestMutations={offlineQueueCounts.queued > 0}
+              hasPendingGuestMutations={hasPendingGuestMutations}
             />
             <div className="context-bar">
                   <DatePicker
