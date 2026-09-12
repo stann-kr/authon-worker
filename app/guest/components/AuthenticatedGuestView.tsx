@@ -27,7 +27,6 @@ import GuestLimitRequestPanel from "./GuestLimitRequestPanel";
 import useGuestLimitRequestController, {
   type GuestLimitRequestControllerDependencies,
 } from "./useGuestLimitRequestController";
-import { useSectionLoadingTask } from "@/components/RouteTransitionProvider";
 import { getBusinessDate } from "@/lib/date";
 import {
   createGuest,
@@ -134,7 +133,6 @@ export default function AuthenticatedGuestView({ user }: AuthenticatedGuestViewP
   });
   const hasCurrentScopeData = displayWorkspace !== null;
   const isCurrentScopeFetching = isFetching || !hasLoadedCurrentScope;
-  useSectionLoadingTask(isCurrentScopeFetching);
   const displayDataGuests = displayWorkspace?.guests ?? [];
   const displayQuota = displayWorkspace?.quota ?? null;
 

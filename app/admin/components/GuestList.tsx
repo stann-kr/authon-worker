@@ -20,7 +20,6 @@ import Icon from "../../../components/Icon";
 import Skeleton from "../../../components/Skeleton";
 import DatePicker from "../../../components/DatePicker";
 import OperationsLayout from "../../../components/OperationsLayout";
-import { useSectionLoadingTask } from "../../../components/RouteTransitionProvider";
 import VenueSelector, {
   useVenueSelector,
 } from "../../../components/VenueSelector";
@@ -118,7 +117,6 @@ export default function GuestList({
 
   const hasCurrentScopeData = loadedScopeKey === requestScopeKey;
   const isCurrentScopeFetching = isFetching || !hasCurrentScopeData;
-  useSectionLoadingTask(isCurrentScopeFetching);
   const displayData = !hasCurrentScopeData
     ? EMPTY_DISPLAY_DATA
     : isFetching && displayCacheRef.current.scopeKey === requestScopeKey

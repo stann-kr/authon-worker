@@ -10,7 +10,11 @@ import {
 import { NextIntlClientProvider } from "next-intl";
 
 import messages from "@/messages/en.json";
-import { RouteTransitionProvider } from "@/components/RouteTransitionProvider";
+import {
+  RouteTransitionProvider,
+  useRouteLoadingTask,
+} from "@/components/RouteTransitionProvider";
+import Skeleton from "@/components/Skeleton";
 import ConfirmDialog from "@/components/ConfirmDialog";
 import {
   useUserDirectoryController,
@@ -137,6 +141,7 @@ function createActions(
 
 interface HarnessProps {
   actions: UserDirectoryControllerActions;
+  isPagePreparing?: boolean;
   effectiveVenueId?: string;
   isSuperAdmin?: boolean;
   onController?: (
@@ -176,6 +181,7 @@ function UserDirectoryHarness({
         aria-label="Directory fallback"
       />
       <output data-testid="state">{controller.listState}</output>
+      {controller.listState === "loading" && <Skeleton rows={3} />}
       <output data-testid="loading">
         {String(controller.isCurrentScopeLoading)}
       </output>
@@ -264,10 +270,16 @@ function UserDirectoryHarness({
   );
 }
 
+function PageReadiness({ isPreparing }: { isPreparing: boolean }) {
+  useRouteLoadingTask(isPreparing);
+  return null;
+}
+
 function harnessTree(props: HarnessProps) {
   return (
     <NextIntlClientProvider locale="en" messages={messages}>
       <RouteTransitionProvider>
+        <PageReadiness isPreparing={props.isPagePreparing ?? false} />
         <UserDirectoryHarness {...props} />
       </RouteTransitionProvider>
     </NextIntlClientProvider>
@@ -283,6 +295,39 @@ afterEach(() => {
   cleanup();
   SETUP_MAIN_CONTENT?.setAttribute("id", "main-content");
 });
+
+for (const outcome of ["success", "error"] as const) {
+  test(`page preparation releases navigation while the directory is pending, then shows ${outcome}`, async () => {
+    const request = createDeferred<{ data: User[] | null; error: string | null }>();
+    const actions = createActions({
+      fetchManagedUsersByVenue: () => request.promise,
+    });
+    const view = renderHarness({ actions, isPagePreparing: true });
+    const input = screen.getByLabelText("Directory fallback");
+    assert.equal(input.closest("[inert]") !== null, true);
+    assert.equal(screen.getByTestId("state").textContent, "loading");
+
+    view.rerender(harnessTree({ actions, isPagePreparing: false }));
+    await waitFor(() => assert.equal(input.closest("[inert]") === null, true));
+    assert.equal(screen.getByRole("status", { name: messages.Common.loadingContent }).getAttribute("aria-busy"), "true");
+    assert.equal(screen.getByTestId("state").textContent, "loading");
+    input.focus();
+    assert.equal(document.activeElement === input, true);
+
+    await act(async () => {
+      request.resolve(outcome === "success"
+        ? { data: [USER_A], error: null }
+        : { data: null, error: "DIRECTORY_UNAVAILABLE" });
+      await request.promise;
+    });
+    assert.equal(screen.queryByRole("status", { name: messages.Common.loadingContent }) === null, true);
+    assert.equal(screen.getByTestId("state").textContent, outcome === "success" ? "success-data" : "error");
+    assert.equal(screen.getByTestId("users").textContent, outcome === "success" ? USER_A.name : "");
+    if (outcome === "error") assert.notEqual(screen.getByTestId("load-error").textContent, "");
+    assert.equal(input.closest("[inert]") === null, true);
+    assert.equal(document.activeElement === input, true);
+  });
+}
 
 test("super-admin user and audit loads start in parallel and retain a partial result", async () => {
   const usersRequest = createDeferred<{

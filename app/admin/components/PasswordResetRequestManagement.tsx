@@ -9,7 +9,6 @@ import PanelHeader from "@/components/PanelHeader";
 import RoleLabel from "@/components/RoleLabel";
 import Skeleton from "@/components/Skeleton";
 import AsyncListContent from "@/components/AsyncListContent";
-import { useSectionLoadingTask } from "@/components/RouteTransitionProvider";
 import {
   fetchPasswordResetRequests,
   rejectPasswordResetRequest,
@@ -89,7 +88,6 @@ export default function PasswordResetRequestManagement({
   const activeDecisionRef = useRef<symbol | null>(null);
   const shouldFocusResultRef = useRef(false);
   const requestGuard = useLatestRequestGuard();
-  useSectionLoadingTask(isLoading);
 
   const pendingRequests = useMemo(
     () => requests.filter((request) => request.status === "pending"),
