@@ -1,4 +1,4 @@
-/* Authon workspace: neutral reference palette with persistent context and task hierarchy. */
+/* Authon workspace: reference floating pill rows with persistent operation context. */
 :root {
   color-scheme: dark;
   --bg: #000000;
@@ -192,6 +192,13 @@ svg {
   overscroll-behavior: contain;
   scrollbar-width: none;
   min-height: 0;
+  padding-bottom: var(--dock-space, calc(194px + env(safe-area-inset-bottom)));
+  scroll-padding-bottom: var(
+    --dock-space,
+    calc(194px + env(safe-area-inset-bottom))
+  );
+}
+.app-shell.public .workspace-scroll {
   padding-bottom: 24px;
   scroll-padding-bottom: 24px;
 }
@@ -381,97 +388,111 @@ svg {
   color: var(--accent);
 }
 .dock-region {
-  position: relative;
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
   z-index: 5;
-  flex-shrink: 0;
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  padding: 12px 16px max(12px, env(safe-area-inset-bottom));
-  background: var(--bg);
-  border-top: 1px solid var(--line);
+  gap: 12px;
+  padding: 20px 12px calc(34px + env(safe-area-inset-bottom));
+  background: linear-gradient(to top, var(--bg) 80%, transparent);
+  pointer-events: none;
 }
-.dock-nav {
+.nav-handle {
+  width: 32px;
+  height: 3px;
+  background: var(--pill-active);
+  border-radius: 99px;
+  margin: 0 auto 8px;
+}
+.dock-nav,
+.dock-tools {
   display: flex;
-  gap: 4px;
-  order: 2;
+  gap: 8px;
+  padding: 4px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  pointer-events: auto;
+  scroll-padding-inline: 4px;
+}
+.dock-nav::-webkit-scrollbar,
+.dock-tools::-webkit-scrollbar {
+  display: none;
 }
 .dock-nav > button {
-  position: relative;
-  flex: 1;
-  min-width: 0;
+  flex-shrink: 0;
   display: flex;
-  flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 4px;
-  padding: 8px 3px;
-  min-height: 58px;
+  gap: 8px;
+  padding: 10px 18px;
+  min-height: 44px;
+  background: var(--pill-bg);
   border: 0;
-  border-radius: 14px;
-  background: none;
+  border-radius: 99px;
+  white-space: nowrap;
   color: var(--muted);
-  font-size: 12px;
+  font-size: 14px;
   font-weight: 500;
 }
 .dock-nav > button.active {
-  background: var(--pill-bg);
+  background: var(--pill-active);
   color: var(--text);
 }
 .nav-count {
-  position: absolute;
-  top: 4px;
-  right: 8px;
   border-radius: 99px;
   padding: 1px 5px;
   font-size: 10px;
   min-width: 16px;
-  background: var(--accent);
-  color: #001b13;
-}
-.dock-tools {
-  display: flex;
-  gap: 8px;
-  order: 1;
+  background: var(--pill-active);
+  color: var(--text);
 }
 .dock-tools:empty {
   display: none;
 }
 .action-pill {
-  flex: 1;
-  min-width: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
-  min-height: 48px;
-  padding: 10px 12px;
+  gap: 10px;
+  flex: 1 0 auto;
+  min-height: 44px;
+  padding: 10px 20px 10px 12px;
   background: var(--pill-bg);
-  border: 1px solid var(--line);
-  border-radius: 14px;
+  border: 0;
+  border-radius: 99px;
+  white-space: nowrap;
   font-size: 14px;
   font-weight: 500;
-}
-.action-pill.main-action {
-  flex-grow: 1.35;
-  background: var(--accent);
-  color: #001b13;
-  border-color: transparent;
-  font-weight: 650;
 }
 .circle-icon {
   display: grid;
   place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  color: white;
   flex-shrink: 0;
 }
 .circle-icon svg {
-  width: 18px;
-  height: 18px;
-  stroke-width: 2;
+  width: 14px;
+  height: 14px;
+  stroke-width: 2.5;
+}
+.circle-icon.green {
+  background: var(--accent);
+}
+.circle-icon.blue {
+  background: var(--blue);
+}
+.circle-icon.gray {
+  background: #4b5563;
 }
 .toast {
   display: flex;
-  order: 0;
+  pointer-events: auto;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
@@ -531,19 +552,6 @@ svg {
 .preview-settings-panel .preview-device {
   display: flex;
   justify-content: center;
-}
-@container workspace (max-width: 350px) {
-  .dock-region {
-    padding-inline: 10px;
-  }
-  .action-pill {
-    font-size: 13px;
-    padding-inline: 8px;
-    gap: 6px;
-  }
-  .dock-nav > button {
-    font-size: 11px;
-  }
 }
 /* Shared controls retain the reference's neutral surfaces and semantic accents. */
 .eyebrow {

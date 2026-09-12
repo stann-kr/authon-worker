@@ -1,5 +1,5 @@
 import { isBusinessDate } from "../../lib/events/domain";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import {
   MockProvider,
   useMock,
@@ -110,6 +110,26 @@ function Workspace() {
     document.documentElement.lang = locale;
   }, [locale]);
   const isPublic = view === "auth" || view === "external";
+  const dockRef = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    const dock = dockRef.current;
+    const shell = dock?.closest<HTMLElement>(".app-shell");
+    if (!dock || !shell) return;
+    const reserveDockSpace = () => {
+      const height = dock.getBoundingClientRect().height;
+      if (height) shell.style.setProperty("--dock-space", `${height + 16}px`);
+    };
+    reserveDockSpace();
+    const observer =
+      typeof ResizeObserver === "undefined"
+        ? null
+        : new ResizeObserver(reserveDockSpace);
+    observer?.observe(dock);
+    return () => {
+      observer?.disconnect();
+      shell.style.removeProperty("--dock-space");
+    };
+  }, [isPublic]);
   const isRoster = view === "roster" || view === "door";
   const quota = quotaFor(data, user.id, event.id);
   const canRequest =
@@ -496,7 +516,7 @@ function Workspace() {
         </span>
       </div>
       <div className={`preview-frame ${mobile ? "mobile" : ""}`}>
-        <div className="app-shell">
+        <div className={`app-shell ${isPublic ? "public" : ""}`}>
           {!isPublic && (
             <>
               <header className="workspace-header">
@@ -621,7 +641,7 @@ function Workspace() {
             )}
           </main>
           {!isPublic && (
-            <div className="dock-region">
+            <div className="dock-region" ref={dockRef}>
               {notice && (
                 <div
                   className={`toast ${ctx.noticeError ? "error" : ""}`}
@@ -636,21 +656,7 @@ function Workspace() {
                   </button>
                 </div>
               )}
-              <div className="dock-tools" aria-label={t("현재 화면 작업")}>
-                {tools.map((tool, index) => (
-                  <button
-                    className={`action-pill ${index === 0 ? "main-action" : ""}`}
-                    key={tool.label}
-                    disabled={tool.disabled || busy || forbidden || inactive}
-                    onClick={tool.action}
-                  >
-                    <span className={`circle-icon ${tool.color}`}>
-                      <Icon name={tool.icon} size={14} />
-                    </span>
-                    <span>{t(tool.label)}</span>
-                  </button>
-                ))}
-              </div>
+              <div className="nav-handle" aria-hidden="true" />
               <nav className="dock-nav" aria-label={t("주요 메뉴")}>
                 {nav.map((item) => (
                   <button
@@ -700,6 +706,21 @@ function Workspace() {
                   </button>
                 ))}
               </nav>
+              <div className="dock-tools" aria-label={t("현재 화면 작업")}>
+                {tools.map((tool) => (
+                  <button
+                    className="action-pill"
+                    key={tool.label}
+                    disabled={tool.disabled || busy || forbidden || inactive}
+                    onClick={tool.action}
+                  >
+                    <span className={`circle-icon ${tool.color}`}>
+                      <Icon name={tool.icon} size={14} />
+                    </span>
+                    <span>{t(tool.label)}</span>
+                  </button>
+                ))}
+              </div>
             </div>
           )}
           {isPublic && notice && (
