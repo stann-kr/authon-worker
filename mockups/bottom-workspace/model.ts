@@ -106,7 +106,7 @@ const names = [
 ];
 export function seedGuests(eventId: string): Guest[] {
   if (eventId !== "tonight") return [];
-  return names.map((name, i) => ({
+  return names.slice(0, 5).map((name, i) => ({
     id: `guest-${i}`,
     name,
     owner: ["SORA", "MILO", "운영팀"][i % 3],

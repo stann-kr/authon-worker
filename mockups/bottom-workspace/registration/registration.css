@@ -35,14 +35,14 @@
 }
 .invitation-line {
   height: 1px;
-  background: #354139;
+  background: var(--line);
   margin: 25px 0 32px;
 }
 .invitation h1 {
-  font-size: 46px;
-  letter-spacing: -2.5px;
+  font-size: 22px;
+  letter-spacing: -0.5px;
   line-height: 1.22;
-  font-weight: 450;
+  font-weight: 500;
   margin: 23px 0 32px;
 }
 .invitation-event {
@@ -65,7 +65,7 @@
   color: var(--muted);
 }
 .invitation-details strong {
-  font-weight: 450;
+  font-weight: 500;
 }
 .invitation-footer {
   position: sticky;
@@ -83,13 +83,13 @@
 .invitation-footer > span:last-child {
   font-size: 9px;
   letter-spacing: 2px;
-  color: #8a998f;
+  color: var(--muted);
 }
 .invitation-result {
   margin-top: 40px;
-  background: #1d2b22;
-  border: 1px solid #405644;
-  border-radius: 20px;
+  background: var(--card-bg);
+  border: 1px solid var(--line);
+  border-radius: 12px;
   padding: 23px;
   display: flex;
   flex-wrap: wrap;
@@ -104,7 +104,7 @@
   font-weight: 500;
 }
 .invitation-result p {
-  color: #b5c4ba;
+  color: var(--muted);
   line-height: 1.8;
   font-size: 12px;
 }
@@ -112,12 +112,12 @@
   flex-basis: 100%;
   display: grid;
   gap: 14px;
-  border-top: 1px solid #415246;
+  border-top: 1px solid var(--line);
   padding-top: 22px;
   margin-top: 7px;
 }
 .admission-code span {
-  color: #b5c4ba;
+  color: var(--muted);
   font-size: 11px;
 }
 .admission-code strong {

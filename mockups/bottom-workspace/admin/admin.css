@@ -4,8 +4,8 @@
   gap: 17px;
   width: 100%;
   text-align: left;
-  background: #202a25;
-  border: 1px solid #3a4d40;
+  background: var(--card-bg);
+  border: 1px solid var(--line);
   border-radius: 20px;
   padding: 22px;
   margin-bottom: 38px;
@@ -20,7 +20,7 @@
   font-weight: 500;
 }
 .pending-banner small {
-  color: #aab9af;
+  color: var(--muted);
   font-size: 12px;
 }
 .notification-icon {
@@ -29,7 +29,7 @@
   display: grid;
   place-items: center;
   border-radius: 50%;
-  background: #36483b;
+  background: var(--pill-active);
   color: var(--accent);
 }
 .contributor-table-head,
@@ -91,8 +91,8 @@
 }
 .request-card {
   padding: 24px;
-  background: #191c1b;
-  border: 1px solid #313834;
+  background: var(--card-bg);
+  border: 1px solid var(--line);
   border-radius: 20px;
 }
 .request-title {
@@ -118,7 +118,7 @@
 }
 .request-card > p {
   font-size: 13px;
-  color: #c0c9c2;
+  color: var(--muted);
   line-height: 1.8;
   min-height: 48px;
   margin: 22px 0;
@@ -218,15 +218,15 @@
   margin-top: 8px;
 }
 .link-icon {
-  background: #232925;
-  border: 1px solid #39443c;
+  background: var(--pill-bg);
+  border: 1px solid var(--line);
   display: grid;
   place-items: center;
   width: 44px;
   height: 44px;
   border-radius: 13px;
   flex-shrink: 0;
-  color: #b9cbbf;
+  color: var(--muted);
 }
 .toggle {
   min-height: 44px;
@@ -288,7 +288,7 @@
   display: block;
   width: 9px;
   height: 9px;
-  background: #34483b;
+  background: var(--pill-active);
   border-radius: 3px;
 }
 .analytics-legend span:last-child i {
@@ -312,13 +312,13 @@
 }
 .bar-track {
   height: 29px;
-  background: #191d1b;
+  background: var(--card-bg);
   border-radius: 5px;
   overflow: hidden;
 }
 .bar-track > div {
   height: 100%;
-  background: #34483b;
+  background: var(--pill-active);
   border-radius: 5px;
   overflow: hidden;
 }

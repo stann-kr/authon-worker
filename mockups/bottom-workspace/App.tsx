@@ -56,9 +56,9 @@ const screenIcons: Record<Screen, IconName> = {
 };
 
 export default function App() {
-  const [role, setRole] = useState<PreviewRole>("door");
-  const [mobile, setMobile] = useState(false);
-  const [screen, setScreen] = useState<Screen>("roster");
+  const [role, setRole] = useState<PreviewRole>("admin");
+  const [mobile, setMobile] = useState(true);
+  const [screen, setScreen] = useState<Screen>("overview");
   const [eventId, setEventId] = useState("tonight");
   const [scopes, setScopes] = useState<Record<string, ScopeData>>({
     tonight: makeScope("tonight"),
@@ -247,36 +247,174 @@ export default function App() {
           { id: "attendance", label: "입장 집계", icon: "chart" },
           { id: "account", label: "내 계정", icon: "user" },
         ];
-  const currentHeading =
-    screen === "roster"
-      ? isMine
-        ? "오늘의 내 게스트"
-        : role === "door"
-          ? "오늘의 도어"
-          : "오늘의 게스트"
-      : screenNames[screen];
-  const heading =
-    eventId === "tonight"
-      ? currentHeading
-      : currentHeading.replace("오늘의", "행사의");
+  const isRosterScreen = screen === "roster" || screen === "overview";
+  const heading = isRosterScreen ? event.title : screenNames[screen];
   const titleStats = isMine
     ? [
         { label: "내 등록", value: mineCount },
-        {
-          label: "남은 한도",
-          value: Math.max(0, data.quota - mineCount),
-          accent: true,
-        },
-        {
-          label: "입장 완료",
-          value: scopeGuests.filter((guest) => guest.checked).length,
-        },
+        { label: "남은 한도", value: Math.max(0, data.quota - mineCount) },
       ]
     : [
-        { label: "입장 완료", value: checked, accent: true },
-        { label: "미입장", value: data.guests.length - checked },
+        { label: "입장 완료", value: checked },
         { label: "등록 게스트", value: data.guests.length },
       ];
+  const pendingRequests = data.requests.filter(
+    (request) => request.state === "pending",
+  ).length;
+  const hasPendingRequest = data.requests.some(
+    (request) => request.name === "SORA" && request.state === "pending",
+  );
+  type DockAction = {
+    label: string;
+    icon: IconName;
+    tone: "green" | "blue" | "gray";
+    onClick: () => void;
+    disabled?: boolean;
+  };
+  const dockActions: DockAction[] = isRosterScreen
+    ? role === "door"
+      ? [
+          {
+            label: "워크인 추가",
+            icon: "plus",
+            tone: "green",
+            onClick: addWalkIn,
+            disabled: !isOpen,
+          },
+          {
+            label: "코드 조회",
+            icon: "code",
+            tone: "blue",
+            onClick: () => openSheet("code"),
+          },
+          {
+            label: "입장 집계",
+            icon: "chart",
+            tone: "gray",
+            onClick: () => navigate("attendance"),
+          },
+        ]
+      : isMine
+        ? [
+            {
+              label: "게스트 등록",
+              icon: "plus",
+              tone: "green",
+              onClick: () => openSheet("add"),
+              disabled: data.closed,
+            },
+            {
+              label: "인원 요청",
+              icon: "bell",
+              tone: "blue",
+              onClick: () => navigate("requests"),
+            },
+            {
+              label: "행사 선택",
+              icon: "calendar",
+              tone: "gray",
+              onClick: () => openSheet("scope"),
+            },
+          ]
+        : [
+            {
+              label: "게스트 등록",
+              icon: "plus",
+              tone: "green",
+              onClick: () => openSheet("add"),
+              disabled: data.closed,
+            },
+            {
+              label: "코드 조회",
+              icon: "code",
+              tone: "blue",
+              onClick: () => openSheet("code"),
+            },
+            {
+              label: `추가 요청 ${pendingRequests}`,
+              icon: "bell",
+              tone: "gray",
+              onClick: () => navigate("requests"),
+            },
+          ]
+    : screen === "attendance"
+      ? [
+          {
+            label: "워크인 1명",
+            icon: "plus",
+            tone: "green",
+            onClick: addWalkIn,
+            disabled: !isOpen,
+          },
+          {
+            label: "되돌리기",
+            icon: "undo",
+            tone: "gray",
+            onClick: undoWalkIn,
+            disabled: !isOpen || !data.addedWalkIns,
+          },
+          {
+            label: "명단 보기",
+            icon: "people",
+            tone: "blue",
+            onClick: () => navigate("roster"),
+          },
+        ]
+      : screen === "requests" && isMine
+        ? [
+            {
+              label: hasPendingRequest ? "승인 대기 중" : "인원 요청",
+              icon: "plus",
+              tone: "green",
+              onClick: () => openSheet("request"),
+              disabled: hasPendingRequest,
+            },
+            {
+              label: "내 명단",
+              icon: "people",
+              tone: "gray",
+              onClick: () => navigate("roster"),
+            },
+          ]
+        : screen === "links"
+          ? [
+              {
+                label: "링크 만들기",
+                icon: "plus",
+                tone: "green",
+                onClick: () => openSheet("link"),
+              },
+              {
+                label: "행사 선택",
+                icon: "calendar",
+                tone: "gray",
+                onClick: () => openSheet("scope"),
+              },
+            ]
+          : [
+              {
+                label: "명단 보기",
+                icon: "people",
+                tone: "green",
+                onClick: () => navigate("roster"),
+              },
+              {
+                label: "행사 선택",
+                icon: "calendar",
+                tone: "blue",
+                onClick: () => openSheet("scope"),
+              },
+              ...(isAdmin
+                ? [
+                    {
+                      label: "입장 집계",
+                      icon: "chart" as const,
+                      tone: "gray" as const,
+                      onClick: () => navigate("attendance"),
+                    },
+                  ]
+                : []),
+            ];
 
   let sheetContent: ReactNode = null;
   let sheetTitle = "";
@@ -347,7 +485,13 @@ export default function App() {
             </select>
           </label>
         )}
-        <button className="primary" onClick={closeSheet}>
+        <button
+          className="primary"
+          onClick={() => {
+            if (!isRosterScreen) setScreen("roster");
+            closeSheet();
+          }}
+        >
           {visible.length}명 보기
           <Icon name="arrow" />
         </button>
@@ -675,15 +819,15 @@ export default function App() {
         <div>
           <b>02 · 중앙 / 작업 영역</b>
           <span>
-            명단·요청·행사·통계를 교체합니다. 넓은 화면에는 입장 집계를 옆에
-            둡니다.
+            명단·요청·행사·통계를 교체합니다. 화면 폭과 관계없이 하나의 작업
+            영역을 사용합니다.
           </span>
         </div>
         <div>
           <b>03 · 하단 / 메뉴 + 작업</b>
           <span>
-            역할별 주요 메뉴 3–4개, 검색·등록·코드 조회는 현재 화면에 맞게
-            바뀝니다.
+            역할별 주요 메뉴와 작업 버튼을 독립된 pill 두 줄로 배치합니다.
+            검색은 명단 바로 위에 둡니다.
           </span>
         </div>
         <div>
@@ -709,14 +853,14 @@ export default function App() {
           href="#"
           onClick={(e) => {
             e.preventDefault();
-            changeRole("door");
+            changeRole("admin");
           }}
         >
           <span className="brand-glyph" aria-hidden="true">
             a
           </span>
           <strong>
-            authon<span> / design study 01</span>
+            authon<span> / reference study</span>
           </strong>
         </a>
         <div className="preview-controls">
@@ -758,173 +902,157 @@ export default function App() {
             <ExternalRegistration />
           ) : (
             <>
-              <header className="workspace-header">
-                <div className="venue-wordmark">
-                  FAUST<span>SEOUL</span>
-                </div>
-                <button
-                  className="scope-button"
-                  onClick={() => openSheet("scope")}
-                >
-                  <span className="scope-date">
-                    {event.date.slice(5).replace(".", ". ")}{" "}
-                    <span>{event.day}</span>
-                  </span>
-                  <span className="scope-divider" />
-                  <span className="scope-event">{event.title}</span>
-                  <Icon name="down" size={14} />
-                </button>
-                <button
-                  className="account-button"
-                  aria-label="내 계정 열기"
-                  onClick={() => openSheet("account")}
-                >
-                  <Icon name="user" size={18} />
-                </button>
-              </header>
               <main className="workspace-scroll" id="workspace-content">
-                <div className="workspace-content">
-                  <div className="page-heading">
-                    <div>
-                      <div className="page-eyebrow">
-                        <span
-                          className={`live-dot ${!isOpen ? "inactive" : ""}`}
-                        />
-                        <span>
-                          {data.closed ? "입장 마감" : event.state} ·{" "}
-                          {event.time}
-                        </span>
-                      </div>
-                      <h1>
-                        {heading}
-                        <span className="heading-period">.</span>
-                      </h1>
-                    </div>
-                    <span className="role-caption">
-                      {roleNames[role]}
+                <header className="workspace-header">
+                  <div className="header-title">
+                    <button
+                      className="scope-button"
+                      onClick={() => openSheet("scope")}
+                      aria-label="베뉴와 행사 선택"
+                    >
+                      <span
+                        className={`live-dot ${!isOpen ? "inactive" : ""}`}
+                      />
                       <span>
-                        {isMine ? "SORA · 내 명단만 표시" : "FAUST 전체 명단"}
+                        FAUST · {event.date.slice(5).replace(".", ".")}{" "}
+                        {event.day}
                       </span>
-                    </span>
+                      <Icon name="down" size={12} />
+                    </button>
+                    <h1>{heading}</h1>
                   </div>
-                  <div className="stat-strip" aria-label="선택한 행사 요약">
-                    {titleStats.map((stat) => (
-                      <div className="stat" key={stat.label}>
-                        <span>{stat.label}</span>
-                        <strong className={stat.accent ? "green-text" : ""}>
-                          {stat.value}
-                          <small>명</small>
-                        </strong>
-                      </div>
-                    ))}
-                    <div className="stat-aside">
-                      <span>운영일</span>
-                      <strong>{event.date}</strong>
-                      <small>자정 이후에도 같은 행사</small>
-                    </div>
-                  </div>
-                  <div
-                    className={`workspace-columns ${["roster", "overview"].includes(screen) && !isMine ? "has-aside" : ""}`}
+                  <button
+                    className="account-button"
+                    aria-label="내 계정 열기"
+                    onClick={() => openSheet("account")}
                   >
-                    <div className="primary-workspace">
-                      {screen === "roster" ? (
-                        <GuestRoster
-                          guests={visible}
-                          total={scopeGuests.length}
-                          role={role}
-                          onDetail={(guest) => {
-                            closeSheet();
-                            setSelectedGuest(guest);
-                          }}
-                          onCheck={toggleGuest}
-                          onClear={clearFilters}
-                        />
-                      ) : screen === "attendance" ? (
-                        <Attendance {...attendanceProps} />
-                      ) : (
-                        <AdminWorkspace
-                          screen={screen}
-                          guests={data.guests}
-                          requests={data.requests}
-                          links={data.links}
-                          eventId={eventId}
-                          mine={isMine}
-                          onNavigate={navigate}
-                          onDecision={(id, approved) => {
-                            update((current) => {
-                              const request = current.requests.find(
-                                (item) => item.id === id,
-                              );
-                              if (!request || request.state !== "pending")
-                                return current;
-                              return {
-                                ...current,
-                                requests: current.requests.map((item) =>
-                                  item.id === id
-                                    ? {
-                                        ...item,
-                                        state: approved
-                                          ? "approved"
-                                          : "rejected",
-                                      }
-                                    : item,
-                                ),
-                                quota:
-                                  current.quota +
-                                  (approved && request.name === "SORA"
-                                    ? request.count
-                                    : 0),
-                              };
-                            });
-                            setNotice(
-                              approved
-                                ? "추가 인원을 승인했어요."
-                                : "추가 인원 요청을 거절했어요.",
-                            );
-                          }}
-                          onEvent={selectEvent}
-                          onLinkToggle={(id) =>
-                            update((current) => ({
-                              ...current,
-                              links: current.links.map((link) =>
-                                link.id === id
-                                  ? { ...link, active: !link.active }
-                                  : link,
-                              ),
-                            }))
-                          }
-                          onLinkInspect={setSelectedLink}
-                          onAccount={(name) => {
-                            setAccountName(name);
-                            openSheet("user");
-                          }}
-                          onVenue={() => openSheet("event")}
-                        />
-                      )}
+                    <Icon name="user" size={21} />
+                  </button>
+                </header>
+                <section className="stat-strip" aria-label="선택한 행사 요약">
+                  {titleStats.map((stat) => (
+                    <div className="stat" key={stat.label}>
+                      <strong>{stat.value.toLocaleString()}</strong>
+                      <span>{stat.label}</span>
                     </div>
-                    {["roster", "overview"].includes(screen) && !isMine && (
-                      <aside className="secondary-panel">
-                        <Attendance {...attendanceProps} compact />
-                        <div className="side-footnote">
-                          <span className="eyebrow">
-                            ONE NIGHT. ONE WORKSPACE.
-                          </span>
-                          <p>
-                            명단과 입장 집계를
-                            <br />
-                            같은 화면에서.
-                          </p>
-                          <span className="side-index">01 / AUTHON</span>
-                        </div>
-                      </aside>
+                  ))}
+                  <button
+                    className={`filter-pill ${filter !== "all" || ownerFilter !== "all" ? "active" : ""}`}
+                    aria-label="명단 필터"
+                    onClick={() => openSheet("filter")}
+                  >
+                    <span>
+                      {filter === "checked"
+                        ? "입장 완료"
+                        : filter === "pending"
+                          ? "미입장"
+                          : "전체"}
+                    </span>
+                    <Icon name="down" size={14} />
+                  </button>
+                </section>
+                {isRosterScreen && (
+                  <label className="roster-search">
+                    <Icon name="search" size={20} />
+                    <span className="sr-only">
+                      게스트 이름 또는 등록 담당자 검색
+                    </span>
+                    <input
+                      aria-label="게스트 이름 또는 등록 담당자 검색"
+                      value={query}
+                      onChange={(e) => setQuery(e.target.value)}
+                      placeholder="게스트 이름 검색..."
+                    />
+                    {query && (
+                      <button
+                        aria-label="검색어 지우기"
+                        onClick={() => setQuery("")}
+                      >
+                        <Icon name="close" size={15} />
+                      </button>
                     )}
-                  </div>
+                  </label>
+                )}
+                <div
+                  className={`primary-workspace ${isRosterScreen ? "roster-workspace" : "detail-workspace"}`}
+                >
+                  {isRosterScreen ? (
+                    <GuestRoster
+                      guests={visible}
+                      total={scopeGuests.length}
+                      role={role}
+                      onDetail={(guest) => {
+                        closeSheet();
+                        setSelectedGuest(guest);
+                      }}
+                      onCheck={toggleGuest}
+                      onClear={clearFilters}
+                    />
+                  ) : screen === "attendance" ? (
+                    <Attendance {...attendanceProps} />
+                  ) : (
+                    <AdminWorkspace
+                      screen={screen}
+                      guests={data.guests}
+                      requests={data.requests}
+                      links={data.links}
+                      eventId={eventId}
+                      mine={isMine}
+                      onNavigate={navigate}
+                      onDecision={(id, approved) => {
+                        update((current) => {
+                          const request = current.requests.find(
+                            (item) => item.id === id,
+                          );
+                          if (!request || request.state !== "pending")
+                            return current;
+                          return {
+                            ...current,
+                            requests: current.requests.map((item) =>
+                              item.id === id
+                                ? {
+                                    ...item,
+                                    state: approved ? "approved" : "rejected",
+                                  }
+                                : item,
+                            ),
+                            quota:
+                              current.quota +
+                              (approved && request.name === "SORA"
+                                ? request.count
+                                : 0),
+                          };
+                        });
+                        setNotice(
+                          approved
+                            ? "추가 인원을 승인했어요."
+                            : "추가 인원 요청을 거절했어요.",
+                        );
+                      }}
+                      onEvent={selectEvent}
+                      onLinkToggle={(id) =>
+                        update((current) => ({
+                          ...current,
+                          links: current.links.map((link) =>
+                            link.id === id
+                              ? { ...link, active: !link.active }
+                              : link,
+                          ),
+                        }))
+                      }
+                      onLinkInspect={setSelectedLink}
+                      onAccount={(name) => {
+                        setAccountName(name);
+                        openSheet("user");
+                      }}
+                      onVenue={() => openSheet("event")}
+                    />
+                  )}
                 </div>
               </main>
               <div className="dock-region">
                 {notice && (
                   <div className="toast" role="status">
-                    <Icon name="check" size={15} />
                     <span>{notice}</span>
                     <button
                       aria-label="알림 닫기"
@@ -934,189 +1062,47 @@ export default function App() {
                     </button>
                   </div>
                 )}
-                <div className="bottom-dock">
-                  <nav className="dock-nav" aria-label="주요 메뉴">
-                    {navItems.map((item) => (
-                      <button
-                        key={item.id}
-                        className={
-                          screen === item.id ||
-                          (item.id === "more" &&
-                            !["overview", "roster", "events"].includes(screen))
-                            ? "active"
-                            : ""
-                        }
-                        aria-current={screen === item.id ? "page" : undefined}
-                        onClick={() =>
-                          item.id === "more" || item.id === "account"
-                            ? openSheet(item.id)
-                            : navigate(item.id)
-                        }
-                      >
-                        <Icon name={item.icon} size={18} />
-                        <span>{item.label}</span>
-                        {item.id === "requests" &&
-                          data.requests.some(
-                            (request) =>
-                              request.name === "SORA" &&
-                              request.state === "pending",
-                          ) && <i className="nav-dot" />}
-                      </button>
-                    ))}
-                  </nav>
-                  <div className="dock-tools">
-                    {screen === "roster" ? (
-                      <>
-                        <label className="dock-search">
-                          <Icon name="search" size={18} />
-                          <span className="sr-only">
-                            게스트 이름 또는 등록 담당자 검색
-                          </span>
-                          <input
-                            aria-label="게스트 이름 또는 등록 담당자 검색"
-                            value={query}
-                            onChange={(e) => setQuery(e.target.value)}
-                            placeholder="이름 검색"
-                          />
-                          {query && (
-                            <button
-                              aria-label="검색어 지우기"
-                              onClick={() => setQuery("")}
-                            >
-                              <Icon name="close" size={15} />
-                            </button>
-                          )}
-                        </label>
-                        <button
-                          className={`dock-icon ${filter !== "all" || ownerFilter !== "all" ? "selected" : ""}`}
-                          aria-label="명단 필터"
-                          onClick={() => openSheet("filter")}
-                        >
-                          <Icon name="sliders" size={19} />
-                        </button>
-                        {role === "door" ? (
-                          <button
-                            className="dock-action secondary-action"
-                            onClick={() => openSheet("code")}
-                          >
-                            <Icon name="code" size={18} />
-                            <span>코드 조회</span>
-                          </button>
-                        ) : (
-                          <button
-                            className="dock-action"
-                            disabled={data.closed}
-                            onClick={() => openSheet("add")}
-                          >
-                            <Icon name="plus" size={18} />
-                            <span>등록</span>
-                          </button>
-                        )}
-                      </>
-                    ) : screen === "attendance" ? (
-                      <>
-                        <span className="dock-context">
-                          워크인 <b>{data.walkIns}명</b>
-                        </span>
-                        <button
-                          className="dock-icon"
-                          disabled={!isOpen || !data.addedWalkIns}
-                          aria-label="마지막 워크인 되돌리기"
-                          onClick={undoWalkIn}
-                        >
-                          <Icon name="undo" size={18} />
-                        </button>
-                        <button
-                          className="dock-action"
-                          disabled={!isOpen}
-                          onClick={addWalkIn}
-                        >
-                          <Icon name="plus" size={18} />
-                          <span>워크인 1명</span>
-                        </button>
-                      </>
-                    ) : screen === "requests" && isMine ? (
-                      <>
-                        <span className="dock-context">
-                          남은 한도{" "}
-                          <b>{Math.max(0, data.quota - mineCount)}명</b>
-                        </span>
-                        <button
-                          className="dock-action"
-                          disabled={data.requests.some(
-                            (request) =>
-                              request.name === "SORA" &&
-                              request.state === "pending",
-                          )}
-                          onClick={() => openSheet("request")}
-                        >
-                          <Icon name="plus" size={18} />
-                          <span>
-                            {data.requests.some(
-                              (request) =>
-                                request.name === "SORA" &&
-                                request.state === "pending",
-                            )
-                              ? "승인 대기 중"
-                              : "인원 요청"}
-                          </span>
-                        </button>
-                      </>
-                    ) : screen === "links" ? (
-                      <>
-                        <span className="dock-context">
-                          활성 링크{" "}
-                          <b>
-                            {data.links.filter((link) => link.active).length}개
-                          </b>
-                        </span>
-                        <button
-                          className="dock-action"
-                          onClick={() => openSheet("link")}
-                        >
-                          <Icon name="plus" size={18} />
-                          <span>링크 만들기</span>
-                        </button>
-                      </>
-                    ) : (
-                      <>
-                        <button
-                          className="dock-secondary"
-                          onClick={() => openSheet("scope")}
-                        >
-                          <Icon name="calendar" size={18} />
-                          <span>행사 선택</span>
-                        </button>
-                        <button
-                          className="dock-action"
-                          onClick={() =>
-                            isAdmin && screen === "overview"
-                              ? openSheet("add")
-                              : navigate("roster")
-                          }
-                        >
-                          <Icon
-                            name={screen === "overview" ? "plus" : "people"}
-                            size={18}
-                          />
-                          <span>
-                            {screen === "overview"
-                              ? "게스트 등록"
-                              : "명단 보기"}
-                          </span>
-                        </button>
-                        {isAdmin && (
-                          <button
-                            className="dock-icon"
-                            aria-label="입장 집계 열기"
-                            onClick={() => navigate("attendance")}
-                          >
-                            <Icon name="chart" size={19} />
-                          </button>
-                        )}
-                      </>
-                    )}
-                  </div>
+                <div className="nav-handle" aria-hidden="true" />
+                <nav className="dock-nav" aria-label="주요 메뉴">
+                  {navItems.map((item) => (
+                    <button
+                      key={item.id}
+                      className={
+                        screen === item.id ||
+                        (item.id === "more" &&
+                          !["overview", "roster", "events"].includes(screen))
+                          ? "active"
+                          : ""
+                      }
+                      aria-current={screen === item.id ? "page" : undefined}
+                      onClick={() =>
+                        item.id === "more" || item.id === "account"
+                          ? openSheet(item.id)
+                          : navigate(item.id)
+                      }
+                    >
+                      <Icon name={item.icon} size={18} />
+                      <span>{item.label}</span>
+                      {item.id === "requests" && hasPendingRequest && (
+                        <i className="nav-dot" />
+                      )}
+                    </button>
+                  ))}
+                </nav>
+                <div className="dock-tools" aria-label="현재 화면 작업">
+                  {dockActions.map((action) => (
+                    <button
+                      key={action.label}
+                      className="action-pill"
+                      onClick={action.onClick}
+                      disabled={action.disabled}
+                    >
+                      <span className={`circle-icon ${action.tone}`}>
+                        <Icon name={action.icon} size={14} />
+                      </span>
+                      <span>{action.label}</span>
+                    </button>
+                  ))}
                 </div>
               </div>
             </>
@@ -1128,9 +1114,11 @@ export default function App() {
           key={sheet}
           title={sheetTitle}
           subtitle={
-            sheet === "map"
-              ? "Authon · 하단 중심 작업 화면"
-              : `${event.venue} · ${event.date} · ${event.title}`
+            sheet === "add"
+              ? undefined
+              : sheet === "map"
+                ? "Authon · 하단 중심 작업 화면"
+                : `${event.venue} · ${event.date} · ${event.title}`
           }
           onClose={closeSheet}
         >

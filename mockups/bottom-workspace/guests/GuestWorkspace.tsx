@@ -24,21 +24,9 @@ export function GuestRoster({
       className="roster"
       aria-label={role === "guest" ? "내 게스트 명단" : "전체 게스트 명단"}
     >
-      <div className="section-heading">
-        <div>
-          <span className="eyebrow">GUEST LIST</span>
-          <h2>
-            {role === "guest" ? "내 게스트" : "전체 게스트"}{" "}
-            <span className="count">{total}</span>
-          </h2>
-        </div>
-        <span className="quiet">이름순 · {guests.length}명 표시</span>
-      </div>
-      <div className="roster-columns" aria-hidden="true">
-        <span>이름 / 등록 담당자</span>
-        <span>등록 경로</span>
-        <span>입장 상태</span>
-      </div>
+      <h2 className="list-header">
+        {role === "guest" ? "내 게스트 명단" : "게스트 명단"}
+      </h2>
       <ul className="guest-list">
         {guests.map((guest) => (
           <li key={guest.id} className={guest.checked ? "is-checked" : ""}>
@@ -47,7 +35,6 @@ export function GuestRoster({
               onClick={() => onDetail(guest)}
               aria-label={`${guest.name} 상세`}
             >
-              <span className="avatar">{guest.name.slice(0, 1)}</span>
               <span>
                 <strong>{guest.name}</strong>
                 <small>
@@ -56,15 +43,17 @@ export function GuestRoster({
                 </small>
               </span>
             </button>
-            <span className="source-label">{guest.source}</span>
             {canCheck ? (
               <button
                 className={`check-button ${guest.checked ? "checked" : ""}`}
                 aria-label={`${guest.name} ${guest.checked ? "입장 취소 확인" : "입장 처리"}`}
                 onClick={() => onCheck(guest)}
               >
-                <Icon name={guest.checked ? "check" : "plus"} size={15} />
-                <span>{guest.checked ? "입장 완료" : "입장"}</span>
+                <span
+                  className={`status-badge ${guest.checked ? "green" : ""}`}
+                >
+                  {guest.checked ? "입장 완료" : "미입장"}
+                </span>
               </button>
             ) : (
               <span className={`status-badge ${guest.checked ? "green" : ""}`}>
@@ -91,9 +80,7 @@ export function GuestRoster({
             </button>
           )}
         </div>
-      ) : (
-        <p className="list-end">{guests.length}명의 명단을 모두 확인했어요</p>
-      )}
+      ) : null}
     </section>
   );
 }
@@ -127,43 +114,6 @@ export function AddGuestForm({
         setError(onAdd(names, owner));
       }}
     >
-      <div className="segmented" aria-label="등록 방식">
-        <button
-          type="button"
-          aria-pressed={!bulk}
-          onClick={() => {
-            setBulk(false);
-            setValue("");
-            setError(null);
-          }}
-        >
-          한 명 등록
-        </button>
-        <button
-          type="button"
-          aria-pressed={bulk}
-          onClick={() => {
-            setBulk(true);
-            setValue("");
-            setError(null);
-          }}
-        >
-          여러 명 등록
-        </button>
-      </div>
-      {!mine && (
-        <label className="field">
-          <span>등록 담당자</span>
-          <select
-            value={owner}
-            onChange={(event) => setOwner(event.target.value)}
-          >
-            <option>SORA</option>
-            <option>MILO</option>
-            <option>운영팀</option>
-          </select>
-        </label>
-      )}
       <label className="field">
         <span>{bulk ? "게스트 이름 · 한 줄에 한 명" : "게스트 이름"}</span>
         {bulk ? (
@@ -193,6 +143,32 @@ export function AddGuestForm({
           />
         )}
       </label>
+      {!mine && (
+        <label className="field">
+          <span>등록 담당자</span>
+          <select
+            value={owner}
+            onChange={(event) => setOwner(event.target.value)}
+          >
+            <option>SORA</option>
+            <option>MILO</option>
+            <option>운영팀</option>
+          </select>
+        </label>
+      )}
+      <label className="form-toggle">
+        <span>여러 명 한 번에 등록</span>
+        <input
+          type="checkbox"
+          checked={bulk}
+          onChange={(event) => {
+            setBulk(event.target.checked);
+            setValue("");
+            setError(null);
+          }}
+        />
+        <span className="switch-track" aria-hidden="true" />
+      </label>
       <div className="quota-line">
         <span>{mine ? "SORA의 남은 등록 한도" : "등록 인원"}</span>
         <strong>{mine ? `${remaining}명` : `${count}명`}</strong>
@@ -204,7 +180,6 @@ export function AddGuestForm({
       )}
       <button className="primary" disabled={mine && remaining <= 0}>
         {count > 1 ? `${count}명 등록하기` : "게스트 등록하기"}
-        <Icon name="arrow" size={18} />
       </button>
     </form>
   );
