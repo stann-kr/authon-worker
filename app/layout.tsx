@@ -7,7 +7,7 @@ import VenueBrandProvider from "@/components/VenueBrandProvider";
 import { RouteTransitionProvider } from "@/components/RouteTransitionProvider";
 import { VenueDataProvider } from "@/components/VenueSelector";
 import { getRequestTenantContext } from "@/lib/tenant/server";
-import { getCurrentUser } from "@/lib/auth/server";
+import { getRenderUser } from "@/lib/auth/server";
 import { toClientUser } from "@/lib/auth/user-profile";
 import { AuthSessionProvider } from "@/components/AuthSessionProvider";
 import { NextIntlClientProvider } from "next-intl";
@@ -49,7 +49,7 @@ export default async function RootLayout({
     getLocale(),
     getMessages(),
     getTranslations("Common"),
-    getCurrentUser(),
+    getRenderUser(),
   ]));
 
   return (

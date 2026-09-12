@@ -6,7 +6,7 @@ import {
   REQUEST_LOCALE_HEADER,
 } from "@/i18n/config";
 import { resolveLocale } from "@/i18n/resolve";
-import { getCurrentUser } from "@/lib/auth/server";
+import { getRenderUser } from "@/lib/auth/server";
 import { isLocale } from "@/i18n/config";
 
 export default getRequestConfig(async () => {
@@ -14,7 +14,7 @@ export default getRequestConfig(async () => {
     headers(),
     cookies(),
     getRequestTenantContext(),
-    getCurrentUser(),
+    getRenderUser(),
   ]);
 
   const explicitLocale = requestHeaders.get(REQUEST_LOCALE_HEADER);
