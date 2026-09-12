@@ -1,5 +1,6 @@
 import { useLayoutEffect, useRef, type ReactNode } from "react";
 import { Icon } from "./Icon";
+import { useMock } from "../data/MockData";
 import "./sheet.css";
 
 export function Sheet({
@@ -13,6 +14,7 @@ export function Sheet({
   onClose: () => void;
   children: ReactNode;
 }) {
+  const { t } = useMock();
   const ref = useRef<HTMLDialogElement>(null);
   const opener = useRef<HTMLElement | null>(null);
   useLayoutEffect(() => {
@@ -48,6 +50,12 @@ export function Sheet({
       window.removeEventListener("resize", alignWithFrame);
       dialog?.close();
       if (opener.current?.isConnected) opener.current.focus();
+      else
+        document
+          .querySelector<HTMLElement>(
+            '.dock-nav [aria-current="page"],.account-button,.preview-toolbar select',
+          )
+          ?.focus();
     };
   }, []);
   return (
@@ -78,7 +86,11 @@ export function Sheet({
           <h2 id="sheet-title">{title}</h2>
           {subtitle && <p>{subtitle}</p>}
         </div>
-        <button className="icon-button" aria-label="닫기" onClick={onClose}>
+        <button
+          className="icon-button"
+          aria-label={t("닫기")}
+          onClick={onClose}
+        >
           <Icon name="close" />
         </button>
       </header>
