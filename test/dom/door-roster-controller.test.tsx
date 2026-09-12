@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { afterEach, test } from "node:test";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { announceRouteTransitionStart } from "@/lib/route-transition-events";
 
 import useDoorRosterController, {
   type DoorRosterDependencies,
@@ -200,6 +201,8 @@ function DoorRosterHarness({
       </output>
       <output data-testid="offline-notice">{roster.offlineNotice ?? ""}</output>
       <output data-testid="offline-queued">{roster.offlineQueueCounts.queued}</output>
+      <output data-testid="busy">{String(Object.values(roster.loadingStates).some(Boolean))}</output>
+      <output data-testid="guest-statuses">{roster.displayData.guests.map((guest) => guest.status).join(",")}</output>
       <button
         type="button"
         onClick={() =>
@@ -208,6 +211,13 @@ function DoorRosterHarness({
       >
         Check in
       </button>
+      <button type="button" onClick={() => void roster.handleStatusChange(GUEST.id, "pending", "cancel")}>
+        Cancel check in
+      </button>
+      <button type="button" onClick={() => void roster.handleStatusChange("guest-0002", "checked", "check")}>
+        Check in second
+      </button>
+      <button type="button" onClick={() => void roster.loadData()}>Refresh roster</button>
       <button type="button" onClick={() => void roster.syncOfflineQueue()}>
         Sync offline queue
       </button>
@@ -229,6 +239,82 @@ test("authoritative success publishes the current roster", async () => {
   });
   assert.equal(screen.getByTestId("feedback").textContent, "");
   assert.equal(screen.getByTestId("offline-mode").textContent, "false");
+});
+
+test("concurrent saves finish before one coalesced background roster refresh", async () => {
+  const secondGuest = { ...GUEST, id: "guest-0002" };
+  const saves = [createDeferred<{ data: Guest; error: null }>(), createDeferred<{ data: Guest; error: null }>()];
+  const refresh = createDeferred<{ data: GuestOperationsSnapshot; error: null }>();
+  let reads = 0;
+  const dependencies = createDependencies({
+    fetchGuestOperationsSnapshot: async () => ++reads === 1
+      ? { data: { ...OPERATIONS_SNAPSHOT, guests: [GUEST, secondGuest] }, error: null }
+      : refresh.promise,
+    updateGuestStatus: async (id) => saves[id === GUEST.id ? 0 : 1].promise,
+  });
+  render(<DoorRosterHarness dependencies={dependencies} />);
+  await waitFor(() => assert.equal(screen.getByTestId("guest-count").textContent, "2"));
+  fireEvent.click(screen.getByRole("button", { name: /^Check in$/ }));
+  fireEvent.click(screen.getByRole("button", { name: "Check in second" }));
+  await act(async () => { saves[0].resolve({ data: { ...GUEST, status: "checked" }, error: null }); });
+  assert.equal(reads, 1);
+  await act(async () => { saves[1].resolve({ data: { ...secondGuest, status: "checked" }, error: null }); });
+  await waitFor(() => assert.equal(reads, 2));
+  assert.equal(screen.getByTestId("busy").textContent, "false");
+  assert.equal(screen.getByTestId("fetching").textContent, "false");
+  assert.equal(screen.getByTestId("guest-statuses").textContent, "checked,checked");
+  fireEvent.click(screen.getByRole("button", { name: "Refresh roster" }));
+  assert.equal(reads, 2);
+  await act(async () => { refresh.resolve({ data: { ...OPERATIONS_SNAPSHOT, guests: [GUEST, secondGuest].map((guest) => ({ ...guest, status: "checked" })) }, error: null }); });
+  assert.equal(reads, 2);
+});
+
+test("an earlier refresh cannot undo a later confirmed mutation or survive navigation", async () => {
+  for (const navigate of [false, true]) {
+    const stale = createDeferred<{ data: GuestOperationsSnapshot; error: null }>();
+    const fresh = createDeferred<{ data: GuestOperationsSnapshot; error: null }>();
+    let reads = 0;
+    const dependencies = createDependencies({
+      fetchGuestOperationsSnapshot: async () => {
+        reads += 1;
+        if (reads === 1) return { data: OPERATIONS_SNAPSHOT, error: null };
+        return reads === 2 ? stale.promise : fresh.promise;
+      },
+    });
+    const view = render(<DoorRosterHarness dependencies={dependencies} />);
+    await waitFor(() => assert.equal(screen.getByTestId("guest-count").textContent, "1"));
+    fireEvent.click(screen.getByRole("button", { name: /^Check in$/ }));
+    await waitFor(() => assert.equal(reads, 2));
+    fireEvent.click(screen.getByRole("button", { name: "Cancel check in" }));
+    await waitFor(() => assert.equal(screen.getByTestId("guest-status").textContent, "pending"));
+    if (navigate) act(() => announceRouteTransitionStart());
+    await act(async () => { stale.resolve({ data: { ...OPERATIONS_SNAPSHOT, guests: [{ ...GUEST, status: "checked", name: "Stale response" }] }, error: null }); });
+    assert.equal(screen.getByTestId("guest-status").textContent, "pending");
+    assert.equal(screen.getByTestId("guest-name").textContent, GUEST.name);
+    assert.equal(reads, navigate ? 2 : 3);
+    await act(async () => { fresh.resolve({ data: OPERATIONS_SNAPSHOT, error: null }); });
+    view.unmount();
+  }
+});
+
+test("a failed or partial background refresh preserves the confirmed row", async () => {
+  for (const partial of [false, true]) {
+    let reads = 0;
+    const dependencies = createDependencies({
+      fetchGuestOperationsSnapshot: async () => ++reads === 1
+        ? { data: OPERATIONS_SNAPSHOT, error: null }
+        : { data: partial ? { ...OPERATIONS_SNAPSHOT, guests: [], failedSections: ["guests"] } : null, error: "UNAVAILABLE" },
+    });
+    const view = render(<DoorRosterHarness dependencies={dependencies} />);
+    await waitFor(() => assert.equal(screen.getByTestId("guest-count").textContent, "1"));
+    fireEvent.click(screen.getByRole("button", { name: /^Check in$/ }));
+    await waitFor(() => assert.equal(screen.getByTestId("outcome").textContent, "partial"));
+    assert.equal(screen.getByTestId("guest-status").textContent, "checked");
+    assert.equal(screen.getByTestId("busy").textContent, "false");
+    assert.equal(screen.getByTestId("fetching").textContent, "false");
+    assert.equal(screen.getByTestId("feedback").textContent, partial ? "partialLoadFailed" : "loadFailed");
+    view.unmount();
+  }
 });
 
 test("an eligible operations snapshot supplies the offline roster without another fetch", async () => {
