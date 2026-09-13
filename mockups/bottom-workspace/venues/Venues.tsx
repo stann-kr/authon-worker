@@ -219,14 +219,11 @@ function VenueForm({
         defaultValue={venue?.tagline ?? ""}
       />
       <Field
-        label="기본 도메인"
+        label="기본 도메인 (빈 값: 해제)"
         name="domain"
         defaultValue={venue?.domain ?? ""}
         placeholder="venue.example.com"
       />
-      <p className="flow-hint">
-        {t("빈 값으로 저장하면 기본 도메인을 제거합니다.")}
-      </p>
       <Select
         label="도메인 기본 언어"
         name="locale"

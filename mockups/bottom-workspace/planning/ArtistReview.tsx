@@ -107,9 +107,6 @@ export function ArtistReview({
               onChange={(e) => setAcknowledged(e.target.checked)}
             />
           )}
-          <p className="planning-hint">
-            {t("가능 여부 응답은 부킹 확정과 별개입니다.")}
-          </p>
         </Form>
       </div>
     </Sheet>

@@ -498,7 +498,7 @@ function AccountForm({
         )}
         {kind === "shared" && (
           <p className="flow-hint">
-            {t("공용 계정은 필수이며 각 게스트에 입력자 이름이 기록됩니다.")}
+            {t("공용 계정은 게스트 등록 시 입력자 이름 필수")}
           </p>
         )}
       </fieldset>
@@ -551,10 +551,6 @@ export function ResetRequests() {
           { id: "history", label: "최근 처리 내역" },
         ]}
       />
-      <Notice>
-        기존 연락 경로로 사용자를 확인하고 4자리 요청 확인번호를 입력해
-        승인합니다.
-      </Notice>
       {requests.map((r) => (
         <Row
           key={r.id}
@@ -616,11 +612,6 @@ export function ResetRequests() {
             </>
           ) : (
             <>
-              <Notice>
-                관리자 화면에는 정답이 표시되지 않습니다. 사용자에게 먼저 연락 →
-                사용자가 알려준 4자리 번호 입력 → 확인 체크 후 승인 순서로
-                진행하세요.
-              </Notice>
               {error && <Notice error>{error}</Notice>}
               <Form
                 submit="재설정 승인"
@@ -678,7 +669,7 @@ export function ResetRequests() {
                   <input type="checkbox" name="attested" required />
                   <span>
                     {t(
-                      "재설정 요청에서 새로 제공된 연락처가 아니라, 요청 전부터 확인된 채널로 사용자에게 먼저 연락했습니다.",
+                      "요청 전에 확인된 연락처로 먼저 연락해 본인 확인을 마쳤습니다.",
                     )}
                   </span>
                 </label>

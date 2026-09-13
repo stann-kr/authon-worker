@@ -3,25 +3,17 @@
   gap: 22px;
   min-width: 0;
 }
-.planning-section h2 {
-  margin: 0;
-  font-size: 20px;
-  line-height: 1.45;
-  font-weight: 600;
-  letter-spacing: -0.03em;
-}
-.planning-section h3,
+.planning-section-title,
 .planning-detail h3,
 .planning-form-title {
   margin: 0 0 14px;
   font-size: 14px;
   font-weight: 600;
 }
-.planning-heading {
-  display: grid;
-  gap: 16px;
+.planning-actions {
+  display: flex;
+  justify-content: flex-end;
 }
-.planning-heading p,
 .planning-copy {
   margin: 8px 0 0;
   color: var(--muted);
@@ -29,9 +21,6 @@
   line-height: 1.7;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
-}
-.planning-heading > .primary {
-  justify-self: start;
 }
 .planning-tabs {
   display: flex;
@@ -218,11 +207,11 @@
   scroll-snap-align: start;
   min-width: 0;
 }
-.planning-board h3 {
+.planning-board h2 {
   display: flex;
   justify-content: space-between;
 }
-.planning-board h3 span {
+.planning-board h2 span {
   color: var(--muted);
   font-weight: 400;
 }
@@ -535,10 +524,6 @@
   .preview-frame:not(.mobile) .planning-booking-list {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 0 28px;
-  }
-  .preview-frame:not(.mobile) .planning-heading {
-    grid-template-columns: minmax(0, 1fr) auto;
-    align-items: center;
   }
   .preview-frame:not(.mobile) .planning-prep-summary {
     grid-template-columns: repeat(3, minmax(0, 1fr));

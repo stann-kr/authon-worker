@@ -75,12 +75,6 @@ export function Preparation() {
   return (
     <div className="flow-section planning-section">
       <PlanningTabs />
-      <div className="planning-heading">
-        <div>
-          <h2>{t("공연 전에 남은 일")}</h2>
-          <p>{t("출연표와 자료, 담당자별 준비 업무를 함께 확인하세요.")}</p>
-        </div>
-      </div>
       <Select
         label="준비할 행사"
         value={event.id}
@@ -105,7 +99,7 @@ export function Preparation() {
       </div>
       <section>
         <div className="planning-card-top">
-          <h3>{t("행사 출연표")}</h3>
+          <h2 className="planning-section-title">{t("행사 출연표")}</h2>
           <small>KST · {event.date}</small>
         </div>
         {bookings.map((b) => (
@@ -134,7 +128,7 @@ export function Preparation() {
       </section>
       <section>
         <div className="planning-card-top">
-          <h3>{t("준비 체크리스트")}</h3>
+          <h2 className="planning-section-title">{t("준비 체크리스트")}</h2>
           <Action secondary onClick={beginTask}>
             업무 추가
           </Action>
@@ -212,7 +206,7 @@ export function Preparation() {
         )}
       </section>
       <section>
-        <h3>{t("출연 자료와 일정 확인")}</h3>
+        <h2 className="planning-section-title">{t("출연 자료와 일정 확인")}</h2>
         {confirmed.map((b) => (
           <div className="planning-prep-material" key={b.id}>
             <div className="planning-card-top">

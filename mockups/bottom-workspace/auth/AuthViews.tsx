@@ -200,9 +200,6 @@ export function AuthViews() {
       )}
       {page === "reset" && (
         <>
-          <Notice>
-            이메일로 요청하면 관리자가 본인 확인 후 재설정을 도와드립니다.
-          </Notice>
           <Form
             submit="관리자에게 재설정 요청"
             onSubmit={async (form) => {
@@ -245,17 +242,10 @@ export function AuthViews() {
               required
               defaultValue="milo@example.com"
             />
-            <p className="flow-hint">
-              {t("응답에는 이메일 등록 여부를 표시하지 않습니다.")}
-            </p>
           </Form>
           <Action secondary disabled>
             이메일로 재설정 — 사용 안 함
           </Action>
-          <Notice>
-            현재 이메일 방식은 사용할 수 없습니다. 아래 관리자 요청을
-            이용해주세요.
-          </Notice>
           <Action secondary onClick={() => go("login")}>
             로그인으로 돌아가기
           </Action>
@@ -389,11 +379,12 @@ export function AuthViews() {
           </>
         ) : (
           <>
-            <Notice>
-              {kind === "approved"
-                ? "승인되었습니다. 이 브라우저에서 15분 안에 한 번만 사용할 수 있습니다."
-                : "로그인에 사용할 새 비밀번호를 만드세요."}
-            </Notice>
+            {kind === "approved" && (
+              <Notice>
+                승인되었습니다. 이 브라우저에서 15분 안에 한 번만 사용할 수
+                있습니다.
+              </Notice>
+            )}
             <Form
               submit={
                 target?.setup ? "비밀번호 변경" : "비밀번호 설정 후 로그인"

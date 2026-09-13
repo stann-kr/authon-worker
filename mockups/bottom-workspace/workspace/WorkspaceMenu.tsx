@@ -1,4 +1,4 @@
-import { useId, useState } from "react";
+import { useState } from "react";
 import { useMock } from "../data/MockData";
 import { viewLabels, type View } from "../data/types";
 import { Icon, type IconName } from "../shared/Icon";
@@ -70,7 +70,6 @@ export function WorkspaceMenu({
 }) {
   const { t, view, data, event, venue, user, isAdmin } = useMock();
   const [query, setQuery] = useState("");
-  const menuId = useId();
   const matches = groups.map((group) => ({
     ...group,
     items: group.items.filter(
@@ -120,16 +119,12 @@ export function WorkspaceMenu({
                   <button
                     key={item.view}
                     aria-label={t(viewLabels[item.view])}
-                    aria-describedby={`${menuId}-${item.view}`}
                     aria-current={view === item.view ? "page" : undefined}
                     onClick={() => onNavigate(item.view)}
                   >
                     <Icon name={item.icon} />
                     <span>
                       <strong>{t(viewLabels[item.view])}</strong>
-                      <small id={`${menuId}-${item.view}`}>
-                        {t(item.detail)}
-                      </small>
                     </span>
                     {pending(item.view) > 0 && (
                       <b className="menu-count">{pending(item.view)}</b>

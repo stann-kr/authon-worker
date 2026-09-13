@@ -149,13 +149,12 @@ export function DoorAttendance() {
     <div className="flow-section">
       <Metrics
         items={[
-          { label: "누적 입장", value: total },
+          { label: "누적 입장 (퇴장 미차감)", value: total },
           { label: "입장 게스트", value: checked },
           { label: "워크인", value: attendance.walkIns },
           { label: "동기화 대기", value: queued.length },
         ]}
       />
-      <Notice>퇴장을 차감하지 않은 누적 입장 수예요.</Notice>
       {event.date !== MOCK_DATE && (
         <Notice>현재 영업일만 입력할 수 있습니다.</Notice>
       )}
@@ -277,10 +276,7 @@ export function DoorAttendance() {
           subtitle={event.name}
           onClose={() => setReconcile(false)}
         >
-          <Notice>
-            모든 도어 기기를 동기화한 뒤, 현재 재실 인원이 아닌 마감 시 최종
-            누적 입장객을 입력하세요.
-          </Notice>
+          <Notice>모든 도어 기기 동기화 후 확정하세요.</Notice>
           {confirmation ? (
             <>
               <Metrics

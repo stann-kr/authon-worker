@@ -993,10 +993,6 @@ function Workspace() {
       )}
       {modal === "coverage" && (
         <Sheet title={t("기능 목록")} onClose={() => setModal(null)}>
-          <Notice>
-            기존 운영 기능과 새 공연 준비 기능을 확인할 수 있습니다. 샘플
-            데이터만 변경됩니다.
-          </Notice>
           <div className="flow-coverage">
             {coverage.map((item) => (
               <button
@@ -1051,7 +1047,7 @@ function Workspace() {
   );
 }
 function Home() {
-  const { user, data, event, venue, isAdmin, canDoor, navigate, t } = useMock();
+  const { user, data, event, venue, isAdmin, canDoor, navigate } = useMock();
   const requests = data.requests.filter(
     (r) => r.eventId === event.id && r.state === "pending",
   );
@@ -1062,41 +1058,22 @@ function Home() {
   );
   return (
     <div className="flow-section">
-      <h2 className="flow-subheading">{t("사용 가능한 작업 공간")}</h2>
-      <Row
-        title="게스트 등록"
-        meta="게스트를 추가하고 명단과 한도를 확인합니다."
-        onClick={() => navigate("roster")}
-      />
+      <Row title="게스트 등록" onClick={() => navigate("roster")} />
       {canDoor && (
-        <Row
-          title="도어 체크인"
-          meta="게스트를 찾아 입장을 바로 확인합니다."
-          onClick={() => navigate("door")}
-        />
+        <Row title="도어 체크인" onClick={() => navigate("door")} />
       )}{" "}
       {isAdmin && (
         <>
+          <Row title="부킹 관리" onClick={() => navigate("bookings")} />
+          <Row title="계정 관리" onClick={() => navigate("users")} />
           <Row
-            title="부킹 관리"
-            meta="아티스트 섭외와 일정·준비 업무를 이어서 관리합니다."
-            onClick={() => navigate("bookings")}
-          />
-          <Row
-            title="관리자"
-            meta="게스트·링크·사용자·베뉴를 관리합니다."
-            onClick={() => navigate("users")}
-          />
-          <Row
-            title={t("추가 게스트 요청 {count}건이 대기 중입니다", {
-              count: requests.length,
-            })}
+            title="추가 인원 요청"
+            badge={String(requests.length)}
             onClick={() => navigate("requests")}
           />
           <Row
-            title={t("비밀번호 재설정 요청 {count}건이 대기 중입니다", {
-              count: resets.length,
-            })}
+            title="비밀번호 재설정 요청"
+            badge={String(resets.length)}
             onClick={() => navigate("password-requests")}
           />
         </>

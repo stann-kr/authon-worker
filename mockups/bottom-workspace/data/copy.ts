@@ -347,6 +347,21 @@ Object.assign(extra, {
   "기여자 연결률": "Contributor mapping",
   "등록 영업일": "Registration days",
 });
+Object.assign(extra, {
+  "입장 처리는 현재 운영일에만 가능합니다.":
+    "Check-in is available only for the current operating day.",
+  "한 줄에 1명 · 한 번에 최대 25명": "One name per line · Up to 25 per batch",
+  "누적 입장 (퇴장 미차감)": "Total admissions (exits not deducted)",
+  "모든 도어 기기 동기화 후 확정하세요.":
+    "Sync all door devices before finalizing.",
+  "기본 도메인 (빈 값: 해제)": "Default domain (blank to remove)",
+  "공용 계정은 게스트 등록 시 입력자 이름 필수":
+    "Shared accounts require an operator name for guest entry",
+  "요청 전에 확인된 연락처로 먼저 연락해 본인 확인을 마쳤습니다.":
+    "I initiated contact using previously verified details and verified the person's identity.",
+  "본인 1명 · 수정 시 같은 브라우저 사용":
+    "One registration for yourself · Use the same browser to edit",
+});
 for (const [k, e] of Object.entries(extra)) english.set(k, e);
 for (const [k, e] of Object.entries(planningEnglish)) {
   if (!english.has(k)) english.set(k, e);

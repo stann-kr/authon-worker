@@ -135,13 +135,13 @@ export function ExternalView() {
           )}
           {self ? (
             <>
-              <Notice>
-                {own?.status === "checked"
-                  ? "입장 완료 후에는 RSVP를 수정하거나 취소할 수 없습니다."
-                  : own
-                    ? "아래에서 이름을 수정하거나 등록 카드에서 입장 전 RSVP를 취소할 수 있습니다."
-                    : "본인 1명만 등록할 수 있습니다. 수정할 때는 같은 브라우저를 이용해주세요."}
-              </Notice>
+              {(!own || own.status === "checked") && (
+                <Notice>
+                  {own
+                    ? "입장 완료 후에는 RSVP를 수정하거나 취소할 수 없습니다."
+                    : "본인 1명 · 수정 시 같은 브라우저 사용"}
+                </Notice>
+              )}
               {own ? (
                 <>
                   <Row

@@ -320,11 +320,7 @@ export function GuestEntry({
               </>
             )}
           </details>
-          <p className="flow-hint">
-            {t(
-              "한 줄에 한 명씩, 최대 25명까지 붙여넣으세요. 중복은 추가 전에 확인합니다.",
-            )}
-          </p>
+          <p className="flow-hint">{t("한 줄에 1명 · 한 번에 최대 25명")}</p>
           {preview.lines.slice(0, 30).map((line) => (
             <div className="flow-pair" key={line.inputIndex}>
               <span>

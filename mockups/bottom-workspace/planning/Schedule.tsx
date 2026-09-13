@@ -53,16 +53,6 @@ export function Schedule() {
   return (
     <div className="flow-section planning-section">
       <PlanningTabs />
-      <div className="planning-heading">
-        <div>
-          <h2>{t("팀이 함께 보는 출연 일정")}</h2>
-          <p>
-            {t(
-              "등록된 일정만 표시됩니다. 외부 일정의 가능 여부는 별도 확인하세요.",
-            )}
-          </p>
-        </div>
-      </div>
       <div className="planning-calendar-controls">
         <Action secondary onClick={() => move(-7)}>
           이전 주
@@ -176,7 +166,9 @@ export function Schedule() {
           .filter((day) => onDay(day).length)
           .map((day) => (
             <section key={day}>
-              <h3>{day.slice(5).replace("-", ".")}</h3>
+              <h2 className="planning-section-title">
+                {day.slice(5).replace("-", ".")}
+              </h2>
               {onDay(day).map((b) => (
                 <button
                   className="planning-agenda-item"
@@ -223,7 +215,9 @@ export function Schedule() {
       )}
       {unscheduled.length > 0 && (
         <section className="planning-undated">
-          <h3>{t("날짜 조율이 필요한 부킹")}</h3>
+          <h2 className="planning-section-title">
+            {t("날짜 조율이 필요한 부킹")}
+          </h2>
           {unscheduled.map((b) => (
             <button
               className="planning-history-link"

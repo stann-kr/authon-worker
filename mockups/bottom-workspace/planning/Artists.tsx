@@ -40,13 +40,7 @@ export function Artists() {
   return (
     <div className="flow-section planning-section">
       <PlanningTabs />
-      <div className="planning-heading">
-        <div>
-          <h2>{t("다음 공연에도 함께할 사람들")}</h2>
-          <p>
-            {t("연락처와 자료를 한 번 정리하고 행사마다 이어서 사용하세요.")}
-          </p>
-        </div>
+      <div className="planning-actions">
         <Action onClick={create}>아티스트 추가</Action>
       </div>
       <div className="planning-filters">
@@ -131,7 +125,7 @@ export function Artists() {
                   setDraft(structuredClone(selected));
                 }}
               >
-                정보 수정
+                아티스트 수정
               </Action>
             </div>
             <dl className="planning-facts">
@@ -198,7 +192,7 @@ export function Artists() {
           key={draft.id}
           title={
             selected?.id === draft.id
-              ? t("아티스트 정보 수정")
+              ? t("아티스트 수정")
               : t("아티스트 추가")
           }
           protectEdits
@@ -304,11 +298,6 @@ export function Artists() {
               onChange={(e) => update("notes", e.target.value)}
               maxLength={1500}
             />
-            <p className="planning-hint">
-              {t(
-                "기본 자료를 수정해도 기존 행사의 확정 자료는 바뀌지 않습니다.",
-              )}
-            </p>
             {error && <Notice error>{error}</Notice>}
           </Form>
         </Sheet>

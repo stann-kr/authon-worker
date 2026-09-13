@@ -25,9 +25,6 @@ export const planningEnglish: Record<string, string> = {
     "Explore existing operations and new production workflows. Changes affect sample data only.",
   "아티스트 섭외와 일정·준비 업무를 이어서 관리합니다.":
     "Connect artist bookings, schedules and preparation.",
-  "다음 공연에도 함께할 사람들": "People for your next show",
-  "연락처와 자료를 한 번 정리하고 행사마다 이어서 사용하세요.":
-    "Keep contacts and materials together and reuse them for each event.",
   "아티스트 추가": "Add artist",
   "아티스트 검색": "Search artists",
   "이름·담당자·에이전시": "Name, contact or agency",
@@ -44,7 +41,7 @@ export const planningEnglish: Record<string, string> = {
   "기술자료 필요": "Technical rider needed",
   "조건에 맞는 아티스트가 없습니다.": "No artists match these filters.",
   "이 아티스트 부킹": "Book this artist",
-  "정보 수정": "Edit information",
+  "아티스트 수정": "Edit artist",
   "연락 담당자": "Contact person",
   에이전시: "Agency",
   "소개·프레스 자료": "Press materials",
@@ -59,8 +56,6 @@ export const planningEnglish: Record<string, string> = {
   "소개·공연 구성": "Biography and performance format",
   "소개·프레스 자료 URL": "Press materials URL",
   "기술자료 URL": "Technical rider URL",
-  "기본 자료를 수정해도 기존 행사의 확정 자료는 바뀌지 않습니다.":
-    "Updating the profile does not change materials saved for existing events.",
   "아티스트 정보를 저장했습니다.": "Artist information saved.",
   문의: "Enquiry",
   "조율 중": "Negotiating",
@@ -79,10 +74,8 @@ export const planningEnglish: Record<string, string> = {
   "가능한 시간 확인, 기술자료 요청 등": "Check availability, request a rider…",
   "후속 업무 기한": "Follow-up due date",
   "출연 일정": "Performance schedule",
-  "모든 시간은 한국 시간입니다. 자정 이후에는 다음 날짜를 선택하세요.":
-    "All times are in Korea Standard Time. Select the next date for times after midnight.",
-  "출연 시작": "Performance starts",
-  "출연 종료": "Performance ends",
+  "출연 시작 일시": "Performance start date and time",
+  "출연 종료 일시": "Performance end date and time",
   "장소·무대": "Location / stage",
   "상대 일정 가능 여부": "Artist availability",
   미확인: "Not checked",
@@ -90,16 +83,16 @@ export const planningEnglish: Record<string, string> = {
   불가: "Unavailable",
   "홀드 기한": "Hold expires",
   "겹치는 일정이 있습니다": "Schedule conflicts found",
-  "가안은 저장할 수 있습니다. 확정 일정과 겹치면 시간을 조정한 뒤 확정하세요.":
-    "You can save a tentative booking. Resolve conflicts with confirmed bookings before confirming.",
+  "확정 일정과 겹치면 부킹 확정 불가":
+    "Resolve confirmed schedule conflicts before confirming",
   "도착·사운드체크": "Arrival and soundcheck",
   "도착 일시": "Arrival time",
   "사운드체크 일시": "Soundcheck time",
   "이 행사에 사용할 자료": "Materials for this event",
   "기술·준비 요청사항": "Technical and preparation requirements",
-  "아티스트 기본 자료 가져오기": "Use artist profile materials",
-  "확정된 시간·장소·자료가 바뀌면 상대의 확인이 다시 필요합니다.":
-    "Changes to confirmed times, location or materials require a new acknowledgement.",
+  "프로필 자료로 교체": "Replace with profile materials",
+  "시간·장소·자료 변경 시 아티스트 재확인":
+    "Artist acknowledgement required after time, location or material changes",
   "부킹을 저장했습니다.": "Booking saved.",
   "아티스트 화면 미리보기": "Preview artist view",
   "일정 버전 {version}": "Schedule version {version}",
@@ -113,16 +106,12 @@ export const planningEnglish: Record<string, string> = {
   "조정이 필요합니다": "Needs adjustment",
   "위 출연 일정과 준비사항을 확인했습니다":
     "I have reviewed the schedule and preparation details",
-  "가능 여부 응답은 부킹 확정과 별개입니다.":
-    "An availability response does not confirm a booking.",
   "아티스트 응답을 반영했습니다.": "Artist response recorded.",
   "게스트 링크 준비": "Prepare guest link",
   "비활성 링크 만들기": "Create inactive link",
   "게스트 한도": "Guest limit",
   "게스트 링크를 준비했습니다. 링크 관리에서 확인 후 활성화하세요.":
     "Guest link prepared. Review and activate it in Links.",
-  "링크 관리에서 한도와 행사 정보를 확인한 뒤 활성화·공유하세요.":
-    "Review the event and limit in Links, then activate and share.",
   "무대 미정": "Stage not set",
   "홀드 기한이 지났습니다. 상대에게 일정을 다시 확인하세요.":
     "The hold has expired. Reconfirm the date with the artist.",
@@ -131,10 +120,8 @@ export const planningEnglish: Record<string, string> = {
   "조정 필요": "Needs adjustment",
   "기한 미정": "No due date",
   "담당자 미정": "Unassigned",
-  "아티스트가 최신 일정을 확인했습니다.":
-    "The artist has acknowledged the latest schedule.",
-  "아티스트의 최신 일정 확인이 필요합니다.":
-    "The artist needs to review the latest schedule.",
+
+  "최신 일정 확인 대기": "Awaiting latest schedule acknowledgement",
   "행사 준비 열기": "Open event preparation",
   "연결된 게스트 링크": "Open linked guest list",
   "게스트 링크 활성": "Guest link active",
@@ -154,9 +141,6 @@ export const planningEnglish: Record<string, string> = {
     "The performance will be recorded as completed.",
   "부킹 상태를 변경했습니다.": "Booking status updated.",
   "변경 이력": "Change history",
-  "문의부터 출연 확정까지": "From enquiry to confirmed show",
-  "누가 답변을 기다리고, 다음에 무엇을 해야 하는지 확인하세요.":
-    "See who is waiting for a reply and what needs to happen next.",
   "조율 중인 부킹": "Bookings in progress",
   "확인이 필요한 일정": "Schedules to review",
   "부킹 검색": "Search bookings",
@@ -176,9 +160,6 @@ export const planningEnglish: Record<string, string> = {
   "조건에 맞는 부킹이 없습니다.": "No bookings match these filters.",
   "일정 겹침 확인": "Review schedule conflict",
   "상대 확인 대기": "Awaiting acknowledgement",
-  "팀이 함께 보는 출연 일정": "A shared performance calendar",
-  "등록된 일정만 표시됩니다. 외부 일정의 가능 여부는 별도 확인하세요.":
-    "Only recorded schedules appear here. Check external availability separately.",
   "이전 주": "Previous",
   "다음 주": "Next",
   "기준 날짜": "Reference date",
@@ -202,9 +183,6 @@ export const planningEnglish: Record<string, string> = {
   "선택한 기간에 등록된 출연 일정이 없습니다.":
     "No performances recorded for this period.",
   "날짜 조율이 필요한 부킹": "Bookings without dates",
-  "공연 전에 남은 일": "What needs doing before the show",
-  "출연표와 자료, 담당자별 준비 업무를 함께 확인하세요.":
-    "Review the running order, materials and assigned preparation tasks.",
   "준비할 행사": "Event to prepare",
   "확정 출연 {count}팀": "{count} confirmed acts",
   "남은 업무 {count}건": "{count} open tasks",

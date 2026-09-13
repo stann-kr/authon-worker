@@ -146,9 +146,6 @@ export function BookingSheet({
             defaultValue={10}
             required
           />
-          <p className="planning-hint">
-            {t("링크 관리에서 한도와 행사 정보를 확인한 뒤 활성화·공유하세요.")}
-          </p>
         </Form>
       </Sheet>
     );
@@ -239,8 +236,8 @@ export function BookingSheet({
         {b.status === "confirmed" && (
           <Notice>
             {b.acknowledgedRevision === b.revision
-              ? "아티스트가 최신 일정을 확인했습니다."
-              : "아티스트의 최신 일정 확인이 필요합니다."}
+              ? "최신 일정 확인 완료"
+              : "최신 일정 확인 대기"}
           </Notice>
         )}
         <section>

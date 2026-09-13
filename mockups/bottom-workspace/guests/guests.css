@@ -135,12 +135,6 @@
   outline-offset: 4px;
 }
 
-.roster-summary {
-  grid-column: 1 / -1;
-  color: var(--muted);
-  font-size: 12px;
-  margin-top: -8px;
-}
 .roster-controls {
   position: sticky;
   top: 0;

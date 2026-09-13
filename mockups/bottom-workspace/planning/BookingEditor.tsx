@@ -141,21 +141,16 @@ export function BookingEditor({
           value={draft.due}
           onChange={(e) => update("due", e.target.value)}
         />
-        <h3 className="planning-form-title">{t("출연 일정")}</h3>
-        <p className="planning-hint">
-          {t(
-            "모든 시간은 한국 시간입니다. 자정 이후에는 다음 날짜를 선택하세요.",
-          )}
-        </p>
+        <h3 className="planning-form-title">{t("출연 일정")} · KST</h3>
         <Field
-          label="출연 시작"
+          label="출연 시작 일시"
           type="datetime-local"
           value={draft.start}
           onChange={(e) => update("start", e.target.value)}
           error={error.includes("일시") ? error : undefined}
         />
         <Field
-          label="출연 종료"
+          label="출연 종료 일시"
           type="datetime-local"
           value={draft.end}
           onChange={(e) => update("end", e.target.value)}
@@ -194,11 +189,7 @@ export function BookingEditor({
                 {t(bookingStatuses[b.status])}
               </p>
             ))}
-            <small>
-              {t(
-                "가안은 저장할 수 있습니다. 확정 일정과 겹치면 시간을 조정한 뒤 확정하세요.",
-              )}
-            </small>
+            <small>{t("확정 일정과 겹치면 부킹 확정 불가")}</small>
           </div>
         )}
         <details
@@ -254,7 +245,7 @@ export function BookingEditor({
                 }))
               }
             >
-              {t("아티스트 기본 자료 가져오기")}
+              {t("프로필 자료로 교체")}
             </button>
           )}
         </details>
@@ -266,7 +257,7 @@ export function BookingEditor({
         />
         {draft.status === "confirmed" && (
           <p className="planning-hint">
-            {t("확정된 시간·장소·자료가 바뀌면 상대의 확인이 다시 필요합니다.")}
+            {t("시간·장소·자료 변경 시 아티스트 재확인")}
           </p>
         )}
         {error && <Notice error>{error}</Notice>}

@@ -107,13 +107,7 @@ export function Bookings() {
   return (
     <div className="flow-section planning-section">
       <PlanningTabs />
-      <div className="planning-heading">
-        <div>
-          <h2>{t("문의부터 출연 확정까지")}</h2>
-          <p>
-            {t("누가 답변을 기다리고, 다음에 무엇을 해야 하는지 확인하세요.")}
-          </p>
-        </div>
+      <div className="planning-actions">
         <Action onClick={() => create()}>새 부킹</Action>
       </div>
       <div className="planning-summary">
@@ -194,10 +188,10 @@ export function Bookings() {
             )
             .map(([key, label]) => (
               <section key={key}>
-                <h3>
+                <h2 className="planning-section-title">
                   {t(label)}{" "}
                   <span>{list.filter((b) => b.status === key).length}</span>
-                </h3>
+                </h2>
                 {list.filter((b) => b.status === key).map(card)}
                 {!list.some((b) => b.status === key) && (
                   <p className="planning-hint">{t("등록된 부킹 없음")}</p>

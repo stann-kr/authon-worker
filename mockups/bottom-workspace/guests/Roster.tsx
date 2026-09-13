@@ -159,21 +159,28 @@ export function Roster() {
   };
   return (
     <>
-      <section className="stat-strip" aria-label={t("선택한 행사 요약")}>
+      <dl className="stat-strip" aria-label={t("선택한 행사 요약")}>
         <div className="stat">
-          <strong>{isAdmin || isDoor ? checked : quota.used}</strong>
-          <span>{t(isAdmin || isDoor ? "입장 완료" : "내 등록")}</span>
+          <dt>{t(isAdmin || isDoor ? "입장 완료" : "내 등록")}</dt>
+          <dd>
+            <strong>{isAdmin || isDoor ? checked : quota.used}</strong>
+          </dd>
         </div>
         <div className="stat">
-          <strong>
-            {isAdmin || isDoor ? all.length : (quota.remaining ?? "∞")}
-          </strong>
-          <span>{t(isAdmin || isDoor ? "등록 게스트" : "남은 한도")}</span>
+          <dt>{t(isAdmin || isDoor ? "등록 게스트" : "남은 한도")}</dt>
+          <dd>
+            <strong>
+              {isAdmin || isDoor ? all.length : (quota.remaining ?? "∞")}
+            </strong>
+          </dd>
         </div>
-        <span className="roster-summary">
-          {t("미입장 {count}명", { count: all.length - checked })}
-        </span>
-      </section>
+        <div className="roster-summary">
+          <dt>{t("미입장")}</dt>
+          <dd>
+            <strong>{all.length - checked}</strong>
+          </dd>
+        </div>
+      </dl>
       <div className="roster-controls">
         <div className="roster-controlbar">
           <div className="roster-result-heading" hidden={searchOpen}>
@@ -302,9 +309,7 @@ export function Roster() {
       </div>
       {event.date !== MOCK_DATE && canCheck && (
         <p className="roster-hint">
-          {t(
-            "선택한 운영일의 명단입니다. 입장 처리는 현재 운영일에서 가능합니다.",
-          )}
+          {t("입장 처리는 현재 운영일에만 가능합니다.")}
         </p>
       )}
       {!event.general && ["offline", "syncing"].includes(scenario) && (
@@ -393,7 +398,6 @@ export function Roster() {
           />
           {filtered ? (
             <>
-              <p>{t("검색어나 적용한 필터를 바꿔보세요.")}</p>
               <Action secondary onClick={resetFilters}>
                 검색·필터 초기화
               </Action>
