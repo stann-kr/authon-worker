@@ -15,12 +15,14 @@ export function Sheet({
   onClose,
   children,
   protectEdits = false,
+  dirty = false,
 }: {
   title: string;
   subtitle?: string;
   onClose: () => void;
   children: ReactNode;
   protectEdits?: boolean;
+  dirty?: boolean;
 }) {
   const { t, busy } = useMock();
   const titleId = useId();
@@ -30,7 +32,7 @@ export function Sheet({
   const editFocus = useRef<HTMLElement | null>(null);
   const requestClose = () => {
     if (busy) return;
-    if (protectEdits && edited) {
+    if (protectEdits && (edited || dirty)) {
       editFocus.current = document.activeElement as HTMLElement;
       setDiscardPrompt(true);
     } else onClose();

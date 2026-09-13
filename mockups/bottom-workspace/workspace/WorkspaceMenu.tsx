@@ -9,6 +9,23 @@ const groups: {
   items: { view: View; icon: IconName; detail: string }[];
 }[] = [
   {
+    title: "공연 준비",
+    items: [
+      { view: "artists", icon: "user", detail: "연락처·자료·출연 이력" },
+      { view: "bookings", icon: "file", detail: "문의·조율·홀드·출연 확정" },
+      {
+        view: "schedule",
+        icon: "calendar",
+        detail: "출연 시간과 일정 겹침 확인",
+      },
+      {
+        view: "preparation",
+        icon: "check",
+        detail: "출연표·자료·준비 체크리스트",
+      },
+    ],
+  },
+  {
     title: "현장 운영",
     items: [
       { view: "home", icon: "home", detail: "작업 공간과 대기 요청" },

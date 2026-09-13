@@ -228,6 +228,16 @@ export function Events() {
           />
           <div className="flow-stack">
             <Action
+              secondary
+              onClick={() => {
+                chooseEvent(selected.id);
+                navigate("preparation");
+                close();
+              }}
+            >
+              출연표·준비 업무
+            </Action>
+            <Action
               onClick={() => {
                 chooseEvent(selected.id);
                 navigate("roster");

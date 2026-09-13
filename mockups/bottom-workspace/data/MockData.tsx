@@ -201,6 +201,16 @@ export function MockProvider({ children }: { children: ReactNode }) {
         throw Error(
           "데이터가 변경되었습니다. 최신 내용을 확인하고 다시 시도해 주세요.",
         );
+      if (["artists", "bookings", "schedule", "preparation"].includes(view)) {
+        if (scenario === "offline")
+          throw Error(
+            "인터넷에 연결한 뒤 다시 저장해주세요. 입력 내용은 유지됩니다.",
+          );
+        if (scenario === "unknown-result")
+          throw Error(
+            "최신 내용을 확인한 뒤 다시 저장해주세요. 입력 내용은 유지됩니다.",
+          );
+      }
       const next = structuredClone(current.current);
       action(next);
       setData(next);

@@ -1,3 +1,4 @@
+import { planningEnglish } from "../planning/copy";
 import ko from "../../../messages/ko.json";
 import en from "../../../messages/en.json";
 import type { Locale } from "./types";
@@ -347,6 +348,9 @@ Object.assign(extra, {
   "등록 영업일": "Registration days",
 });
 for (const [k, e] of Object.entries(extra)) english.set(k, e);
+for (const [k, e] of Object.entries(planningEnglish)) {
+  if (!english.has(k)) english.set(k, e);
+}
 export function translate(
   text: string,
   locale: Locale,

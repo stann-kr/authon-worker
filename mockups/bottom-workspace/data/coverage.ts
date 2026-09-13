@@ -8,6 +8,57 @@ export const coverage: {
   states: string[];
 }[] = [
   {
+    title: "아티스트 관리",
+    view: "artists",
+    source: "상용화 신규 제안 · planning/Artists.tsx",
+    features: [
+      "아티스트·담당자 검색",
+      "프로필·자료 등록/수정",
+      "출연 이력",
+      "새 부킹 연결",
+    ],
+    states: ["빈 목록", "자료 미등록", "입력 오류", "저장 실패"],
+  },
+  {
+    title: "부킹 관리",
+    view: "bookings",
+    source: "상용화 신규 제안 · planning/Bookings.tsx",
+    features: [
+      "상태별 보드·목록",
+      "담당자·후속 업무",
+      "문의·조율·홀드·확정/취소",
+      "변경 이력",
+      "게스트 링크 연결",
+    ],
+    states: ["홀드 재확인", "일정 충돌", "저장 실패", "상대 확인 대기"],
+  },
+  {
+    title: "공유 일정",
+    view: "schedule",
+    source: "상용화 신규 제안 · planning/Schedule.tsx",
+    features: [
+      "주간·목록",
+      "행사·아티스트 필터",
+      "자정을 넘는 출연",
+      "아티스트·무대 충돌",
+      "미확정 일정",
+    ],
+    states: ["일정 미정", "일정 겹침", "빈 기간"],
+  },
+  {
+    title: "행사 준비",
+    view: "preparation",
+    source: "상용화 신규 제안 · planning/Preparation.tsx",
+    features: [
+      "도착·사운드체크·출연표",
+      "담당자·기한·업무 완료",
+      "자료 누락 확인",
+      "아티스트 응답 미리보기",
+      "게스트 명단 연결",
+    ],
+    states: ["기한 지남", "자료 미등록", "변경 후 재확인", "행사별 공개 범위"],
+  },
+  {
     title: "홈·작업 공간·범위",
     view: "home",
     source: "app/page.tsx · EventScopeSelector · VenueSelector",

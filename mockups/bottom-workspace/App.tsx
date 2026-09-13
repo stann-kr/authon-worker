@@ -32,6 +32,11 @@ import { DoorAttendance } from "./door/DoorAttendance";
 import { ExternalView } from "./registration/ExternalView";
 import { Analytics } from "./analytics/Analytics";
 import { WorkspaceMenu } from "./workspace/WorkspaceMenu";
+import { Artists } from "./planning/Artists";
+import { Bookings } from "./planning/Bookings";
+import { Schedule } from "./planning/Schedule";
+import { Preparation } from "./planning/Preparation";
+import "./planning/planning.css";
 import "./shell.css";
 import "./guests/guests.css";
 import "./shared/flows.css";
@@ -91,7 +96,12 @@ function Workspace() {
   const routeRef = useRef<() => void>(() => {});
   routeRef.current = () => {
     const parts = location.hash.slice(1).split("/");
-    if (parts[0] === "external" && parts[1]) {
+    if (
+      parts[0] === "planning" &&
+      ["artists", "bookings", "schedule", "preparation"].includes(parts[1])
+    ) {
+      navigate(parts[1] as View);
+    } else if (parts[0] === "external" && parts[1]) {
       setExternalLinkId(decodeURIComponent(parts[1]));
       navigate("external");
     } else if (parts[0] === "auth") {
@@ -131,6 +141,13 @@ function Workspace() {
     };
   }, [isPublic]);
   const isRoster = view === "roster" || view === "door";
+  const isPlanning = [
+    "artists",
+    "bookings",
+    "schedule",
+    "preparation",
+  ].includes(view);
+  const isTeamView = ["artists", "bookings", "schedule"].includes(view);
   const quota = quotaFor(data, user.id, event.id);
   const canRequest =
     user.accountKind === "personal" &&
@@ -139,6 +156,10 @@ function Workspace() {
   const forbidden =
     (!isAdmin &&
       [
+        "artists",
+        "bookings",
+        "schedule",
+        "preparation",
         "events",
         "report",
         "links",
@@ -154,6 +175,9 @@ function Workspace() {
     view !== "auth";
   const nav: { view: View | "more"; label: string; icon: IconName }[] = isAdmin
     ? [
+        { view: "artists", label: "아티스트", icon: "user" },
+        { view: "bookings", label: "부킹", icon: "file" },
+        { view: "schedule", label: "일정", icon: "calendar" },
         { view: "roster", label: "명단", icon: "people" },
         { view: "door", label: "도어", icon: "door" },
         { view: "events", label: "행사", icon: "calendar" },
@@ -255,6 +279,72 @@ function Workspace() {
             },
           ]
         : []),
+    ];
+  else if (view === "artists")
+    tools = [
+      {
+        label: "아티스트 추가",
+        icon: "plus",
+        color: "green",
+        action: () => setIntent("artist-create"),
+      },
+      {
+        label: "부킹 관리",
+        icon: "file",
+        color: "blue",
+        action: () => go("bookings"),
+      },
+    ];
+  else if (view === "bookings")
+    tools = [
+      {
+        label: "새 부킹",
+        icon: "plus",
+        color: "green",
+        action: () => setIntent("booking-create"),
+      },
+      {
+        label: "공유 일정",
+        icon: "calendar",
+        color: "blue",
+        action: () => go("schedule"),
+      },
+      {
+        label: "행사 준비",
+        icon: "check",
+        color: "gray",
+        action: () => go("preparation"),
+      },
+    ];
+  else if (view === "schedule")
+    tools = [
+      {
+        label: "새 부킹",
+        icon: "plus",
+        color: "green",
+        action: () => go("bookings", "booking-create"),
+      },
+      {
+        label: "행사 준비",
+        icon: "check",
+        color: "blue",
+        action: () => go("preparation"),
+      },
+    ];
+  else if (view === "preparation")
+    tools = [
+      {
+        label: "업무 추가",
+        icon: "plus",
+        color: "green",
+        action: () => setIntent("preparation-add"),
+      },
+      {
+        label: "게스트 명단",
+        icon: "people",
+        color: "blue",
+        action: () => go("roster"),
+      },
     ];
   else if (view === "events")
     tools = [
@@ -394,6 +484,14 @@ function Workspace() {
         return <ResetRequests />;
       case "venues":
         return <Venues />;
+      case "artists":
+        return <Artists />;
+      case "bookings":
+        return <Bookings />;
+      case "schedule":
+        return <Schedule />;
+      case "preparation":
+        return <Preparation />;
       case "events":
         return <Events />;
       case "report":
@@ -417,6 +515,10 @@ function Workspace() {
     ...(canRequest || isAdmin ? (["requests"] as View[]) : []),
     ...(isAdmin
       ? ([
+          "artists",
+          "bookings",
+          "schedule",
+          "preparation",
           "events",
           "report",
           "links",
@@ -531,7 +633,9 @@ function Workspace() {
                     />
                     <span>
                       {venue.brandName || venue.name} ·{" "}
-                      {event.date.slice(5).replace("-", ".")}{" "}
+                      {isTeamView
+                        ? t("운영팀")
+                        : event.date.slice(5).replace("-", ".")}{" "}
                     </span>
                     <Icon name="down" size={12} />
                   </button>
@@ -546,9 +650,15 @@ function Workspace() {
                 </button>
               </header>
               <div className="workspace-context">
-                <span>{isRoster ? t(viewLabels[view]) : event.name}</span>
+                <span>
+                  {isTeamView
+                    ? t("전체 행사 · 공연 준비")
+                    : isRoster
+                      ? t(viewLabels[view])
+                      : event.name}
+                </span>
                 <span className={`scope-status ${writable ? "live" : ""}`}>
-                  {t(scopeState)}
+                  {t(isTeamView ? "팀 작업 공간" : scopeState)}
                 </span>
               </div>
             </>
@@ -625,11 +735,13 @@ function Workspace() {
                           ? "저장 중입니다."
                           : scenario === "scope-closed"
                             ? "입장 집계가 마감되어 변경을 반영하지 않았습니다."
-                            : "최신 명단을 확인할 수 없어 변경을 잠시 멈췄습니다. 새로고침해주세요."}
+                            : isPlanning
+                              ? "최신 내용을 확인할 수 없어 변경을 잠시 멈췄습니다. 다시 확인해주세요."
+                              : "최신 명단을 확인할 수 없어 변경을 잠시 멈췄습니다. 새로고침해주세요."}
                     </Notice>
                     {scenario === "unknown-result" && (
                       <Action secondary onClick={() => setScenario("normal")}>
-                        최신 명단 확인
+                        {isPlanning ? "최신 내용 확인" : "최신 명단 확인"}
                       </Action>
                     )}
                   </div>
@@ -882,7 +994,8 @@ function Workspace() {
       {modal === "coverage" && (
         <Sheet title={t("기능 목록")} onClose={() => setModal(null)}>
           <Notice>
-            기존 기능별 목업 진입 경로입니다. 샘플 데이터만 변경됩니다.
+            기존 운영 기능과 새 공연 준비 기능을 확인할 수 있습니다. 샘플
+            데이터만 변경됩니다.
           </Notice>
           <div className="flow-coverage">
             {coverage.map((item) => (
@@ -894,6 +1007,10 @@ function Workspace() {
                     [
                       "users",
                       "password-requests",
+                      "artists",
+                      "bookings",
+                      "schedule",
+                      "preparation",
                       "events",
                       "report",
                       "links",
@@ -960,6 +1077,11 @@ function Home() {
       )}{" "}
       {isAdmin && (
         <>
+          <Row
+            title="부킹 관리"
+            meta="아티스트 섭외와 일정·준비 업무를 이어서 관리합니다."
+            onClick={() => navigate("bookings")}
+          />
           <Row
             title="관리자"
             meta="게스트·링크·사용자·베뉴를 관리합니다."

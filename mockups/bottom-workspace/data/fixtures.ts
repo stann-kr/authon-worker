@@ -1,4 +1,5 @@
 import { MOCK_NOW, type MockState, type MockUser } from "./types";
+import { initialPlanning } from "../planning/fixtures";
 const user = (
   id: string,
   name: string,
@@ -24,6 +25,7 @@ const user = (
 });
 export function initialData(): MockState {
   return {
+    planning: initialPlanning(),
     venues: [
       {
         id: "faust",
@@ -78,6 +80,19 @@ export function initialData(): MockState {
       }),
     ],
     events: [
+      {
+        id: "showcase",
+        venueId: "faust",
+        date: "2026-09-20",
+        name: "Autumn Sessions",
+        state: "draft",
+        capacity: 120,
+        target: 80,
+        createdAt: MOCK_NOW,
+        openedAt: null,
+        closedAt: null,
+        templateId: null,
+      },
       {
         id: "tonight",
         venueId: "faust",

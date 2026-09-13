@@ -1,3 +1,4 @@
+import type { PlanningState } from "../planning/types";
 export type Role =
   "super_admin" | "venue_admin" | "door_staff" | "staff" | "dj";
 export type Locale = "ko" | "en";
@@ -7,6 +8,10 @@ export type View =
   | "roster"
   | "attendance"
   | "events"
+  | "artists"
+  | "bookings"
+  | "schedule"
+  | "preparation"
   | "report"
   | "links"
   | "users"
@@ -183,6 +188,7 @@ export interface ReportData {
   }[];
 }
 export interface MockState {
+  planning: PlanningState;
   venues: MockVenue[];
   users: MockUser[];
   events: MockEvent[];
@@ -211,6 +217,10 @@ export const viewLabels: Record<View, string> = {
   roster: "게스트 명단",
   attendance: "입장 집계",
   events: "행사 관리",
+  artists: "아티스트 관리",
+  bookings: "부킹 관리",
+  schedule: "공유 일정",
+  preparation: "행사 준비",
   report: "마감 리포트",
   links: "등록 링크",
   users: "계정 관리",
