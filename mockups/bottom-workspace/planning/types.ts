@@ -34,6 +34,8 @@ export interface Booking {
   arrival: string;
   soundcheck: string;
   stage: string;
+  changeoverMinutes: number;
+  travelMinutes: number;
   nextAction: string;
   due: string;
   holdUntil: string;
@@ -43,6 +45,8 @@ export interface Booking {
   tasks: PreparationTask[];
   revision: number;
   acknowledgedRevision: number | null;
+  materialsReviewedRevision: number | null;
+  cancellation: { reason: string; linkAction: "keep" | "pause" } | null;
   guestLinkId: string | null;
   history: { id: string; at: string; actor: string; message: string }[];
 }

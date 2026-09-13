@@ -14,6 +14,7 @@ import {
 import { activeBooking, addHistory, assertScope } from "./domain";
 import { MaterialLink, PlanningTabs, Status, timeLabel } from "./ui";
 import { BookingSheet } from "./BookingSheet";
+import { bookingIssues } from "./pipeline";
 
 export function Preparation() {
   const { data, venue, event, user, chooseEvent, mutate, navigate, busy, t } =
@@ -33,7 +34,8 @@ export function Preparation() {
     (b) =>
       !b.materials.pressUrl ||
       !b.materials.riderUrl ||
-      b.acknowledgedRevision !== b.revision,
+      b.acknowledgedRevision !== b.revision ||
+      b.materialsReviewedRevision !== b.revision,
   );
   const tasks = bookings.flatMap((b) =>
     b.tasks.map((task) => ({ booking: b, task })),
@@ -120,6 +122,9 @@ export function Preparation() {
                 {t("도착")} {timeLabel(b.arrival)} · {t("사운드체크")}{" "}
                 {timeLabel(b.soundcheck)}
               </small>
+              {bookingIssues(data, b).length > 0 && (
+                <small>{t("확인 {count}건", { count: bookingIssues(data, b).length })}</small>
+              )}
             </span>
             <Status booking={b} />
           </button>
@@ -240,6 +245,8 @@ export function Preparation() {
                   : "상대 확인 대기",
               )}
             </p>
+            <p className="planning-hint">{t(b.materialsReviewedRevision === b.revision
+              ? "운영팀 자료 검토 완료" : "운영팀 자료 검토 대기")}</p>
           </div>
         ))}
       </section>

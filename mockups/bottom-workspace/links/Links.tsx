@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useMock, id, useIntent } from "../data/MockData";
 import { MOCK_NOW, type MockLink, type Locale } from "../data/types";
 import { Sheet } from "../shared/Sheet";
@@ -44,6 +44,8 @@ export function Links() {
     scenario,
     t,
     notice,
+    intent,
+    setIntent,
   } = useMock();
   const [panel, setPanel] = useState<string | null>(null),
     [template, setTemplate] = useState<MockLink | null>(null),
@@ -57,6 +59,16 @@ export function Links() {
     setTemplate(null);
     setPanel("create");
   });
+  useEffect(() => {
+    if (!intent.startsWith("link-open:")) return;
+    const link = data.links.find((l) => l.id === intent.slice(10) && l.venueId === venue.id && !l.deleted);
+    if (link) {
+      setDate(data.events.find((e) => e.id === link.eventId)?.date ?? event.date);
+      setFilter("all");
+      setPanel(link.id);
+    }
+    setIntent("");
+  }, [intent, data.links, data.events, venue.id, event.date, setIntent]);
   const selected = data.links.find((l) => l.id === panel && !l.deleted);
   const used = (id: string) =>
     data.guests.filter((g) => g.externalLinkId === id && g.status !== "deleted")

@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useMock } from "../data/MockData";
 import { Sheet } from "../shared/Sheet";
 import { Area, Field, Form, Notice, Select } from "../shared/ui";
-import { bookingError, conflictsFor, saveBooking } from "./domain";
+import { bookingError, conflictsFor, saveBooking, scheduleKey } from "./domain";
 import { bookingStatuses, type Booking } from "./types";
 import { timeLabel } from "./ui";
 
@@ -28,6 +28,7 @@ export function BookingEditor({
   );
   const artist = artists.find((a) => a.id === draft.artistId);
   const conflicts = conflictsFor(draft, data.planning.bookings);
+  const scheduleChanged = exists && scheduleKey(booking) !== scheduleKey(draft);
   const update = <K extends keyof Booking>(key: K, value: Booking[K]) =>
     setDraft((d) => ({ ...d, [key]: value }));
   const material = (key: keyof Booking["materials"], value: string) =>
@@ -164,7 +165,8 @@ export function BookingEditor({
         />
         <Select
           label="상대 일정 가능 여부"
-          value={draft.availability}
+          value={scheduleChanged ? "unknown" : draft.availability}
+          disabled={scheduleChanged}
           onChange={(e) =>
             update("availability", e.target.value as Booking["availability"])
           }
@@ -173,6 +175,14 @@ export function BookingEditor({
           <option value="available">{t("가능 확인")}</option>
           <option value="unavailable">{t("불가")}</option>
         </Select>
+        {scheduleChanged && <Notice>일정 변경을 저장한 뒤 상대 가능 여부를 다시 확인해주세요.</Notice>}
+        <details className="flow-details">
+          <summary>{t("교체·이동 여유 시간")}</summary>
+          <Field label="출연 후 무대 교체 (분)" type="number" min={0} max={240} step={1}
+            value={draft.changeoverMinutes} onChange={(e) => update("changeoverMinutes", Number(e.target.value))} />
+          <Field label="다음 행사까지 이동 (분)" type="number" min={0} max={240} step={1}
+            value={draft.travelMinutes} onChange={(e) => update("travelMinutes", Number(e.target.value))} />
+        </details>
         <Field
           label="홀드 기한"
           type="datetime-local"

@@ -33,6 +33,8 @@ export function artistError(artist: Artist) {
   return "";
 }
 export function bookingError(b: Booking) {
+  if ([b.changeoverMinutes, b.travelMinutes].some((n) => !Number.isInteger(n) || n < 0 || n > 240))
+    return "교체·이동 시간은 0~240분으로 입력해주세요.";
   if (
     (b.start || b.end) &&
     (!Number.isFinite(timeValue(b.start)) || !Number.isFinite(timeValue(b.end)))
@@ -63,19 +65,22 @@ export function bookingError(b: Booking) {
 }
 export function conflictsFor(b: Booking, bookings: Booking[]) {
   if (!activeBooking(b) || !b.start || !b.end) return [];
-  return bookings.filter(
-    (other) =>
-      other.id !== b.id &&
-      other.scopeId === b.scopeId &&
-      activeBooking(other) &&
-      (other.artistId === b.artistId ||
-        (other.eventId === b.eventId &&
-          !!b.stage.trim() &&
-          other.stage.trim().toLowerCase() === b.stage.trim().toLowerCase())) &&
-      timeValue(b.start) < timeValue(other.end) &&
-      timeValue(other.start) < timeValue(b.end),
-  );
+  return bookings.filter((other) => {
+    if (other.id === b.id || other.scopeId !== b.scopeId || !activeBooking(other)) return false;
+    const sameArtist = other.artistId === b.artistId;
+    const sameStage = !!b.stage.trim() && other.stage.trim().toLowerCase() === b.stage.trim().toLowerCase();
+    if (!sameArtist && !sameStage) return false;
+    const buffer = (item: Booking) => Math.max(
+      sameStage ? item.changeoverMinutes : 0,
+      sameArtist && other.eventId !== b.eventId ? item.travelMinutes : 0,
+    ) * 60_000;
+    return timeValue(b.start) < timeValue(other.end) + buffer(other) &&
+      timeValue(other.start) < timeValue(b.end) + buffer(b);
+  });
 }
+export const scheduleKey = (b: Booking) => JSON.stringify([
+  b.start, b.end, b.arrival, b.soundcheck, b.stage, b.changeoverMinutes, b.travelMinutes,
+]);
 export function assertScope(data: MockState, scopeId: string, actorId: string) {
   const actor = data.users.find(
     (u) => u.id === actorId && u.active && !u.deleted,
@@ -141,22 +146,26 @@ export function saveBooking(
     throw Error("확정 이후 상태는 상세 화면에서 변경해주세요.");
   if (old && ["completed", "cancelled"].includes(old.status))
     throw Error("완료되거나 취소된 부킹은 수정할 수 없습니다.");
-  if (candidate.status === "confirmed") {
-    assertConfirmable(candidate, data.planning.bookings);
-  }
   const next = structuredClone(candidate);
+  const scheduleChanged = !!old && scheduleKey(old) !== scheduleKey(next);
+  if (scheduleChanged) next.availability = "unknown";
+  if (next.status === "confirmed") {
+    // A changed confirmed slot remains reserved, but its old availability response is invalid.
+    assertConfirmable(next, data.planning.bookings, false);
+  }
   if (old) {
     next.tasks = old.tasks;
     next.guestLinkId = old.guestLinkId;
     next.history = old.history;
     next.revision = old.revision + 1;
+    next.cancellation = old.cancellation;
+    next.materialsReviewedRevision =
+      JSON.stringify(old.materials) === JSON.stringify(next.materials) &&
+      old.materialsReviewedRevision === old.revision ? next.revision : null;
     const shared = (b: Booking) =>
       JSON.stringify([
-        b.start,
-        b.end,
-        b.arrival,
-        b.soundcheck,
-        b.stage,
+        scheduleKey(b),
+        b.availability,
         b.materials,
       ]);
     next.acknowledgedRevision =
@@ -172,16 +181,23 @@ export function saveBooking(
     );
     data.planning.bookings[data.planning.bookings.indexOf(old)] = next;
   } else {
+    next.tasks = [];
+    next.history = [];
+    next.revision = 1;
+    next.acknowledgedRevision = null;
+    next.materialsReviewedRevision = null;
+    next.guestLinkId = null;
+    next.cancellation = null;
     addHistory(next, actorId, "부킹 생성");
     data.planning.bookings.unshift(next);
   }
 }
-function assertConfirmable(b: Booking, bookings: Booking[]) {
+function assertConfirmable(b: Booking, bookings: Booking[], requireAvailability = true) {
   if (!b.start || !b.end || !b.stage.trim() || !b.owner.trim())
     throw Error("출연 일시·무대·담당자를 입력한 뒤 확정해주세요.");
   const error = bookingError(b);
   if (error) throw Error(error);
-  if (b.availability !== "available")
+  if (requireAvailability && b.availability !== "available")
     throw Error("상대에게 일정 가능 여부를 확인한 뒤 확정해주세요.");
   if (holdExpired(b))
     throw Error(
@@ -199,6 +215,7 @@ export function transitionBooking(
   actorId: string,
   revision: number,
   status: BookingStatus,
+  cancellation?: NonNullable<Booking["cancellation"]>,
 ) {
   assertScope(data, scopeId, actorId);
   const b = data.planning.bookings.find(
@@ -221,10 +238,67 @@ export function transitionBooking(
     throw Error("이 상태로 변경할 수 없습니다.");
   if (status === "completed" && timeValue(b.end) > Date.parse(MOCK_NOW))
     throw Error("출연 종료 이후에 완료로 기록할 수 있습니다.");
+  if (status === "cancelled") {
+    if (!cancellation?.reason.trim() || !["keep", "pause"].includes(cancellation.linkAction))
+      throw Error("취소 사유와 게스트 링크 처리 방법을 선택해주세요.");
+    const { link, sharedBookings } = guestImpact(data, b);
+    if (cancellation.linkAction === "pause" && sharedBookings.length)
+      throw Error("다른 확정 부킹이 사용하는 링크입니다. 유지한 뒤 링크 관리에서 조정해주세요.");
+    if (link && cancellation.linkAction === "pause") link.active = false;
+    b.cancellation = { ...cancellation, reason: cancellation.reason.trim() };
+  }
+  const materialsReviewed = b.materialsReviewedRevision === b.revision;
   b.status = status;
   b.revision++;
+  b.materialsReviewedRevision = materialsReviewed ? b.revision : null;
   b.acknowledgedRevision = null;
   addHistory(b, actorId, `부킹 상태 변경 · ${bookingStatuses[status]}`);
+}
+
+export function guestImpact(data: MockState, b: Booking) {
+  const link = data.links.find((l) => l.venueId === b.scopeId && l.eventId === b.eventId &&
+    !l.deleted && (l.id === b.guestLinkId || l.contributorKey === `artist:${b.artistId}`));
+  const guests = link ? data.guests.filter((g) => g.venueId === b.scopeId &&
+    g.eventId === b.eventId && g.externalLinkId === link.id && g.status !== "deleted") : [];
+  const sharedBookings = link ? data.planning.bookings.filter((other) =>
+    other.id !== b.id && other.scopeId === b.scopeId && other.eventId === b.eventId &&
+    other.status === "confirmed" && (other.guestLinkId === link.id || other.artistId === b.artistId)) : [];
+  return { link, registered: guests.length, checked: guests.filter((g) => g.status === "checked").length, sharedBookings };
+}
+
+function currentBooking(data: MockState, id: string, scopeId: string, actorId: string, revision: number) {
+  assertScope(data, scopeId, actorId);
+  const b = data.planning.bookings.find((b) => b.id === id && b.scopeId === scopeId);
+  if (!b || b.revision !== revision || !activeBooking(b))
+    throw Error("부킹이 변경되었습니다. 최신 내용을 확인해주세요.");
+  return b;
+}
+
+export function reviewMaterials(data: MockState, id: string, scopeId: string, actorId: string, revision: number) {
+  const b = currentBooking(data, id, scopeId, actorId, revision);
+  if (!b.materials.pressUrl || !b.materials.riderUrl)
+    throw Error("소개·기술자료를 등록한 뒤 검토 완료로 기록해주세요.");
+  const acknowledged = b.acknowledgedRevision === b.revision;
+  b.revision++;
+  b.materialsReviewedRevision = b.revision;
+  b.acknowledgedRevision = acknowledged ? b.revision : null;
+  addHistory(b, actorId, "행사 자료 운영팀 검토 완료");
+}
+
+// Mock response only: the real invitation/authentication boundary is not implemented here.
+export function respondToBooking(data: MockState, id: string, scopeId: string, actorId: string,
+  revision: number, availability: Booking["availability"], acknowledged: boolean, riderUrl: string) {
+  const b = currentBooking(data, id, scopeId, actorId, revision);
+  if (!safeUrl(riderUrl)) throw Error("자료 링크는 http 또는 https 주소를 입력해주세요.");
+  const changed = riderUrl !== b.materials.riderUrl;
+  const reviewed = b.materialsReviewedRevision === b.revision;
+  b.materials.riderUrl = riderUrl;
+  b.availability = availability;
+  b.revision++;
+  b.materialsReviewedRevision = !changed && reviewed ? b.revision : null;
+  b.acknowledgedRevision = acknowledged && availability === "available" && !changed && b.status === "confirmed" ? b.revision : null;
+  addHistory(b, data.planning.artists.find((a) => a.id === b.artistId)!.name,
+    changed ? "기술자료 제출 · 운영팀 검토 필요" : b.acknowledgedRevision ? "출연 일정 확인" : "일정 가능 여부 응답");
 }
 export function connectGuestLink(
   data: MockState,

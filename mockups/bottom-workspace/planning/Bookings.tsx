@@ -2,7 +2,8 @@ import { useCallback, useEffect, useState } from "react";
 import { useMock, useIntent } from "../data/MockData";
 import { Action, Empty, Field, Select, Tabs } from "../shared/ui";
 import { bookingStatuses, type Booking } from "./types";
-import { activeBooking, conflictsFor, holdExpired } from "./domain";
+import { activeBooking } from "./domain";
+import { bookingIssues } from "./pipeline";
 import { newBooking } from "./fixtures";
 import { PlanningTabs, Status, timeLabel } from "./ui";
 import { BookingEditor } from "./BookingEditor";
@@ -51,13 +52,7 @@ export function Bookings() {
   const pending = bookings.filter(
     (b) => activeBooking(b) && b.status !== "confirmed",
   );
-  const attention = bookings.filter(
-    (b) =>
-      activeBooking(b) &&
-      (holdExpired(b) ||
-        conflictsFor(b, bookings).length ||
-        (b.status === "confirmed" && b.acknowledgedRevision !== b.revision)),
-  );
+  const attention = bookings.filter((b) => bookingIssues(data, b).length > 0);
   const list = bookings.filter(
     (b) =>
       (!eventFilter || b.eventId === eventFilter) &&
@@ -96,12 +91,9 @@ export function Bookings() {
           <small>{b.due || t("기한 미정")}</small>
         </div>
       )}
-      {conflictsFor(b, bookings).length > 0 && (
-        <span className="planning-flag">{t("일정 겹침 확인")}</span>
-      )}
-      {b.status === "confirmed" && b.acknowledgedRevision !== b.revision && (
-        <span className="planning-flag">{t("상대 확인 대기")}</span>
-      )}
+      {bookingIssues(data, b).length > 0 && <span className="planning-flag">
+        {t(bookingIssues(data, b)[0].label)} · {t("확인 {count}건", { count: bookingIssues(data, b).length })}
+      </span>}
     </button>
   );
   return (

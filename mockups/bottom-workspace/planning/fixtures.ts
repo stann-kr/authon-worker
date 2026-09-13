@@ -30,6 +30,8 @@ export const newBooking = (
   arrival: "",
   soundcheck: "",
   stage: "",
+  changeoverMinutes: 0,
+  travelMinutes: 0,
   nextAction: "일정 가능 여부 문의",
   due: "",
   holdUntil: "",
@@ -43,6 +45,8 @@ export const newBooking = (
   tasks: [],
   revision: 1,
   acknowledgedRevision: null,
+  materialsReviewedRevision: null,
+  cancellation: null,
   guestLinkId: null,
   history: [],
 });

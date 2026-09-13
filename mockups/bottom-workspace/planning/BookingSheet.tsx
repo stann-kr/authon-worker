@@ -6,18 +6,20 @@ import type { BookingStatus } from "./types";
 import { bookingStatuses } from "./types";
 import {
   activeBooking,
-  addHistory,
-  assertScope,
   conflictsFor,
   connectGuestLink,
   holdExpired,
-  safeUrl,
+  guestImpact,
+  respondToBooking,
+  reviewMaterials,
   timeValue,
   transitionBooking,
 } from "./domain";
 import { MOCK_NOW } from "../data/types";
 import { BookingEditor } from "./BookingEditor";
 import { ArtistReview } from "./ArtistReview";
+import { BookingCancellation } from "./BookingCancellation";
+import { BookingPipeline } from "./BookingPipeline";
 import { MaterialLink, Status, timeLabel } from "./ui";
 
 export function BookingSheet({
@@ -27,9 +29,9 @@ export function BookingSheet({
   bookingId: string;
   onClose: () => void;
 }) {
-  const { data, venue, user, mutate, chooseEvent, navigate, t, notice } =
+  const { data, venue, user, mutate, chooseEvent, navigate, t, notice, setIntent } =
     useMock();
-  const [mode, setMode] = useState<"detail" | "edit" | "review" | "guest">(
+  const [mode, setMode] = useState<"detail" | "edit" | "review" | "guest" | "cancel" | "materials">(
     "detail",
   );
   const [confirm, setConfirm] = useState<BookingStatus | null>(null);
@@ -45,10 +47,12 @@ export function BookingSheet({
   if (!b || !artist || !event) return null;
   const back = () => setMode("detail");
   const conflicts = conflictsFor(b, data.planning.bookings);
-  const link = data.links.find((l) => l.id === b.guestLinkId && !l.deleted);
+  const { link, registered, checked } = guestImpact(data, b);
   const go = (view: "preparation" | "links" | "roster") => {
     chooseEvent(b.eventId);
+    if (view === "links" && link) setIntent(`link-open:${link.id}`);
     navigate(view);
+    onClose();
   };
   if (mode === "edit")
     return <BookingEditor booking={b} onClose={back} onSaved={back} />;
@@ -70,45 +74,24 @@ export function BookingSheet({
         }}
         onClose={back}
         onRespond={async (availability, acknowledged, riderUrl) => {
-          const revision = b.revision;
-          if (
-            await mutate((d) => {
-              assertScope(d, venue.id, user.id);
-              const current = d.planning.bookings.find(
-                (item) => item.id === b.id && item.scopeId === venue.id,
-              )!;
-              if (current.revision !== revision || !activeBooking(current))
-                throw Error(
-                  "일정이 변경되었습니다. 최신 내용을 다시 확인해주세요.",
-                );
-              if (!safeUrl(riderUrl))
-                throw Error("자료 링크는 http 또는 https 주소를 입력해주세요.");
-              const changed = riderUrl !== current.materials.riderUrl;
-              current.materials.riderUrl = riderUrl;
-              current.availability = availability;
-              if (changed) current.revision++;
-              current.acknowledgedRevision =
-                acknowledged &&
-                availability === "available" &&
-                !changed &&
-                current.status === "confirmed"
-                  ? current.revision
-                  : null;
-              addHistory(
-                current,
-                artist.name,
-                changed
-                  ? "기술자료 제출 · 운영팀 검토 필요"
-                  : current.acknowledgedRevision
-                    ? "출연 일정 확인"
-                    : "일정 가능 여부 응답",
-              );
-            }, "아티스트 응답을 반영했습니다.")
-          )
-            back();
+          if (await mutate((d) => respondToBooking(d, b.id, venue.id, user.id,
+            b.revision, availability, acknowledged, riderUrl), "아티스트 응답을 반영했습니다.")) back();
         }}
       />
     );
+  if (mode === "cancel") return <BookingCancellation booking={b} onClose={back} />;
+  if (mode === "materials") return <Sheet title={t("행사 자료 운영팀 검토")} subtitle={artist.name} onClose={back}>
+    <div className="planning-detail">
+      <MaterialLink label="소개·프레스 자료" value={b.materials.pressUrl} />
+      <MaterialLink label="기술자료" value={b.materials.riderUrl} />
+      {b.materials.requirements && <p className="planning-copy">{b.materials.requirements}</p>}
+      <Notice>자료 내용과 현장 준비 가능 여부를 확인한 뒤 완료로 기록하세요.</Notice>
+      <Action disabled={!b.materials.pressUrl || !b.materials.riderUrl} onClick={async () => {
+        if (await mutate((d) => reviewMaterials(d, b.id, venue.id, user.id, b.revision), "행사 자료 검토를 기록했습니다.")) back();
+      }}>운영팀 검토 완료</Action>
+      {notice && <Notice>{notice}</Notice>}
+    </div>
+  </Sheet>;
   if (mode === "guest")
     return (
       <Sheet
@@ -163,6 +146,10 @@ export function BookingSheet({
           <span>→ {timeLabel(b.end)}</span>
           <small>{b.stage || t("무대 미정")} · KST</small>
         </div>
+        <BookingPipeline booking={b} onAction={(action) => {
+          if (action === "preparation" || action === "links") go(action);
+          else setMode(action);
+        }} />
         {holdExpired(b) && (
           <Notice error>
             홀드 기한이 지났습니다. 상대에게 일정을 다시 확인하세요.
@@ -216,7 +203,14 @@ export function BookingSheet({
             </div>
           )}
         </dl>
-        {b.nextAction && (
+        {(b.changeoverMinutes > 0 || b.travelMinutes > 0) && <p className="planning-hint">
+          {t("출연 후 교체 {changeover}분 · 다음 행사 이동 {travel}분", { changeover: b.changeoverMinutes, travel: b.travelMinutes })}
+        </p>}
+        {b.cancellation && <section>
+          <h3>{t("취소 사유")}</h3><p className="planning-copy">{b.cancellation.reason}</p>
+          <p className="planning-hint">{t(b.cancellation.linkAction === "pause" ? "취소 시 추가 등록 중지" : "취소 시 링크 상태 유지")}</p>
+        </section>}
+        {activeBooking(b) && b.nextAction && (
           <div className="planning-next">
             <span>{t("다음 할 일")}</span>
             <strong>{b.nextAction}</strong>
@@ -253,6 +247,10 @@ export function BookingSheet({
             <p className="planning-copy">{b.materials.requirements}</p>
           )}
         </section>
+        {activeBooking(b) && <div className="button-row">
+          <span className="planning-hint">{t(b.materialsReviewedRevision === b.revision ? "운영팀 자료 검토 완료" : "운영팀 자료 검토 대기")}</span>
+          {b.materialsReviewedRevision !== b.revision && <Action secondary onClick={() => setMode("materials")}>자료 검토</Action>}
+        </div>}
         {b.notes && (
           <section>
             <h3>{t("팀 내부 메모")}</h3>
@@ -263,7 +261,7 @@ export function BookingSheet({
           <Action secondary onClick={() => go("preparation")}>
             행사 준비 열기
           </Action>
-          {b.status === "confirmed" && (
+          {(b.status === "confirmed" || link) && (
             <Action
               secondary
               onClick={() => (link ? go("links") : setMode("guest"))}
@@ -278,6 +276,7 @@ export function BookingSheet({
             {t("한도 {count}명", { count: link.limit })}
           </p>
         )}
+        {link && <p className="planning-hint">{t("등록 {registered}명 · 입장 {checked}명", { registered, checked })}</p>}
         {!["cancelled", "completed"].includes(b.status) && (
           <div className="button-row">
             {b.status !== "confirmed" ? (
@@ -289,7 +288,7 @@ export function BookingSheet({
                 </Action>
               )
             )}
-            <Action secondary onClick={() => setConfirm("cancelled")}>
+            <Action secondary onClick={() => setMode("cancel")}>
               부킹 취소
             </Action>
           </div>
@@ -299,16 +298,12 @@ export function BookingSheet({
             title={t(
               confirm === "confirmed"
                 ? "이 일정으로 부킹을 확정할까요?"
-                : confirm === "cancelled"
-                  ? "부킹을 취소할까요?"
-                  : "출연을 완료로 기록할까요?",
+                : "출연을 완료로 기록할까요?",
             )}
             description={t(
               confirm === "confirmed"
                 ? "상대와 합의한 일시·무대를 확인하세요. 확정해도 외부 메시지나 게스트 링크가 자동 발송되지 않습니다."
-                : confirm === "cancelled"
-                  ? "기존 게스트와 링크는 유지됩니다. 필요한 변경은 링크·명단에서 별도로 확인하세요."
-                  : "출연 이력에 완료로 남깁니다.",
+                : "출연 이력에 완료로 남깁니다.",
             )}
             onCancel={() => setConfirm(null)}
             onConfirm={async () => {
