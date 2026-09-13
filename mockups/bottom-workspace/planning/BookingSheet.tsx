@@ -20,6 +20,7 @@ import { BookingEditor } from "./BookingEditor";
 import { ArtistReview } from "./ArtistReview";
 import { BookingCancellation } from "./BookingCancellation";
 import { BookingPipeline } from "./BookingPipeline";
+import type { BookingIssue } from "./pipeline";
 import { MaterialLink, Status, timeLabel } from "./ui";
 
 export function BookingSheet({
@@ -35,6 +36,7 @@ export function BookingSheet({
     "detail",
   );
   const [confirm, setConfirm] = useState<BookingStatus | null>(null);
+  const [editTarget, setEditTarget] = useState<BookingIssue["target"]>();
   const b = data.planning.bookings.find(
     (b) => b.id === bookingId && b.scopeId === venue.id,
   );
@@ -45,7 +47,7 @@ export function BookingSheet({
     (e) => e.id === b?.eventId && e.venueId === venue.id,
   );
   if (!b || !artist || !event) return null;
-  const back = () => setMode("detail");
+  const back = () => { setEditTarget(undefined); setMode("detail"); };
   const conflicts = conflictsFor(b, data.planning.bookings);
   const { link, registered, checked } = guestImpact(data, b);
   const go = (view: "preparation" | "links" | "roster") => {
@@ -55,7 +57,7 @@ export function BookingSheet({
     onClose();
   };
   if (mode === "edit")
-    return <BookingEditor booking={b} onClose={back} onSaved={back} />;
+    return <BookingEditor booking={b} initialTarget={editTarget} onClose={back} onSaved={back} />;
   if (mode === "review")
     return (
       <ArtistReview
@@ -146,7 +148,8 @@ export function BookingSheet({
           <span>→ {timeLabel(b.end)}</span>
           <small>{b.stage || t("무대 미정")} · KST</small>
         </div>
-        <BookingPipeline booking={b} onAction={(action) => {
+        <BookingPipeline booking={b} onAction={({ action, target }) => {
+          setEditTarget(target);
           if (action === "preparation" || action === "links") go(action);
           else setMode(action);
         }} />

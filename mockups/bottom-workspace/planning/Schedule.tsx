@@ -1,10 +1,11 @@
-import { useState } from "react";
+import { useId, useState } from "react";
 import { useMock } from "../data/MockData";
 import { MOCK_NOW } from "../data/types";
 import { Action, Empty, Field, Select, Tabs, Toggle } from "../shared/ui";
 import { activeBooking, conflictsFor } from "./domain";
 import { PlanningTabs, Status } from "./ui";
 import { BookingSheet } from "./BookingSheet";
+import { Icon } from "../shared/Icon";
 
 export function shiftDate(day: string, amount: number) {
   const date = new Date(`${day}T12:00:00Z`);
@@ -18,6 +19,8 @@ function weekDates(day: string) {
 }
 export function Schedule() {
   const { data, venue, event, t, setIntent, navigate } = useMock();
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const filtersId = useId();
   const [anchor, setAnchor] = useState(event.date);
   const [dayFilter, setDayFilter] = useState("");
   const [eventFilter, setEventFilter] = useState("");
@@ -51,7 +54,7 @@ export function Schedule() {
     setDayFilter("");
   };
   return (
-    <div className="flow-section planning-section">
+    <div className="flow-section planning-section planning-schedule">
       <PlanningTabs />
       <div className="planning-calendar-controls">
         <Action secondary onClick={() => move(-7)}>
@@ -75,6 +78,33 @@ export function Schedule() {
           다음 주
         </Action>
       </div>
+      <div className="planning-schedule-view">
+        <Tabs
+          label="일정 보기"
+          value={layout}
+          onChange={setLayout}
+          items={[
+            { id: "week", label: "주간" },
+            { id: "list", label: "목록" },
+          ]}
+        />
+        <Action
+          secondary
+          onClick={() => {
+            setAnchor(MOCK_NOW.slice(0, 10));
+            setDayFilter("");
+          }}
+        >
+          오늘
+        </Action>
+        <button className="secondary planning-filter-toggle" type="button"
+          aria-label={t("일정 필터")} aria-expanded={filtersOpen} aria-controls={filtersId}
+          onClick={() => setFiltersOpen((open) => !open)}>
+          <Icon name="sliders" size={16} /><span>{t("필터")}</span>
+          {(eventFilter || artistFilter || !tentative) && <span className="nav-count">{Number(!!eventFilter) + Number(!!artistFilter) + Number(!tentative)}</span>}
+        </button>
+      </div>
+      <div className="planning-schedule-filters" id={filtersId} hidden={!filtersOpen}>
       <div className="planning-filters">
         <Select
           label="행사 필터"
@@ -105,31 +135,17 @@ export function Schedule() {
             ))}
         </Select>
       </div>
-      <div className="planning-filters">
-        <Tabs
-          label="일정 보기"
-          value={layout}
-          onChange={setLayout}
-          items={[
-            { id: "week", label: "주간" },
-            { id: "list", label: "목록" },
-          ]}
-        />
-        <Action
-          secondary
-          onClick={() => {
-            setAnchor(MOCK_NOW.slice(0, 10));
-            setDayFilter("");
-          }}
-        >
-          오늘
-        </Action>
-      </div>
       <Toggle
         label="미확정 일정 포함"
         checked={tentative}
         onChange={(e) => setTentative(e.target.checked)}
       />
+      </div>
+      {!filtersOpen && (eventFilter || artistFilter || !tentative) && <p className="planning-hint">
+        {[data.events.find((e) => e.id === eventFilter)?.name,
+          data.planning.artists.find((a) => a.id === artistFilter)?.name,
+          !tentative ? t("확정") : ""].filter(Boolean).join(" · ")}
+      </p>}
       {layout === "week" && (
         <nav className="planning-week" aria-label={t("주간 날짜 선택")}>
           {dates.map((day, i) => (

@@ -21,6 +21,7 @@ import {
   string,
 } from "../shared/ui";
 import { GuestEntry } from "../guests/GuestEntry";
+import "./registration.css";
 export function ExternalView() {
   const {
     data,
@@ -73,6 +74,7 @@ export function ExternalView() {
       <div className="flow-toolbar">
         <span className="flow-auth-brand">{venue?.brandName ?? "Authon"}</span>
         <select
+          className="registration-language"
           aria-label={t("언어")}
           value={locale}
           onChange={(e) => setLocale(e.target.value as "ko" | "en")}

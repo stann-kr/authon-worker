@@ -386,7 +386,6 @@ svg {
   display: flex;
   gap: 8px;
   padding: 4px;
-  overflow-x: auto;
   scrollbar-width: none;
   pointer-events: auto;
   scroll-padding-inline: 4px;
@@ -394,26 +393,6 @@ svg {
 .dock-nav::-webkit-scrollbar,
 .dock-tools::-webkit-scrollbar {
   display: none;
-}
-.dock-nav > button {
-  flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  padding: 10px 18px;
-  min-height: 44px;
-  background: var(--pill-bg);
-  border: 0;
-  border-radius: 99px;
-  white-space: nowrap;
-  color: var(--muted);
-  font-size: 14px;
-  font-weight: 500;
-}
-.dock-nav > button.active {
-  background: var(--pill-active);
-  color: var(--text);
 }
 .nav-count {
   border-radius: 99px;
@@ -423,6 +402,7 @@ svg {
   background: var(--pill-active);
   color: var(--text);
 }
+.dock-tools { overflow-x: auto; }
 .dock-tools:empty {
   display: none;
 }

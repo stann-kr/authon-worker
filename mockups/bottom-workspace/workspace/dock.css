@@ -1,0 +1,68 @@
+.dock-nav {
+  overflow: visible;
+  min-width: 0;
+}
+.dock-nav-window {
+  flex: 1;
+  min-width: 0;
+  position: relative;
+}
+.dock-nav-scroll {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  scroll-padding-inline: 20px;
+  padding: 4px;
+  margin: -4px;
+}
+.dock-nav-scroll::-webkit-scrollbar {
+  display: none;
+}
+.dock-nav button {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 18px;
+  min-height: 44px;
+  border: 0;
+  border-radius: 99px;
+  white-space: nowrap;
+  background: var(--pill-bg);
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 500;
+}
+.dock-nav button.active {
+  background: var(--pill-active);
+  color: var(--text);
+}
+.dock-nav .dock-more {
+  padding-inline: 14px;
+}
+.dock-edge {
+  display: none;
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 20px;
+  align-items: center;
+  color: var(--muted);
+  pointer-events: none;
+  font-size: 20px;
+}
+.dock-edge.previous {
+  left: -4px;
+  background: linear-gradient(to right, var(--bg), transparent);
+}
+.dock-edge.next {
+  right: -4px;
+  justify-content: flex-end;
+  background: linear-gradient(to left, var(--bg), transparent);
+}
+.dock-nav-scroll[data-previous="true"] ~ .previous,
+.dock-nav-scroll[data-next="true"] ~ .next {
+  display: flex;
+}

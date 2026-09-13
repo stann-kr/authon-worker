@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { formatVenueDateTime } from "../../../lib/date";
 import { useMock, id, useIntent } from "../data/MockData";
 import { MOCK_NOW, type MockLink, type Locale } from "../data/types";
 import { Sheet } from "../shared/Sheet";
@@ -269,16 +270,21 @@ export function Links() {
           </div>
           <div className="flow-pair">
             <span>{t("언어")}</span>
-            <strong>{selected.locale}</strong>
+            <strong>{selected.locale === "auto" ? t("자동") : selected.locale === "ko" ? "한국어" : "English"}</strong>
           </div>
           <div className="flow-pair">
             <span>{t("만료")}</span>
             <strong>
-              {selected.expiresAt?.slice(0, 16) ?? t("만료 없음")}
+              {selected.expiresAt
+                ? `${formatVenueDateTime(selected.expiresAt, {
+                    timeZone: "Asia/Seoul", locale: "sv-SE",
+                    dateStyle: "short", timeStyle: "short",
+                  })?.replaceAll("-", ".") ?? "—"} KST`
+                : t("만료 없음")}
             </strong>
           </div>
           <CopyBox
-            value={`http://127.0.0.1:4176/#external/${selected.id}`}
+            value={new URL(`#external/${encodeURIComponent(selected.id)}`, window.location.href).href}
             onOpen={() => {
               setExternalLinkId(selected.id);
               navigate("external");

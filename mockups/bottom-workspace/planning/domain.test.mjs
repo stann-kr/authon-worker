@@ -268,6 +268,17 @@ test("attention derives from deadlines, incomplete tasks, material review and li
   assert.ok(keys().includes("followup"));
   assert.ok(keys().includes("tasks"));
   assert.ok(keys().includes("materials-review"));
+  for (const [due, expected] of [
+    ["2026-09-12", "기한 지난 후속 업무 처리"],
+    ["2026-09-13", "오늘까지 후속 업무 처리"],
+    ["2026-09-14", undefined],
+    ["", "후속 업무 기한 지정"],
+  ]) {
+    b.due = due;
+    const followup = bookingIssues(data, b).find((issue) => issue.key === "followup");
+    assert.equal(followup?.label, expected);
+    if (followup) assert.equal(followup.target, "due");
+  }
   connectGuestLink(data, b.id, "faust", "admin", 10);
   assert.ok(keys().includes("link"));
   data.links.find((l) => l.id === b.guestLinkId).deleted = true;

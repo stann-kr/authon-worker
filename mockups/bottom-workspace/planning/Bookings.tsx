@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { useMock, useIntent } from "../data/MockData";
-import { Action, Empty, Field, Select, Tabs } from "../shared/ui";
+import { Action, Empty, Select, Tabs } from "../shared/ui";
 import { bookingStatuses, type Booking } from "./types";
 import { activeBooking } from "./domain";
 import { bookingIssues } from "./pipeline";
@@ -8,6 +8,7 @@ import { newBooking } from "./fixtures";
 import { PlanningTabs, Status, timeLabel } from "./ui";
 import { BookingEditor } from "./BookingEditor";
 import { BookingSheet } from "./BookingSheet";
+import { BookingSearch } from "./BookingSearch";
 
 export function Bookings() {
   const { data, venue, event, user, intent, setIntent, t } = useMock();
@@ -97,29 +98,19 @@ export function Bookings() {
     </button>
   );
   return (
-    <div className="flow-section planning-section">
+    <div className="flow-section planning-section planning-bookings">
       <PlanningTabs />
-      <div className="planning-actions">
-        <Action onClick={() => create()}>새 부킹</Action>
-      </div>
       <div className="planning-summary">
-        <button onClick={() => setFilter("negotiation")}>
+        <button aria-pressed={filter === "negotiation"} onClick={() => setFilter(filter === "negotiation" ? "active" : "negotiation")}>
           <span>{t("조율 중인 부킹")}</span>
           <strong>{pending.length}</strong>
         </button>
-        <button onClick={() => setFilter("attention")}>
+        <button aria-pressed={filter === "attention"} onClick={() => setFilter(filter === "attention" ? "active" : "attention")}>
           <span>{t("확인이 필요한 일정")}</span>
           <strong>{attention.length}</strong>
         </button>
       </div>
-      <div className="planning-filters">
-        <Field
-          label="부킹 검색"
-          type="search"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder="아티스트·행사·담당자"
-        />
+      <div className="planning-booking-controls">
         <Select
           label="행사 필터"
           value={eventFilter}
@@ -134,8 +125,6 @@ export function Bookings() {
               </option>
             ))}
         </Select>
-      </div>
-      <div className="planning-filters">
         <Select
           label="부킹 상태 필터"
           value={filter}
@@ -151,6 +140,12 @@ export function Bookings() {
             </option>
           ))}
         </Select>
+        <BookingSearch value={query} onChange={setQuery} />
+      </div>
+      <div className="planning-list-view">
+        <p role="status" className="planning-result">
+          {t("부킹 {count}건", { count: list.length })}
+        </p>
         <Tabs
           label="부킹 보기"
           value={layout}
@@ -161,9 +156,6 @@ export function Bookings() {
           ]}
         />
       </div>
-      <p role="status" className="planning-result">
-        {t("부킹 {count}건", { count: list.length })}
-      </p>
       {layout === "list" ? (
         <div className="planning-booking-list">{list.map(card)}</div>
       ) : (

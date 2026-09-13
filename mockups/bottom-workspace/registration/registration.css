@@ -1,0 +1,10 @@
+.registration-language {
+  min-height: 44px;
+  max-width: 100%;
+  padding: 10px 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--pill-bg);
+  color: var(--text);
+  font-size: 16px;
+}

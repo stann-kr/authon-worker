@@ -1,6 +1,6 @@
 .planning-section {
   display: grid;
-  gap: 22px;
+  gap: 16px;
   min-width: 0;
 }
 .planning-section-title,
@@ -40,7 +40,7 @@
   font-size: 13px;
 }
 .planning-tabs button[aria-current="page"] {
-  border-bottom-color: var(--green);
+  border-bottom-color: var(--accent);
   color: var(--text);
 }
 .planning-filters {
@@ -133,7 +133,7 @@
   color: var(--muted);
 }
 .planning-status.confirmed {
-  color: var(--green);
+  color: var(--accent);
   background: rgba(16, 185, 129, 0.08);
   border-color: rgba(16, 185, 129, 0.2);
 }
@@ -145,31 +145,60 @@
   text-decoration: line-through;
 }
 .planning-summary {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 20px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 20px;
   border-block: 1px solid var(--line);
-  padding-block: 16px;
+  padding-block: 4px;
 }
 .planning-summary button {
   border: 0;
   background: none;
   color: var(--text);
-  padding: 0;
-  display: grid;
+  padding: 4px 0;
+  display: inline-flex;
+  align-items: center;
   gap: 8px;
   text-align: left;
-  min-height: 70px;
+  min-height: 44px;
 }
-.planning-summary span {
-  font-size: 12px;
-  color: var(--muted);
+.planning-summary span { font-size: 12px; color: var(--muted); }
+.planning-summary strong { font-size: 16px; font-weight: 600; }
+.planning-summary button[aria-pressed="true"] span { color: var(--accent); }
+.planning-booking-controls {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 44px;
+  gap: 12px;
+  align-items: center;
 }
-.planning-summary strong {
-  font-size: 28px;
-  font-weight: 500;
-  line-height: 1;
+.planning-booking-controls > .field > span:not(.sr-only) {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
 }
+.planning-booking-controls select { padding-inline: 10px; }
+.planning-search-toggle {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 99px;
+  border: 1px solid var(--line);
+  background: var(--pill-bg);
+  color: var(--text);
+}
+.planning-search-toggle[aria-expanded="true"] { color: var(--accent); }
+.planning-search-field { grid-column: 1 / -1; }
+.planning-search-field[hidden] { display: none; }
+.planning-list-view {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+}
+.planning-list-view .flow-tabs { padding: 0; }
 .planning-card-next {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
@@ -404,7 +433,7 @@
   text-align: center;
 }
 .planning-week button[aria-pressed="true"] {
-  border-color: var(--green);
+  border-color: var(--accent);
   background: rgba(16, 185, 129, 0.08);
 }
 .planning-week span,
@@ -480,7 +509,7 @@
 }
 .planning-inline-check input,
 .planning-task input {
-  accent-color: var(--green);
+  accent-color: var(--accent);
   width: 18px;
   height: 18px;
   flex-shrink: 0;
@@ -558,4 +587,23 @@
   border: 0;
   border-bottom: 1px solid var(--line);
   overflow-wrap: anywhere;
+}
+
+.planning-schedule { gap: 12px; }
+.planning-editor .flow-details[open] > :not(summary) { margin-top: 16px; }
+.planning-schedule-view { display: flex; align-items: center; gap: 8px; }
+.planning-schedule-view .flow-tabs { margin-right: auto; padding: 0; }
+.planning-schedule-view > button { min-height: 44px; padding: 10px 12px; }
+.planning-filter-toggle { display: inline-flex; gap: 6px; align-items: center; }
+.planning-schedule-filters { display: grid; gap: 12px; }
+.planning-schedule-filters[hidden] { display: none; }
+.planning-calendar-controls .field > span {
+  position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%);
+}
+.planning-week button { min-height: 74px; padding: 8px 2px; gap: 4px; }
+@media (min-width: 700px) {
+  .preview-frame:not(.mobile) .planning-bookings { grid-template-columns: minmax(0, 1fr) auto; }
+  .preview-frame:not(.mobile) .planning-bookings > * { grid-column: 1 / -1; }
+  .preview-frame:not(.mobile) .planning-bookings > .planning-booking-controls { grid-column: 1; }
+  .preview-frame:not(.mobile) .planning-bookings > .planning-list-view { grid-column: 2; gap: 20px; }
 }

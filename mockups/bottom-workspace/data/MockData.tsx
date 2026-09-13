@@ -2,12 +2,14 @@ import {
   createContext,
   useContext,
   useEffect,
+  useLayoutEffect,
   useRef,
   useState,
   type ReactNode,
 } from "react";
 import { initialData } from "./fixtures";
 import { translate } from "./copy";
+import { useMockRoute } from "../workspace/useMockRoute";
 import {
   MOCK_DATE,
   MOCK_NOW,
@@ -106,15 +108,17 @@ export function MockProvider({ children }: { children: ReactNode }) {
   const [userId, setUserId] = useState("admin");
   const [venueId, setVenueId] = useState("faust");
   const [eventId, setEventId] = useState("tonight");
-  const [view, setView] = useState<View>("roster");
+  const [route, setRoute] = useMockRoute();
+  const { view, externalLinkId, authPage } = route;
+  const setView = (view: View) => setRoute((route) => ({ ...route, view }));
+  const setAuthPage = (authPage: string) => setRoute((route) => ({ ...route, authPage }));
+  const setExternalLinkId = (externalLinkId: string) => setRoute((route) => ({ ...route, externalLinkId }));
   const [scenario, setScenario] = useState<Scenario>("normal");
   const [locale, setLocale] = useState<Locale>("ko");
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState("");
   const [noticeError, setNoticeError] = useState(false);
   const [operator, setOperator] = useState("");
-  const [externalLinkId, setExternalLinkId] = useState("rsvp-link");
-  const [authPage, setAuthPage] = useState("login");
   const [receiptId, setReceiptId] = useState("");
   const user = data.users.find((u) => u.id === userId) ?? data.users[0];
   const venue = data.venues.find((v) => v.id === venueId) ?? data.venues[0];
@@ -126,6 +130,9 @@ export function MockProvider({ children }: { children: ReactNode }) {
     pending = useRef(false),
     current = useRef(data);
   current.current = data;
+  useLayoutEffect(() => {
+    version.current++;
+  }, [view, externalLinkId, authPage]);
   const isSuper = user.role === "super_admin",
     isAdmin = isSuper || user.role === "venue_admin";
   const canDoor =

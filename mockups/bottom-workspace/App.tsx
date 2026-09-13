@@ -32,6 +32,7 @@ import { DoorAttendance } from "./door/DoorAttendance";
 import { ExternalView } from "./registration/ExternalView";
 import { Analytics } from "./analytics/Analytics";
 import { WorkspaceMenu } from "./workspace/WorkspaceMenu";
+import { DockNavigation } from "./workspace/DockNavigation";
 import { Artists } from "./planning/Artists";
 import { Bookings } from "./planning/Bookings";
 import { Schedule } from "./planning/Schedule";
@@ -73,7 +74,6 @@ function Workspace() {
     setScenario,
     setIntent,
     setAuthPage,
-    setExternalLinkId,
     setData,
     operator,
     setOperator,
@@ -93,28 +93,10 @@ function Workspace() {
     navigate(v);
     setIntent(intent);
   };
-  const routeRef = useRef<() => void>(() => {});
-  routeRef.current = () => {
-    const parts = location.hash.slice(1).split("/");
-    if (
-      parts[0] === "planning" &&
-      ["artists", "bookings", "schedule", "preparation"].includes(parts[1])
-    ) {
-      navigate(parts[1] as View);
-    } else if (parts[0] === "external" && parts[1]) {
-      setExternalLinkId(decodeURIComponent(parts[1]));
-      navigate("external");
-    } else if (parts[0] === "auth") {
-      setAuthPage(parts.slice(1).join(":") || "login");
-      navigate("auth");
-    }
-  };
-  useEffect(() => {
-    const route = () => routeRef.current();
-    route();
-    window.addEventListener("hashchange", route);
-    return () => window.removeEventListener("hashchange", route);
-  }, []);
+  const contentRef = useRef<HTMLElement>(null);
+  useLayoutEffect(() => {
+    if (contentRef.current) contentRef.current.scrollTop = 0;
+  }, [view, user.id, venue.id, event.id, ctx.authPage, ctx.externalLinkId]);
 
   useEffect(() => {
     document.documentElement.lang = locale;
@@ -664,6 +646,7 @@ function Workspace() {
             </>
           )}
           <main
+            ref={contentRef}
             className="workspace-scroll"
             id="workspace-content"
             aria-label={t(viewLabels[view])}
@@ -769,55 +752,8 @@ function Workspace() {
                 </div>
               )}
               <div className="nav-handle" aria-hidden="true" />
-              <nav className="dock-nav" aria-label={t("주요 메뉴")}>
-                {nav.map((item) => (
-                  <button
-                    key={item.view}
-                    className={
-                      view === item.view ||
-                      (item.view === "more" &&
-                        !nav.some((n) => n.view === view))
-                        ? "active"
-                        : ""
-                    }
-                    aria-current={
-                      view === item.view ||
-                      (item.view === "more" &&
-                        !nav.some((n) => n.view === view))
-                        ? "page"
-                        : undefined
-                    }
-                    aria-label={t(item.label)}
-                    aria-describedby={
-                      pendingCount > 0 &&
-                      ((item.view === "more" && isAdmin) ||
-                        item.view === "requests")
-                        ? "workspace-pending-count"
-                        : undefined
-                    }
-                    aria-haspopup={item.view === "more" ? "dialog" : undefined}
-                    onClick={() =>
-                      item.view === "more" ? open("more") : go(item.view)
-                    }
-                  >
-                    <Icon name={item.icon} size={18} />
-                    <span>{t(item.label)}</span>
-                    {pendingCount > 0 &&
-                      ((item.view === "more" && isAdmin) ||
-                        item.view === "requests") && (
-                        <span
-                          className="nav-count"
-                          id="workspace-pending-count"
-                          aria-label={t("대기 {count}건", {
-                            count: pendingCount,
-                          })}
-                        >
-                          {pendingCount}
-                        </span>
-                      )}
-                  </button>
-                ))}
-              </nav>
+              <DockNavigation items={nav} pendingCount={pendingCount}
+                onSelect={(next) => next === "more" ? open("more") : go(next)} />
               <div className="dock-tools" aria-label={t("현재 화면 작업")}>
                 {tools.map((tool) => (
                   <button

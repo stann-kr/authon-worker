@@ -1,23 +1,39 @@
-import { useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 import { useMock } from "../data/MockData";
 import { Sheet } from "../shared/Sheet";
 import { Area, Field, Form, Notice, Select } from "../shared/ui";
 import { bookingError, conflictsFor, saveBooking, scheduleKey } from "./domain";
 import { bookingStatuses, type Booking } from "./types";
 import { timeLabel } from "./ui";
+import type { BookingIssue } from "./pipeline";
 
 export function BookingEditor({
   booking,
   onClose,
   onSaved,
+  initialTarget,
 }: {
   booking: Booking;
   onClose: () => void;
   onSaved: (id: string) => void;
+  initialTarget?: BookingIssue["target"];
 }) {
   const { data, user, venue, mutate, t } = useMock();
   const [draft, setDraft] = useState(() => structuredClone(booking));
   const [error, setError] = useState("");
+  const editorRef = useRef<HTMLDivElement>(null);
+  const targetName = initialTarget === "materials"
+    ? (!booking.materials.pressUrl ? "pressUrl" : "riderUrl") : initialTarget;
+  useLayoutEffect(() => {
+    if (!targetName) return;
+    const input = editorRef.current?.querySelector<HTMLInputElement>(`[name="${targetName}"]`);
+    if (!input) return;
+    const details = input.closest("details");
+    if (details) details.open = true;
+    input.focus({ preventScroll: true });
+    const body = input.closest<HTMLElement>(".sheet-body");
+    if (body) body.scrollTop += input.getBoundingClientRect().top - body.getBoundingClientRect().top - 80;
+  }, [targetName]);
   const exists = data.planning.bookings.some((b) => b.id === booking.id);
   const artists = data.planning.artists.filter((a) => a.scopeId === venue.id);
   const events = data.events.filter(
@@ -41,6 +57,7 @@ export function BookingEditor({
       dirty={JSON.stringify(draft) !== JSON.stringify(booking)}
       onClose={onClose}
     >
+      <div ref={editorRef} className="planning-editor">
       <Form
         submit="부킹 저장"
         onSubmit={async () => {
@@ -104,6 +121,7 @@ export function BookingEditor({
         <div className="form-duo">
           <Field
             label="부킹 담당자"
+            name="owner"
             value={draft.owner}
             onChange={(e) => update("owner", e.target.value)}
             maxLength={80}
@@ -138,6 +156,7 @@ export function BookingEditor({
         />
         <Field
           label="후속 업무 기한"
+          name="due"
           type="date"
           value={draft.due}
           onChange={(e) => update("due", e.target.value)}
@@ -145,6 +164,7 @@ export function BookingEditor({
         <h3 className="planning-form-title">{t("출연 일정")} · KST</h3>
         <Field
           label="출연 시작 일시"
+          name="start"
           type="datetime-local"
           value={draft.start}
           onChange={(e) => update("start", e.target.value)}
@@ -185,6 +205,7 @@ export function BookingEditor({
         </details>
         <Field
           label="홀드 기한"
+          name="holdUntil"
           type="datetime-local"
           value={draft.holdUntil}
           onChange={(e) => update("holdUntil", e.target.value)}
@@ -224,12 +245,14 @@ export function BookingEditor({
           <summary>{t("이 행사에 사용할 자료")}</summary>
           <Field
             label="소개·프레스 자료 URL"
+            name="pressUrl"
             type="url"
             value={draft.materials.pressUrl}
             onChange={(e) => material("pressUrl", e.target.value)}
           />
           <Field
             label="기술자료 URL"
+            name="riderUrl"
             type="url"
             value={draft.materials.riderUrl}
             onChange={(e) => material("riderUrl", e.target.value)}
@@ -272,6 +295,7 @@ export function BookingEditor({
         )}
         {error && <Notice error>{error}</Notice>}
       </Form>
+      </div>
     </Sheet>
   );
 }
