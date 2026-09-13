@@ -61,23 +61,14 @@ export function Events() {
   };
   return (
     <div className="flow-section">
-      <div className="flow-toolbar">
-        <strong>{t("행사 관리")}</strong>
-        <Action
-          onClick={() => {
-            setTemplate(null);
-            setPanel("create");
-          }}
-        >
-          행사 만들기
-        </Action>
-      </div>
+      <div className="flow-filter-stack">
       <Field
         label="운영일"
         type="date"
         value={date}
         onChange={(e) => setDate(e.target.value)}
       />
+      </div>
       {list.map((e) => (
         <Row
           key={e.id}

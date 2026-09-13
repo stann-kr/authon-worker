@@ -6,7 +6,7 @@ import {
   id,
   useIntent,
 } from "../data/MockData";
-import { MOCK_DATE, type MockState } from "../data/types";
+import { MOCK_DATE, type MockEvent, type MockState } from "../data/types";
 import { performCheck } from "../guests/Roster";
 import { Sheet } from "../shared/Sheet";
 import {
@@ -29,6 +29,12 @@ export function applyWalkin(data: MockState, eventId: string, undo = false) {
     state.undoIds.push(id());
     state.walkIns++;
   }
+}
+export function canFinalizeAttendance(data: MockState, event: MockEvent, isAdmin: boolean) {
+  return isAdmin &&
+    (event.general || ["closed", "archived"].includes(event.state)) &&
+    !attendanceFor(data, event.id).finalized &&
+    !data.queue.some((q) => q.eventId === event.id && q.state === "queued");
 }
 export function DoorAttendance() {
   const {
@@ -76,11 +82,7 @@ export function DoorAttendance() {
       queued.filter((q) => q.kind === "walkin").length -
       queued.filter((q) => q.kind === "undo-walkin").length >
     0;
-  const canFinalize =
-    isAdmin &&
-    (event.general || ["closed", "archived"].includes(event.state)) &&
-    !attendance.finalized &&
-    queued.length === 0;
+  const canFinalize = canFinalizeAttendance(data, event, isAdmin);
   const record = async (undo = false) => {
     if (!canRecord) return;
     await mutate(
@@ -176,6 +178,7 @@ export function DoorAttendance() {
           마지막 워크인 취소
         </Action>
       </div>
+      {(queued.length > 0 || results.length > 0 || ["offline", "syncing"].includes(scenario)) && <>
       <h2 className="flow-subheading">{t("이벤트 오프라인 운영")}</h2>
       {scenario === "offline" && (
         <Notice>저장된 명단 사용 중. 변경은 연결 후 반영됩니다.</Notice>
@@ -243,6 +246,7 @@ export function DoorAttendance() {
           </Action>
         </>
       )}
+      </>}
       {isAdmin && (
         <>
           <h2 className="flow-subheading">{t("마감 합계 확정")}</h2>
@@ -254,6 +258,7 @@ export function DoorAttendance() {
           {queued.length > 0 && (
             <Notice>이 기기의 대기 입력을 먼저 동기화하세요.</Notice>
           )}
+          <div className="button-row">
           <Action
             disabled={!canFinalize}
             onClick={() => {
@@ -268,6 +273,7 @@ export function DoorAttendance() {
           <Action secondary onClick={() => navigate("events")}>
             행사 관리
           </Action>
+          </div>
         </>
       )}
       {reconcile && (

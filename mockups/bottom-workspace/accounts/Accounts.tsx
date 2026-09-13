@@ -133,10 +133,7 @@ export function Accounts() {
   };
   return (
     <div className="flow-section">
-      <div className="flow-toolbar">
-        <strong>{t("계정 관리")}</strong>
-        <Action onClick={() => setPanel("create")}>계정 생성</Action>
-      </div>
+      <div className="flow-filter-stack">
       <Field
         label="사용자 검색"
         value={query}
@@ -175,6 +172,7 @@ export function Accounts() {
             </option>
           ))}
         </Select>
+      </div>
       </div>
       {entries.map((u) => (
         <Row

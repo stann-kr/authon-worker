@@ -200,6 +200,7 @@ export const planningEnglish: Record<string, string> = {
   "확인 필요": "Needs review",
   "전체 이력": "All history",
   "부킹 보기": "Booking view",
+  "일정 미정": "Date to be confirmed",
   목록: "List",
   보드: "Board",
   "부킹 {count}건": "{count} bookings",

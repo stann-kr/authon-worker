@@ -32,10 +32,6 @@ export function Venues() {
   };
   return (
     <div className="flow-section">
-      <div className="flow-toolbar">
-        <strong>{t("베뉴 관리")}</strong>
-        <Action onClick={() => setPanel("create")}>베뉴 생성</Action>
-      </div>
       {data.venues.map((v) => (
         <Row
           key={v.id}

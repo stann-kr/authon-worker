@@ -40,26 +40,3 @@ export function MaterialLink({
     </span>
   );
 }
-export function PlanningTabs() {
-  const { view, navigate, t } = useMock();
-  return (
-    <nav className="planning-tabs" aria-label={t("공연 준비")}>
-      {(
-        [
-          ["artists", "아티스트"],
-          ["bookings", "부킹"],
-          ["schedule", "일정"],
-          ["preparation", "준비 업무"],
-        ] as const
-      ).map(([v, label]) => (
-        <button
-          key={v}
-          aria-current={view === v ? "page" : undefined}
-          onClick={() => navigate(v)}
-        >
-          {t(label)}
-        </button>
-      ))}
-    </nav>
-  );
-}

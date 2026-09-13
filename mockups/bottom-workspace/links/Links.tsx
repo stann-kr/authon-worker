@@ -103,17 +103,7 @@ export function Links() {
   };
   return (
     <div className="flow-section">
-      <div className="flow-toolbar">
-        <strong>{t("등록 링크")}</strong>
-        <Action
-          onClick={() => {
-            setTemplate(null);
-            setPanel("create");
-          }}
-        >
-          링크 생성
-        </Action>
-      </div>
+      <div className="flow-filter-stack">
       <Tabs
         value={range}
         onChange={setRange}
@@ -172,6 +162,7 @@ export function Links() {
           <option value="expiry">{t("만료 임박순")}</option>
           <option value="name">{t("DJ 이름")}</option>
         </Select>
+      </div>
       </div>
       {items.map((l) => (
         <Row

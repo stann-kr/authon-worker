@@ -5,7 +5,7 @@ import { bookingStatuses, type Booking } from "./types";
 import { activeBooking } from "./domain";
 import { bookingIssues } from "./pipeline";
 import { newBooking } from "./fixtures";
-import { PlanningTabs, Status, timeLabel } from "./ui";
+import { Status, timeLabel } from "./ui";
 import { BookingEditor } from "./BookingEditor";
 import { BookingSheet } from "./BookingSheet";
 import { BookingSearch } from "./BookingSearch";
@@ -80,8 +80,8 @@ export function Bookings() {
       </div>
       <span>{data.events.find((e) => e.id === b.eventId)?.name}</span>
       <p className="planning-booking-time">
-        {timeLabel(b.start)}
-        {b.end && ` → ${timeLabel(b.end)}`}
+        {b.start ? timeLabel(b.start) : t("일정 미정")}
+        {b.end && ` → ${b.start.slice(0, 10) === b.end.slice(0, 10) ? b.end.slice(11, 16) : timeLabel(b.end)}`}
       </p>
       <small>
         {b.stage || t("무대 미정")} · {b.owner || t("담당자 미정")}
@@ -99,7 +99,6 @@ export function Bookings() {
   );
   return (
     <div className="flow-section planning-section planning-bookings">
-      <PlanningTabs />
       <div className="planning-summary">
         <button aria-pressed={filter === "negotiation"} onClick={() => setFilter(filter === "negotiation" ? "active" : "negotiation")}>
           <span>{t("조율 중인 부킹")}</span>

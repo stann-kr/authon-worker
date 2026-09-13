@@ -25,6 +25,11 @@ import {
   Select,
   Tabs,
 } from "../shared/ui";
+function inclusiveEndDate(endExclusive: string) {
+  const date = new Date(`${endExclusive}T12:00:00Z`);
+  date.setUTCDate(date.getUTCDate() - 1);
+  return date.toISOString().slice(0, 10);
+}
 function periodRows(
   data: MockState,
   venueId: string,
@@ -168,6 +173,7 @@ export function Analytics() {
   const series = [...buckets.entries()];
   return (
     <div className="flow-section">
+      <div className="flow-filter-stack">
       <Tabs
         value={granularity}
         onChange={(v) => setGranularity(v as AnalyticsGranularity)}
@@ -205,17 +211,18 @@ export function Analytics() {
           다음 기간
         </Action>
       </div>
+      </div>
       {!selection ? (
         <Notice error>
           이 기간은 조회할 수 없습니다. 현재 또는 이전 기간을 선택해주세요.
         </Notice>
       ) : (
         <>
-          <Notice>{`${selection.period.startDate} — ${selection.period.dataEndDateExclusive} · ${t(selection.period.status === "in_progress" ? "진행 중" : "완료")}`}</Notice>
+          <Notice>{`${selection.period.startDate} — ${inclusiveEndDate(selection.period.dataEndDateExclusive)} · ${t(selection.period.status === "in_progress" ? "진행 중" : "완료")}`}</Notice>
           <p className="flow-hint">
             {t("{start}~{end} 이전 기간 비교", {
               start: selection.comparisonPeriod.startDate,
-              end: selection.comparisonPeriod.endDateExclusive,
+              end: inclusiveEndDate(selection.comparisonPeriod.endDateExclusive),
             })}
           </p>
           <h2 className="flow-subheading">{t("핵심 결과")}</h2>

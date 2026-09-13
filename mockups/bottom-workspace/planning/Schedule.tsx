@@ -3,7 +3,7 @@ import { useMock } from "../data/MockData";
 import { MOCK_NOW } from "../data/types";
 import { Action, Empty, Field, Select, Tabs, Toggle } from "../shared/ui";
 import { activeBooking, conflictsFor } from "./domain";
-import { PlanningTabs, Status } from "./ui";
+import { Status } from "./ui";
 import { BookingSheet } from "./BookingSheet";
 import { Icon } from "../shared/Icon";
 
@@ -18,7 +18,8 @@ function weekDates(day: string) {
   return Array.from({ length: 7 }, (_, i) => shiftDate(monday, i));
 }
 export function Schedule() {
-  const { data, venue, event, t, setIntent, navigate } = useMock();
+  const { data, venue, event, locale, t } = useMock();
+  const weekday = new Intl.DateTimeFormat(locale, { weekday: "short", timeZone: "UTC" });
   const [filtersOpen, setFiltersOpen] = useState(false);
   const filtersId = useId();
   const [anchor, setAnchor] = useState(event.date);
@@ -55,10 +56,10 @@ export function Schedule() {
   };
   return (
     <div className="flow-section planning-section planning-schedule">
-      <PlanningTabs />
       <div className="planning-calendar-controls">
         <Action secondary onClick={() => move(-7)}>
-          이전 주
+          <Icon name="chevron" size={18} />
+          <span className="sr-only">{t("이전 주")}</span>
         </Action>
         <Field
           label="기준 날짜"
@@ -75,7 +76,8 @@ export function Schedule() {
           }}
         />
         <Action secondary onClick={() => move(7)}>
-          다음 주
+          <Icon name="chevron" size={18} />
+          <span className="sr-only">{t("다음 주")}</span>
         </Action>
       </div>
       <div className="planning-schedule-view">
@@ -148,15 +150,17 @@ export function Schedule() {
       </p>}
       {layout === "week" && (
         <nav className="planning-week" aria-label={t("주간 날짜 선택")}>
-          {dates.map((day, i) => (
+          {dates.map((day) => (
             <button
               key={day}
               aria-pressed={dayFilter === day}
+              aria-current={day === MOCK_NOW.slice(0, 10) ? "date" : undefined}
+              aria-label={`${day.replaceAll("-", ".")} · ${weekday.format(new Date(`${day}T12:00:00Z`))}${day === MOCK_NOW.slice(0, 10) ? ` · ${t("오늘")}` : ""} · ${t("부킹 {count}건", { count: onDay(day).length })}`}
               onClick={() =>
                 setDayFilter((current) => (current === day ? "" : day))
               }
             >
-              <span>{t(["월", "화", "수", "목", "금", "토", "일"][i])}</span>
+              <span>{day === MOCK_NOW.slice(0, 10) ? t("오늘") : weekday.format(new Date(`${day}T12:00:00Z`))}</span>
               <strong>{Number(day.slice(-2))}</strong>
               <small>{onDay(day).length || "—"}</small>
             </button>
@@ -254,15 +258,6 @@ export function Schedule() {
           ))}
         </section>
       )}
-      <Action
-        secondary
-        onClick={() => {
-          navigate("bookings");
-          setIntent("booking-create");
-        }}
-      >
-        새 부킹
-      </Action>
       {selected && (
         <BookingSheet bookingId={selected} onClose={() => setSelected(null)} />
       )}

@@ -12,7 +12,7 @@ import {
   string,
 } from "../shared/ui";
 import { activeBooking, addHistory, assertScope } from "./domain";
-import { MaterialLink, PlanningTabs, Status, timeLabel } from "./ui";
+import { MaterialLink, Status, timeLabel } from "./ui";
 import { BookingSheet } from "./BookingSheet";
 import { bookingIssues } from "./pipeline";
 
@@ -76,7 +76,6 @@ export function Preparation() {
   };
   return (
     <div className="flow-section planning-section">
-      <PlanningTabs />
       <Select
         label="준비할 행사"
         value={event.id}

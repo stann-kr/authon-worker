@@ -8,3 +8,17 @@
   color: var(--text);
   font-size: 16px;
 }
+.registration-page > .flow-hint + .flow-metrics {
+  margin-top: 20px;
+}
+.registration-page > .empty-state {
+  padding-block: 24px;
+}
+.registration-page > .primary {
+  width: 100%;
+  min-height: 48px;
+  margin-top: 12px;
+}
+.registration-page > .secondary {
+  margin-top: 12px;
+}

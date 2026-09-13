@@ -1,5 +1,6 @@
 .planning-section {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 16px;
   min-width: 0;
 }
@@ -10,10 +11,6 @@
   font-size: 14px;
   font-weight: 600;
 }
-.planning-actions {
-  display: flex;
-  justify-content: flex-end;
-}
 .planning-copy {
   margin: 8px 0 0;
   color: var(--muted);
@@ -21,27 +18,6 @@
   line-height: 1.7;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
-}
-.planning-tabs {
-  display: flex;
-  gap: 18px;
-  overflow-x: auto;
-  border-bottom: 1px solid var(--line);
-  padding: 2px;
-}
-.planning-tabs button {
-  flex: 0 0 auto;
-  min-height: 44px;
-  padding: 8px 0 12px;
-  border: 0;
-  border-bottom: 2px solid transparent;
-  background: none;
-  color: var(--muted);
-  font-size: 13px;
-}
-.planning-tabs button[aria-current="page"] {
-  border-bottom-color: var(--accent);
-  color: var(--text);
 }
 .planning-filters {
   display: grid;
@@ -80,6 +56,7 @@
   background: transparent;
   padding: 20px 0;
   display: grid;
+  align-content: start;
   gap: 8px;
 }
 .planning-artist:first-child,
@@ -407,14 +384,20 @@
   gap: 8px;
 }
 .planning-calendar-controls > button {
-  padding: 12px 10px;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  padding: 10px;
   min-height: 49px;
   font-size: 12px;
   white-space: nowrap;
 }
+.planning-calendar-controls > button:first-child svg {
+  transform: rotate(180deg);
+}
 .planning-calendar-controls input {
   padding-inline: 8px;
-  font-size: 13px;
+  font-size: 16px;
 }
 .planning-week {
   display: grid;
@@ -434,7 +417,12 @@
 }
 .planning-week button[aria-pressed="true"] {
   border-color: var(--accent);
-  background: rgba(16, 185, 129, 0.08);
+  background: rgba(16, 185, 129, 0.18);
+}
+.planning-week button[aria-current="date"] strong {
+  color: #31d9a1;
+  text-decoration: underline;
+  text-underline-offset: 4px;
 }
 .planning-week span,
 .planning-week small {
@@ -444,6 +432,12 @@
 .planning-week strong {
   font-size: 18px;
   font-weight: 500;
+}
+.planning-booking .planning-booking-time {
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
 }
 .planning-text-action {
   min-height: 44px;
@@ -492,10 +486,11 @@
   border-top: 1px solid var(--line);
 }
 .planning-prep-summary {
-  display: grid;
-  gap: 10px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
   border-block: 1px solid var(--line);
-  padding-block: 18px;
+  padding-block: 12px;
   font-size: 13px;
   color: var(--muted);
 }
@@ -554,9 +549,6 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 0 28px;
   }
-  .preview-frame:not(.mobile) .planning-prep-summary {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
   .preview-frame:not(.mobile) .planning-artist,
   .preview-frame:not(.mobile) .planning-booking {
     padding-top: 20px;
@@ -591,7 +583,7 @@
 
 .planning-schedule { gap: 12px; }
 .planning-editor .flow-details[open] > :not(summary) { margin-top: 16px; }
-.planning-schedule-view { display: flex; align-items: center; gap: 8px; }
+.planning-schedule-view { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .planning-schedule-view .flow-tabs { margin-right: auto; padding: 0; }
 .planning-schedule-view > button { min-height: 44px; padding: 10px 12px; }
 .planning-filter-toggle { display: inline-flex; gap: 6px; align-items: center; }
@@ -601,6 +593,19 @@
   position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%);
 }
 .planning-week button { min-height: 74px; padding: 8px 2px; gap: 4px; }
+@container workspace (max-width: 350px) {
+  .planning-schedule-view {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .planning-schedule-view .flow-tabs {
+    grid-column: 1 / -1;
+    margin-right: 0;
+  }
+  .planning-schedule-view .flow-tabs button { flex: 1; }
+  .planning-schedule-view > button { justify-content: center; }
+  .planning-week { margin-inline: -18px; gap: 1px; }
+}
 @media (min-width: 700px) {
   .preview-frame:not(.mobile) .planning-bookings { grid-template-columns: minmax(0, 1fr) auto; }
   .preview-frame:not(.mobile) .planning-bookings > * { grid-column: 1 / -1; }

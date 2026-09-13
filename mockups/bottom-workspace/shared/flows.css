@@ -41,7 +41,7 @@
   border: 0;
   padding: 10px 16px;
   border-radius: 99px;
-  min-height: 40px;
+  min-height: 44px;
   font-size: 13px;
 }
 .flow-tabs button[aria-pressed="true"] {
@@ -318,6 +318,15 @@
 .flow-section {
   padding: 20px;
 }
+.flow-filter-stack {
+  display: grid;
+  gap: 16px;
+  margin-bottom: 12px;
+  min-width: 0;
+}
+.flow-filter-stack .flow-tabs {
+  padding-bottom: 0;
+}
 .flow-state-banner {
   padding: 0 20px;
 }
@@ -327,13 +336,16 @@
   margin: 0 0 12px;
 }
 .flow-auth {
-  padding: 24px 20px 180px;
+  padding: 24px 20px max(32px, env(safe-area-inset-bottom));
   max-width: 520px;
   margin: auto;
 }
 .flow-auth h1 {
   font-size: 22px;
   margin: 12px 0 26px;
+}
+.flow-auth > .flow-form + :is(.secondary, .flow-stack) {
+  margin-top: 14px;
 }
 .flow-auth-brand {
   font-size: 14px;

@@ -28,7 +28,7 @@ import { Reports } from "./events/Reports";
 import { Links } from "./links/Links";
 import { Roster } from "./guests/Roster";
 import { QuotaRequests } from "./guests/QuotaRequests";
-import { DoorAttendance } from "./door/DoorAttendance";
+import { DoorAttendance, canFinalizeAttendance } from "./door/DoorAttendance";
 import { ExternalView } from "./registration/ExternalView";
 import { Analytics } from "./analytics/Analytics";
 import { WorkspaceMenu } from "./workspace/WorkspaceMenu";
@@ -129,7 +129,19 @@ function Workspace() {
     "schedule",
     "preparation",
   ].includes(view);
-  const isTeamView = ["artists", "bookings", "schedule"].includes(view);
+  const isTeamView = [
+    "artists", "bookings", "schedule", "events", "links", "users",
+    "password-requests", "analytics", "venues", "profile",
+  ].includes(view);
+  const scopeLabel = view === "venues"
+    ? t("전체 베뉴")
+    : ["users", "password-requests"].includes(view)
+      ? t("전체 계정")
+      : view === "profile"
+        ? user.name
+        : isTeamView
+          ? t(isPlanning ? "전체 행사 · 공연 준비" : "전체 행사")
+          : event.name;
   const quota = quotaFor(data, user.id, event.id);
   const canRequest =
     user.accountKind === "personal" &&
@@ -234,6 +246,7 @@ function Workspace() {
               icon: "file" as const,
               color: "gray" as const,
               action: () => setIntent("attendance-closeout"),
+              disabled: !canFinalizeAttendance(data, event, isAdmin),
             },
           ]
         : []),
@@ -608,14 +621,10 @@ function Workspace() {
                 </button>
               </header>
               <div className="workspace-context">
-                <span>
-                  {isTeamView
-                    ? t("전체 행사 · 공연 준비")
-                    : event.name}
-                </span>
-                <span className={`scope-status ${writable ? "live" : ""}`}>
-                  {t(isTeamView ? "팀 작업 공간" : scopeState)}
-                </span>
+                <span>{scopeLabel}</span>
+                {!isTeamView && <span className={`scope-status ${writable ? "live" : ""}`}>
+                  {t(scopeState)}
+                </span>}
               </div>
             </>
           )}
@@ -725,7 +734,6 @@ function Workspace() {
                   </button>
                 </div>
               )}
-              <div className="nav-handle" aria-hidden="true" />
               <DockNavigation
                 items={nav}
                 allowedViews={allowedViews}
@@ -733,7 +741,7 @@ function Workspace() {
                 menuOpen={modal === "more"}
                 onSelect={(next) => next === "more" ? open("more") : go(next)}
               />
-              <div className="dock-tools" aria-label={t("현재 화면 작업")}>
+              <div className="dock-tools" data-action-count={tools.length} aria-label={t("현재 화면 작업")}>
                 {tools.map((tool) => (
                   <button
                     className="action-pill"

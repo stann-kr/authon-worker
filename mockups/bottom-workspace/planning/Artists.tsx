@@ -5,7 +5,7 @@ import { Action, Area, Empty, Field, Form, Notice, Select } from "../shared/ui";
 import { artistKinds, type Artist } from "./types";
 import { artistError, assertScope, activeBooking } from "./domain";
 import { newArtist } from "./fixtures";
-import { MaterialLink, PlanningTabs, Status, timeLabel } from "./ui";
+import { MaterialLink, Status, timeLabel } from "./ui";
 
 export function Artists() {
   const { data, venue, user, mutate, navigate, setIntent, t } = useMock();
@@ -39,10 +39,6 @@ export function Artists() {
     setDraft((d) => (d ? { ...d, [key]: value } : d));
   return (
     <div className="flow-section planning-section">
-      <PlanningTabs />
-      <div className="planning-actions">
-        <Action onClick={create}>아티스트 추가</Action>
-      </div>
       <div className="planning-filters">
         <Field
           label="아티스트 검색"

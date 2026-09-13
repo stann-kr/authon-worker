@@ -70,7 +70,7 @@ export function ExternalView() {
     setError("");
   };
   return (
-    <div className="flow-auth">
+    <div className="flow-auth registration-page">
       <div className="flow-toolbar">
         <span className="flow-auth-brand">{venue?.brandName ?? "Authon"}</span>
         <select
