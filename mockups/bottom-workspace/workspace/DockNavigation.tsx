@@ -1,10 +1,8 @@
-import { useLayoutEffect, useRef } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 import { useMock } from "../data/MockData";
 import type { View } from "../data/types";
-import { Icon, type IconName } from "../shared/Icon";
+import { navigationLabel } from "./navigation";
 import "./dock.css";
-
-type Item = { view: View | "more"; label: string; icon: IconName };
 
 function reveal(button: HTMLElement, scroller: HTMLElement) {
   const item = button.getBoundingClientRect(),
@@ -17,15 +15,26 @@ function reveal(button: HTMLElement, scroller: HTMLElement) {
 
 export function DockNavigation({
   items,
+  allowedViews,
   pendingCount,
+  menuOpen,
   onSelect,
 }: {
-  items: Item[];
+  items: View[];
+  allowedViews: View[];
   pendingCount: number;
-  onSelect: (view: Item["view"]) => void;
+  menuOpen: boolean;
+  onSelect: (view: View | "more") => void;
 }) {
   const { view, user, locale, isAdmin, t } = useMock();
+  const navRef = useRef<HTMLElement>(null);
   const scrollerRef = useRef<HTMLDivElement>(null);
+  const [itemLimit, setItemLimit] = useState(5);
+  const visible = items.slice(0, itemLimit);
+  if (allowedViews.includes(view) && !visible.includes(view)) {
+    if (visible.length < itemLimit) visible.push(view);
+    else visible[visible.length - 1] = view;
+  }
   const refreshEdges = () => {
     const el = scrollerRef.current;
     if (!el) return;
@@ -38,6 +47,8 @@ export function DockNavigation({
     const el = scrollerRef.current;
     if (!el) return;
     const resize = () => {
+      const width = navRef.current?.clientWidth;
+      if (width) setItemLimit(width < 340 ? 4 : 5);
       const selected = el.querySelector<HTMLElement>('[aria-current="page"]');
       if (selected) reveal(selected, el);
       refreshEdges();
@@ -46,31 +57,26 @@ export function DockNavigation({
     const observer =
       typeof ResizeObserver === "undefined" ? null : new ResizeObserver(resize);
     observer?.observe(el);
+    if (navRef.current) observer?.observe(navRef.current);
     return () => observer?.disconnect();
-  }, [view, user.id, locale, items.length]);
-  const button = (item: Item) => {
-    const active =
-      view === item.view ||
-      (item.view === "more" && !items.some((n) => n.view === view));
-    const showCount =
-      pendingCount > 0 &&
-      ((item.view === "more" && isAdmin) || item.view === "requests");
+  }, [view, user.id, locale, items.length, itemLimit]);
+  const button = (target: View) => {
+    const showCount = pendingCount > 0 && !isAdmin && target === "requests";
     return (
       <button
-        key={item.view}
-        className={`${active ? "active" : ""} ${item.view === "more" ? "dock-more" : ""}`}
-        aria-current={active ? "page" : undefined}
-        aria-label={t(item.label)}
-        aria-describedby={showCount ? "workspace-pending-count" : undefined}
-        aria-haspopup={item.view === "more" ? "dialog" : undefined}
-        onClick={() => onSelect(item.view)}
+        type="button"
+        key={target}
+        className="navigation-pill"
+        aria-current={view === target ? "page" : undefined}
+        aria-label={t(navigationLabel(target, isAdmin))}
+        aria-describedby={showCount ? "workspace-request-count" : undefined}
+        onClick={() => onSelect(target)}
       >
-        <Icon name={item.icon} size={18} />
-        <span>{t(item.label)}</span>
+        <span>{t(navigationLabel(target, isAdmin))}</span>
         {showCount && (
           <span
             className="nav-count"
-            id="workspace-pending-count"
+            id="workspace-request-count"
             aria-label={t("대기 {count}건", { count: pendingCount })}
           >
             {pendingCount}
@@ -80,7 +86,7 @@ export function DockNavigation({
     );
   };
   return (
-    <nav className="dock-nav" aria-label={t("주요 메뉴")}>
+    <nav className="dock-nav" ref={navRef} aria-label={t("주요 메뉴")}>
       <div className="dock-nav-window">
         <div
           className="dock-nav-scroll"
@@ -93,7 +99,7 @@ export function DockNavigation({
             }
           }}
         >
-          {items.filter((item) => item.view !== "more").map(button)}
+          {visible.map(button)}
         </div>
         <span className="dock-edge previous" aria-hidden="true">
           ‹
@@ -102,7 +108,29 @@ export function DockNavigation({
           ›
         </span>
       </div>
-      {items.filter((item) => item.view === "more").map(button)}
+      <button
+        type="button"
+        className="dock-more"
+        aria-label={t("전체 메뉴")}
+        aria-haspopup="dialog"
+        aria-expanded={menuOpen}
+        aria-controls={menuOpen ? "workspace-all-menu" : undefined}
+        aria-describedby={
+          isAdmin && pendingCount > 0 ? "workspace-pending-count" : undefined
+        }
+        onClick={() => onSelect("more")}
+      >
+        <span>{t("전체")}</span>
+        {isAdmin && pendingCount > 0 && (
+          <span
+            className="nav-count"
+            id="workspace-pending-count"
+            aria-label={t("대기 {count}건", { count: pendingCount })}
+          >
+            {pendingCount}
+          </span>
+        )}
+      </button>
     </nav>
   );
 }

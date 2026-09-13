@@ -10,6 +10,7 @@ import { useMock } from "../data/MockData";
 import "./sheet.css";
 
 export function Sheet({
+  id,
   title,
   subtitle,
   onClose,
@@ -17,6 +18,7 @@ export function Sheet({
   protectEdits = false,
   dirty = false,
 }: {
+  id?: string;
   title: string;
   subtitle?: string;
   onClose: () => void;
@@ -102,6 +104,7 @@ export function Sheet({
   }, []);
   return (
     <dialog
+      id={id}
       ref={ref}
       className="sheet"
       aria-labelledby={titleId}

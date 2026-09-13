@@ -33,6 +33,7 @@ import { ExternalView } from "./registration/ExternalView";
 import { Analytics } from "./analytics/Analytics";
 import { WorkspaceMenu } from "./workspace/WorkspaceMenu";
 import { DockNavigation } from "./workspace/DockNavigation";
+import { navigationLabel } from "./workspace/navigation";
 import { Artists } from "./planning/Artists";
 import { Bookings } from "./planning/Bookings";
 import { Schedule } from "./planning/Schedule";
@@ -122,7 +123,6 @@ function Workspace() {
       shell.style.removeProperty("--dock-space");
     };
   }, [isPublic]);
-  const isRoster = view === "roster" || view === "door";
   const isPlanning = [
     "artists",
     "bookings",
@@ -155,38 +155,14 @@ function Workspace() {
     (!venue.active || !user.active || user.deleted) &&
     view !== "venues" &&
     view !== "auth";
-  const nav: { view: View | "more"; label: string; icon: IconName }[] = isAdmin
-    ? [
-        { view: "artists", label: "아티스트", icon: "user" },
-        { view: "bookings", label: "부킹", icon: "file" },
-        { view: "schedule", label: "일정", icon: "calendar" },
-        { view: "roster", label: "명단", icon: "people" },
-        { view: "door", label: "도어", icon: "door" },
-        { view: "events", label: "행사", icon: "calendar" },
-        { view: "more", label: "더보기", icon: "more" },
-      ]
+  const nav: View[] = isAdmin
+    ? ["bookings", "schedule", "roster", "door", "events"]
     : user.role === "door_staff"
-      ? [
-          { view: "door", label: "도어", icon: "door" },
-          { view: "roster", label: "내 명단", icon: "people" },
-          { view: "attendance", label: "입장 집계", icon: "chart" },
-          { view: "more", label: "더보기", icon: "more" },
-        ]
+      ? ["door", "roster", "attendance"]
       : [
-          { view: "roster", label: "내 명단", icon: "people" },
-          ...(canRequest
-            ? [
-                {
-                  view: "requests" as const,
-                  label: "인원 요청",
-                  icon: "bell" as const,
-                },
-              ]
-            : []),
-          ...(canDoor
-            ? [{ view: "door" as const, label: "도어", icon: "door" as const }]
-            : []),
-          { view: "more", label: "더보기", icon: "more" },
+          "roster",
+          ...(canRequest ? ["requests" as const] : []),
+          ...(canDoor ? ["door" as const] : []),
         ];
   type Tool = {
     label: string;
@@ -621,7 +597,7 @@ function Workspace() {
                     </span>
                     <Icon name="down" size={12} />
                   </button>
-                  <h1>{isRoster ? event.name : t(viewLabels[view])}</h1>
+                  <h1 aria-live="polite">{t(navigationLabel(view, isAdmin))}</h1>
                 </div>
                 <button
                   className="account-button"
@@ -635,9 +611,7 @@ function Workspace() {
                 <span>
                   {isTeamView
                     ? t("전체 행사 · 공연 준비")
-                    : isRoster
-                      ? t(viewLabels[view])
-                      : event.name}
+                    : event.name}
                 </span>
                 <span className={`scope-status ${writable ? "live" : ""}`}>
                   {t(isTeamView ? "팀 작업 공간" : scopeState)}
@@ -752,8 +726,13 @@ function Workspace() {
                 </div>
               )}
               <div className="nav-handle" aria-hidden="true" />
-              <DockNavigation items={nav} pendingCount={pendingCount}
-                onSelect={(next) => next === "more" ? open("more") : go(next)} />
+              <DockNavigation
+                items={nav}
+                allowedViews={allowedViews}
+                pendingCount={pendingCount}
+                menuOpen={modal === "more"}
+                onSelect={(next) => next === "more" ? open("more") : go(next)}
+              />
               <div className="dock-tools" aria-label={t("현재 화면 작업")}>
                 {tools.map((tool) => (
                   <button
@@ -879,7 +858,8 @@ function Workspace() {
       )}
       {(modal === "more" || modal === "account") && (
         <Sheet
-          title={t(modal === "more" ? "운영 도구" : "내 계정")}
+          id={modal === "more" ? "workspace-all-menu" : undefined}
+          title={t(modal === "more" ? "전체 메뉴" : "내 계정")}
           onClose={() => setModal(null)}
         >
           {modal === "account" && (
@@ -901,7 +881,14 @@ function Workspace() {
           )}
           <WorkspaceMenu
             views={modal === "account" ? ["profile", "home"] : allowedViews}
-            onNavigate={go}
+            onNavigate={(next) => {
+              go(next);
+              requestAnimationFrame(() => {
+                dockRef.current
+                  ?.querySelector<HTMLElement>('[aria-current="page"]')
+                  ?.focus({ preventScroll: true });
+              });
+            }}
             searchable={modal === "more"}
           />
           {modal === "account" && (

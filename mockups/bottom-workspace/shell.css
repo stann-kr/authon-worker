@@ -258,7 +258,7 @@ svg {
   background: var(--muted);
 }
 .header-title h1 {
-  font-size: 21px;
+  font-size: 24px;
   font-weight: 600;
   line-height: 1.4;
   letter-spacing: -0.5px;

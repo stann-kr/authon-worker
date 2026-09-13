@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { useId, useState } from "react";
 import { useMock } from "../data/MockData";
 import { viewLabels, type View } from "../data/types";
 import { Icon, type IconName } from "../shared/Icon";
+import { navigationLabel } from "./navigation";
 import "./menu.css";
 
 const groups: {
@@ -69,13 +70,14 @@ export function WorkspaceMenu({
   searchable: boolean;
 }) {
   const { t, view, data, event, venue, user, isAdmin } = useMock();
+  const menuId = useId();
   const [query, setQuery] = useState("");
   const matches = groups.map((group) => ({
     ...group,
     items: group.items.filter(
       (item) =>
         views.includes(item.view) &&
-        `${t(viewLabels[item.view])} ${t(item.detail)} ${t(group.title)}`
+        `${t(navigationLabel(item.view, isAdmin))} ${t(viewLabels[item.view])} ${t(item.detail)} ${t(group.title)}`
           .toLocaleLowerCase()
           .includes(query.trim().toLocaleLowerCase()),
     ),
@@ -96,7 +98,9 @@ export function WorkspaceMenu({
           ).length
         : 0;
   return (
-    <div className="workspace-menu">
+    <div
+      className={`workspace-menu ${searchable ? "workspace-menu-expanded" : ""}`}
+    >
       {searchable && (
         <label className="menu-search">
           <Icon name="search" size={18} />
@@ -114,25 +118,42 @@ export function WorkspaceMenu({
           group.items.length > 0 && (
             <section key={group.title}>
               {searchable && <h3>{t(group.title)}</h3>}
-              <div className="sheet-menu">
+              <div className={searchable ? "menu-pills" : "sheet-menu"}>
                 {group.items.map((item) => (
                   <button
                     key={item.view}
-                    aria-label={t(viewLabels[item.view])}
+                    type="button"
+                    className={searchable ? "navigation-pill" : undefined}
+                    aria-label={t(
+                      item.view === "roster" && !isAdmin
+                        ? "내 명단"
+                        : viewLabels[item.view],
+                    )}
                     aria-current={view === item.view ? "page" : undefined}
+                    aria-describedby={pending(item.view) > 0 ? `${menuId}-${item.view}-pending` : undefined}
                     onClick={() => onNavigate(item.view)}
                   >
-                    <Icon name={item.icon} />
+                    {!searchable && <Icon name={item.icon} />}
                     <span>
-                      <strong>{t(viewLabels[item.view])}</strong>
+                      <strong>{t(navigationLabel(item.view, isAdmin))}</strong>
                     </span>
                     {pending(item.view) > 0 && (
-                      <b className="menu-count">{pending(item.view)}</b>
+                      <b
+                        className="menu-count"
+                        id={`${menuId}-${item.view}-pending`}
+                        aria-label={t("대기 {count}건", {
+                          count: pending(item.view),
+                        })}
+                      >
+                        {pending(item.view)}
+                      </b>
                     )}
-                    <Icon
-                      name={view === item.view ? "check" : "chevron"}
-                      size={16}
-                    />
+                    {!searchable && (
+                      <Icon
+                        name={view === item.view ? "check" : "chevron"}
+                        size={16}
+                      />
+                    )}
                   </button>
                 ))}
               </div>

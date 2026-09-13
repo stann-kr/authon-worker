@@ -6,7 +6,28 @@
   font-size: 12px;
   font-weight: 500;
   color: var(--muted);
-  margin: 0 0 4px;
+  margin: 0 0 8px;
+}
+.workspace-menu-expanded {
+  gap: 20px;
+}
+.menu-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.menu-pills .navigation-pill {
+  flex: 0 1 auto;
+  min-width: 44px;
+  max-width: 100%;
+  padding-inline: 12px;
+  white-space: normal;
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+.menu-pills strong {
+  font-size: 14px;
+  font-weight: inherit;
 }
 .workspace-menu .sheet-menu button {
   min-height: 48px;

@@ -9,7 +9,7 @@
 }
 .dock-nav-scroll {
   display: flex;
-  gap: 8px;
+  gap: 6px;
   overflow-x: auto;
   scrollbar-width: none;
   scroll-padding-inline: 20px;
@@ -19,28 +19,52 @@
 .dock-nav-scroll::-webkit-scrollbar {
   display: none;
 }
-.dock-nav button {
+.navigation-pill,
+.dock-nav .dock-more {
   flex: 0 0 auto;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
-  padding: 10px 18px;
+  gap: 6px;
+  padding: 10px 9px;
   min-height: 44px;
+  min-width: 44px;
   border: 0;
   border-radius: 99px;
   white-space: nowrap;
   background: var(--pill-bg);
-  color: var(--muted);
+  color: #b7b7bb;
   font-size: 14px;
   font-weight: 500;
 }
-.dock-nav button.active {
+.navigation-pill[aria-current="page"] {
+  background: #e7e7e7;
+  color: #111111;
+  font-weight: 600;
+}
+.navigation-pill[aria-current="page"]::before {
+  content: "";
+  flex: 0 0 5px;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #08784e;
+}
+.dock-nav .dock-more {
+  position: relative;
+  padding-inline: 8px;
+  border: 1px solid #303030;
+}
+.dock-nav .dock-more[aria-expanded="true"] {
   background: var(--pill-active);
   color: var(--text);
 }
-.dock-nav .dock-more {
-  padding-inline: 14px;
+.dock-more .nav-count {
+  position: absolute;
+  top: -5px;
+  right: -3px;
+  border: 2px solid var(--bg);
+  background: #3a3a3a;
 }
 .dock-edge {
   display: none;
