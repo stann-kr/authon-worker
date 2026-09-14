@@ -137,7 +137,7 @@ export function Accounts() {
   };
   return (
     <div className="flow-section management-section">
-      <div className="flow-filter-stack flow-compact-filters">
+      <div className="flow-filter-stack flow-filter-bar flow-compact-filters">
       <Field
         label="사용자 검색"
         value={query}
@@ -178,11 +178,17 @@ export function Accounts() {
         </Select>
       </div>
       </div>
-      {entries.map((u) => (
+      {entries.map((u, index) => (
         <Row
           key={u.id}
           selected={panel === u.id}
           title={u.deleted ? t("삭제된 계정") : u.name}
+          heading={index === 0 ? "계정" : undefined}
+          columns={[
+            { label: "이메일", value: u.deleted ? "—" : u.email, grow: 1.8 },
+            { label: "역할", value: u.deleted ? "—" : roleLabels[u.role] },
+            { label: "계정 유형", value: u.deleted ? "—" : u.accountKind === "shared" ? "공용 계정" : "개인 계정" },
+          ]}
           meta={
             u.deleted
               ? t("삭제됨")
@@ -566,11 +572,16 @@ export function ResetRequests() {
           { id: "history", label: "최근 처리 내역" },
         ]}
       />
-      {requests.map((r) => (
+      {requests.map((r, index) => (
         <Row
           key={r.id}
           selected={selectedId === r.id}
           title={data.users.find((u) => u.id === r.userId)?.name ?? "사용자"}
+          heading={index === 0 ? "요청 계정" : undefined}
+          columns={[
+            { label: "이메일", value: r.email, grow: 1.8 },
+            { label: "요청 일시", value: r.createdAt.replace("T", " ").slice(0, 16) },
+          ]}
           meta={r.email}
           badge={
             r.state === "pending"

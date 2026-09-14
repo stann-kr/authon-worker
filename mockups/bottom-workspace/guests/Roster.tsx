@@ -315,7 +315,8 @@ export function Roster() {
         })}
       </p>
       {list.length > 0 && <div className="guest-list-columns" aria-hidden="true">
-        <span>{t("게스트")}</span><span>{t("입장 상태")}</span><span>{t("입장 시각")}</span>
+        <span>{t("게스트")}</span><span>{t("입장 상태")}</span>
+        <span>{t("등록 담당자")}</span><span className="guest-operator">{t("입력자")}</span><span>{t("입장 시각")}</span>
       </div>}
       <ul className="guest-list">
         {list.map((g) => (
@@ -328,7 +329,7 @@ export function Roster() {
             >
               <span>
                 <strong>{g.name}</strong>
-                <small>
+                <small className="guest-mobile-meta">
                   {contributorName(data, g.ownerId, g.externalLinkId)}
                   {g.operator ? ` · ${g.operator}` : ""}
                 </small>
@@ -372,6 +373,12 @@ export function Roster() {
                 {t(g.status === "checked" ? "입장 완료" : "미입장")}
               </span>
             )}
+            <span className="guest-owner">
+              <span className="sr-only">{t("등록 담당자")}: </span>
+              {contributorName(data, g.ownerId, g.externalLinkId)}
+              {g.operator && <small className="guest-tablet-operator">{g.operator}</small>}
+            </span>
+            <span className="guest-operator"><span className="sr-only">{t("입력자")}: </span>{g.operator || "—"}</span>
             <time className="guest-check-time" dateTime={g.checkedAt ?? undefined}>
               <span className="sr-only">{t("입장 시각")} </span>
               {g.checkedAt?.slice(11, 16) ?? "—"}

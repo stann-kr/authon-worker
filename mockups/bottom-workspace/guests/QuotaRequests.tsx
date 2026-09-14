@@ -58,11 +58,17 @@ export function QuotaRequests() {
           { id: "history", label: "최근 처리 내역" },
         ]}
       />
-      {list.map((r) => (
+      {list.map((r, index) => (
         <Row
           key={r.id}
           selected={panel === r.id}
           title={data.users.find((u) => u.id === r.userId)?.name ?? t("사용자")}
+          heading={index === 0 ? "요청자" : undefined}
+          columns={[
+            { label: "요청 인원", value: `+${r.count}`, grow: 0.7 },
+            { label: "승인 인원", value: r.state === "approved" ? `+${r.approved}` : "—", grow: 0.7 },
+            { label: "사유", value: r.reason || t("입력된 사유 없음"), grow: 2 },
+          ]}
           meta={`${r.reason || t("입력된 사유 없음")} · +${r.state === "approved" ? r.approved : r.count}`}
           badge={
             r.state === "pending"

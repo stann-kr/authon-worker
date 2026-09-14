@@ -17,6 +17,22 @@ function collect(k: unknown, e: unknown) {
 }
 collect(ko, en);
 const extra: Record<string, string> = {
+  "이메일": "Email",
+  "사유": "Reason",
+  "입력자": "Entered by",
+  "계정 유형": "Account type",
+  "요청 계정": "Account",
+  "요청 일시": "Requested at",
+  "요청자": "Requested by",
+  "요청 인원": "Requested",
+  "승인 인원": "Approved",
+  "링크 유형": "Link type",
+  "개인 RSVP": "Individual RSVP",
+  "담당자 명단": "Contributor list",
+  "등록 / 한도": "Registered / Limit",
+  "만료 (KST)": "Expires (KST)",
+  "도메인": "Domain",
+  "운영 시간": "Operating hours",
   "아티스트 · 행사": "Artist · Event",
   "후속 업무": "Follow-up",
   "화면 크기": "Screen size",

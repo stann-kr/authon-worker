@@ -561,7 +561,19 @@
   width: 100%;
 }
 .flow-row-button[aria-pressed="true"] { background: var(--card-bg); }
-.management-section { max-width: 740px; }
+.flow-row-column,
+.flow-column-head { display: none; }
+@container content (min-width: 760px) {
+  .flow-filter-stack.flow-filter-bar { grid-template-columns: minmax(0, 1fr) minmax(120px, 180px) minmax(120px, 180px); max-width: none; gap: 12px; align-items: center; }
+  .flow-filter-bar > .flow-inline-fields { display: contents; }
+  .flow-section > .flow-filter-stack > .field:only-child { max-width: 280px; }
+  .flow-row-columns > :is(.flow-row-button, .flow-row-static),
+  .flow-column-head { display: grid; grid-template-columns: var(--row-columns); gap: 20px; }
+  .flow-row-columns .flow-row-identity > small { display: none; }
+  .flow-row-column { display: block; min-width: 0; font-size: 13px; line-height: 1.6; overflow-wrap: anywhere; color: var(--muted); }
+  .flow-column-head { padding: 12px 0; border-bottom: 1px solid var(--line); color: var(--muted); font-size: 11px; }
+  .flow-row-columns .status-badge { justify-self: start; max-width: 100%; }
+}
 @container content (min-width: 700px) {
   .flow-filter-stack { max-width: 640px; }
   .flow-section > :is(.primary, .secondary) { max-width: 320px; width: fit-content; }

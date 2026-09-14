@@ -4,6 +4,7 @@ import {
   useId,
   useState,
   type ReactNode,
+  type CSSProperties,
   type InputHTMLAttributes,
   type SelectHTMLAttributes,
   type TextareaHTMLAttributes,
@@ -243,6 +244,8 @@ export function Row({
   children,
   onClick,
   selected,
+  columns,
+  heading,
 }: {
   title: string;
   meta?: string;
@@ -250,20 +253,39 @@ export function Row({
   children?: ReactNode;
   onClick?: () => void;
   selected?: boolean;
+  columns?: { label: string; value: string; grow?: number }[];
+  heading?: string;
 }) {
   const { t } = useMock();
+  const columnStyle = columns ? {
+    "--row-columns": [
+      "minmax(0, 1.4fr)",
+      ...columns.map((column) => `minmax(0, ${column.grow ?? 1}fr)`),
+      ...(badge ? ["96px"] : []),
+      ...(onClick ? ["16px"] : []),
+    ].join(" "),
+  } as CSSProperties : undefined;
   const content = (
     <>
-      <span>
+      <span className="flow-row-identity">
         <strong>{t(title)}</strong>
         {meta && <small>{t(meta)}</small>}
       </span>
+      {columns?.map((column) => <span className="flow-row-column" key={column.label}>
+        <span className="sr-only">{t(column.label)}: </span>{t(column.value)}
+      </span>)}
       {badge && <span className="status-badge">{t(badge)}</span>}
       {onClick && <Icon name="chevron" size={16} />}
     </>
   );
   return (
-    <div className="flow-row">
+    <div className={`flow-row${columns ? " flow-row-columns" : ""}`} style={columnStyle}>
+      {columns && heading && <div className="flow-column-head" aria-hidden="true">
+        <span>{t(heading)}</span>
+        {columns.map((column) => <span key={column.label}>{t(column.label)}</span>)}
+        {badge && <span>{t("상태")}</span>}
+        {onClick && <span />}
+      </div>}
       {onClick ? (
         <button className="flow-row-button" onClick={onClick} aria-pressed={selected}>
           {content}

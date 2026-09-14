@@ -32,11 +32,16 @@ export function Venues() {
   };
   return (
     <div className="flow-section management-section">
-      {data.venues.map((v) => (
+      {data.venues.map((v, index) => (
         <Row
           key={v.id}
           selected={panel === v.id}
           title={v.name}
+          heading={index === 0 ? "베뉴" : undefined}
+          columns={[
+            { label: "도메인", value: v.domain || t("지정된 기본 도메인 없음"), grow: 1.5 },
+            { label: "운영 시간", value: `${v.opening}–${v.closing}` },
+          ]}
           meta={`${v.domain || t("지정된 기본 도메인 없음")} · ${v.opening}–${v.closing}`}
           badge={v.active ? "활성" : "비활성"}
           onClick={() => setPanel(v.id)}

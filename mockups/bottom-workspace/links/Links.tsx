@@ -108,7 +108,7 @@ export function Links() {
   };
   return (
     <div className="flow-section management-section">
-      <div className="flow-filter-stack links-filters flow-compact-filters">
+      <div className="flow-filter-stack links-filters flow-filter-bar flow-compact-filters">
       <Tabs
         value={range}
         onChange={setRange}
@@ -169,11 +169,19 @@ export function Links() {
         </Select>
       </div>
       </div>
-      {items.map((l) => (
+      {items.map((l, index) => (
         <Row
           key={l.id}
           selected={panel === l.id}
           title={l.ownerName}
+          heading={index === 0 ? "등록 담당자" : undefined}
+          columns={[
+            { label: "링크 유형", value: l.kind === "self_rsvp" ? "개인 RSVP" : "담당자 명단", grow: 1.2 },
+            { label: "등록 / 한도", value: `${used(l.id)} / ${l.limit}`, grow: 0.7 },
+            { label: "만료 (KST)", value: l.expiresAt ? formatVenueDateTime(l.expiresAt, {
+              timeZone: "Asia/Seoul", locale: "sv-SE", dateStyle: "short", timeStyle: "short",
+            }) ?? "—" : t("만료 없음"), grow: 1.3 },
+          ]}
           meta={`${t(l.kind === "self_rsvp" ? "방문자가 직접 RSVP" : "DJ가 게스트 명단 관리")} · ${used(l.id)}/${l.limit}`}
           badge={linkState(l, used(l.id), scenario)}
           onClick={() => setPanel(l.id)}

@@ -69,11 +69,17 @@ export function Events() {
         onChange={(e) => setDate(e.target.value)}
       />
       </div>
-      {list.map((e) => (
+      {list.map((e, index) => (
         <Row
           key={e.id}
           selected={panel === e.id}
           title={e.name}
+          heading={index === 0 ? "행사" : undefined}
+          columns={[
+            { label: "운영일", value: e.date },
+            { label: "등록 게스트", value: String(data.guests.filter((g) => g.eventId === e.id && g.status !== "deleted").length), grow: 0.7 },
+            { label: "수용 인원", value: String(e.capacity ?? "—"), grow: 0.7 },
+          ]}
           meta={`${e.date} · ${t("수용 인원")} ${e.capacity ?? "—"}`}
           badge={states[e.state]}
           onClick={() => setPanel(e.id)}
