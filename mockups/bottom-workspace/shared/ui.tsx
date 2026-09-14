@@ -101,7 +101,7 @@ export function Select({
   const generated = useId();
   return (
     <label className="field" htmlFor={props.id ?? generated}>
-      <span id={`${generated}-label`}>{t(label)}</span>
+      <span id={`${generated}-label`}>{t(label)}{props.required ? " *" : ""}</span>
       <select {...props} id={props.id ?? generated}
         aria-labelledby={props["aria-labelledby"] ?? (props["aria-label"] ? undefined : `${generated}-label`)}>
         {children}
@@ -117,7 +117,7 @@ export function Area({
   const generated = useId();
   return (
     <label className="field" htmlFor={props.id ?? generated}>
-      <span id={`${generated}-label`}>{t(label)}</span>
+      <span id={`${generated}-label`}>{t(label)}{props.required ? " *" : ""}</span>
       <textarea
         {...props}
         id={props.id ?? generated}

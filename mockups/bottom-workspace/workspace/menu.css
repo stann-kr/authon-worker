@@ -4,7 +4,7 @@
 }
 .workspace-menu h3 {
   font-size: 12px;
-  font-weight: 500;
+  font-weight: 600;
   color: var(--muted);
   margin: 0 0 8px;
 }
@@ -45,13 +45,13 @@
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 0 14px;
-  border: 1px solid var(--line);
+  padding: 0 var(--control-inset);
+  border: 1px solid var(--control-line);
   background: var(--bg-secondary);
-  border-radius: 12px;
+  border-radius: var(--control-radius);
 }
 .menu-search input {
-  min-height: 48px;
+  min-height: var(--control-height);
   width: 100%;
   min-width: 0;
   background: none;

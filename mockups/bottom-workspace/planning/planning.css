@@ -54,10 +54,10 @@
   border: 0;
   border-bottom: 1px solid var(--line);
   background: transparent;
-  padding: 20px 0;
+  padding: 16px 0;
   display: grid;
   align-content: start;
-  gap: 8px;
+  gap: 6px;
 }
 .planning-artist:first-child,
 .planning-booking:first-child {
@@ -106,7 +106,8 @@
   padding: 4px 9px;
   border: 1px solid var(--line);
   border-radius: 99px;
-  font-size: 11px;
+  font-size: 12px;
+  line-height: 1.4;
   color: var(--muted);
 }
 .planning-status.confirmed {
@@ -145,7 +146,7 @@
 .planning-booking-controls {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 44px;
-  gap: 12px;
+  gap: 8px;
   align-items: center;
 }
 .planning-booking-controls > .field > span:not(.sr-only) {
@@ -171,6 +172,7 @@
 .planning-search-field[hidden] { display: none; }
 .planning-list-view {
   display: flex;
+  flex-wrap: wrap;
   gap: 12px;
   align-items: center;
   justify-content: space-between;
@@ -222,11 +224,11 @@
   font-weight: 400;
 }
 .planning-board .planning-booking {
-  padding: 18px 0;
+  padding: 14px 0;
 }
 .planning-detail {
   display: grid;
-  gap: 22px;
+  gap: 16px;
   min-width: 0;
 }
 .planning-detail .flow-notice {
@@ -235,7 +237,7 @@
 .planning-detail .button-row > .primary,
 .planning-detail .button-row > .secondary {
   width: auto;
-  flex: 1;
+  flex: 1 1 100px;
   margin: 0;
   font-size: 13px;
   min-height: 44px;
@@ -251,6 +253,7 @@
   font-size: 24px;
   font-weight: 500;
   letter-spacing: -0.04em;
+  font-variant-numeric: tabular-nums;
 }
 .planning-slot span {
   font-size: 18px;
@@ -263,13 +266,13 @@
 .planning-facts {
   display: grid;
   margin: 0;
-  gap: 14px;
+  gap: 12px;
   font-size: 13px;
 }
 .planning-facts > div {
   display: grid;
-  grid-template-columns: 100px minmax(0, 1fr);
-  gap: 16px;
+  grid-template-columns: 80px minmax(0, 1fr);
+  gap: 12px;
 }
 .planning-facts dt {
   color: var(--muted);
@@ -300,7 +303,7 @@
 .planning-next {
   display: grid;
   gap: 6px;
-  padding: 16px;
+  padding: 12px;
   background: var(--card-bg);
   border-left: 2px solid var(--blue);
   font-size: 13px;
@@ -317,7 +320,7 @@
 .planning-warning {
   border: 1px solid #3a516c;
   background: rgba(59, 130, 246, 0.06);
-  padding: 16px;
+  padding: 12px;
   border-radius: 12px;
   font-size: 13px;
   line-height: 1.7;
@@ -388,7 +391,7 @@
   place-items: center;
   width: 44px;
   padding: 10px;
-  min-height: 49px;
+  min-height: var(--control-height);
   font-size: 12px;
   white-space: nowrap;
 }
@@ -449,12 +452,12 @@
 }
 .planning-agenda {
   display: grid;
-  gap: 24px;
+  gap: 20px;
 }
 .planning-agenda-item {
   display: grid;
-  grid-template-columns: 62px minmax(0, 1fr);
-  gap: 16px;
+  grid-template-columns: 56px minmax(0, 1fr);
+  gap: 12px;
   text-align: left;
   width: 100%;
   color: var(--text);
@@ -462,14 +465,14 @@
   border: 0;
   border-left: 2px solid var(--line);
   border-bottom: 1px solid var(--line);
-  padding: 18px 0 18px 12px;
+  padding: 14px 0 14px 10px;
 }
 .planning-agenda-item > div:last-child {
   display: grid;
   gap: 8px;
 }
 .planning-agenda-item small {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--muted);
 }
 .planning-agenda-time {
@@ -480,6 +483,7 @@
 .planning-agenda-time strong {
   font-size: 14px;
   font-weight: 500;
+  font-variant-numeric: tabular-nums;
 }
 .planning-undated {
   padding-top: 20px;
@@ -511,7 +515,7 @@
 }
 .planning-task {
   border-bottom: 1px solid var(--line);
-  padding: 16px 0;
+  padding: 12px 0;
   display: grid;
   gap: 8px;
 }
@@ -521,6 +525,7 @@
   align-items: center;
   min-height: 44px;
 }
+.planning-task label > span { min-width: 0; overflow-wrap: anywhere; }
 .planning-task strong {
   display: block;
   font-size: 14px;
@@ -535,7 +540,7 @@
   padding-left: 30px;
 }
 .planning-prep-material {
-  padding: 16px 0;
+  padding: 12px 0;
   border-bottom: 1px solid var(--line);
   display: grid;
   gap: 10px;
@@ -551,7 +556,7 @@
   }
   .preview-frame:not(.mobile) .planning-artist,
   .preview-frame:not(.mobile) .planning-booking {
-    padding-top: 20px;
+    padding-top: 16px;
   }
 }
 .planning-pipeline ul {
@@ -586,6 +591,13 @@
 .planning-schedule-view { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .planning-schedule-view .flow-tabs { margin-right: auto; padding: 0; }
 .planning-schedule-view > button { min-height: 44px; padding: 10px 12px; }
+@media (hover: hover) and (pointer: fine) {
+  .planning-artist:hover,
+  .planning-booking:hover,
+  .planning-agenda-item:hover {
+    background: #ffffff06;
+  }
+}
 .planning-filter-toggle { display: inline-flex; gap: 6px; align-items: center; }
 .planning-schedule-filters { display: grid; gap: 12px; }
 .planning-schedule-filters[hidden] { display: none; }

@@ -18,7 +18,7 @@
   justify-content: space-between;
   align-items: center;
   gap: 12px;
-  padding: 12px 20px;
+  padding: 10px 20px;
   border-bottom: 1px solid var(--line);
 }
 .guest-person {
@@ -89,17 +89,18 @@
   justify-content: space-between;
   position: relative;
   gap: 14px;
-  padding: 14px 16px;
+  min-height: var(--control-height);
+  padding: 10px var(--control-inset);
   background: var(--bg-secondary);
-  border: 1px solid var(--line);
-  border-radius: 12px;
+  border: 1px solid var(--control-line);
+  border-radius: var(--control-radius);
   font-size: 15px;
   font-weight: 500;
   cursor: pointer;
 }
 .form-toggle input {
   position: absolute;
-  right: 16px;
+  right: var(--control-inset);
   width: 44px;
   height: 24px;
   opacity: 0;
@@ -158,10 +159,10 @@
   align-items: center;
   flex: 1;
   min-width: 0;
-  min-height: 44px;
+  min-height: var(--control-height);
   padding: 0 10px;
-  border: 1px solid var(--line);
-  border-radius: 12px;
+  border: 1px solid var(--control-line);
+  border-radius: var(--control-radius);
   background: var(--bg-secondary);
 }
 .roster-search input {
@@ -266,7 +267,7 @@
   color: var(--muted);
   font-size: 12px;
   padding: 8px 10px;
-  min-height: 36px;
+  min-height: 44px;
 }
 .roster-result-heading {
   display: flex;
@@ -308,6 +309,10 @@
 }
 .check-button:disabled {
   opacity: 0.65;
+}
+@media (hover: hover) and (pointer: fine) {
+  .guest-person:hover strong { text-decoration: underline; text-underline-offset: 4px; }
+  .check-button.is-pending:hover:not(:disabled) .status-badge { background: #10b98126; }
 }
 .roster-empty {
   display: grid;

@@ -3,7 +3,7 @@
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   min-width: 0;
-  gap: 20px;
+  gap: 16px;
 }
 .flow-fields {
   border: 0;
@@ -16,12 +16,12 @@
 }
 .flow-notice {
   font-size: 13px;
-  line-height: 1.7;
+  line-height: 1.6;
   color: var(--muted);
-  padding: 14px 16px;
+  padding: 12px;
   background: var(--card-bg);
   border: 1px solid var(--line);
-  border-radius: 12px;
+  border-radius: var(--control-radius);
   margin: 12px 0;
 }
 .flow-notice.error {
@@ -39,7 +39,7 @@
   background: var(--pill-bg);
   color: var(--muted);
   border: 0;
-  padding: 10px 16px;
+  padding: 10px 12px;
   border-radius: 99px;
   min-height: 44px;
   font-size: 13px;
@@ -55,49 +55,65 @@
 .flow-row-static {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
   text-align: left;
   width: 100%;
   border: 0;
   background: none;
-  padding: 18px 0;
-  min-height: 70px;
+  padding: 14px 0;
+  min-height: 64px;
 }
 .flow-row-button > span:first-child,
 .flow-row-static > span:first-child {
   min-width: 0;
   flex: 1;
 }
-.flow-row strong {
+.flow-row-button strong,
+.flow-row-static strong {
   font-size: 15px;
   font-weight: 500;
   display: block;
   overflow-wrap: anywhere;
+  line-height: 1.45;
 }
-.flow-row small {
-  font-size: 12px;
+.flow-row-button small,
+.flow-row-static small {
+  font-size: 13px;
   color: var(--muted);
   display: block;
-  margin-top: 5px;
-  line-height: 1.6;
+  margin-top: 4px;
+  line-height: 1.5;
 }
+.flow-row-button > .status-badge,
+.flow-row-static > .status-badge {
+  flex-shrink: 0;
+  max-width: 42%;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  text-align: center;
+}
+.flow-row-button > svg { color: var(--muted); }
 .flow-row > .confirmation {
   margin: 0 0 14px;
 }
 .flow-metrics {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 20px;
-  margin: 0 0 24px;
+  gap: 16px;
+  margin: 0 0 20px;
 }
+.flow-metrics > div { min-width: 0; }
 .flow-metrics dt {
   font-size: 12px;
   color: var(--muted);
 }
 .flow-metrics dd {
-  font-size: 26px;
+  font-size: 22px;
   font-weight: 500;
-  margin: 6px 0 0;
+  margin: 4px 0 0;
+  line-height: 1.3;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
 }
 .flow-copy,
 .flow-qr {
@@ -147,14 +163,32 @@
 }
 .flow-details {
   border-top: 1px solid var(--line);
-  margin: 18px 0;
+  margin: 16px 0;
 }
 .flow-details summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  list-style: none;
   cursor: pointer;
   min-height: 44px;
-  padding: 16px 0;
+  padding: 12px 0;
   font-size: 13px;
+  line-height: 1.5;
 }
+.flow-details summary::-webkit-details-marker { display: none; }
+.flow-details summary::after {
+  content: "";
+  flex: 0 0 7px;
+  height: 7px;
+  margin-right: 3px;
+  border-right: 1.5px solid var(--muted);
+  border-bottom: 1.5px solid var(--muted);
+  transform: rotate(45deg);
+}
+.flow-details[open] > summary::after { transform: rotate(225deg); }
+.flow-details summary:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
 .flow-toolbar {
   display: flex;
   flex-wrap: wrap;
@@ -162,7 +196,7 @@
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  margin-bottom: 20px;
+  margin-bottom: 16px;
 }
 .flow-toolbar .primary,
 .flow-toolbar .secondary {
@@ -216,12 +250,15 @@
   gap: 10px;
   font-size: 13px;
   line-height: 1.6;
+  min-height: 44px;
+  padding-block: 8px;
 }
 .flow-check input {
   min-width: 18px;
   min-height: 18px;
   accent-color: var(--accent);
   margin: 2px 0;
+  flex-shrink: 0;
 }
 .flow-result-code {
   font-size: 32px;
@@ -248,9 +285,9 @@
   background: var(--pill-bg);
   border: 0;
   border-radius: 99px;
-  font-size: 11px;
+  font-size: 12px;
   padding: 8px 12px;
-  min-height: 36px;
+  min-height: 44px;
 }
 .flow-hint {
   font-size: 12px;
@@ -320,7 +357,7 @@
 }
 .flow-filter-stack {
   display: grid;
-  gap: 16px;
+  gap: 12px;
   margin-bottom: 12px;
   min-width: 0;
 }
@@ -446,13 +483,17 @@
 }
 .flow-metrics > div > strong {
   display: block;
-  font-size: 26px;
+  font-size: 22px;
   font-weight: 500;
-  margin: 6px 0;
+  margin: 4px 0;
+  line-height: 1.3;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
 }
 .flow-metrics > div > small {
   display: block;
-  font-size: 11px;
+  font-size: 12px;
+  line-height: 1.5;
 }
 
 .flow-secret {
@@ -463,14 +504,17 @@
 }
 .flow-secret button {
   position: absolute;
-  right: 8px;
-  top: 4px;
-  bottom: 4px;
+  right: 4px;
+  top: 1px;
+  bottom: 1px;
   min-width: 48px;
   border: 0;
   background: none;
   color: var(--muted);
-  font-size: 11px;
+  font-size: 12px;
+}
+@media (hover: hover) and (pointer: fine) {
+  .flow-row-button:hover { background: #ffffff06; }
 }
 
 .flow-form-actions {
