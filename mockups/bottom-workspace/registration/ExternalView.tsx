@@ -3,9 +3,10 @@ import {
   prepareGuestName,
   toStoredGuestName,
 } from "../../../lib/guests/bulk-entry";
-import { useMock, id, attendanceFor } from "../data/MockData";
+import { useMock, id } from "../data/MockData";
 import { MOCK_NOW } from "../data/types";
 import { linkState } from "../links/Links";
+import { canWriteLink, requireWritableLink } from "./access";
 import { Sheet } from "../shared/Sheet";
 import {
   Action,
@@ -60,11 +61,7 @@ export function ExternalView() {
     ["closed", "archived"].includes(event.state) ||
     ["비활성", "만료"].includes(state);
   const self = link?.kind === "self_rsvp";
-  const writable =
-    !invalid &&
-    !attendanceFor(data, event?.id ?? "").finalized &&
-    scenario !== "storage-denied" &&
-    scenario !== "unknown-result";
+  const writable = Boolean(link && canWriteLink(data, link.id, link.kind, scenario));
   const close = () => {
     setPanel(null);
     setError("");
@@ -251,9 +248,10 @@ export function ExternalView() {
               if (
                 await mutate(
                   (d) => {
+                    requireWritableLink(d, link.id, "self_rsvp", scenario);
                     const current = d.guests.find(
                       (g) =>
-                        g.id === d.ownRsvps[link.id] && g.status !== "deleted",
+                        g.id === d.ownRsvps[link.id] && g.externalLinkId === link.id && g.eventId === link.eventId && g.venueId === link.venueId && g.status !== "deleted",
                     );
                     if (current) {
                       if (current.status === "checked")
@@ -306,7 +304,7 @@ export function ExternalView() {
           </Form>
         </Sheet>
       )}
-      {panel === "cancel-self" && own && (
+      {panel === "cancel-self" && own && link && (
         <Sheet title={`${own.name} · ${t("RSVP 취소")}`} onClose={close}>
           <Confirm
             title="RSVP를 취소할까요?"
@@ -315,8 +313,9 @@ export function ExternalView() {
             onCancel={close}
             onConfirm={() =>
               void mutate((d) => {
-                const g = d.guests.find((g) => g.id === own.id)!;
-                if (g.status === "checked")
+                requireWritableLink(d, link.id, "self_rsvp", scenario);
+                const g = d.guests.find((g) => g.id === d.ownRsvps[link.id] && g.id === own.id && g.externalLinkId === link.id && g.status !== "deleted");
+                if (!g || g.status === "checked")
                   throw Error(
                     "입장 완료 후에는 RSVP를 수정하거나 취소할 수 없습니다.",
                   );
@@ -355,14 +354,16 @@ export function ExternalView() {
           )}
         </Sheet>
       )}
-      {panel?.startsWith("delete:") && (
+      {panel?.startsWith("delete:") && link && (
         <Sheet title={t("게스트 삭제")} onClose={close}>
           <Confirm
             title={guests.find((g) => g.id === panel.slice(7))?.name ?? ""}
             description="명단에서 삭제합니다."
+            disabled={!writable}
             onCancel={close}
             onConfirm={() =>
               void mutate((d) => {
+                requireWritableLink(d, link!.id, "contributor", scenario);
                 const g = d.guests.find(
                   (g) =>
                     g.id === panel.slice(7) && g.externalLinkId === link?.id,

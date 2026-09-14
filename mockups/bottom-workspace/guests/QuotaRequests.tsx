@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useMock, id, quotaFor, useIntent } from "../data/MockData";
+import { assertCapability, permissionsFor } from "../data/access";
 import { Sheet } from "../shared/Sheet";
 import {
   Action,
@@ -15,15 +16,14 @@ import {
   string,
 } from "../shared/ui";
 export function QuotaRequests() {
-  const { data, user, event, isAdmin, mutate, t, notice } = useMock();
+  const { data, user, event, isAdmin, canRequestQuota, mutate, t, notice } = useMock();
   const [panel, setPanel] = useState<string | null>(null),
     [tab, setTab] = useState("pending"),
     [reject, setReject] = useState(false);
   useIntent("quota-request", () => setPanel("create"));
   const quota = quotaFor(data, user.id, event.id);
   const canRequest =
-    user.accountKind === "personal" &&
-    ["dj", "staff"].includes(user.role) &&
+    canRequestQuota &&
     quota.limit !== null;
   const ownPending = data.requests.find(
     (r) =>
@@ -97,6 +97,9 @@ export function QuotaRequests() {
               const count = Number(string(form, "count"));
               if (
                 await mutate((d) => {
+                  const actor = assertCapability(d, user.id, "guest", event.venueId);
+                  if (!permissionsFor(actor).canRequestQuota || actor.limit === null)
+                    throw Error("이 작업을 수행할 권한이 없습니다.");
                   if (!Number.isInteger(count) || count < 1)
                     throw Error("입력값을 확인해주세요.");
                   if (
@@ -162,8 +165,10 @@ export function QuotaRequests() {
                 onCancel={() => setReject(false)}
                 onConfirm={() =>
                   void mutate((d) => {
-                    d.requests.find((r) => r.id === selected.id)!.state =
-                      "rejected";
+                    assertCapability(d, user.id, "admin", event.venueId);
+                    const request = d.requests.find((r) => r.id === selected.id && r.venueId === event.venueId && r.eventId === event.id);
+                    if (!request || request.state !== "pending") throw Error("요청이 이미 처리되었습니다.");
+                    request.state = "rejected";
                   }, "추가 게스트 요청을 거절했습니다.").then((ok) => {
                     if (ok) setPanel(null);
                   })
@@ -179,8 +184,9 @@ export function QuotaRequests() {
                   const count = Number(string(form, "count"));
                   if (
                     await mutate((d) => {
-                      const r = d.requests.find((r) => r.id === selected.id)!;
-                      if (r.state !== "pending")
+                      assertCapability(d, user.id, "admin", event.venueId);
+                      const r = d.requests.find((r) => r.id === selected.id && r.venueId === event.venueId && r.eventId === event.id);
+                      if (!r || r.state !== "pending")
                         throw Error("요청이 이미 처리되었습니다.");
                       if (
                         count < 1 ||

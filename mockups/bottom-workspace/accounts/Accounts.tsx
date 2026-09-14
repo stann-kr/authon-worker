@@ -2,8 +2,11 @@ import { useState } from "react";
 import {
   canManageTargetAccount,
   canManageTargetRole,
+  canDiscoverTargetRole,
 } from "../../../lib/users/policy";
 import { useMock, audit, id, useIntent } from "../data/MockData";
+import { assertCapability } from "../data/access";
+import { requireManagedAccount, validateAccountGrant } from "./policy";
 import {
   MOCK_NOW,
   roleLabels,
@@ -62,6 +65,7 @@ export function Accounts() {
   const entries = data.users.filter(
     (u) =>
       (u.venueId === venue.id || (isSuper && u.role === "super_admin")) &&
+      canDiscoverTargetRole(user.role, u.role) &&
       (status === "deleted"
         ? u.deleted
         : !u.deleted &&
@@ -83,7 +87,7 @@ export function Accounts() {
     const kind = selected.setup ? "reset" : "invitation";
     if (
       await mutate((d) => {
-        const u = d.users.find((u) => u.id === selected.id)!;
+        const u = requireManagedAccount(d, user.id, selected.id, venue.id);
         if (!u.active || u.deleted)
           throw Error(
             "비활성 계정은 먼저 활성화한 뒤 비밀번호를 재설정할 수 있습니다.",
@@ -108,9 +112,9 @@ export function Accounts() {
     const operation = confirm;
     if (
       await mutate((d) => {
-        const u = d.users.find((u) => u.id === selected.id)!;
+        const u = requireManagedAccount(d, user.id, selected.id, venue.id);
         if (
-          u.role === "super_admin" &&
+          u.active && u.role === "super_admin" &&
           d.users.filter(
             (x) => x.role === "super_admin" && x.active && !x.deleted,
           ).length <= 1
@@ -224,21 +228,21 @@ export function Accounts() {
                 uid = id();
               let created = false;
               const ok = await mutate((d) => {
+                const actor = assertCapability(d, user.id, "admin", venue.id);
+                const grant = validateAccountGrant(actor, string(form, "role"), string(form, "kind"), form.has("door"));
                 if (d.users.some((u) => u.email === email && !u.deleted))
                   throw Error(
                     "이미 등록된 이메일입니다. 사용자 목록에서 기존 계정의 초대 링크 재발급 또는 비밀번호 재설정을 진행해주세요.",
                   );
                 const limit = optionalNumber(form, "limit");
-                if (limit !== null && (!Number.isInteger(limit) || limit < 0))
+                if (limit !== null && (!Number.isInteger(limit) || limit < 0 || limit > 999))
                   throw Error("게스트 한도는 0 이상의 숫자여야 합니다.");
                 d.users.push({
                   id: uid,
                   venueId: venue.id,
                   name: string(form, "name"),
                   email,
-                  role: string(form, "role") as Role,
-                  accountKind: string(form, "kind") as "personal" | "shared",
-                  doorAccess: form.has("door"),
+                  ...grant,
                   limit,
                   active: true,
                   deleted: false,
@@ -294,18 +298,18 @@ export function Accounts() {
                   )
                     return;
                   const ok = await mutate((d) => {
-                    const u = d.users.find((u) => u.id === selected.id)!;
+                    const u = requireManagedAccount(d, user.id, selected.id, venue.id);
+                    const actor = assertCapability(d, user.id, "admin", venue.id);
+                    const grant = validateAccountGrant(actor, nextRole, string(form, "kind"), form.has("door"), u);
                     const limit = optionalNumber(form, "limit");
                     if (
                       limit !== null &&
-                      (!Number.isInteger(limit) || limit < 0)
+                      (!Number.isInteger(limit) || limit < 0 || limit > 999)
                     )
                       throw Error("게스트 한도는 0 이상의 숫자여야 합니다.");
                     Object.assign(u, {
                       name: string(form, "name"),
-                      role: nextRole,
-                      accountKind: string(form, "kind"),
-                      doorAccess: form.has("door"),
+                      ...grant,
                       limit,
                     });
                     audit(d, u.id, "user_updated");
@@ -360,8 +364,7 @@ export function Accounts() {
                       if (selected.active) setConfirm("toggle");
                       else
                         void mutate((d) => {
-                          d.users.find((u) => u.id === selected.id)!.active =
-                            true;
+                          requireManagedAccount(d, user.id, selected.id, venue.id).active = true;
                           audit(d, selected.id, "reactivated");
                         }, "변경했습니다.");
                     }}
@@ -430,6 +433,8 @@ function AccountForm({
 }) {
   const { t } = useMock();
   const [kind, setKind] = useState(user?.accountKind ?? "personal");
+  const [role, setRole] = useState<Role>(user?.role ?? "dj");
+  const [doorAccess, setDoorAccess] = useState(Boolean(user?.doorAccess));
   return (
     <Form
       submit={user ? "저장" : "계정 생성 및 초대 링크 발급"}
@@ -456,16 +461,21 @@ function AccountForm({
           label="계정 유형"
           name="kind"
           value={kind}
-          onChange={(e) => setKind(e.target.value as "personal" | "shared")}
+          onChange={(e) => {
+            const kind = e.target.value as "personal" | "shared";
+            setKind(kind);
+            if (kind === "shared") setRole("staff");
+            else setDoorAccess(false);
+          }}
         >
           {accountKinds.map((k) => (
-            <option key={k.id} value={k.id}>
+            <option key={k.id} value={k.id} disabled={user?.role === "super_admin" && k.id === "shared"}>
               {t(k.label)}
             </option>
           ))}
         </Select>
-        <Select label="역할" name="role" defaultValue={user?.role ?? "dj"}>
-          {roles.map((role) => (
+        <Select label="역할" name="role" value={role} onChange={(e) => setRole(e.target.value as Role)}>
+          {roles.filter((role) => kind !== "shared" || role === "staff").map((role) => (
             <option key={role} value={role}>
               {t(roleLabels[role])}
             </option>
@@ -475,7 +485,8 @@ function AccountForm({
           <Toggle
             label="도어 접근"
             name="door"
-            defaultChecked={user?.doorAccess}
+            checked={doorAccess}
+            onChange={(e) => setDoorAccess(e.target.checked)}
           />
         )}
         <Field
@@ -483,6 +494,7 @@ function AccountForm({
           name="limit"
           type="number"
           min="0"
+          max="999"
           step="1"
           defaultValue={user?.limit ?? ""}
           placeholder="무제한"
@@ -598,8 +610,12 @@ export function ResetRequests() {
                 onCancel={() => setReject(false)}
                 onConfirm={() =>
                   void mutate((d) => {
-                    d.resetRequests.find((r) => r.id === selected.id)!.state =
-                      "rejected";
+                    const account = requireManagedAccount(d, user.id, target.id, venue.id);
+                    if (!account.active) throw Error("비활성 계정은 먼저 활성화해야 합니다.");
+                    const request = d.resetRequests.find((r) => r.id === selected.id && r.userId === target.id);
+                    if (!request || request.state !== "pending")
+                      throw Error("이 요청은 이미 다른 관리자가 처리했습니다.");
+                    request.state = "rejected";
                     audit(d, target.id, "password_reset_request_rejected");
                   }, "비밀번호 재설정 요청을 거절했습니다.").then((ok) => {
                     if (ok) setSelected(null);
@@ -622,11 +638,15 @@ export function ResetRequests() {
                   }
                   if (!form.has("attested")) return;
                   const ok = await mutate((d) => {
+                    const account = requireManagedAccount(d, user.id, target.id, venue.id);
+                    if (!account.active) throw Error("비활성 계정은 먼저 활성화해야 합니다.");
                     const r = d.resetRequests.find(
-                      (r) => r.id === selected.id,
-                    )!;
-                    if (r.state !== "pending")
+                      (r) => r.id === selected.id && r.userId === target.id,
+                    );
+                    if (!r || r.state !== "pending")
                       throw Error("이 요청은 이미 다른 관리자가 처리했습니다.");
+                    if (!form.has("attested") || r.challenge !== string(form, "challenge"))
+                      throw Error("사용자가 알려준 4자리 요청 확인번호가 이 요청과 일치하지 않습니다.");
                     if (scenario === "credential-expired")
                       throw Error(
                         "요청이 만료되었습니다. 사용자에게 재설정을 다시 요청하도록 안내해주세요.",

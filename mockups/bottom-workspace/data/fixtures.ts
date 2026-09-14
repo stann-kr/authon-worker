@@ -62,10 +62,10 @@ export function initialData(): MockState {
       user("super", "플랫폼 관리자", "super_admin", { limit: null }),
       user("admin", "FAUST 관리자", "venue_admin", { limit: null }),
       user("door", "Door 01", "door_staff", {
-        accountKind: "shared",
-        doorAccess: true,
         limit: 0,
       }),
+      user("staff", "개인 스태프", "staff"),
+      user("register-team", "등록 전용 운영팀", "staff", { accountKind: "shared" }),
       user("sora", "SORA", "dj"),
       user("milo", "MILO", "dj"),
       user("team", "운영팀", "staff", {

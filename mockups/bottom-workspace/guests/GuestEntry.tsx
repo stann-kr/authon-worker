@@ -18,6 +18,8 @@ import {
   attendanceFor,
 } from "../data/MockData";
 import { MOCK_NOW } from "../data/types";
+import { assertCapability } from "../data/access";
+import { canWriteLink, requireWritableLink } from "../registration/access";
 import {
   Action,
   Area,
@@ -96,7 +98,7 @@ export function GuestEntry({
     !attendanceFor(data, targetEvent.id).finalized &&
     ["draft", "open"].includes(targetEvent.state) &&
     scenario !== "scope-closed" &&
-    (!link || (link.active && !link.deleted)) &&
+    (!link || canWriteLink(data, link.id, "contributor", scenario)) &&
     scenario !== "storage-denied" &&
     scenario !== "unknown-result";
   const changeRaw = (value: string) => {
@@ -125,6 +127,12 @@ export function GuestEntry({
     }
     const added: number[] = [];
     const ok = await mutate((d) => {
+      if (link) requireWritableLink(d, link.id, "contributor", scenario);
+      else {
+        const actor = assertCapability(d, user.id, "guest", targetEvent.venueId);
+        if (actor.accountKind === "shared" && !operator.trim())
+          throw Error("게스트를 추가하기 전에 현재 입력자 이름을 입력해주세요.");
+      }
       const target = d.events.find((e) => e.id === targetEvent.id)!;
       if (attendanceFor(d, target.id).finalized)
         throw Error("이 행사에는 게스트를 등록할 수 없습니다.");
@@ -133,7 +141,7 @@ export function GuestEntry({
       const free = link
         ? Math.max(
             0,
-            link.limit -
+            d.links.find((l) => l.id === link.id)!.limit -
               d.guests.filter(
                 (g) => g.externalLinkId === link.id && g.status !== "deleted",
               ).length,

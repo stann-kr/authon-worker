@@ -36,7 +36,7 @@ export function Events() {
     setTemplate(null);
     setPanel("create");
   });
-  const selected = data.events.find((e) => e.id === panel);
+  const selected = data.events.find((e) => e.id === panel && e.venueId === venue.id);
   const list = data.events.filter(
     (e) => e.venueId === venue.id && e.date === date && !e.general,
   );
@@ -49,8 +49,8 @@ export function Events() {
     if (!selected || !canTransitionEventState(selected.state, next)) return;
     if (
       await mutate((d) => {
-        const e = d.events.find((e) => e.id === selected.id)!;
-        if (!canTransitionEventState(e.state, next))
+        const e = d.events.find((e) => e.id === selected.id && e.venueId === venue.id);
+        if (!e || !canTransitionEventState(e.state, next))
           throw Error("행사 상태를 변경하지 못했습니다.");
         e.state = next;
         if (next === "open") e.openedAt = MOCK_NOW;

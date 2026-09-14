@@ -94,6 +94,8 @@ DOM 검증은 상태 전환과 입력 보존 등의 동작을 확인하는 범�
 
 ## 구현 경계
 
+역할별 메뉴·직접 URL·저장 동작과 외부 링크의 허용 범위는 [접근 권한표](ACCESS.md)에 정리했습니다. 역할 미리보기의 **개인 스태프**, **운영팀**(공용·도어 허용), **등록 전용 운영팀**으로 계정 유형에 따른 차이를 확인할 수 있습니다. **Door 01**은 개인 도어 스태프 계정입니다.
+
 ### 베뉴 구성별 검토
 
 상단 **검토 설정 → 베뉴 구성**에서 기본 2개·1개·없음·모두 비활성·행사 없음·보관 행사만 있는 상태를 선택할 수 있습니다. 구성을 바꾸면 샘플 데이터가 초기화됩니다. 역할 미리보기의 **베뉴 미지정 DJ**로 소속 없는 계정도 확인합니다.
@@ -126,6 +128,7 @@ DOM 검증은 상태 전환과 입력 보존 등의 동작을 확인하는 범�
 ```sh
 node --import tsx --test mockups/bottom-workspace/planning/domain.test.mjs
 node --import tsx --test mockups/bottom-workspace/data/scope.test.mjs
+node --import tsx --test mockups/bottom-workspace/data/access.test.mjs
 npx --no-install eslint mockups/bottom-workspace --ignore-pattern '**/dist/**'
 npm run typecheck
 node mockups/bottom-workspace/build.mjs

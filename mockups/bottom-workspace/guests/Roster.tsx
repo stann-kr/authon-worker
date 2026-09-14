@@ -8,6 +8,7 @@ import {
   quotaFor,
 } from "../data/MockData";
 import { MOCK_DATE, MOCK_NOW, type MockGuest } from "../data/types";
+import { requireGuestAction } from "../data/access";
 import { contributorName } from "../events/Reports";
 import { Sheet } from "../shared/Sheet";
 import { Icon } from "../shared/Icon";
@@ -72,7 +73,7 @@ export function Roster() {
   const isDoor = view === "door";
   const canCheck = isAdmin || (isDoor && canDoor);
   const all = activeGuests(data, event.id).filter((g) =>
-    isAdmin || isDoor ? true : g.ownerId === user.id && !g.externalLinkId,
+    g.venueId === event.venueId && ((isAdmin || (isDoor && canDoor)) || g.ownerId === user.id && !g.externalLinkId),
   );
   const quota = quotaFor(data, user.id, event.id);
   const checked = all.filter((g) => g.status === "checked").length;
@@ -114,7 +115,7 @@ export function Roster() {
           ? a.name.localeCompare(b.name)
           : b.createdAt.localeCompare(a.createdAt)),
     );
-  const selected = data.guests.find(
+  const selected = all.find(
     (g) => g.id === panel && g.status !== "deleted",
   );
   const close = () => {
@@ -125,7 +126,7 @@ export function Roster() {
     data.queue.some((q) => q.guestId === guestId && q.state === "queued");
   const check = async (g: MockGuest) => {
     if (
-      !writable ||
+      !canCheck || !writable ||
       event.date !== MOCK_DATE ||
       queued(g.id) ||
       (scenario === "offline" && event.general)
@@ -138,6 +139,7 @@ export function Roster() {
     }
     return await mutate(
       (d) => {
+        const guest = requireGuestAction(d, user.id, event.id, g.id, "check");
         if (scenario === "offline") {
           d.queue.push({
             id: id(),
@@ -148,7 +150,7 @@ export function Roster() {
           });
         } else
           performCheck(
-            d.guests.find((x) => x.id === g.id)!,
+            guest,
             true,
           );
       },
@@ -491,7 +493,7 @@ export function Roster() {
           </Action>
         </Sheet>
       )}
-      {panel === "code" && (
+      {panel === "code" && canCheck && (
         <Sheet title={t("게스트 찾기")} onClose={close}>
           <Form
             submit="게스트 찾기"
@@ -501,7 +503,7 @@ export function Roster() {
                 setPanel("code-unavailable");
                 return;
               }
-              const found = activeGuests(data, event.id).find(
+              const found = all.find(
                 (g) => g.code === code || g.code.endsWith(`:${code}`),
               );
               setPanel(found?.id ?? "code-missing");
@@ -584,7 +586,7 @@ export function Roster() {
                 onConfirm={() =>
                   void mutate(
                     (d) => {
-                      const g = d.guests.find((x) => x.id === selected.id)!;
+                      const g = requireGuestAction(d, user.id, event.id, selected.id, confirm === "delete" ? "delete" : "check");
                       if (confirm === "delete") g.status = "deleted";
                       else if (scenario === "offline")
                         d.queue.push({

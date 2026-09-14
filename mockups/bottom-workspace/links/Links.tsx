@@ -72,7 +72,7 @@ export function Links() {
     }
     setIntent("");
   }, [intent, data.links, data.events, venue.id, event.date, setIntent]);
-  const selected = data.links.find((l) => l.id === panel && !l.deleted);
+  const selected = data.links.find((l) => l.id === panel && l.venueId === venue.id && !l.deleted);
   const used = (id: string) =>
     data.guests.filter((g) => g.externalLinkId === id && g.status !== "deleted")
       .length;
@@ -312,7 +312,8 @@ export function Links() {
               secondary
               onClick={() =>
                 void mutate((d) => {
-                  const l = d.links.find((l) => l.id === selected.id)!;
+                  const l = d.links.find((l) => l.id === selected.id && l.venueId === venue.id && !l.deleted);
+                  if (!l) throw Error("이 작업을 수행할 권한이 없습니다.");
                   l.active = !l.active;
                 }, "변경했습니다.")
               }
@@ -328,7 +329,8 @@ export function Links() {
                 onCancel={() => setDeleteOpen(false)}
                 onConfirm={() =>
                   void mutate((d) => {
-                    const l = d.links.find((l) => l.id === selected.id)!;
+                    const l = d.links.find((l) => l.id === selected.id && l.venueId === venue.id && !l.deleted);
+                    if (!l) throw Error("이 작업을 수행할 권한이 없습니다.");
                     l.deleted = true;
                     l.active = false;
                   }, "링크를 삭제했습니다.").then((ok) => {

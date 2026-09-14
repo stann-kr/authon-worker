@@ -13,6 +13,7 @@ import { useMockRoute } from "../workspace/useMockRoute";
 import { isBusinessDate } from "../../../lib/events/domain";
 import type { AdminAnalyticsUrlState } from "../../../lib/analytics/url-state";
 import { availableVenues, needsEvent, needsVenue, resolveScope } from "./scope";
+import { assertViewAccess, permissionsFor } from "./access";
 import {
   MOCK_DATE,
   MOCK_NOW,
@@ -124,6 +125,7 @@ type Context = {
   isSuper: boolean;
   canDoor: boolean;
   canRegister: boolean;
+  canRequestQuota: boolean;
   writable: boolean;
   setData: React.Dispatch<React.SetStateAction<MockState>>;
 };
@@ -158,13 +160,7 @@ export function MockProvider({ children }: { children: ReactNode }) {
   useLayoutEffect(() => {
     version.current++;
   }, [view, externalLinkId, authPage, user.id, venue.id, event.id, businessDate]);
-  const isSuper = user.role === "super_admin",
-    isAdmin = isSuper || user.role === "venue_admin";
-  const canDoor =
-    isAdmin ||
-    user.role === "door_staff" ||
-    (user.accountKind === "shared" && user.doorAccess);
-  const canRegister = true;
+  const { isSuper, isAdmin, canDoor, canRegister, canRequestQuota } = permissionsFor(user);
   const t = (text: string, values?: Record<string, string | number>) =>
     translate(text, locale, values);
   const navigate = (v: View) => {
@@ -258,6 +254,7 @@ export function MockProvider({ children }: { children: ReactNode }) {
     await new Promise((r) => setTimeout(r, 140));
     try {
       if (started !== version.current) return false;
+      assertViewAccess(current.current, user.id, view, venue.id);
       if ((needsVenue(view) && !venue.id) || (needsEvent(view) && !event.id))
         throw Error("운영할 베뉴와 명단을 먼저 선택해주세요.");
       if (scenario === "save-error" || scenario === "rate-limited")
@@ -368,6 +365,7 @@ export function MockProvider({ children }: { children: ReactNode }) {
         isSuper,
         canDoor,
         canRegister,
+        canRequestQuota,
         writable:
           user.active &&
           !user.deleted &&

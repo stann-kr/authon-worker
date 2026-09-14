@@ -7,6 +7,7 @@ import {
   quotaFor,
 } from "./data/MockData";
 import { needsEvent, needsVenue } from "./data/scope";
+import { canOpenView } from "./data/access";
 import {
   MOCK_DATE,
   roleLabels,
@@ -70,6 +71,7 @@ function Workspace() {
     isAdmin,
     isSuper,
     canDoor,
+    canRequestQuota,
     chooseUser,
     chooseEvent,
     chooseVenue,
@@ -156,26 +158,8 @@ function Workspace() {
           ? t(isPlanning ? "전체 행사 · 공연 준비" : "전체 행사")
           : event.name;
   const quota = quotaFor(data, user.id, event.id);
-  const canRequest =
-    user.accountKind === "personal" &&
-    ["dj", "staff"].includes(user.role) &&
-    quota.limit !== null;
-  const forbidden =
-    (!isAdmin &&
-      [
-        "artists",
-        "bookings",
-        "schedule",
-        "preparation",
-        "events",
-        "report",
-        "links",
-        "users",
-        "password-requests",
-        "analytics",
-      ].includes(view)) ||
-    (view === "venues" && !isSuper) ||
-    (["door", "attendance"].includes(view) && !canDoor);
+  const canRequest = canRequestQuota && quota.limit !== null;
+  const forbidden = !canOpenView(user, view);
   const inactive =
     (!user.active || user.deleted || (scopeStatus === "inactive-venue" && needsVenue(view))) &&
     view !== "auth";
@@ -525,7 +509,8 @@ function Workspace() {
       : []),
     ...(isSuper ? (["venues"] as View[]) : []),
     "profile",
-  ] as View[]).filter((next) => venue.id || next === "home" || !needsVenue(next));
+  ] as View[]).filter((next) => canOpenView(user, next) &&
+    (venue.id || next === "home" || !needsVenue(next)));
   return (
     <div className="preview-root">
       <header className="preview-toolbar">

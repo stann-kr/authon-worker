@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useMock, activeGuests } from "../data/MockData";
+import { assertCapability } from "../data/access";
 import { MOCK_NOW, type MockState, type ReportData } from "../data/types";
 import { Action, Confirm, Metrics, Notice, downloadCsv } from "../shared/ui";
 export function contributorName(
@@ -81,7 +82,7 @@ export function buildReport(data: MockState, eventId: string): ReportData {
   };
 }
 export function Reports() {
-  const { data, event, scenario, mutate, t, notice } = useMock();
+  const { data, user, event, scenario, mutate, t, notice } = useMock();
   const [confirm, setConfirm] = useState(false);
   const snapshot = data.reports[event.id];
   const report = snapshot ?? buildReport(data, event.id);
@@ -238,6 +239,11 @@ export function Reports() {
             onCancel={() => setConfirm(false)}
             onConfirm={() =>
               void mutate((d) => {
+                assertCapability(d, user.id, "admin", event.venueId);
+                const latest = d.events.find((e) => e.id === event.id && e.venueId === event.venueId);
+                if (!latest || !["closed", "archived"].includes(latest.state) || inconsistent ||
+                  d.queue.some((q) => q.eventId === event.id && q.state === "queued"))
+                  throw Error("이 작업을 수행할 권한이 없습니다.");
                 if (d.reports[event.id])
                   throw Error("확정한 리포트는 변경할 수 없습니다.");
                 d.reports[event.id] = buildReport(d, event.id);

@@ -7,6 +7,7 @@ import {
   useIntent,
 } from "../data/MockData";
 import { MOCK_DATE, type MockEvent, type MockState } from "../data/types";
+import { assertCapability } from "../data/access";
 import { performCheck } from "../guests/Roster";
 import { Sheet } from "../shared/Sheet";
 import {
@@ -39,6 +40,7 @@ export function canFinalizeAttendance(data: MockState, event: MockEvent, isAdmin
 export function DoorAttendance() {
   const {
     data,
+    user,
     event,
     canDoor,
     isAdmin,
@@ -87,6 +89,7 @@ export function DoorAttendance() {
     if (!canRecord) return;
     await mutate(
       (d) => {
+        assertCapability(d, user.id, "door", event.venueId);
         if (scenario === "offline")
           d.queue.push({
             id: id(),
@@ -112,6 +115,7 @@ export function DoorAttendance() {
   const sync = async () => {
     if (["offline", "syncing"].includes(scenario)) return;
     await mutate((d) => {
+      assertCapability(d, user.id, "door", event.venueId);
       for (const q of d.queue.filter(
         (q) => q.eventId === event.id && q.state === "queued",
       )) {
@@ -304,6 +308,10 @@ export function DoorAttendance() {
                 disabled={!canFinalize}
                 onConfirm={() =>
                   void mutate((d) => {
+                    assertCapability(d, user.id, "admin", event.venueId);
+                    const latestEvent = d.events.find((e) => e.id === event.id && e.venueId === event.venueId);
+                    if (!latestEvent || !canFinalizeAttendance(d, latestEvent, true))
+                      throw Error("이 작업을 수행할 권한이 없습니다.");
                     const actualChecked = activeGuests(d, event.id).filter(
                         (g) => g.status === "checked",
                       ).length,
