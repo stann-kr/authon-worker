@@ -1,13 +1,15 @@
 /* Keep native selection and keyboard behavior, with consistent arrow clearance. */
 .preview-root select:not([multiple]):not([size]),
 .preview-root select[size="1"]:not([multiple]) {
+  --select-spacing: 10px;
   appearance: none;
   -webkit-appearance: none;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16' fill='none'%3E%3Cpath d='m4 6 4 4 4-4' stroke='%23b7b7bb' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8' fill='none'%3E%3Cpath d='m1 1.5 5 5 5-5' stroke='%23b7b7bb' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
-  background-position: right 16px center;
-  background-size: 16px 16px;
-  padding-inline-end: 44px;
+  background-position: right var(--select-spacing) center;
+  background-size: 12px 8px;
+  padding-inline-start: var(--select-spacing);
+  padding-inline-end: calc(var(--select-spacing) * 2 + 12px);
   text-overflow: ellipsis;
 }
 
@@ -17,6 +19,6 @@
     appearance: auto;
     -webkit-appearance: auto;
     background-image: none;
-    padding-inline-end: 16px;
+    padding-inline-end: var(--select-spacing);
   }
 }
