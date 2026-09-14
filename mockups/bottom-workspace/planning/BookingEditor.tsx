@@ -51,6 +51,7 @@ export function BookingEditor({
     setDraft((d) => ({ ...d, materials: { ...d.materials, [key]: value } }));
   return (
     <Sheet
+      size="wide"
       title={t(exists ? "부킹 수정" : "새 부킹")}
       subtitle={artist?.name}
       protectEdits

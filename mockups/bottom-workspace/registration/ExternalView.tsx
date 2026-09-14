@@ -67,7 +67,7 @@ export function ExternalView() {
     setError("");
   };
   return (
-    <div className="flow-auth registration-page">
+    <div className={`flow-auth registration-page ${self || invalid ? "registration-personal" : "registration-contributor"}`}>
       <div className="flow-toolbar">
         <span className="flow-auth-brand">{venue?.brandName ?? "Authon"}</span>
         <select
@@ -176,7 +176,7 @@ export function ExternalView() {
               )}
             </>
           ) : (
-            <>
+            <section className="registration-roster">
               <Field
                 label="게스트 이름 검색..."
                 value={query}
@@ -201,7 +201,7 @@ export function ExternalView() {
               >
                 게스트 추가
               </Action>
-            </>
+            </section>
           )}
           {state === "정원 마감" && !own && (
             <Notice error>이 이벤트의 RSVP 정원에 도달했습니다.</Notice>
@@ -225,7 +225,7 @@ export function ExternalView() {
         />
       </details>
       {panel === "add" && link && (
-        <Sheet protectEdits title={t("게스트 추가")} onClose={close}>
+        <Sheet size="wide" protectEdits title={t("게스트 추가")} onClose={close}>
           <GuestEntry externalLinkId={link.id} onDone={close} />
         </Sheet>
       )}

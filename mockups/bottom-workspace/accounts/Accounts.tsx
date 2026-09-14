@@ -136,7 +136,7 @@ export function Accounts() {
       close();
   };
   return (
-    <div className="flow-section">
+    <div className="flow-section management-section">
       <div className="flow-filter-stack flow-compact-filters">
       <Field
         label="사용자 검색"
@@ -181,6 +181,7 @@ export function Accounts() {
       {entries.map((u) => (
         <Row
           key={u.id}
+          selected={panel === u.id}
           title={u.deleted ? t("삭제된 계정") : u.name}
           meta={
             u.deleted
@@ -216,6 +217,7 @@ export function Accounts() {
       </Action>
       {panel === "create" && (
         <Sheet
+          size="wide"
           protectEdits
           title={t("계정 생성")}
           subtitle={venue.name}
@@ -268,6 +270,9 @@ export function Accounts() {
       )}
       {selected && (
         <Sheet
+          key={selected.id}
+          presentation={confirm ? "modal" : "detail"}
+          size="wide"
           protectEdits
           title={selected.deleted ? t("삭제된 계정") : selected.name}
           subtitle={t(roleLabels[selected.role])}
@@ -552,7 +557,7 @@ export function ResetRequests() {
     );
   });
   return (
-    <div className="flow-section">
+    <div className="flow-section management-section">
       <Tabs
         value={tab}
         onChange={setTab}
@@ -564,6 +569,7 @@ export function ResetRequests() {
       {requests.map((r) => (
         <Row
           key={r.id}
+          selected={selectedId === r.id}
           title={data.users.find((u) => u.id === r.userId)?.name ?? "사용자"}
           meta={r.email}
           badge={
@@ -587,6 +593,10 @@ export function ResetRequests() {
       )}
       {selected && target && (
         <Sheet
+          key={selected.id}
+          presentation={reject ? "modal" : "detail"}
+          protectEdits
+          subtitle={venue.name}
           title={`${target.name} · ${t("본인 확인 및 승인")}`}
           onClose={() => setSelected(null)}
         >

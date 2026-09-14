@@ -69,6 +69,7 @@ export function Bookings() {
   const card = (b: Booking) => (
     <button
       className="planning-booking"
+      aria-pressed={selected === b.id}
       key={b.id}
       onClick={() => setSelected(b.id)}
     >

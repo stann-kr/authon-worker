@@ -31,10 +31,11 @@ export function Venues() {
     setConfirm(false);
   };
   return (
-    <div className="flow-section">
+    <div className="flow-section management-section">
       {data.venues.map((v) => (
         <Row
           key={v.id}
+          selected={panel === v.id}
           title={v.name}
           meta={`${v.domain || t("지정된 기본 도메인 없음")} · ${v.opening}–${v.closing}`}
           badge={v.active ? "활성" : "비활성"}
@@ -44,6 +45,10 @@ export function Venues() {
       {!data.venues.length && <Empty text="베뉴가 없습니다" />}
       {panel && (
         <Sheet
+          key={panel}
+          presentation={venue && !confirm ? "detail" : "modal"}
+          size="wide"
+          subtitle={venue?.name}
           protectEdits
           title={t(venue ? "베뉴 수정" : "베뉴 생성")}
           onClose={close}

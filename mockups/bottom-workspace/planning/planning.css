@@ -549,17 +549,6 @@
 .planning-prep-material p {
   margin: 0;
 }
-@media (min-width: 700px) {
-  .preview-frame:not(.mobile) .planning-directory,
-  .preview-frame:not(.mobile) .planning-booking-list {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 0 28px;
-  }
-  .preview-frame:not(.mobile) .planning-artist,
-  .preview-frame:not(.mobile) .planning-booking {
-    padding-top: 16px;
-  }
-}
 .planning-pipeline ul {
   list-style: none;
   padding: 0;
@@ -619,9 +608,45 @@
   .planning-schedule-view > button { justify-content: center; }
   .planning-week { margin-inline: -18px; gap: 1px; }
 }
-@media (min-width: 700px) {
-  .preview-frame:not(.mobile) .planning-bookings { grid-template-columns: minmax(0, 1fr) auto; }
-  .preview-frame:not(.mobile) .planning-bookings > * { grid-column: 1 / -1; }
-  .preview-frame:not(.mobile) .planning-bookings > .planning-booking-controls { grid-column: 1; }
-  .preview-frame:not(.mobile) .planning-bookings > .planning-list-view { grid-column: 2; gap: 20px; }
+/* Layout follows the remaining content width, including an open detail pane. */
+.planning-prep-grid { display: grid; gap: 24px; min-width: 0; }
+.planning-prep-grid > section { min-width: 0; }
+.planning-day-empty { display: none; }
+:is(.planning-artist, .planning-booking, .planning-agenda-item, .planning-history-link)[aria-pressed="true"] {
+  background: #10b9810d;
+  box-shadow: inset 2px 0 var(--accent);
+  padding-left: 12px;
+}
+@container content (min-width: 700px) {
+  .planning-directory,
+  .planning-booking-list { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 28px; }
+  .planning-directory .planning-artist,
+  .planning-booking-list .planning-booking { padding-block: 16px; }
+  .planning-booking-controls { max-width: 700px; }
+  .planning-list-view,
+  .planning-schedule-view,
+  .planning-filters,
+  .planning-schedule-filters,
+  .planning-section > .flow-compact-filters { max-width: 700px; width: 100%; }
+  .planning-undated { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 28px; }
+  .planning-undated > h2 { grid-column: 1 / -1; }
+  .planning-prep-grid { grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: 24px 32px; }
+  .planning-prep-grid > section:first-child { grid-row: span 2; }
+  .planning-calendar-controls { max-width: 520px; }
+  .planning-week-agenda { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@container content (min-width: 1160px) {
+  .planning-directory, .planning-booking-list { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .planning-week-agenda { grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 12px; }
+  .planning-week-agenda > section { display: block; padding: 12px; border: 1px solid var(--line); border-radius: 12px; min-width: 0; }
+  .planning-week-agenda .planning-agenda-item { grid-template-columns: minmax(0, 1fr); padding-left: 8px; }
+  .planning-week-agenda .planning-agenda-time { display: flex; flex-wrap: wrap; }
+  .planning-week-agenda .planning-section-title { font-size: 12px; }
+  .planning-week-agenda .planning-card-top { align-items: start; }
+}
+@container sheet-content (min-width: 650px) {
+  .planning-editor > .flow-form > .flow-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px 24px; }
+  .planning-editor > .flow-form > .flow-fields > :is(h3, details, .flow-notice, .form-error, .planning-warning),
+  .planning-editor > .flow-form > .flow-fields > .field:has(textarea),
+  .planning-editor > .flow-form > .flow-fields > .form-duo { grid-column: 1 / -1; }
 }

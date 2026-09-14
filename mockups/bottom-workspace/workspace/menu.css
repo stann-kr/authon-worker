@@ -76,3 +76,6 @@
   color: var(--muted);
   font-size: 14px;
 }
+@container sheet-content (min-width: 650px) {
+  .workspace-menu-expanded { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px 32px; }
+}

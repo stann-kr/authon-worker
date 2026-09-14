@@ -135,7 +135,7 @@ export function BookingSheet({
       </Sheet>
     );
   return (
-    <Sheet title={artist.name} subtitle={event.name} onClose={onClose}>
+    <Sheet presentation={confirm ? "modal" : "detail"} title={artist.name} subtitle={event.name} onClose={onClose}>
       <div className="planning-detail">
         <div className="planning-card-top">
           <Status booking={b} />

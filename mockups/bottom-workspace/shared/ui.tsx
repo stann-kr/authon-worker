@@ -177,17 +177,19 @@ export function Form({
   onSubmit,
   submit = "저장",
   disabled = false,
+  className = "",
 }: {
   children: ReactNode;
   onSubmit: (data: FormData) => void | Promise<void>;
   submit?: string;
   disabled?: boolean;
+  className?: string;
 }) {
   const { busy, notice, notify, t } = useMock();
   useEffect(() => notify(""), [notify]);
   return (
     <form
-      className="flow-form"
+      className={`flow-form ${className}`}
       onSubmit={async (e) => {
         e.preventDefault();
         if (busy) return;
@@ -240,12 +242,14 @@ export function Row({
   badge,
   children,
   onClick,
+  selected,
 }: {
   title: string;
   meta?: string;
   badge?: string;
   children?: ReactNode;
   onClick?: () => void;
+  selected?: boolean;
 }) {
   const { t } = useMock();
   const content = (
@@ -261,7 +265,7 @@ export function Row({
   return (
     <div className="flow-row">
       {onClick ? (
-        <button className="flow-row-button" onClick={onClick}>
+        <button className="flow-row-button" onClick={onClick} aria-pressed={selected}>
           {content}
         </button>
       ) : (

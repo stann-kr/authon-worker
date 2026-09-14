@@ -26,3 +26,10 @@
   grid-row: span 3;
   padding-bottom: 12px;
 }
+.analytics-section { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; }
+@container content (min-width: 760px) {
+  .analytics-section { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px 28px; }
+  .analytics-section > * { grid-column: 1 / -1; }
+  .analytics-section > .analytics-trend { grid-column: auto; }
+  .analytics-period-controls { max-width: 600px; }
+}

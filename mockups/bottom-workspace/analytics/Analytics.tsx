@@ -296,7 +296,7 @@ export function Analytics() {
           />
           {!current.length && <Empty text="이 기간에 게스트 등록이 없습니다" />}
           {["registered", "attendance"].map((kind) => (
-            <section key={kind}>
+            <section key={kind} className="analytics-trend">
               <h2 className="flow-subheading">
                 {t(kind === "registered" ? "기간 추이" : "전체 입장 추이")}
               </h2>

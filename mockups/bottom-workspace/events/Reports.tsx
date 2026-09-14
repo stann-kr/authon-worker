@@ -3,6 +3,7 @@ import { useMock, activeGuests } from "../data/MockData";
 import { assertCapability } from "../data/access";
 import { MOCK_NOW, type MockState, type ReportData } from "../data/types";
 import { Action, Confirm, Metrics, Notice, downloadCsv } from "../shared/ui";
+import "./reports.css";
 export function contributorName(
   data: MockState,
   ownerId: string,
@@ -116,7 +117,7 @@ export function Reports() {
       </Notice>
     );
   return (
-    <div className="flow-section">
+    <div className="flow-section report-section">
       <div className="flow-toolbar">
         <strong>{event.name}</strong>
         <span className={`status-badge ${snapshot ? "green" : ""}`}>
@@ -142,6 +143,8 @@ export function Reports() {
           확인해주세요.
         </Notice>
       )}
+      <div className="report-columns">
+      <section className="report-overview">
       <Metrics compact
         items={[
           { label: "등록", value: report.registered },
@@ -202,6 +205,8 @@ export function Reports() {
           },
         ]}
       />
+      </section>
+      <section className="report-contributors">
       <h2 className="flow-subheading">{t("기여자 성과")}</h2>
       <div className="flow-table-wrap">
         <table className="flow-table">
@@ -230,6 +235,8 @@ export function Reports() {
       <Action secondary onClick={csv}>
         CSV 다운로드
       </Action>
+      </section>
+      </div>
       {confirm ? (
         <>
           <Confirm

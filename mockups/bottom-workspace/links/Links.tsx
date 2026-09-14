@@ -107,7 +107,7 @@ export function Links() {
     setDeleteOpen(false);
   };
   return (
-    <div className="flow-section">
+    <div className="flow-section management-section">
       <div className="flow-filter-stack links-filters flow-compact-filters">
       <Tabs
         value={range}
@@ -172,6 +172,7 @@ export function Links() {
       {items.map((l) => (
         <Row
           key={l.id}
+          selected={panel === l.id}
           title={l.ownerName}
           meta={`${t(l.kind === "self_rsvp" ? "방문자가 직접 RSVP" : "DJ가 게스트 명단 관리")} · ${used(l.id)}/${l.limit}`}
           badge={linkState(l, used(l.id), scenario)}
@@ -181,6 +182,7 @@ export function Links() {
       {!items.length && <Empty text="이 필터에 해당하는 링크가 없습니다" />}
       {panel === "create" && (
         <Sheet
+          size="wide"
           protectEdits
           title={t("링크 생성")}
           subtitle={
@@ -262,6 +264,8 @@ export function Links() {
       )}
       {selected && (
         <Sheet
+          key={selected.id}
+          presentation={deleteOpen ? "modal" : "detail"}
           title={selected.ownerName}
           subtitle={`${t(linkState(selected, used(selected.id), scenario))} · ${data.events.find((e) => e.id === selected.eventId)?.name}`}
           onClose={close}

@@ -23,6 +23,15 @@
   display: flex;
   flex-direction: column;
 }
+.sheet[data-inline="true"] {
+  height: var(--sheet-max-height);
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  box-shadow: none;
+  animation: none;
+}
+.sheet[data-wide="true"] { border-radius: 24px; }
+.sheet-body { container: sheet-content / inline-size; }
 .sheet-header {
   display: flex;
   align-items: center;

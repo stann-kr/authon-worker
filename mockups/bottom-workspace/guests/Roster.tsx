@@ -319,6 +319,7 @@ export function Roster() {
           <li key={g.id}>
             <button
               className="guest-person"
+              aria-pressed={panel === g.id}
               aria-label={`${g.name} ${t("상세")}`}
               onClick={() => setPanel(g.id)}
             >
@@ -398,6 +399,7 @@ export function Roster() {
       {panel === "add" && canRegister && (
         <Sheet
           title={t("게스트 등록")}
+          size="wide"
           subtitle={`${event.name} · ${event.date}`}
           protectEdits
           onClose={close}
@@ -523,7 +525,7 @@ export function Roster() {
         </Sheet>
       )}
       {selected && (
-        <Sheet title={selected.name} subtitle={event.name} onClose={close}>
+        <Sheet key={selected.id} presentation={confirm ? "modal" : "detail"} title={selected.name} subtitle={event.name} onClose={close}>
           <div className="flow-pair">
             <span>{t("등록 담당자")}</span>
             <strong>

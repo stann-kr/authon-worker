@@ -45,6 +45,7 @@ import "./shell.css";
 import "./guests/guests.css";
 import "./shared/flows.css";
 import "./shared/select.css";
+import "./workspace/responsive.css";
 
 export default function App() {
   return (
@@ -89,7 +90,7 @@ function Workspace() {
     reset,
     writable,
   } = ctx;
-  const [mobile, setMobile] = useState(true),
+  const [previewSize, setPreviewSize] = useState("auto"),
     [modal, setModal] = useState<string | null>(null),
     [scopeDate, setScopeDate] = useState(event.date);
   const open = (name: string) => {
@@ -591,13 +592,12 @@ function Workspace() {
                 <option value="archived">{t("보관 행사만 있음")}</option>
               </Select>
               <p id="venue-preview-hint" className="flow-hint">{t("구성을 바꾸면 샘플 데이터가 초기화됩니다.")}</p>
-              <button
-                className="preview-device"
-                aria-pressed={mobile}
-                onClick={() => setMobile((v) => !v)}
-              >
-                {t(mobile ? "전체 폭" : "모바일 폭")}
-              </button>
+              <Select label="화면 크기" value={previewSize} onChange={(e) => setPreviewSize(e.target.value)}>
+                <option value="auto">{t("자동")}</option>
+                <option value="mobile">{t("모바일")} · 390px</option>
+                <option value="tablet">{t("태블릿")} · 834px</option>
+                <option value="desktop">{t("데스크탑")} · 1280px</option>
+              </Select>
             </div>
           </details>
           <button className="preview-map" onClick={() => open("coverage")}>
@@ -611,8 +611,8 @@ function Workspace() {
           {t("모든 이름·수치는 샘플입니다.")} · {t("새로고침하면 초기화")}
         </span>
       </div>
-      <div className={`preview-frame ${mobile ? "mobile" : ""}`}>
-        <div className={`app-shell ${isPublic ? "public" : ""}`}>
+      <div className={`preview-frame ${previewSize}`}>
+        <div className={`app-shell ${isPublic ? "public" : ""}`} data-view={view}>
           {!isPublic && (
             <>
               <header className="workspace-header">
@@ -892,6 +892,7 @@ function Workspace() {
       {(modal === "more" || modal === "account") && (
         <Sheet
           id={modal === "more" ? "workspace-all-menu" : undefined}
+          size={modal === "more" ? "wide" : "default"}
           title={t(modal === "more" ? "전체 메뉴" : "내 계정")}
           onClose={() => setModal(null)}
         >

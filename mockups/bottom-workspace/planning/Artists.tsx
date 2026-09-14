@@ -67,6 +67,7 @@ export function Artists() {
         {list.map((a) => (
           <button
             className="planning-artist"
+            aria-pressed={selectedId === a.id}
             key={a.id}
             onClick={() => setSelectedId(a.id)}
           >
@@ -105,6 +106,8 @@ export function Artists() {
       )}
       {selected && !draft && (
         <Sheet
+          key={selected.id}
+          presentation="detail"
           title={selected.name}
           subtitle={`${t(artistKinds[selected.kind])} · ${selected.city || t("거점 미등록")}`}
           onClose={() => setSelectedId(null)}
@@ -186,6 +189,7 @@ export function Artists() {
       {draft && (
         <Sheet
           key={draft.id}
+          size="wide"
           title={
             selected?.id === draft.id
               ? t("아티스트 수정")

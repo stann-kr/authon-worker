@@ -100,6 +100,7 @@ export function Preparation() {
         </span>
         <span>{t("자료·확인 필요 {count}팀", { count: missing.length })}</span>
       </div>
+      <div className="planning-prep-grid">
       <section>
         <div className="planning-card-top">
           <h2 className="planning-section-title">{t("행사 출연표")}</h2>
@@ -108,6 +109,7 @@ export function Preparation() {
         {bookings.map((b) => (
           <button
             className="planning-history-link"
+            aria-pressed={selected === b.id}
             key={b.id}
             onClick={() => setSelected(b.id)}
           >
@@ -251,6 +253,7 @@ export function Preparation() {
           </div>
         ))}
       </section>
+      </div>
       <div className="button-row">
         <Action onClick={() => navigate("bookings")}>부킹 관리</Action>
         <Action secondary onClick={() => navigate("roster")}>

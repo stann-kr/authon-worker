@@ -37,7 +37,7 @@ export function QuotaRequests() {
   );
   const selected = data.requests.find((r) => r.id === panel);
   return (
-    <div className="flow-section">
+    <div className="flow-section management-section">
       {!isAdmin && (
         <div className="quota-summary">
           <Metrics
@@ -61,6 +61,7 @@ export function QuotaRequests() {
       {list.map((r) => (
         <Row
           key={r.id}
+          selected={panel === r.id}
           title={data.users.find((u) => u.id === r.userId)?.name ?? t("사용자")}
           meta={`${r.reason || t("입력된 사유 없음")} · +${r.state === "approved" ? r.approved : r.count}`}
           badge={
@@ -139,8 +140,11 @@ export function QuotaRequests() {
       )}
       {selected && (
         <Sheet
+          key={selected.id}
+          presentation={reject ? "modal" : "detail"}
+          protectEdits
           title={t("추가 인원 요청")}
-          subtitle={data.users.find((u) => u.id === selected.userId)?.name}
+          subtitle={`${data.users.find((u) => u.id === selected.userId)?.name} · ${event.name}`}
           onClose={() => setPanel(null)}
         >
           <Notice>{selected.reason || t("입력된 사유 없음")}</Notice>

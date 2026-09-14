@@ -60,7 +60,7 @@ export function Events() {
       setTransition(null);
   };
   return (
-    <div className="flow-section">
+    <div className="flow-section management-section">
       <div className="flow-filter-stack">
       <Field
         label="운영일"
@@ -72,6 +72,7 @@ export function Events() {
       {list.map((e) => (
         <Row
           key={e.id}
+          selected={panel === e.id}
           title={e.name}
           meta={`${e.date} · ${t("수용 인원")} ${e.capacity ?? "—"}`}
           badge={states[e.state]}
@@ -100,6 +101,7 @@ export function Events() {
       </details>
       {panel === "create" && (
         <Sheet
+          size="wide"
           protectEdits
           title={t("행사 만들기")}
           subtitle={
@@ -207,6 +209,8 @@ export function Events() {
       )}
       {selected && (
         <Sheet
+          key={selected.id}
+          presentation={transition ? "modal" : "detail"}
           title={selected.name}
           subtitle={`${selected.date} · ${t(states[selected.state])}`}
           onClose={close}

@@ -185,6 +185,7 @@ export function GuestEntry({
   };
   return (
     <Form
+      className={`guest-entry ${bulk ? "bulk" : ""}`}
       submit={
         bulk
           ? t("{count}명 추가", {
@@ -328,6 +329,7 @@ export function GuestEntry({
               </>
             )}
           </details>
+          <div className="guest-bulk-preview">
           <p className="flow-hint">{t("한 줄에 1명 · 한 번에 최대 25명")}</p>
           {preview.lines.slice(0, 30).map((line) => (
             <div className="flow-pair" key={line.inputIndex}>
@@ -373,6 +375,7 @@ export function GuestEntry({
           <Action secondary onClick={() => changeRaw("")}>
             지우기
           </Action>
+          </div>
         </>
       )}
     </Form>

@@ -1,0 +1,10 @@
+.attendance-overview,
+.attendance-sync,
+.attendance-closeout { display: grid; gap: 16px; min-width: 0; }
+.attendance-section .flow-subheading { margin-top: 0; }
+@container content (min-width: 760px) {
+  .attendance-section { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 28px; align-items: start; }
+  .attendance-overview { grid-column: 1; }
+  .attendance-sync { grid-column: 2; grid-row: span 2; }
+  .attendance-closeout { grid-column: 1; }
+}

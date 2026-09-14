@@ -181,17 +181,17 @@ export function Schedule() {
           </button>
         )}
       </div>
-      <div className="planning-agenda">
+      <div className={`planning-agenda ${layout === "week" && !dayFilter ? "planning-week-agenda" : ""}`}>
         {visibleDates
-          .filter((day) => onDay(day).length)
           .map((day) => (
-            <section key={day}>
+            <section key={day} className={!onDay(day).length ? "planning-day-empty" : undefined}>
               <h2 className="planning-section-title">
-                {day.slice(5).replace("-", ".")}
+                {day.slice(5).replace("-", ".")} · {weekday.format(new Date(`${day}T12:00:00Z`))}
               </h2>
               {onDay(day).map((b) => (
                 <button
                   className="planning-agenda-item"
+                  aria-pressed={selected === b.id}
                   key={b.id}
                   onClick={() => setSelected(b.id)}
                 >

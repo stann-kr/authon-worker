@@ -1,3 +1,4 @@
+import "./door.css";
 import { useState } from "react";
 import {
   useMock,
@@ -152,7 +153,8 @@ export function DoorAttendance() {
     }, "동기화 결과를 확인해주세요.");
   };
   return (
-    <div className="flow-section">
+    <div className="flow-section attendance-section">
+      <section className="attendance-overview">
       <Metrics compact
         items={[
           { label: "누적 입장 (퇴장 미차감)", value: total },
@@ -182,7 +184,8 @@ export function DoorAttendance() {
           마지막 워크인 취소
         </Action>
       </div>
-      {(queued.length > 0 || results.length > 0 || ["offline", "syncing"].includes(scenario)) && <>
+      </section>
+      {(queued.length > 0 || results.length > 0 || ["offline", "syncing"].includes(scenario)) && <section className="attendance-sync">
       <h2 className="flow-subheading">{t("이벤트 오프라인 운영")}</h2>
       {scenario === "offline" && (
         <Notice>저장된 명단 사용 중. 변경은 연결 후 반영됩니다.</Notice>
@@ -250,9 +253,9 @@ export function DoorAttendance() {
           </Action>
         </>
       )}
-      </>}
+      </section>}
       {isAdmin && (
-        <>
+        <section className="attendance-closeout">
           <h2 className="flow-subheading">{t("마감 합계 확정")}</h2>
           {!attendance.finalized &&
             !event.general &&
@@ -278,7 +281,7 @@ export function DoorAttendance() {
             행사 관리
           </Action>
           </div>
-        </>
+        </section>
       )}
       {reconcile && (
         <Sheet

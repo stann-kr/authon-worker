@@ -17,6 +17,10 @@ function collect(k: unknown, e: unknown) {
 }
 collect(ko, en);
 const extra: Record<string, string> = {
+  "화면 크기": "Screen size",
+  "모바일": "Mobile",
+  "태블릿": "Tablet",
+  "데스크탑": "Desktop",
   "전체 상태": "All statuses",
   "최근 {count}개": "Latest {count}",
   "전체 공연 형태": "All performance types",

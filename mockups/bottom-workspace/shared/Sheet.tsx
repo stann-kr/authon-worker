@@ -5,9 +5,23 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { createPortal } from "react-dom";
 import { Icon } from "./Icon";
 import { useMock } from "../data/MockData";
+import { useSheetLayout } from "./useSheetLayout";
 import "./sheet.css";
+
+type Control = HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement;
+const valueOf = (input: Control) =>
+  input instanceof HTMLInputElement && ["checkbox", "radio"].includes(input.type)
+    ? String(input.checked) : input.value;
+const defaultValueOf = (input: Control) => {
+  if (input instanceof HTMLInputElement && ["checkbox", "radio"].includes(input.type))
+    return String(input.defaultChecked);
+  if (input instanceof HTMLSelectElement)
+    return input.querySelector<HTMLOptionElement>("option[selected]")?.value ?? input.options[0]?.value ?? "";
+  return input.defaultValue;
+};
 
 export function Sheet({
   id,
@@ -17,6 +31,8 @@ export function Sheet({
   children,
   protectEdits = false,
   dirty = false,
+  presentation = "modal",
+  size = "default",
 }: {
   id?: string;
   title: string;
@@ -25,6 +41,8 @@ export function Sheet({
   children: ReactNode;
   protectEdits?: boolean;
   dirty?: boolean;
+  presentation?: "modal" | "detail";
+  size?: "default" | "wide";
 }) {
   const { t, busy } = useMock();
   const titleId = useId();
@@ -49,51 +67,19 @@ export function Sheet({
     if (discardPrompt) continueRef.current?.focus();
   }, [discardPrompt]);
   const ref = useRef<HTMLDialogElement>(null);
+  const initialValues = useRef(new Map<Element, string>());
   const opener = useRef<HTMLElement | null>(null);
   useLayoutEffect(() => {
     opener.current = document.activeElement as HTMLElement;
     const dialog = ref.current;
-    const frame =
-      dialog?.closest(".preview-frame") ??
-      document.querySelector(".preview-frame");
-    const alignWithFrame = () => {
-      const box = frame?.getBoundingClientRect();
-      if (!dialog || !box?.width) return;
-      const viewport = window.visualViewport;
-      const visibleTop = Math.max(box.top, viewport?.offsetTop ?? 0);
-      const visibleBottom = Math.min(
-        box.bottom,
-        (viewport?.offsetTop ?? 0) + (viewport?.height ?? window.innerHeight),
-      );
-      const width = Math.min(box.width, 560);
-      dialog.style.setProperty("--sheet-left", `${box.right - width}px`);
-      dialog.style.setProperty("--sheet-width", `${width}px`);
-      dialog.style.setProperty(
-        "--sheet-bottom",
-        `${Math.max(0, window.innerHeight - visibleBottom)}px`,
-      );
-      dialog.style.setProperty(
-        "--sheet-max-height",
-        `${Math.max(0, visibleBottom - visibleTop - 12)}px`,
-      );
-    };
-    alignWithFrame();
-    const observer =
-      typeof ResizeObserver === "undefined"
-        ? null
-        : new ResizeObserver(alignWithFrame);
-    if (frame) observer?.observe(frame);
-    window.addEventListener("resize", alignWithFrame);
-    window.visualViewport?.addEventListener("resize", alignWithFrame);
-    window.visualViewport?.addEventListener("scroll", alignWithFrame);
-    dialog?.showModal();
+    dialog?.querySelectorAll<Control>("form input, form select, form textarea").forEach((input) => {
+      initialValues.current.set(input, valueOf(input));
+    });
     return () => {
-      observer?.disconnect();
-      window.removeEventListener("resize", alignWithFrame);
-      window.visualViewport?.removeEventListener("resize", alignWithFrame);
-      window.visualViewport?.removeEventListener("scroll", alignWithFrame);
+      const restore = document.activeElement === document.body || !!dialog?.contains(document.activeElement);
       dialog?.close();
-      if (opener.current?.isConnected) opener.current.focus();
+      if (!restore) return;
+      if (opener.current?.isConnected) opener.current.focus({ preventScroll: true });
       else
         document
           .querySelector<HTMLElement>(
@@ -102,7 +88,8 @@ export function Sheet({
           ?.focus();
     };
   }, []);
-  return (
+  useSheetLayout(ref, presentation, size, protectEdits && (edited || dirty));
+  return createPortal(
     <dialog
       id={id}
       ref={ref}
@@ -110,13 +97,21 @@ export function Sheet({
       aria-labelledby={titleId}
       aria-busy={busy || undefined}
       onChangeCapture={(event) => {
-        if (protectEdits && (event.target as HTMLElement).closest("form"))
-          setEdited(true);
+        if (protectEdits && (event.target as HTMLElement).closest("form")) {
+          const inputs = [...event.currentTarget.querySelectorAll<Control>("form input, form select, form textarea")];
+          setEdited(inputs.some((input) => valueOf(input) !== (initialValues.current.get(input) ?? defaultValueOf(input))));
+        }
       }}
       onCancel={(event) => {
         event.preventDefault();
         if (discardPrompt) keepEditing();
         else requestClose();
+      }}
+      onKeyDown={(event) => {
+        if (event.key === "Escape" && event.currentTarget.dataset.inline === "true" && !event.defaultPrevented) {
+          event.preventDefault();
+          requestClose();
+        }
       }}
       onClick={(event) => {
         if (event.target === event.currentTarget) {
@@ -165,6 +160,7 @@ export function Sheet({
       <div className="sheet-body" hidden={discardPrompt}>
         {children}
       </div>
-    </dialog>
+    </dialog>,
+    document.body,
   );
 }

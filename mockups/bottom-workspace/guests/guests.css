@@ -8,6 +8,16 @@
   font-weight: 600;
   margin: 0;
 }
+.guest-list li:has(.guest-person[aria-pressed="true"]) { background: #10b9810d; box-shadow: inset 2px 0 var(--accent); }
+@container content (min-width: 700px) {
+  .roster-controls { max-width: 700px; }
+  .guest-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 20px; }
+  .roster-status-filters { max-width: 420px; }
+}
+@container content (min-width: 1160px) {
+  .guest-list { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+
 .guest-list {
   padding: 0;
   margin: 0;
@@ -365,4 +375,10 @@
   .guest-list li {
     padding-inline: 16px;
   }
+}
+.guest-bulk-preview { display: grid; gap: 12px; min-width: 0; }
+@container sheet-content (min-width: 650px) {
+  .guest-entry.bulk > .flow-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px 24px; align-items: start; }
+  .guest-entry.bulk > .flow-fields > * { grid-column: 1; }
+  .guest-entry.bulk > .flow-fields > .guest-bulk-preview { grid-column: 2; grid-row: 1 / span 8; }
 }
