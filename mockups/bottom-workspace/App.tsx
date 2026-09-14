@@ -523,9 +523,7 @@ function Workspace() {
             go("roster");
           }}
         >
-          <strong>
-            authon<span> / full feature mockup</span>
-          </strong>
+          <strong>authon</strong>
         </a>
         <div className="preview-controls">
           <label className="role-select">
@@ -598,6 +596,7 @@ function Workspace() {
                 <option value="tablet">{t("태블릿")} · 834px</option>
                 <option value="desktop">{t("데스크탑")} · 1280px</option>
               </Select>
+              <p className="form-note">{t("모든 이름·수치는 샘플입니다.")} {t("새로고침하면 초기화")}</p>
             </div>
           </details>
           <button className="preview-map" onClick={() => open("coverage")}>
@@ -605,12 +604,6 @@ function Workspace() {
           </button>
         </div>
       </header>
-      <div className="preview-meta">
-        <span>INTERACTIVE MOCKUP</span>
-        <span>
-          {t("모든 이름·수치는 샘플입니다.")} · {t("새로고침하면 초기화")}
-        </span>
-      </div>
       <div className={`preview-frame ${previewSize}`}>
         <div className={`app-shell ${isPublic ? "public" : ""}`} data-view={view}>
           {!isPublic && (

@@ -79,12 +79,12 @@ export function Bookings() {
         </strong>
         <Status booking={b} />
       </div>
-      <span>{data.events.find((e) => e.id === b.eventId)?.name}</span>
+      <span className="planning-booking-event">{data.events.find((e) => e.id === b.eventId)?.name}</span>
       <p className="planning-booking-time">
         {b.start ? timeLabel(b.start) : t("일정 미정")}
         {b.end && ` → ${b.start.slice(0, 10) === b.end.slice(0, 10) ? b.end.slice(11, 16) : timeLabel(b.end)}`}
       </p>
-      <small>
+      <small className="planning-booking-owner">
         {b.stage || t("무대 미정")} · {b.owner || t("담당자 미정")}
       </small>
       {b.nextAction && (
@@ -157,7 +157,12 @@ export function Bookings() {
         />
       </div>
       {layout === "list" ? (
-        <div className="planning-booking-list">{list.map(card)}</div>
+        <div className="planning-booking-list">
+          {list.length > 0 && <div className="planning-list-columns" aria-hidden="true">
+            <span>{t("아티스트 · 행사")}</span><span>{t("출연 일정")}</span><span>{t("후속 업무")}</span>
+          </div>}
+          {list.map(card)}
+        </div>
       ) : (
         <div
           className="planning-board"

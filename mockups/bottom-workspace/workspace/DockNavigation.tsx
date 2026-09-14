@@ -47,7 +47,8 @@ export function DockNavigation({
     const el = scrollerRef.current;
     if (!el) return;
     const resize = () => {
-      const width = navRef.current?.clientWidth;
+      const workspaceWidth = navRef.current?.closest<HTMLElement>(".app-shell")?.clientWidth;
+      const width = workspaceWidth ? workspaceWidth - 24 : navRef.current?.clientWidth;
       if (width) setItemLimit(width < 340 ? 4 : 5);
       const selected = el.querySelector<HTMLElement>('[aria-current="page"]');
       if (selected) reveal(selected, el);
@@ -58,6 +59,8 @@ export function DockNavigation({
       typeof ResizeObserver === "undefined" ? null : new ResizeObserver(resize);
     observer?.observe(el);
     if (navRef.current) observer?.observe(navRef.current);
+    const workspace = navRef.current?.closest(".app-shell");
+    if (workspace) observer?.observe(workspace);
     return () => observer?.disconnect();
   }, [view, user.id, locale, items.length, itemLimit]);
   const button = (target: View) => {

@@ -15,7 +15,7 @@ export function useSheetLayout(
     const dock = frame?.querySelector<HTMLElement>(".dock-region");
     if (!dialog || !frame) return;
     const layout = () => {
-      const box = frame.getBoundingClientRect();
+      const box = (frame.querySelector(".app-shell") ?? frame).getBoundingClientRect();
       const viewport = window.visualViewport;
       const top = Math.max(box.top, viewport?.offsetTop ?? 0);
       const bottom = Math.min(box.bottom, (viewport?.offsetTop ?? 0) + (viewport?.height ?? window.innerHeight));

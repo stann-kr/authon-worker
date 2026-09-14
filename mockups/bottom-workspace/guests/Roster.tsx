@@ -160,7 +160,7 @@ export function Roster() {
     );
   };
   return (
-    <>
+    <div className="roster">
       {!isAdmin && !isDoor && <dl className="stat-strip" aria-label={t("선택한 행사 요약")}>
         <div className="stat"><dt>{t("내 등록")}</dt><dd><strong>{quota.used}</strong></dd></div>
         <div className="stat"><dt>{t("남은 한도")}</dt><dd><strong>{quota.remaining ?? "∞"}</strong></dd></div>
@@ -314,6 +314,9 @@ export function Roster() {
           total: all.length,
         })}
       </p>
+      {list.length > 0 && <div className="guest-list-columns" aria-hidden="true">
+        <span>{t("게스트")}</span><span>{t("입장 상태")}</span><span>{t("입장 시각")}</span>
+      </div>}
       <ul className="guest-list">
         {list.map((g) => (
           <li key={g.id}>
@@ -369,6 +372,10 @@ export function Roster() {
                 {t(g.status === "checked" ? "입장 완료" : "미입장")}
               </span>
             )}
+            <time className="guest-check-time" dateTime={g.checkedAt ?? undefined}>
+              <span className="sr-only">{t("입장 시각")} </span>
+              {g.checkedAt?.slice(11, 16) ?? "—"}
+            </time>
           </li>
         ))}
       </ul>
@@ -644,6 +651,6 @@ export function Roster() {
           </Notice>
         </div>
       )}
-    </>
+    </div>
   );
 }

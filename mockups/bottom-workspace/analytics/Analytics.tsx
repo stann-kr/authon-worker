@@ -244,6 +244,7 @@ export function Analytics() {
         </Notice>
       ) : (
         <>
+          <div className="analytics-period-caption">
           <p className="analytics-period-summary" role="status">{`${selection.period.startDate} — ${inclusiveEndDate(selection.period.dataEndDateExclusive)} · ${t(selection.period.status === "in_progress" ? "진행 중" : "완료")}`}</p>
           <p className="flow-hint">
             {t("{start}~{end} 이전 기간 비교", {
@@ -251,6 +252,7 @@ export function Analytics() {
               end: inclusiveEndDate(selection.comparisonPeriod.endDateExclusive),
             })}
           </p>
+          </div>
           <h2 className="flow-subheading">{t("핵심 결과")}</h2>
           <div className="flow-metrics">
             {Object.entries(summary).map(([key, metric]) => (

@@ -1,10 +1,11 @@
 /* Frame size changes presentation only; route and form owners remain mounted. */
 .preview-toolbar,
 .preview-meta,
-.preview-frame { max-width: 1600px; }
+.preview-frame { max-width: 1280px; }
 .preview-frame.mobile { max-width: 390px; }
 .preview-frame.tablet { max-width: 834px; }
 .preview-frame.desktop { max-width: 1280px; }
+.app-shell { max-width: 1120px; margin-inline: auto; }
 .workspace-scroll { container: content / inline-size; }
 .workspace-scroll.has-detail { margin-right: 400px; }
 .app-shell:is([data-view="profile"], [data-view="auth"]) .workspace-scroll > div {
@@ -17,9 +18,7 @@
   left: 12px;
   right: 12px;
 }
-@container workspace (min-width: 768px) {
-  .dock-region { max-width: 760px; }
-}
+
 @media (max-width: 700px) {
   .preview-frame:is(.auto, .mobile, .tablet, .desktop) { max-width: 100%; }
 }

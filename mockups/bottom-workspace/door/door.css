@@ -8,3 +8,6 @@
   .attendance-sync { grid-column: 2; grid-row: span 2; }
   .attendance-closeout { grid-column: 1; }
 }
+
+.attendance-section .button-row > * { flex: 0 1 auto; }
+.attendance-closeout .flow-notice { margin: 0; }

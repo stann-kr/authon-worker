@@ -14,7 +14,7 @@
   --control-height: 46px;
   --control-inset: 10px;
   --control-radius: 10px;
-  --control-line: rgba(255, 255, 255, 0.16);
+  --control-line: rgba(255, 255, 255, 0.11);
   font-family:
     -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, sans-serif;
   font-synthesis: none;
@@ -218,7 +218,7 @@ svg {
   display: none;
 }
 .workspace-header {
-  padding: 8px 20px 0;
+  padding: 18px 20px 0;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -272,7 +272,7 @@ svg {
   background: var(--muted);
 }
 .header-title h1 {
-  font-size: 24px;
+  font-size: 22px;
   font-weight: 600;
   line-height: 1.4;
   letter-spacing: -0.5px;
@@ -359,8 +359,8 @@ svg {
   justify-content: space-between;
   align-items: center;
   gap: 8px;
-  padding: 0 20px 4px;
-  border-bottom: 1px solid var(--line);
+  padding: 0 20px 12px;
+  border-bottom: 0;
   font-size: 12px;
   color: var(--muted);
 }
@@ -374,20 +374,32 @@ svg {
 .scope-status.live {
   color: var(--accent);
 }
+/* Two independent rows share a compact center, with no stretched buttons. */
 .dock-region {
   position: absolute;
-  max-width: 640px;
-  margin-inline: auto;
+  width: max-content;
+  max-width: calc(100% - 24px);
+  margin: 0;
   bottom: 0;
-  left: 0;
-  right: 0;
+  left: 50%;
+  transform: translateX(-50%);
   z-index: 5;
   display: flex;
+  align-items: center;
   flex-direction: column;
-  gap: 10px;
-  padding: 16px 12px calc(18px + env(safe-area-inset-bottom));
-  background: linear-gradient(to top, var(--bg) 76%, transparent);
+  gap: 8px;
+  padding: 12px 0 calc(18px + env(safe-area-inset-bottom));
+  background: none;
   pointer-events: none;
+}
+.app-shell:not(.public)::after {
+  content: "";
+  position: absolute;
+  inset: auto 0 0;
+  height: var(--dock-space, 150px);
+  background: linear-gradient(to top, var(--bg) 64%, transparent);
+  pointer-events: none;
+  z-index: 3;
 }
 .dock-nav,
 .dock-tools {
@@ -410,7 +422,7 @@ svg {
   background: var(--pill-active);
   color: var(--text);
 }
-.dock-tools { overflow-x: auto; }
+.dock-tools { overflow-x: auto; max-width: 100%; width: max-content; }
 .dock-tools:empty {
   display: none;
 }
@@ -419,9 +431,9 @@ svg {
   align-items: center;
   justify-content: center;
   gap: 10px;
-  flex: 1 0 auto;
+  flex: 0 0 auto;
   min-height: 44px;
-  padding: 10px 20px 10px 12px;
+  padding: 10px 16px 10px 12px;
   background: var(--pill-bg);
   border: 0;
   border-radius: 99px;

@@ -17,6 +17,8 @@ function collect(k: unknown, e: unknown) {
 }
 collect(ko, en);
 const extra: Record<string, string> = {
+  "아티스트 · 행사": "Artist · Event",
+  "후속 업무": "Follow-up",
   "화면 크기": "Screen size",
   "모바일": "Mobile",
   "태블릿": "Tablet",

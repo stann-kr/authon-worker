@@ -560,21 +560,11 @@
 .flow-form-actions .primary {
   width: 100%;
 }
-.flow-row-button[aria-pressed="true"] { background: #10b9810d; box-shadow: inset 2px 0 var(--accent); }
-@container content (min-width: 760px) {
-  .flow-filter-stack { max-width: 760px; }
-  .flow-section > :is(.primary, .secondary) { max-width: 360px; justify-self: start; width: 100%; }
-  .flow-section > .button-row { max-width: 700px; }
-  .flow-section > .flow-details { max-width: 860px; width: 100%; }
-}
-
-/* Keep each target and its status/action within one compact reading unit. */
-.management-section { display: grid; grid-template-columns: minmax(0, 1fr); }
+.flow-row-button[aria-pressed="true"] { background: var(--card-bg); }
+.management-section { max-width: 740px; }
 @container content (min-width: 700px) {
-  .management-section { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 28px; align-items: start; }
-  .management-section > * { grid-column: 1 / -1; }
-  .management-section > .flow-row { grid-column: auto; }
-}
-@container content (min-width: 1160px) {
-  .management-section { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .flow-filter-stack { max-width: 640px; }
+  .flow-section > :is(.primary, .secondary) { max-width: 320px; width: fit-content; }
+  .flow-section > .button-row { max-width: 620px; }
+  .flow-section > .flow-details { max-width: 740px; width: 100%; }
 }
