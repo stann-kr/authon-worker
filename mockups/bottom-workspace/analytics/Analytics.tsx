@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { isBusinessDate } from "../../../lib/events/domain";
 import {
   resolveAnalyticsPeriod,
   isDateInAnalyticsRange,
@@ -29,6 +30,23 @@ function inclusiveEndDate(endExclusive: string) {
   const date = new Date(`${endExclusive}T12:00:00Z`);
   date.setUTCDate(date.getUTCDate() - 1);
   return date.toISOString().slice(0, 10);
+}
+function PeriodDate({ value, periodKey, onChange }: { value: string; periodKey: string; onChange: (date: string) => void }) {
+  const [draft, setDraft] = useState(value);
+  const [source, setSource] = useState(periodKey);
+  if (source !== periodKey) {
+    setSource(periodKey);
+    setDraft(value);
+  }
+  return <Field
+    label="선택 기간" type="date" value={draft} max={MOCK_DATE} required
+    error={!isBusinessDate(draft) ? "날짜를 확인해주세요." : undefined}
+    onChange={(e) => {
+      const date = e.target.value;
+      setDraft(date);
+      if (isBusinessDate(date)) onChange(date);
+    }}
+  />;
 }
 function periodRows(
   data: MockState,
@@ -69,10 +87,13 @@ function periodRows(
   );
 }
 export function Analytics() {
-  const { data, venue, scenario, chooseEvent, navigate, t } = useMock();
-  const [granularity, setGranularity] = useState<AnalyticsGranularity>("month"),
-    [anchor, setAnchor] = useState(MOCK_DATE),
-    [sort, setSort] = useState("registered"),
+  const { data, venue, scenario, chooseEvent, navigate, t, analyticsPeriod, setAnalyticsPeriod } = useMock();
+  const { granularity, anchorDate: anchor } = analyticsPeriod;
+  const setGranularity = (granularity: AnalyticsGranularity) =>
+    setAnalyticsPeriod({ ...analyticsPeriod, granularity });
+  const setAnchor = (anchorDate: string) =>
+    setAnalyticsPeriod({ ...analyticsPeriod, anchorDate });
+  const [sort, setSort] = useState("registered"),
     [direction, setDirection] = useState("desc");
   let selection: AnalyticsPeriodSelection | null = null;
   try {
@@ -183,12 +204,10 @@ export function Analytics() {
           { id: "year", label: "연" },
         ]}
       />
-      <Field
-        label="선택 기간"
-        type="date"
+      <PeriodDate
+        periodKey={`${granularity}:${anchor}`}
         value={anchor}
-        max={MOCK_DATE}
-        onChange={(e) => setAnchor(e.target.value)}
+        onChange={setAnchor}
       />
       <div className="button-row">
         <Action

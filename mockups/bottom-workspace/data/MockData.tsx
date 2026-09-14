@@ -10,6 +10,8 @@ import {
 import { initialData } from "./fixtures";
 import { translate } from "./copy";
 import { useMockRoute } from "../workspace/useMockRoute";
+import { isBusinessDate } from "../../../lib/events/domain";
+import type { AdminAnalyticsUrlState } from "../../../lib/analytics/url-state";
 import {
   MOCK_DATE,
   MOCK_NOW,
@@ -32,6 +34,19 @@ export const attendanceFor = (data: MockState, eventId: string) =>
   };
 export const activeGuests = (data: MockState, eventId: string) =>
   data.guests.filter((g) => g.eventId === eventId && g.status !== "deleted");
+export function ensureGeneralEvent(data: MockState, venueId: string, date: string) {
+  if (!isBusinessDate(date)) throw Error("날짜를 확인해주세요.");
+  let event = data.events.find((e) => e.venueId === venueId && e.date === date && e.general);
+  if (!event) {
+    event = {
+      id: id(), venueId, date, name: "일반 명단", state: "open", general: true,
+      capacity: null, target: null, createdAt: MOCK_NOW, openedAt: MOCK_NOW,
+      closedAt: null, templateId: null,
+    };
+    data.events.push(event);
+  }
+  return event;
+}
 export function quotaFor(data: MockState, userId: string, eventId: string) {
   const user = data.users.find((u) => u.id === userId);
   const extra = data.requests
@@ -76,6 +91,8 @@ type Context = {
   operator: string;
   externalLinkId: string;
   authPage: string;
+  analyticsPeriod: AdminAnalyticsUrlState;
+  setAnalyticsPeriod: (period: AdminAnalyticsUrlState) => void;
   receiptId: string;
   setReceiptId: (id: string) => void;
   setAuthPage: (page: string) => void;
@@ -261,6 +278,8 @@ export function MockProvider({ children }: { children: ReactNode }) {
         operator,
         externalLinkId,
         authPage,
+        analyticsPeriod: route.analytics,
+        setAnalyticsPeriod: (analytics) => setRoute((route) => ({ ...route, analytics })),
         receiptId,
         setReceiptId,
         setAuthPage,
@@ -280,7 +299,11 @@ export function MockProvider({ children }: { children: ReactNode }) {
           setUserId("admin");
           setVenueId("faust");
           setEventId("tonight");
-          setView("roster");
+          setRoute((route) => ({
+            ...route,
+            view: "roster",
+            analytics: { granularity: "month", anchorDate: MOCK_DATE },
+          }));
           setScenario("normal");
           setReceiptId("");
           setNotice("");

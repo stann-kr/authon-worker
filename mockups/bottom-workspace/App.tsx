@@ -5,11 +5,10 @@ import {
   useMock,
   attendanceFor,
   quotaFor,
-  id,
+  ensureGeneralEvent,
 } from "./data/MockData";
 import {
   MOCK_DATE,
-  MOCK_NOW,
   roleLabels,
   viewLabels,
   scenarioLabels,
@@ -34,6 +33,7 @@ import { Analytics } from "./analytics/Analytics";
 import { WorkspaceMenu } from "./workspace/WorkspaceMenu";
 import { DockNavigation } from "./workspace/DockNavigation";
 import { navigationLabel } from "./workspace/navigation";
+import { useAdminShortcuts } from "./workspace/useAdminShortcuts";
 import { Artists } from "./planning/Artists";
 import { Bookings } from "./planning/Bookings";
 import { Schedule } from "./planning/Schedule";
@@ -167,6 +167,15 @@ function Workspace() {
     (!venue.active || !user.active || user.deleted) &&
     view !== "venues" &&
     view !== "auth";
+  useAdminShortcuts({
+    enabled: isAdmin && !isPublic && !inactive && !forbidden && !busy &&
+      !["session-expired", "access-denied", "loading"].includes(scenario),
+    isSuper,
+    onNavigate: (next, intent) => {
+      contentRef.current?.focus({ preventScroll: true });
+      go(next, intent);
+    },
+  });
   const nav: View[] = isAdmin
     ? ["bookings", "schedule", "roster", "door", "events"]
     : user.role === "door_staff"
@@ -632,6 +641,7 @@ function Workspace() {
             ref={contentRef}
             className="workspace-scroll"
             id="workspace-content"
+            tabIndex={-1}
             aria-label={t(viewLabels[view])}
           >
             {scenario === "loading" ? (
@@ -833,28 +843,10 @@ function Workspace() {
                 disabled={!isBusinessDate(scopeDate)}
                 onClick={() => {
                   if (!isBusinessDate(scopeDate)) return;
-                  const eid = id();
-                  setData((d) => ({
-                    ...d,
-                    events: [
-                      ...d.events,
-                      {
-                        id: eid,
-                        venueId: venue.id,
-                        date: scopeDate,
-                        name: "일반 명단",
-                        state: "open",
-                        general: true,
-                        capacity: null,
-                        target: null,
-                        createdAt: MOCK_NOW,
-                        openedAt: MOCK_NOW,
-                        closedAt: null,
-                        templateId: null,
-                      },
-                    ],
-                  }));
-                  chooseEvent(eid);
+                  const next = { ...data, events: [...data.events] };
+                  const general = ensureGeneralEvent(next, venue.id, scopeDate);
+                  setData(next);
+                  chooseEvent(general.id);
                   setModal(null);
                 }}
               >

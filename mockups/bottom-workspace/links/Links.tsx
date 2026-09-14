@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { formatVenueDateTime } from "../../../lib/date";
-import { useMock, id, useIntent } from "../data/MockData";
+import { prepareExternalLinkCreateInput } from "../../../lib/external-links/domain";
+import { useMock, id, useIntent, ensureGeneralEvent, attendanceFor } from "../data/MockData";
 import { MOCK_NOW, type MockLink, type Locale } from "../data/types";
 import { Sheet } from "../shared/Sheet";
 import {
@@ -47,6 +48,7 @@ export function Links() {
     notice,
     intent,
     setIntent,
+    isAdmin,
   } = useMock();
   const [panel, setPanel] = useState<string | null>(null),
     [template, setTemplate] = useState<MockLink | null>(null),
@@ -91,7 +93,9 @@ export function Links() {
               : linkState(l, used(l.id), scenario) === filter)),
     )
     .sort((a, b) =>
-      sort === "expiry"
+      sort === "name"
+        ? a.ownerName.localeCompare(b.ownerName)
+        : sort === "expiry"
         ? (a.expiresAt ?? "z").localeCompare(b.expiresAt ?? "z")
         : b.createdAt.localeCompare(a.createdAt),
     )
@@ -181,39 +185,48 @@ export function Links() {
           subtitle={
             template
               ? `${t("템플릿으로 사용")} · ${template.ownerName}`
-              : event.name
+              : venue.name
           }
           onClose={close}
         >
           <LinkForm
             template={template}
+            initialDate={date}
             onSubmit={async (form) => {
               const lid = id();
               const ok = await mutate((d) => {
-                const ownerName = string(form, "owner"),
-                  limit = Number(string(form, "limit")),
-                  eventId = string(form, "eventId");
-                if (
-                  !ownerName ||
-                  ownerName.length > 100 ||
-                  !Number.isInteger(limit) ||
-                  limit < 1 ||
-                  limit > 999
-                )
+                const { draft } = prepareExternalLinkCreateInput({
+                  date: string(form, "date"),
+                  djName: string(form, "owner"),
+                  event: string(form, "eventName"),
+                  maxGuests: Number(string(form, "limit")),
+                  contributorId: string(form, "contributor") || null,
+                  kind: string(form, "kind"),
+                  localeMode: string(form, "locale"),
+                });
+                if (!draft)
                   throw Error(
                     "날짜, DJ, 이벤트, 언어와 게스트 정원을 확인해주세요.",
                   );
-                const e = d.events.find(
-                  (e) => e.id === eventId && e.venueId === venue.id,
-                );
-                if (!e || !["draft", "open"].includes(e.state))
+                if (!isAdmin || !venue.active)
+                  throw Error("이 화면에 접근할 권한이 없습니다.");
+                const selectedEvent = string(form, "eventId");
+                const e = selectedEvent
+                  ? d.events.find((e) => e.id === selectedEvent && e.venueId === venue.id)
+                  : ensureGeneralEvent(d, venue.id, draft.date);
+                if (!e || e.date !== draft.date || !["draft", "open"].includes(e.state) || attendanceFor(d, e.id).finalized)
                   throw Error("이 행사에는 링크를 생성할 수 없습니다.");
+                if (draft.contributorId && !d.users.some((u) => u.id === draft.contributorId && u.venueId === venue.id && u.active && !u.deleted && ["dj", "staff"].includes(u.role)))
+                  throw Error("날짜, DJ, 이벤트, 언어와 게스트 정원을 확인해주세요.");
+                const ownerName = draft.djName;
+                const expiresAt = new Date(`${draft.date}T23:59:59.999Z`);
+                expiresAt.setUTCDate(expiresAt.getUTCDate() + 1);
                 d.links.push({
                   id: lid,
                   venueId: venue.id,
-                  eventId,
+                  eventId: e.id,
                   ownerName,
-                  eventName: string(form, "eventName"),
+                  eventName: draft.event,
                   contributorKey:
                     d.links.find(
                       (l) =>
@@ -226,20 +239,19 @@ export function Links() {
                         l.ownerName.toUpperCase() === ownerName.toUpperCase(),
                     )?.id ??
                     lid,
-                  contributorUserId: string(form, "contributor") || null,
-                  kind: string(form, "kind") as MockLink["kind"],
-                  limit,
+                  contributorUserId: draft.contributorId,
+                  kind: draft.kind,
+                  limit: draft.maxGuests,
                   active: true,
                   deleted: false,
-                  locale: string(form, "locale") as "auto" | Locale,
+                  locale: draft.localeMode as "auto" | Locale,
                   createdAt: MOCK_NOW,
-                  expiresAt:
-                    e.date === "2026-09-12"
-                      ? "2026-09-13T07:00:00+09:00"
-                      : null,
+                  expiresAt: expiresAt.toISOString(),
                 });
               }, "링크를 생성했습니다.");
               if (ok) {
+                setDate(string(form, "date"));
+                setFilter("all");
                 setTemplate(null);
                 setPanel(lid);
               }
@@ -253,6 +265,10 @@ export function Links() {
           subtitle={`${t(linkState(selected, used(selected.id), scenario))} · ${data.events.find((e) => e.id === selected.eventId)?.name}`}
           onClose={close}
         >
+          <div className="flow-pair">
+            <span>{t("날짜")}</span>
+            <strong>{data.events.find((e) => e.id === selected.eventId)?.date}</strong>
+          </div>
           <div className="flow-pair">
             <span>{t("사용량")}</span>
             <strong>
@@ -334,17 +350,25 @@ export function Links() {
 }
 function LinkForm({
   template,
+  initialDate,
   onSubmit,
 }: {
   template: MockLink | null;
+  initialDate: string;
   onSubmit: (form: FormData) => Promise<void>;
 }) {
   const { data, event, venue, t, scenario } = useMock();
+  const initialEvent = event.date === initialDate && !event.general &&
+    ["draft", "open"].includes(event.state) && !attendanceFor(data, event.id).finalized
+    ? event : null;
   const [contributor, setContributor] = useState(
-      template?.contributorUserId ?? "",
+      template?.kind === "self_rsvp" ? "" : template?.contributorUserId ?? "",
     ),
+    [kind, setKind] = useState<MockLink["kind"]>(template?.kind ?? "contributor"),
     [owner, setOwner] = useState(template?.ownerName ?? ""),
-    [selectedEvent, setSelectedEvent] = useState(event.id);
+    [date, setDate] = useState(initialDate),
+    [selectedEvent, setSelectedEvent] = useState(initialEvent?.id ?? ""),
+    [eventName, setEventName] = useState(template?.eventName ?? initialEvent?.name ?? "");
   const choices = data.users.filter(
     (u) =>
       u.venueId === venue.id &&
@@ -364,6 +388,7 @@ function LinkForm({
         label="기존 DJ 이름"
         name="contributor"
         value={contributor}
+        disabled={kind === "self_rsvp"}
         onChange={(e) => {
           setContributor(e.target.value);
           setOwner(choices.find((u) => u.id === e.target.value)?.name ?? "");
@@ -400,16 +425,31 @@ function LinkForm({
           <option value={name} key={name} />
         ))}
       </datalist>
+      <Field
+        label="날짜" name="date" type="date" value={date} required
+        onChange={(e) => {
+          setDate(e.target.value);
+          if (!template && eventName === data.events.find((e) => e.id === selectedEvent)?.name)
+            setEventName("");
+          setSelectedEvent("");
+        }}
+      />
       <Select
         label="운영 행사"
         name="eventId"
         value={selectedEvent}
-        onChange={(e) => setSelectedEvent(e.target.value)}
+        onChange={(e) => {
+          const next = data.events.find((item) => item.id === e.target.value);
+          if (!eventName || eventName === data.events.find((item) => item.id === selectedEvent)?.name)
+            setEventName(next?.name ?? "");
+          setSelectedEvent(e.target.value);
+        }}
       >
+        <option value="">{t("일반 명단")}</option>
         {data.events
           .filter(
             (e) =>
-              e.venueId === venue.id && ["draft", "open"].includes(e.state),
+              e.venueId === venue.id && e.date === date && !e.general && ["draft", "open"].includes(e.state) && !attendanceFor(data, e.id).finalized,
           )
           .map((e) => (
             <option key={e.id} value={e.id}>
@@ -422,7 +462,9 @@ function LinkForm({
         name="eventName"
         list="event-suggestions"
         maxLength={120}
-        defaultValue={template?.eventName ?? event.name}
+        required
+        value={eventName}
+        onChange={(e) => setEventName(e.target.value)}
       />
       <datalist id="event-suggestions">
         {[
@@ -439,16 +481,15 @@ function LinkForm({
           <option value={name} key={name} />
         ))}
       </datalist>
-      <Field
-        label="날짜"
-        type="date"
-        value={data.events.find((e) => e.id === selectedEvent)?.date ?? ""}
-        readOnly
-      />
       <Select
         label="링크 사용 방식"
         name="kind"
-        defaultValue={template?.kind ?? "contributor"}
+        value={kind}
+        onChange={(e) => {
+          const kind = e.target.value as MockLink["kind"];
+          setKind(kind);
+          if (kind === "self_rsvp") setContributor("");
+        }}
       >
         <option value="contributor">{t("DJ가 게스트 명단 관리")}</option>
         <option value="self_rsvp">{t("방문자가 직접 RSVP")}</option>

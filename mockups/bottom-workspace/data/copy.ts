@@ -138,6 +138,7 @@ const extra: Record<string, string> = {
   한국어: "Korean",
   영어: "English",
   "일반 명단": "General list",
+  "날짜를 확인해주세요.": "Check the date.",
   이름순: "Name",
   등록순: "Registration",
   "미입장 우선": "Pending first",
