@@ -1,0 +1,22 @@
+/* Keep native selection and keyboard behavior, with consistent arrow clearance. */
+.preview-root select:not([multiple]):not([size]),
+.preview-root select[size="1"]:not([multiple]) {
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16' fill='none'%3E%3Cpath d='m4 6 4 4 4-4' stroke='%23b7b7bb' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 16px center;
+  background-size: 16px 16px;
+  padding-inline-end: 44px;
+  text-overflow: ellipsis;
+}
+
+@media (forced-colors: active) {
+  .preview-root select:not([multiple]):not([size]),
+  .preview-root select[size="1"]:not([multiple]) {
+    appearance: auto;
+    -webkit-appearance: auto;
+    background-image: none;
+    padding-inline-end: 16px;
+  }
+}

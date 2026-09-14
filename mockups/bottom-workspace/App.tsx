@@ -42,6 +42,7 @@ import "./planning/planning.css";
 import "./shell.css";
 import "./guests/guests.css";
 import "./shared/flows.css";
+import "./shared/select.css";
 
 export default function App() {
   return (
@@ -744,13 +745,6 @@ function Workspace() {
                   </button>
                 </div>
               )}
-              <DockNavigation
-                items={nav}
-                allowedViews={allowedViews}
-                pendingCount={pendingCount}
-                menuOpen={modal === "more"}
-                onSelect={(next) => next === "more" ? open("more") : go(next)}
-              />
               <div className="dock-tools" data-action-count={tools.length} aria-label={t("현재 화면 작업")}>
                 {tools.map((tool) => (
                   <button
@@ -766,6 +760,13 @@ function Workspace() {
                   </button>
                 ))}
               </div>
+              <DockNavigation
+                items={nav}
+                allowedViews={allowedViews}
+                pendingCount={pendingCount}
+                menuOpen={modal === "more"}
+                onSelect={(next) => next === "more" ? open("more") : go(next)}
+              />
             </div>
           )}
           {isPublic && notice && (
