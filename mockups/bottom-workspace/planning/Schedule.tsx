@@ -56,7 +56,7 @@ export function Schedule() {
   };
   return (
     <div className="flow-section planning-section planning-schedule">
-      <div className="planning-calendar-controls">
+      <div className="planning-calendar-controls flow-compact-filters">
         <Action secondary onClick={() => move(-7)}>
           <Icon name="chevron" size={18} />
           <span className="sr-only">{t("이전 주")}</span>

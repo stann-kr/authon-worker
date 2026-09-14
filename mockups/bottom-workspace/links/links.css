@@ -1,0 +1,11 @@
+.flow-filter-stack.links-filters {
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 8px;
+  align-items: center;
+}
+.links-filters > .flow-inline-fields { grid-column: 1 / -1; }
+.links-filters .flow-tabs { gap: 4px; }
+.links-filters .flow-tabs button { padding-inline: 10px; }
+@container workspace (max-width: 350px) {
+  .flow-filter-stack.links-filters { grid-template-columns: minmax(0, 1fr); }
+}

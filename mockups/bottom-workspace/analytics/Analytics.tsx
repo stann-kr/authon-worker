@@ -1,3 +1,4 @@
+import "./analytics.css";
 import { useState } from "react";
 import { isBusinessDate } from "../../../lib/events/domain";
 import {
@@ -193,7 +194,7 @@ export function Analytics() {
   }
   const series = [...buckets.entries()];
   return (
-    <div className="flow-section">
+    <div className="flow-section analytics-section">
       <div className="flow-filter-stack">
       <Tabs
         value={granularity}
@@ -204,6 +205,7 @@ export function Analytics() {
           { id: "year", label: "연" },
         ]}
       />
+      <div className="analytics-period-controls">
       <PeriodDate
         periodKey={`${granularity}:${anchor}`}
         value={anchor}
@@ -212,23 +214,28 @@ export function Analytics() {
       <div className="button-row">
         <Action
           secondary
+          aria-label={t("이전 기간")}
           disabled={!selection}
           onClick={() =>
             selection && setAnchor(selection.navigation.previousAnchorDate)
           }
         >
-          이전 기간
+          <span className="sr-only">{t("이전 기간")}</span>
+          <span aria-hidden="true">←</span>
         </Action>
         <Action
           secondary
+          aria-label={t("다음 기간")}
           disabled={!selection?.navigation.nextAnchorDate}
           onClick={() =>
             selection?.navigation.nextAnchorDate &&
             setAnchor(selection.navigation.nextAnchorDate)
           }
         >
-          다음 기간
+          <span className="sr-only">{t("다음 기간")}</span>
+          <span aria-hidden="true">→</span>
         </Action>
+      </div>
       </div>
       </div>
       {!selection ? (
@@ -237,7 +244,7 @@ export function Analytics() {
         </Notice>
       ) : (
         <>
-          <Notice>{`${selection.period.startDate} — ${inclusiveEndDate(selection.period.dataEndDateExclusive)} · ${t(selection.period.status === "in_progress" ? "진행 중" : "완료")}`}</Notice>
+          <p className="analytics-period-summary" role="status">{`${selection.period.startDate} — ${inclusiveEndDate(selection.period.dataEndDateExclusive)} · ${t(selection.period.status === "in_progress" ? "진행 중" : "완료")}`}</p>
           <p className="flow-hint">
             {t("{start}~{end} 이전 기간 비교", {
               start: selection.comparisonPeriod.startDate,

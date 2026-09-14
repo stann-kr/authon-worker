@@ -1,0 +1,28 @@
+.analytics-period-controls {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 8px;
+}
+.analytics-period-controls .button-row { flex-wrap: nowrap; }
+.analytics-period-controls .button-row > button {
+  width: 44px;
+  min-height: var(--control-height);
+  flex: 0 0 44px;
+  padding: 8px;
+  font-size: 20px;
+}
+.analytics-period-summary {
+  margin: 0 0 6px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.analytics-section > .flow-hint { margin: 0; }
+.analytics-section > .flow-subheading { margin-top: 16px; }
+.analytics-section > div.flow-metrics { row-gap: 4px; }
+.analytics-section > div.flow-metrics > div {
+  display: grid;
+  grid-template-rows: subgrid;
+  grid-row: span 3;
+  padding-bottom: 12px;
+}

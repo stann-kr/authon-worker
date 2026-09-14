@@ -76,6 +76,7 @@ export function Preparation() {
   };
   return (
     <div className="flow-section planning-section">
+      <div className="flow-compact-filters">
       <Select
         label="준비할 행사"
         value={event.id}
@@ -89,6 +90,7 @@ export function Preparation() {
             </option>
           ))}
       </Select>
+      </div>
       <div className="planning-prep-summary">
         <span>{t("확정 출연 {count}팀", { count: confirmed.length })}</span>
         <span>

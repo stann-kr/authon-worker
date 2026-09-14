@@ -17,6 +17,9 @@ function collect(k: unknown, e: unknown) {
 }
 collect(ko, en);
 const extra: Record<string, string> = {
+  "전체 상태": "All statuses",
+  "최근 {count}개": "Latest {count}",
+  "전체 공연 형태": "All performance types",
   "검색 열기": "Open search",
   "검색 닫기": "Close search",
   "이름·담당자 검색": "Search guests or contributors",

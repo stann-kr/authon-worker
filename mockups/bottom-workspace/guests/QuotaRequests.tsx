@@ -39,21 +39,16 @@ export function QuotaRequests() {
   return (
     <div className="flow-section">
       {!isAdmin && (
-        <>
+        <div className="quota-summary">
           <Metrics
             items={[
               { label: "게스트 한도", value: quota.limit ?? "무제한" },
               { label: "남은 인원", value: quota.remaining ?? "무제한" },
             ]}
           />
-          <Action
-            disabled={!canRequest || !!ownPending}
-            onClick={() => setPanel("create")}
-          >
-            {ownPending ? "승인 대기" : "추가 게스트 요청"}
-          </Action>
-          {!canRequest && <Notice>추가 요청 불필요</Notice>}
-        </>
+          {ownPending && <span className="status-badge">{t("승인 대기")} +{ownPending.count}</span>}
+          {!canRequest && <span className="quiet">{t("추가 요청 불필요")}</span>}
+        </div>
       )}
       <Tabs
         value={tab}

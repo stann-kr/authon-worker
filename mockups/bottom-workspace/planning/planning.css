@@ -1,7 +1,7 @@
 .planning-section {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  gap: 16px;
+  gap: 12px;
   min-width: 0;
 }
 .planning-section-title,
@@ -99,6 +99,7 @@
   overflow-wrap: anywhere;
   min-width: 0;
 }
+.planning-card-top > .planning-section-title { margin: 0; }
 .planning-status {
   display: inline-flex;
   width: fit-content;
@@ -125,9 +126,9 @@
 .planning-summary {
   display: flex;
   flex-wrap: wrap;
-  gap: 4px 20px;
-  border-block: 1px solid var(--line);
-  padding-block: 4px;
+  gap: 4px 16px;
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 4px;
 }
 .planning-summary button {
   border: 0;
@@ -415,7 +416,7 @@
   padding: 12px 2px;
   display: grid;
   gap: 8px;
-  min-height: 95px;
+  min-height: 76px;
   text-align: center;
 }
 .planning-week button[aria-pressed="true"] {

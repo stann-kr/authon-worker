@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import "./links.css";
 import { formatVenueDateTime } from "../../../lib/date";
 import { prepareExternalLinkCreateInput } from "../../../lib/external-links/domain";
 import { useMock, id, useIntent, ensureGeneralEvent, attendanceFor } from "../data/MockData";
@@ -107,7 +108,7 @@ export function Links() {
   };
   return (
     <div className="flow-section">
-      <div className="flow-filter-stack">
+      <div className="flow-filter-stack links-filters flow-compact-filters">
       <Tabs
         value={range}
         onChange={setRange}
@@ -132,7 +133,7 @@ export function Links() {
         >
           {[10, 20, 50, 100].map((n) => (
             <option value={n} key={n}>
-              {n}
+              {t("최근 {count}개", { count: n })}
             </option>
           ))}
         </Select>
@@ -153,7 +154,7 @@ export function Links() {
             "attention",
           ].map((v) => (
             <option key={v} value={v}>
-              {t(v === "all" ? "전체" : v === "attention" ? "확인 필요" : v)}
+              {t(v === "all" ? "전체 상태" : v === "attention" ? "확인 필요" : v)}
             </option>
           ))}
         </Select>

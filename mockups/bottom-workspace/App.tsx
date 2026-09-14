@@ -617,25 +617,6 @@ function Workspace() {
             <>
               <header className="workspace-header">
                 <div className="header-title">
-                  {venue.id ? (
-                  <button
-                    className="scope-button"
-                    onClick={() => open("scope")}
-                    disabled={busy}
-                    aria-label={t("베뉴와 행사 선택")}
-                  >
-                    <span
-                      className={`live-dot ${!writable ? "inactive" : ""}`}
-                    />
-                    <span>
-                      {venue.brandName || venue.name} ·{" "}
-                      {isTeamView
-                        ? t("운영팀")
-                        : event.date.slice(5).replace("-", ".")}{" "}
-                    </span>
-                    <Icon name="down" size={12} />
-                  </button>
-                  ) : <span className="scope-button">Authon</span>}
                   <h1 aria-live="polite">{t(navigationLabel(view, isAdmin))}</h1>
                 </div>
                 <button
@@ -647,7 +628,27 @@ function Workspace() {
                 </button>
               </header>
               <div className="workspace-context">
-                <span>{scopeLabel}</span>
+                  {venue.id ? (
+                  <button
+                    className="scope-button"
+                    onClick={() => open("scope")}
+                    disabled={busy}
+                    aria-label={t("베뉴와 행사 선택")}
+                  >
+                    <span
+                      className={`live-dot ${!writable ? "inactive" : ""}`}
+                    />
+                    <span className="scope-name">
+                      {venue.brandName || venue.name} ·{" "}
+                      {isTeamView
+                        ? t("운영팀")
+                        : event.date.slice(5).replace("-", ".")}{" "}
+                    </span>
+                    <span className="scope-description" title={scopeLabel}>{scopeLabel}</span>
+                    <Icon name="down" size={12} />
+                  </button>
+                  ) : <span className="scope-button">Authon</span>}
+
                 {!isTeamView && event.id && <span className={`scope-status ${writable ? "live" : ""}`}>
                   {t(scopeState)}
                 </span>}

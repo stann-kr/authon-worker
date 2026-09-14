@@ -146,12 +146,14 @@ export function Toggle({
 }
 export function Action({
   children,
+  "aria-label": ariaLabel,
   onClick,
   disabled = false,
   secondary = false,
   type = "button",
 }: {
   children: ReactNode;
+  "aria-label"?: string;
   onClick?: () => void;
   disabled?: boolean;
   secondary?: boolean;
@@ -161,6 +163,7 @@ export function Action({
   return (
     <button
       className={secondary ? "secondary" : "primary"}
+      aria-label={ariaLabel}
       type={type}
       onClick={onClick}
       disabled={disabled || busy}
@@ -308,12 +311,14 @@ export function Confirm({
 }
 export function Metrics({
   items,
+  compact = false,
 }: {
   items: { label: string; value: string | number }[];
+  compact?: boolean;
 }) {
   const { t } = useMock();
   return (
-    <dl className="flow-metrics">
+    <dl className={`flow-metrics${compact ? ` compact${items.length === 4 ? " four" : ""}` : ""}`}>
       {items.map((item) => (
         <div key={item.label}>
           <dt>{t(item.label)}</dt>

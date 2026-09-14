@@ -137,7 +137,7 @@ export function Accounts() {
   };
   return (
     <div className="flow-section">
-      <div className="flow-filter-stack">
+      <div className="flow-filter-stack flow-compact-filters">
       <Field
         label="사용자 검색"
         value={query}

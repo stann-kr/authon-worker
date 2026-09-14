@@ -142,7 +142,7 @@ export function Reports() {
           확인해주세요.
         </Notice>
       )}
-      <Metrics
+      <Metrics compact
         items={[
           { label: "등록", value: report.registered },
           { label: "입장", value: report.checked },
@@ -154,7 +154,7 @@ export function Reports() {
         ]}
       />
       <h2 className="flow-subheading">{t("도어 변경")}</h2>
-      <Metrics
+      <Metrics compact
         items={[
           { label: "명단 취소", value: report.removals },
           { label: "입장 취소", value: report.cancellations },
@@ -184,7 +184,7 @@ export function Reports() {
           {t("확정")} · {snapshot?.confirmedAt ?? "—"}
         </p>
       </details>
-      <Metrics
+      <Metrics compact
         items={[
           {
             label: "준비 시간",

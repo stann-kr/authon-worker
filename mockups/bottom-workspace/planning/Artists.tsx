@@ -39,7 +39,7 @@ export function Artists() {
     setDraft((d) => (d ? { ...d, [key]: value } : d));
   return (
     <div className="flow-section planning-section">
-      <div className="planning-filters">
+      <div className="planning-filters flow-compact-filters">
         <Field
           label="아티스트 검색"
           type="search"
@@ -52,7 +52,7 @@ export function Artists() {
           value={kind}
           onChange={(e) => setKind(e.target.value)}
         >
-          <option value="">{t("전체")}</option>
+          <option value="">{t("전체 공연 형태")}</option>
           {Object.entries(artistKinds).map(([key, label]) => (
             <option key={key} value={key}>
               {t(label)}

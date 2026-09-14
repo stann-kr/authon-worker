@@ -161,31 +161,35 @@ export function Roster() {
   };
   return (
     <>
-      <dl className="stat-strip" aria-label={t("선택한 행사 요약")}>
-        <div className="stat">
-          <dt>{t(isAdmin || isDoor ? "입장 완료" : "내 등록")}</dt>
-          <dd>
-            <strong>{isAdmin || isDoor ? checked : quota.used}</strong>
-          </dd>
+      {!isAdmin && !isDoor && <dl className="stat-strip" aria-label={t("선택한 행사 요약")}>
+        <div className="stat"><dt>{t("내 등록")}</dt><dd><strong>{quota.used}</strong></dd></div>
+        <div className="stat"><dt>{t("남은 한도")}</dt><dd><strong>{quota.remaining ?? "∞"}</strong></dd></div>
+      </dl>}
+      <div className={`roster-controls ${searchOpen ? "searching" : ""}`}>
+        <div className="roster-filter-row">
+          <div
+            className="roster-status-filters"
+            role="group"
+            aria-label={t("입장 상태")}
+          >
+            {[
+              ["all", "전체", all.length],
+              ["pending", "미입장", all.length - checked],
+              ["checked", "입장 완료", checked],
+            ].map(([value, label, count]) => (
+              <button
+                key={value}
+                aria-pressed={status === value}
+                onClick={() => setStatus(String(value))}
+              >
+                <span>{t(String(label))}</span>
+                <small>{count}</small>
+              </button>
+            ))}
+          </div>
         </div>
-        <div className="stat">
-          <dt>{t(isAdmin || isDoor ? "등록 게스트" : "남은 한도")}</dt>
-          <dd>
-            <strong>
-              {isAdmin || isDoor ? all.length : (quota.remaining ?? "∞")}
-            </strong>
-          </dd>
-        </div>
-        <div className="roster-summary">
-          <dt>{t("미입장")}</dt>
-          <dd>
-            <strong>{all.length - checked}</strong>
-          </dd>
-        </div>
-      </dl>
-      <div className="roster-controls">
         <div className="roster-controlbar">
-          <div className="roster-result-heading" hidden={searchOpen}>
+          <div className="roster-result-heading sr-only" hidden={searchOpen}>
             <h2 className="list-header">
               {t(
                 isDoor
@@ -252,28 +256,6 @@ export function Roster() {
           >
             <Icon name="sliders" size={19} />
           </button>
-        </div>
-        <div className="roster-filter-row">
-          <div
-            className="roster-status-filters"
-            role="group"
-            aria-label={t("입장 상태")}
-          >
-            {[
-              ["all", "전체", all.length],
-              ["pending", "미입장", all.length - checked],
-              ["checked", "입장 완료", checked],
-            ].map(([value, label, count]) => (
-              <button
-                key={value}
-                aria-pressed={status === value}
-                onClick={() => setStatus(String(value))}
-              >
-                <span>{t(String(label))}</span>
-                <small>{count}</small>
-              </button>
-            ))}
-          </div>
         </div>
         {(owner !== "all" || sort !== "registered" || waiting) && (
           <div className="roster-applied" aria-label={t("적용한 조건")}>

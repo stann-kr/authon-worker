@@ -153,7 +153,7 @@ export function DoorAttendance() {
   };
   return (
     <div className="flow-section">
-      <Metrics
+      <Metrics compact
         items={[
           { label: "누적 입장 (퇴장 미차감)", value: total },
           { label: "입장 게스트", value: checked },

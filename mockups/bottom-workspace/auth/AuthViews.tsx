@@ -462,7 +462,7 @@ export function ProfileView() {
       />
       {tab === "profile" ? (
         <>
-          <Metrics
+          <Metrics compact
             items={[
               { label: "역할", value: roleLabels[user.role] },
               { label: "게스트 한도", value: user.limit ?? "무제한" },

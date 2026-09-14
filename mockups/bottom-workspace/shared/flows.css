@@ -115,6 +115,18 @@
   font-variant-numeric: tabular-nums;
   overflow-wrap: anywhere;
 }
+.flow-metrics.compact {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: stretch;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.flow-metrics.compact.four { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.flow-metrics.compact > div { display: grid; grid-template-rows: 1fr auto; }
+.flow-metrics.compact dd { font-size: 18px; }
+@container workspace (max-width: 350px) {
+  .flow-metrics.compact.four { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
 .flow-copy,
 .flow-qr {
   display: grid;
@@ -353,8 +365,21 @@
   margin-top: 6px;
 }
 .flow-section {
-  padding: 20px;
+  padding: 12px 20px 20px;
 }
+.flow-section > :is(.primary, .secondary, .flow-form, .button-row) + :is(.primary, .secondary, .flow-tabs, .flow-form) {
+  margin-top: 12px;
+}
+.flow-compact-filters .field > span {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+.flow-compact-filters .field { gap: 0; }
 .flow-filter-stack {
   display: grid;
   gap: 12px;
