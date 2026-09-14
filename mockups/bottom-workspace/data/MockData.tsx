@@ -12,6 +12,7 @@ import { translate } from "./copy";
 import { useMockRoute } from "../workspace/useMockRoute";
 import { isBusinessDate } from "../../../lib/events/domain";
 import type { AdminAnalyticsUrlState } from "../../../lib/analytics/url-state";
+import { availableVenues, needsEvent, needsVenue, resolveScope } from "./scope";
 import {
   MOCK_DATE,
   MOCK_NOW,
@@ -22,6 +23,7 @@ import {
   type MockUser,
   type MockEvent,
   type MockVenue,
+  type VenuePreview,
 } from "./types";
 export const id = () => crypto.randomUUID();
 export const attendanceFor = (data: MockState, eventId: string) =>
@@ -36,6 +38,8 @@ export const activeGuests = (data: MockState, eventId: string) =>
   data.guests.filter((g) => g.eventId === eventId && g.status !== "deleted");
 export function ensureGeneralEvent(data: MockState, venueId: string, date: string) {
   if (!isBusinessDate(date)) throw Error("날짜를 확인해주세요.");
+  if (!data.venues.some((v) => v.id === venueId && v.active))
+    throw Error("이 베뉴를 사용할 수 없습니다.");
   let event = data.events.find((e) => e.venueId === venueId && e.date === date && e.general);
   if (!event) {
     event = {
@@ -82,6 +86,11 @@ type Context = {
   user: MockUser;
   venue: MockVenue;
   event: MockEvent;
+  availableVenues: MockVenue[];
+  scopeStatus: ReturnType<typeof resolveScope>["status"];
+  venuePreview: VenuePreview;
+  setVenuePreview: (preview: VenuePreview) => void;
+  chooseGeneralScope: (date: string) => void;
   view: View;
   scenario: Scenario;
   locale: Locale;
@@ -104,7 +113,7 @@ type Context = {
   navigate: (v: View) => void;
   chooseUser: (id: string) => void;
   chooseEvent: (id: string) => void;
-  chooseVenue: (id: string) => void;
+  chooseVenue: (id: string, date?: string) => void;
   mutate: (
     action: (draft: MockState) => void,
     success?: string,
@@ -125,6 +134,8 @@ export function MockProvider({ children }: { children: ReactNode }) {
   const [userId, setUserId] = useState("admin");
   const [venueId, setVenueId] = useState("faust");
   const [eventId, setEventId] = useState("tonight");
+  const [businessDate, setBusinessDate] = useState(MOCK_DATE);
+  const [venuePreview, setVenuePreviewState] = useState<VenuePreview>("default");
   const [route, setRoute] = useMockRoute();
   const { view, externalLinkId, authPage } = route;
   const setView = (view: View) => setRoute((route) => ({ ...route, view }));
@@ -138,18 +149,15 @@ export function MockProvider({ children }: { children: ReactNode }) {
   const [operator, setOperator] = useState("");
   const [receiptId, setReceiptId] = useState("");
   const user = data.users.find((u) => u.id === userId) ?? data.users[0];
-  const venue = data.venues.find((v) => v.id === venueId) ?? data.venues[0];
-  const event =
-    data.events.find((e) => e.id === eventId && e.venueId === venue.id) ??
-    data.events.find((e) => e.venueId === venue.id) ??
-    data.events[0];
+  const scope = resolveScope(data, user, venueId, eventId, businessDate);
+  const { venue, event } = scope;
   const version = useRef(0),
     pending = useRef(false),
     current = useRef(data);
   current.current = data;
   useLayoutEffect(() => {
     version.current++;
-  }, [view, externalLinkId, authPage]);
+  }, [view, externalLinkId, authPage, user.id, venue.id, event.id, businessDate]);
   const isSuper = user.role === "super_admin",
     isAdmin = isSuper || user.role === "venue_admin";
   const canDoor =
@@ -165,43 +173,78 @@ export function MockProvider({ children }: { children: ReactNode }) {
     setNotice("");
   };
   const chooseEvent = (id: string) => {
+    const selected = current.current.events.find((e) => e.id === id &&
+      e.venueId === venue.id && e.state !== "archived");
+    if (!venue.id || !selected) return;
     version.current++;
     setEventId(id);
+    setBusinessDate(selected.date);
+    setIntent("");
     setNotice("");
     setScenario("normal");
   };
-  const chooseVenue = (id: string) => {
-    if (!isSuper && id !== user.venueId) return;
-    const next =
-      data.events.find((e) => e.venueId === id && e.date === MOCK_DATE) ??
-      data.events.find((e) => e.venueId === id);
+  const chooseVenue = (id: string, date = businessDate) => {
+    if (!availableVenues(data, user).some((v) => v.id === id) || !isBusinessDate(date)) return;
+    const next = resolveScope(data, user, id, "", date);
     version.current++;
     setVenueId(id);
-    if (next) setEventId(next.id);
+    setEventId(next.event.id);
+    setBusinessDate(date);
+    setIntent("");
+    setOperator("");
     setNotice("");
     setScenario("normal");
   };
   const chooseUser = (id: string) => {
-    const next = data.users.find((u) => u.id === id && !u.deleted && u.active);
+    const next = current.current.users.find((u) => u.id === id && !u.deleted && u.active);
     if (!next) return;
     version.current++;
     setUserId(id);
-    const v = next.venueId ?? "faust";
-    setVenueId(v);
-    setEventId(
-      data.events.find(
-        (e) => e.venueId === v && e.date === MOCK_DATE && !e.general,
-      )?.id ?? "tonight",
-    );
-    setView(next.role === "door_staff" ? "door" : "roster");
+    const nextScope = resolveScope(current.current, next, next.venueId ?? venue.id, "", MOCK_DATE);
+    setVenueId(nextScope.venue.id);
+    setEventId(nextScope.event.id);
+    setBusinessDate(MOCK_DATE);
+    setIntent("");
+    setView(!nextScope.venue.id ? "home" : next.role === "door_staff" ? "door" : "roster");
     setScenario("normal");
     setNotice("");
     setOperator("");
     setLocale(
       next.locale ??
-        data.venues.find((venue) => venue.id === v)?.locale ??
+        nextScope.venue.locale ??
         "ko",
     );
+  };
+  const chooseGeneralScope = (date: string) => {
+    if (!venue.id || !isBusinessDate(date)) return;
+    const next = structuredClone(data);
+    const general = ensureGeneralEvent(next, venue.id, date);
+    if (general.state === "archived") return;
+    version.current++;
+    setData(next);
+    setEventId(general.id);
+    setBusinessDate(date);
+    setIntent("");
+    setNotice("");
+    setScenario("normal");
+  };
+  const setVenuePreview = (preview: VenuePreview) => {
+    const next = initialData();
+    if (preview === "one") next.venues = next.venues.filter((v) => v.id === (venue.id || user.venueId || "faust"));
+    if (preview === "none") next.venues = [];
+    if (preview === "inactive") next.venues.forEach((v) => { v.active = false; });
+    if (preview === "no-events") next.events = [];
+    if (preview === "archived") next.events = next.events.filter((e) => !e.general).map((e) => ({ ...e, state: "archived" }));
+    version.current++;
+    setData(next);
+    setUserId(next.users.some((u) => u.id === user.id) ? user.id : "admin");
+    setBusinessDate(MOCK_DATE);
+    setEventId("");
+    setVenuePreviewState(preview);
+    setIntent("");
+    setOperator("");
+    setNotice("");
+    setScenario("normal");
   };
   const mutate = async (
     action: (draft: MockState) => void,
@@ -215,6 +258,8 @@ export function MockProvider({ children }: { children: ReactNode }) {
     await new Promise((r) => setTimeout(r, 140));
     try {
       if (started !== version.current) return false;
+      if ((needsVenue(view) && !venue.id) || (needsEvent(view) && !event.id))
+        throw Error("운영할 베뉴와 명단을 먼저 선택해주세요.");
       if (scenario === "save-error" || scenario === "rate-limited")
         throw Error(
           scenario === "rate-limited"
@@ -237,6 +282,7 @@ export function MockProvider({ children }: { children: ReactNode }) {
       }
       const next = structuredClone(current.current);
       action(next);
+      current.current = next;
       setData(next);
       if (scenario === "unknown-result") {
         setNotice(
@@ -269,6 +315,11 @@ export function MockProvider({ children }: { children: ReactNode }) {
         user,
         venue,
         event,
+        availableVenues: scope.venues,
+        scopeStatus: scope.status,
+        venuePreview,
+        setVenuePreview,
+        chooseGeneralScope,
         view,
         scenario,
         locale,
@@ -299,6 +350,9 @@ export function MockProvider({ children }: { children: ReactNode }) {
           setUserId("admin");
           setVenueId("faust");
           setEventId("tonight");
+          setBusinessDate(MOCK_DATE);
+          setVenuePreviewState("default");
+          setIntent("");
           setRoute((route) => ({
             ...route,
             view: "roster",

@@ -2,6 +2,7 @@ import type { PlanningState } from "../planning/types";
 export type Role =
   "super_admin" | "venue_admin" | "door_staff" | "staff" | "dj";
 export type Locale = "ko" | "en";
+export type VenuePreview = "default" | "one" | "none" | "inactive" | "no-events" | "archived";
 export type View =
   | "home"
   | "door"

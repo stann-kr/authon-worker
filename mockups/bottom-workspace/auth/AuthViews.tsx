@@ -88,7 +88,7 @@ export function AuthViews() {
   };
   return (
     <div className="flow-auth">
-      <div className="flow-auth-brand">{venue.brandName || venue.name}</div>
+      <div className="flow-auth-brand">{venue.brandName || venue.name || "Authon"}</div>
       <h1>
         {t(
           page === "login"

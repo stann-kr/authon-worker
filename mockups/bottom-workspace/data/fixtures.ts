@@ -78,6 +78,7 @@ export function initialData(): MockState {
         venueId: "studio",
         limit: null,
       }),
+      user("unassigned", "베뉴 미지정 DJ", "dj", { venueId: null }),
     ],
     events: [
       {

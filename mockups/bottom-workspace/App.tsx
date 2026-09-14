@@ -5,8 +5,8 @@ import {
   useMock,
   attendanceFor,
   quotaFor,
-  ensureGeneralEvent,
 } from "./data/MockData";
+import { needsEvent, needsVenue } from "./data/scope";
 import {
   MOCK_DATE,
   roleLabels,
@@ -14,6 +14,7 @@ import {
   scenarioLabels,
   type Scenario,
   type View,
+  type VenuePreview,
 } from "./data/types";
 import { coverage } from "./data/coverage";
 import { Icon, type IconName } from "./shared/Icon";
@@ -72,11 +73,15 @@ function Workspace() {
     chooseUser,
     chooseEvent,
     chooseVenue,
+    chooseGeneralScope,
+    availableVenues,
+    scopeStatus,
+    venuePreview,
+    setVenuePreview,
     navigate,
     setScenario,
     setIntent,
     setAuthPage,
-    setData,
     operator,
     setOperator,
     reset,
@@ -134,7 +139,14 @@ function Workspace() {
     "artists", "bookings", "schedule", "events", "links", "users",
     "password-requests", "analytics", "venues", "profile",
   ].includes(view);
-  const scopeLabel = view === "venues"
+  const scopeUnavailable = !venue.id && needsVenue(view);
+  const eventUnavailable = !event.id && needsEvent(view);
+  const contentScopeKey = !needsVenue(view) ? "global"
+    : `${venue.id}:${needsEvent(view) ? event.id : ["links", "events"].includes(view) ? event.date : "venue"}`;
+  const scopeLabel = !venue.id && view !== "venues" && view !== "profile"
+    ? t(scopeStatus === "inactive-venue" ? "소속 베뉴가 비활성 상태입니다." : "연결된 운영 베뉴가 없습니다.")
+    : eventUnavailable ? t("선택한 날짜의 명단이 없습니다.")
+    : view === "venues"
     ? t("전체 베뉴")
     : ["users", "password-requests"].includes(view)
       ? t("전체 계정")
@@ -165,19 +177,21 @@ function Workspace() {
     (view === "venues" && !isSuper) ||
     (["door", "attendance"].includes(view) && !canDoor);
   const inactive =
-    (!venue.active || !user.active || user.deleted) &&
-    view !== "venues" &&
+    (!user.active || user.deleted || (scopeStatus === "inactive-venue" && needsVenue(view))) &&
     view !== "auth";
   useAdminShortcuts({
     enabled: isAdmin && !isPublic && !inactive && !forbidden && !busy &&
       !["session-expired", "access-denied", "loading"].includes(scenario),
     isSuper,
     onNavigate: (next, intent) => {
+      if (!venue.id && needsVenue(next)) return;
       contentRef.current?.focus({ preventScroll: true });
       go(next, intent);
     },
   });
-  const nav: View[] = isAdmin
+  const nav: View[] = !venue.id
+    ? ["home", ...(isSuper ? ["venues" as const] : []), "profile"]
+    : isAdmin
     ? ["bookings", "schedule", "roster", "door", "events"]
     : user.role === "door_staff"
       ? ["door", "roster", "attendance"]
@@ -426,6 +440,7 @@ function Workspace() {
     ];
   // Door starts with lookup; walk-ins remain the adjacent secondary action.
   if (view === "door") tools.reverse();
+  if (scopeUnavailable || eventUnavailable) tools = [];
   const pendingCount =
     data.requests.filter(
       (r) =>
@@ -489,7 +504,7 @@ function Workspace() {
         return <Roster />;
     }
   };
-  const allowedViews: View[] = [
+  const allowedViews: View[] = ([
     "home",
     "roster",
     ...(canDoor ? (["door", "attendance"] as View[]) : []),
@@ -510,7 +525,7 @@ function Workspace() {
       : []),
     ...(isSuper ? (["venues"] as View[]) : []),
     "profile",
-  ];
+  ] as View[]).filter((next) => venue.id || next === "home" || !needsVenue(next));
   return (
     <div className="preview-root">
       <header className="preview-toolbar">
@@ -578,6 +593,19 @@ function Workspace() {
                   <option value="en">EN</option>
                 </select>
               </div>
+              <Select label="베뉴 구성" value={venuePreview} disabled={busy} aria-describedby="venue-preview-hint"
+                onChange={(e) => {
+                  setModal(null);
+                  setVenuePreview(e.target.value as VenuePreview);
+                }}>
+                <option value="default">{t("기본 · 베뉴 2개")}</option>
+                <option value="one">{t("베뉴 1개")}</option>
+                <option value="none">{t("베뉴 없음")}</option>
+                <option value="inactive">{t("모든 베뉴 비활성")}</option>
+                <option value="no-events">{t("행사 없음")}</option>
+                <option value="archived">{t("보관 행사만 있음")}</option>
+              </Select>
+              <p id="venue-preview-hint" className="flow-hint">{t("구성을 바꾸면 샘플 데이터가 초기화됩니다.")}</p>
               <button
                 className="preview-device"
                 aria-pressed={mobile}
@@ -604,9 +632,11 @@ function Workspace() {
             <>
               <header className="workspace-header">
                 <div className="header-title">
+                  {venue.id ? (
                   <button
                     className="scope-button"
                     onClick={() => open("scope")}
+                    disabled={busy}
                     aria-label={t("베뉴와 행사 선택")}
                   >
                     <span
@@ -620,6 +650,7 @@ function Workspace() {
                     </span>
                     <Icon name="down" size={12} />
                   </button>
+                  ) : <span className="scope-button">Authon</span>}
                   <h1 aria-live="polite">{t(navigationLabel(view, isAdmin))}</h1>
                 </div>
                 <button
@@ -632,7 +663,7 @@ function Workspace() {
               </header>
               <div className="workspace-context">
                 <span>{scopeLabel}</span>
-                {!isTeamView && <span className={`scope-status ${writable ? "live" : ""}`}>
+                {!isTeamView && event.id && <span className={`scope-status ${writable ? "live" : ""}`}>
                   {t(scopeState)}
                 </span>}
               </div>
@@ -684,6 +715,22 @@ function Workspace() {
                   </Action>
                 )}
               </div>
+            ) : scopeUnavailable && !forbidden && scenario !== "access-denied" ? (
+              <div className="flow-section">
+                <Empty text={isSuper ? "운영할 베뉴가 없습니다" : "연결된 운영 베뉴가 없습니다."} />
+                {isSuper ? <div className="button-row">
+                  <Action onClick={() => go("venues", "venue-create")}>베뉴 생성</Action>
+                  {data.venues.length > 0 && <Action secondary onClick={() => go("venues")}>베뉴 관리</Action>}
+                </div> : <Notice>관리자에게 베뉴 연결을 요청해주세요.</Notice>}
+              </div>
+            ) : eventUnavailable && !forbidden && scenario !== "access-denied" ? (
+              <div className="flow-section">
+                <Empty text="선택한 날짜의 명단이 없습니다." />
+                <div className="button-row">
+                  <Action onClick={() => chooseGeneralScope(event.date)}>일반 명단으로 사용</Action>
+                  {isAdmin && <Action secondary onClick={() => go("events", "event-create")}>행사 만들기</Action>}
+                </div>
+              </div>
             ) : forbidden || scenario === "access-denied" ? (
               <div className="flow-section">
                 <Notice error>이 화면에 접근할 권한이 없습니다.</Notice>
@@ -723,7 +770,7 @@ function Workspace() {
                     )}
                   </div>
                 )}
-                <div key={`${view}:${user.id}:${venue.id}:${event.id}`}>
+                <div key={`${view}:${user.id}:${contentScopeKey}`}>
                   {renderView()}
                 </div>
               </>
@@ -776,27 +823,27 @@ function Workspace() {
           )}
         </div>
       </div>
-      {modal === "scope" && (
+      {modal === "scope" && venue.id && (
         <Sheet title={t("베뉴와 행사 선택")} onClose={() => setModal(null)}>
-          {isSuper && (
+          {availableVenues.length > 1 ? (
             <Select
               label="베뉴"
               value={venue.id}
-              onChange={(e) => chooseVenue(e.target.value)}
+              disabled={busy || !isBusinessDate(scopeDate)}
+              onChange={(e) => chooseVenue(e.target.value, scopeDate)}
             >
-              {data.venues
-                .filter((v) => v.active)
-                .map((v) => (
+              {availableVenues.map((v) => (
                   <option key={v.id} value={v.id}>
                     {v.name}
                   </option>
                 ))}
             </Select>
-          )}
+          ) : <div className="flow-pair"><span>{t("베뉴")}</span><strong>{venue.name}</strong></div>}
           <Field
             label="운영일"
             type="date"
             value={scopeDate}
+            disabled={busy}
             onChange={(e) => setScopeDate(e.target.value)}
           />
           <div className="sheet-options">
@@ -811,6 +858,8 @@ function Workspace() {
                 <button
                   className={`sheet-option ${e.id === event.id ? "active" : ""}`}
                   key={e.id}
+                  disabled={busy}
+                  aria-pressed={e.id === event.id}
                   onClick={() => {
                     chooseEvent(e.id);
                     setModal(null);
@@ -836,18 +885,15 @@ function Workspace() {
               ))}
           </div>
           {!data.events.some(
-            (e) => e.venueId === venue.id && e.date === scopeDate,
+            (e) => e.venueId === venue.id && e.date === scopeDate && e.state !== "archived",
           ) && (
             <>
               <Empty text="이 날짜에 별도 행사가 없습니다" />
               <Action
-                disabled={!isBusinessDate(scopeDate)}
+                disabled={busy || !isBusinessDate(scopeDate)}
                 onClick={() => {
                   if (!isBusinessDate(scopeDate)) return;
-                  const next = { ...data, events: [...data.events] };
-                  const general = ensureGeneralEvent(next, venue.id, scopeDate);
-                  setData(next);
-                  chooseEvent(general.id);
+                  chooseGeneralScope(scopeDate);
                   setModal(null);
                 }}
               >
