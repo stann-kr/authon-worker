@@ -277,6 +277,7 @@ Object.assign(extra, {
     "Could not load data. Please retry.",
   도어: "Door",
   "도어 명단": "Door roster",
+  "입장 QR 코드": "Entry QR code",
   "동기화 결과를 확인해주세요.": "Review the sync results.",
   "동기화 대기": "Pending sync",
   "되돌릴 워크인 입력이 없습니다.": "There is no walk-in to undo.",

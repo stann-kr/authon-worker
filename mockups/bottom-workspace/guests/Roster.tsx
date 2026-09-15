@@ -49,6 +49,7 @@ export function Roster() {
     mutate,
     t,
     notice,
+    noticeError,
     setScenario,
     operator,
     busy,
@@ -57,6 +58,29 @@ export function Roster() {
   const searchToggleRef = useRef<HTMLButtonElement>(null);
   const searchId = useId();
   const [searchOpen, setSearchOpen] = useState(false);
+  const [wideSearch, setWideSearch] = useState(false);
+  useLayoutEffect(() => {
+    const content = searchRef.current?.closest("main");
+    if (!content) return;
+    let wasWide = false;
+    const update = () => {
+      const wide = content.getBoundingClientRect().width >= 700;
+      if (!wide && wasWide && document.activeElement === searchRef.current)
+        setSearchOpen(true);
+      if (wide && document.activeElement === searchToggleRef.current)
+        requestAnimationFrame(() => searchRef.current?.focus({ preventScroll: true }));
+      wasWide = wide;
+      setWideSearch(wide);
+    };
+    update();
+    const observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(update);
+    observer?.observe(content);
+    window.addEventListener("resize", update);
+    return () => {
+      observer?.disconnect();
+      window.removeEventListener("resize", update);
+    };
+  }, []);
   useLayoutEffect(() => {
     if (searchOpen) searchRef.current?.focus({ preventScroll: true });
   }, [searchOpen]);
@@ -77,14 +101,15 @@ export function Roster() {
   );
   const quota = quotaFor(data, user.id, event.id);
   const checked = all.filter((g) => g.status === "checked").length;
+  const searchVisible = wideSearch || searchOpen || query.length > 0;
   const filtered = query.trim() !== "" || status !== "all" || owner !== "all";
   const closeSearch = () => {
     setQuery("");
     setSearchOpen(false);
-    searchToggleRef.current?.focus({ preventScroll: true });
+    (wideSearch ? searchRef.current : searchToggleRef.current)?.focus({ preventScroll: true });
   };
   const focusSearchControl = () =>
-    (searchOpen ? searchRef.current : searchToggleRef.current)?.focus({
+    (searchVisible ? searchRef.current : searchToggleRef.current)?.focus({
       preventScroll: true,
     });
   const resetFilters = () => {
@@ -165,7 +190,7 @@ export function Roster() {
         <div className="stat"><dt>{t("내 등록")}</dt><dd><strong>{quota.used}</strong></dd></div>
         <div className="stat"><dt>{t("남은 한도")}</dt><dd><strong>{quota.remaining ?? "∞"}</strong></dd></div>
       </dl>}
-      <div className={`roster-controls ${searchOpen ? "searching" : ""}`}>
+      <div className={`roster-controls ${searchVisible ? "searching" : ""} ${wideSearch ? "wide-search" : ""}`}>
         <div className="roster-filter-row">
           <div
             className="roster-status-filters"
@@ -189,7 +214,7 @@ export function Roster() {
           </div>
         </div>
         <div className="roster-controlbar">
-          <div className="roster-result-heading sr-only" hidden={searchOpen}>
+          <div className="roster-result-heading sr-only">
             <h2 className="list-header">
               {t(
                 isDoor
@@ -201,7 +226,8 @@ export function Roster() {
             </h2>
             <span>{t("{count}명", { count: list.length })}</span>
           </div>
-          <div className="roster-search" id={searchId} hidden={!searchOpen}>
+          <div className="roster-search" id={searchId} hidden={!searchVisible}>
+            <Icon name="search" size={18} />
             <label className="sr-only" htmlFor={`${searchId}-input`}>
               {t("게스트 이름 검색...")}
             </label>
@@ -220,7 +246,7 @@ export function Roster() {
                   e.preventDefault();
                   if (query) setQuery("");
                   else closeSearch();
-                } else if (e.key === "Enter") e.currentTarget.blur();
+                } else if (e.key === "Enter" && !wideSearch) e.currentTarget.blur();
               }}
               placeholder={t("이름·담당자 검색")}
             />
@@ -239,14 +265,15 @@ export function Roster() {
           </div>
           <button
             ref={searchToggleRef}
+            hidden={wideSearch}
             type="button"
-            className={`roster-icon-button ${searchOpen ? "active" : ""}`}
-            aria-label={t(searchOpen ? "검색 닫기" : "검색 열기")}
-            aria-expanded={searchOpen}
+            className={`roster-icon-button ${searchVisible ? "active" : ""}`}
+            aria-label={t(searchVisible ? "검색 닫기" : "검색 열기")}
+            aria-expanded={searchVisible}
             aria-controls={searchId}
-            onClick={() => (searchOpen ? closeSearch() : setSearchOpen(true))}
+            onClick={() => (searchVisible ? closeSearch() : setSearchOpen(true))}
           >
-            <Icon name={searchOpen ? "close" : "search"} size={19} />
+            <Icon name={searchVisible ? "close" : "search"} size={19} />
           </button>
           <button
             className={`roster-icon-button ${owner !== "all" || sort !== "registered" || waiting ? "active" : ""}`}
@@ -540,95 +567,102 @@ export function Roster() {
       )}
       {selected && (
         <Sheet key={selected.id} presentation={confirm ? "modal" : "detail"} title={selected.name} subtitle={event.name} onClose={close}>
-          <div className="flow-pair">
-            <span>{t("등록 담당자")}</span>
-            <strong>
-              {contributorName(data, selected.ownerId, selected.externalLinkId)}
-            </strong>
-          </div>
-          {selected.operator && (
-            <div className="flow-pair">
-              <span>{t("현재 입력자")}</span>
-              <strong>{selected.operator}</strong>
+          {!confirm && canCheck && (
+            <div className="guest-detail-action">
+              <Action
+                secondary={selected.status === "checked"}
+                disabled={
+                  !writable ||
+                  event.date !== MOCK_DATE ||
+                  queued(selected.id) ||
+                  (scenario === "offline" && event.general)
+                }
+                onClick={() =>
+                  selected.status === "checked"
+                    ? setConfirm("undo")
+                    : void check(selected).then((ok) => {
+                        if (ok) close();
+                      })
+                }
+              >
+                {queued(selected.id) ? "동기화 대기" : selected.status === "checked" ? "입장 취소" : "입장 처리"}
+              </Action>
             </div>
           )}
-          <div className="flow-pair">
-            <span>{t("상태")}</span>
-            <strong>
-              {t(selected.status === "checked" ? "입장 완료" : "미입장")}
-            </strong>
-          </div>
-          <div className="flow-pair">
-            <span>{t("입장 시각")}</span>
-            <strong>{selected.checkedAt?.slice(11, 16) ?? "—"}</strong>
-          </div>
+          <dl className="sheet-detail">
+            <div>
+              <dt>{t("등록 담당자")}</dt>
+              <dd>
+                {contributorName(data, selected.ownerId, selected.externalLinkId)}
+              </dd>
+            </div>
+            {selected.operator && (
+              <div>
+                <dt>{t("현재 입력자")}</dt>
+                <dd>{selected.operator}</dd>
+              </div>
+            )}
+            <div>
+              <dt>{t("상태")}</dt>
+              <dd>
+                {t(queued(selected.id) ? "동기화 대기" : selected.status === "checked" ? "입장 완료" : "미입장")}
+              </dd>
+            </div>
+            <div>
+              <dt>{t("입장 시각")}</dt>
+              <dd>{selected.checkedAt?.slice(11, 16) ?? "—"}</dd>
+            </div>
+          </dl>
           {selected.externalLinkId &&
             data.links.find((l) => l.id === selected.externalLinkId)?.kind ===
-              "self_rsvp" && <Qr code={selected.code} />}
-          {confirm ? (
-            <>
-              <Confirm
-                title={`${selected.name} · ${t(confirm === "delete" ? "삭제" : "입장 취소")}`}
-                description={
-                  confirm === "delete"
-                    ? selected.status === "checked"
-                      ? "입장 완료 게스트를 삭제하면 명단과 입장 집계가 변경됩니다."
-                      : "명단에서 삭제합니다."
-                    : "입장 처리를 취소하고 미입장 상태로 되돌립니다."
-                }
-                onCancel={() => setConfirm("")}
-                disabled={
-                  !["draft", "open"].includes(event.state) ||
-                  attendanceFor(data, event.id).finalized
-                }
-                onConfirm={() =>
-                  void mutate(
-                    (d) => {
-                      const g = requireGuestAction(d, user.id, event.id, selected.id, confirm === "delete" ? "delete" : "check");
-                      if (confirm === "delete") g.status = "deleted";
-                      else if (scenario === "offline")
-                        d.queue.push({
-                          id: id(),
-                          eventId: event.id,
-                          guestId: g.id,
-                          kind: "undo-check",
-                          state: "queued",
-                        });
-                      else performCheck(g, false);
-                    },
-                    confirm === "delete"
-                      ? "삭제했습니다."
-                      : scenario === "offline"
-                        ? "이 기기에 저장했습니다. 동기화 전에는 확정되지 않습니다."
-                        : "입장을 취소했습니다.",
-                  ).then((ok) => {
-                    if (ok) close();
-                  })
-                }
-              />
-              {notice && <Notice>{notice}</Notice>}
-            </>
-          ) : (
-            <div className="flow-stack">
-              {canCheck && (
-                <Action
-                  disabled={
-                    !writable ||
-                    event.date !== MOCK_DATE ||
-                    queued(selected.id) ||
-                    (scenario === "offline" && event.general)
-                  }
-                  onClick={() =>
-                    selected.status === "checked"
-                      ? setConfirm("undo")
-                      : void check(selected).then((ok) => {
-                          if (ok) close();
-                        })
-                  }
-                >
-                  {selected.status === "checked" ? "입장 취소" : "입장 처리"}
-                </Action>
+              "self_rsvp" && !confirm && (
+                <details className="guest-qr-details">
+                  <summary>{t("입장 QR 코드")}</summary>
+                  <Qr code={selected.code} />
+                </details>
               )}
+          {confirm ? (
+            <Confirm
+              title={`${selected.name} · ${t(confirm === "delete" ? "삭제" : "입장 취소")}`}
+              description={
+                confirm === "delete"
+                  ? selected.status === "checked"
+                    ? "입장 완료 게스트를 삭제하면 명단과 입장 집계가 변경됩니다."
+                    : "명단에서 삭제합니다."
+                  : "입장 처리를 취소하고 미입장 상태로 되돌립니다."
+              }
+              onCancel={() => setConfirm("")}
+              disabled={
+                !["draft", "open"].includes(event.state) ||
+                attendanceFor(data, event.id).finalized
+              }
+              onConfirm={() =>
+                void mutate(
+                  (d) => {
+                    const g = requireGuestAction(d, user.id, event.id, selected.id, confirm === "delete" ? "delete" : "check");
+                    if (confirm === "delete") g.status = "deleted";
+                    else if (scenario === "offline")
+                      d.queue.push({
+                        id: id(),
+                        eventId: event.id,
+                        guestId: g.id,
+                        kind: "undo-check",
+                        state: "queued",
+                      });
+                    else performCheck(g, false);
+                  },
+                  confirm === "delete"
+                    ? "삭제했습니다."
+                    : scenario === "offline"
+                      ? "이 기기에 저장했습니다. 동기화 전에는 확정되지 않습니다."
+                      : "입장을 취소했습니다.",
+                ).then((ok) => {
+                  if (ok) close();
+                })
+              }
+            />
+          ) : (
+            <div className="guest-detail-footer">
               <Action
                 secondary
                 disabled={
@@ -643,7 +677,7 @@ export function Roster() {
               </Action>
             </div>
           )}
-          {!confirm && notice && <Notice>{notice}</Notice>}
+          {noticeError && notice && <Notice>{notice}</Notice>}
           {scenario === "unknown-result" && (
             <Action secondary onClick={() => setScenario("normal")}>
               최신 명단 확인

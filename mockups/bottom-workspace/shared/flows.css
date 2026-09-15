@@ -569,6 +569,7 @@
   .flow-section > .flow-filter-stack > .field:only-child { max-width: 280px; }
   .flow-row-columns > :is(.flow-row-button, .flow-row-static),
   .flow-column-head { display: grid; grid-template-columns: var(--row-columns); gap: 20px; }
+  .flow-row-columns > :is(.flow-row-button, .flow-row-static) { min-height: 56px; padding-block: 12px; }
   .flow-row-columns .flow-row-identity > small { display: none; }
   .flow-row-column { display: block; min-width: 0; font-size: 13px; line-height: 1.6; overflow-wrap: anywhere; color: var(--muted); }
   .flow-column-head { padding: 12px 0; border-bottom: 1px solid var(--line); color: var(--muted); font-size: 11px; }

@@ -73,6 +73,55 @@ test('selected detail changes target and resizes without remounting or losing fo
   q.finish();
 });
 
+test('roster search stays accessible and preserves input and focus through responsive changes', async () => {
+  const q = await workspace('workspace/door');
+  const search = q.d.querySelector('.roster-search'), input = search.querySelector('input');
+  const toggle = q.d.querySelector('[aria-controls="'+search.id+'"]');
+  const escape = async () => {
+    input.dispatchEvent(new q.w.KeyboardEvent('keydown', {key:'Escape', bubbles:true, cancelable:true}));
+    await q.tick();
+  };
+  assert.equal(search.hidden, false);
+  assert.equal(toggle.hidden, true);
+  await q.input(input, '김서윤'); input.focus();
+  for (const width of [390, 700, 834, 1280]) {
+    await q.resize(width);
+    assert.equal(q.d.querySelector('.roster-search input'), input);
+    assert.equal(input.value, '김서윤');
+    assert.equal(search.hidden, false);
+    assert.equal(q.d.activeElement, input);
+    assert.equal(q.d.querySelectorAll('.guest-list li').length, 1);
+  }
+  await escape(); await escape();
+  assert.equal(input.value, '');
+  assert.equal(search.hidden, false);
+  assert.equal(q.d.activeElement, input);
+  await q.resize(390);
+  assert.equal(search.hidden, false, 'active empty search remains open when narrowing');
+  await escape();
+  assert.equal(search.hidden, true);
+  assert.equal(q.d.activeElement, toggle);
+  await q.resize(1280);
+  assert.equal(search.hidden, false);
+  assert.equal(toggle.hidden, true);
+  assert.equal(q.d.activeElement, input, 'focus moves off the hidden toggle');
+  q.finish();
+});
+
+test('guest detail starts with its action, discloses QR and does not repeat another guest success', async () => {
+  const q = await workspace('workspace/door');
+  await q.click(q.button('박지우 입장 처리')); await q.tick(220);
+  await q.click(q.button('김서윤 상세'));
+  const body = q.dialog().querySelector('.sheet-body');
+  assert.equal(body.querySelector('button').textContent, '입장 처리');
+  assert.equal(body.querySelector('details').open, false);
+  assert.equal(body.textContent.includes('박지우'), false);
+  await q.click(q.button('입장 처리', body)); await q.tick(220);
+  assert.equal(q.dialog(), null);
+  assert.ok(q.button('김서윤 입장 취소'));
+  q.finish();
+});
+
 test('editor keeps draft, discard state and focused field through resize', async () => {
   const q = await workspace();
   await q.click(q.d.querySelector('.planning-booking'));
