@@ -25,6 +25,7 @@ import {
   string,
 } from "../shared/ui";
 import { GuestEntry } from "./GuestEntry";
+import type { RosterLayout } from "./RosterComparison";
 export function performCheck(guest: MockGuest, checked: boolean) {
   guest.history ??= guest.checkedAt
     ? [{ kind: "check", at: guest.checkedAt }]
@@ -35,7 +36,7 @@ export function performCheck(guest: MockGuest, checked: boolean) {
   if (checked) guest.checkIns++;
   else guest.cancellations++;
 }
-export function Roster() {
+export function Roster({ layout = "columns" }: { layout?: RosterLayout }) {
   const {
     data,
     user,
@@ -54,11 +55,13 @@ export function Roster() {
     operator,
     busy,
   } = useMock();
+  const identityLayout = view === "door" && layout === "identity";
   const searchRef = useRef<HTMLInputElement>(null);
   const searchToggleRef = useRef<HTMLButtonElement>(null);
   const searchId = useId();
   const [searchOpen, setSearchOpen] = useState(false);
   const [wideSearch, setWideSearch] = useState(false);
+  const persistentSearch = wideSearch || identityLayout;
   useLayoutEffect(() => {
     const content = searchRef.current?.closest("main");
     if (!content) return;
@@ -101,12 +104,12 @@ export function Roster() {
   );
   const quota = quotaFor(data, user.id, event.id);
   const checked = all.filter((g) => g.status === "checked").length;
-  const searchVisible = wideSearch || searchOpen || query.length > 0;
+  const searchVisible = persistentSearch || searchOpen || query.length > 0;
   const filtered = query.trim() !== "" || status !== "all" || owner !== "all";
   const closeSearch = () => {
     setQuery("");
     setSearchOpen(false);
-    (wideSearch ? searchRef.current : searchToggleRef.current)?.focus({ preventScroll: true });
+    (persistentSearch ? searchRef.current : searchToggleRef.current)?.focus({ preventScroll: true });
   };
   const focusSearchControl = () =>
     (searchVisible ? searchRef.current : searchToggleRef.current)?.focus({
@@ -185,7 +188,7 @@ export function Roster() {
     );
   };
   return (
-    <div className="roster">
+    <div className={`roster${identityLayout ? " roster--identity" : ""}`}>
       {!isAdmin && !isDoor && <dl className="stat-strip" aria-label={t("선택한 행사 요약")}>
         <div className="stat"><dt>{t("내 등록")}</dt><dd><strong>{quota.used}</strong></dd></div>
         <div className="stat"><dt>{t("남은 한도")}</dt><dd><strong>{quota.remaining ?? "∞"}</strong></dd></div>
@@ -265,7 +268,7 @@ export function Roster() {
           </div>
           <button
             ref={searchToggleRef}
-            hidden={wideSearch}
+            hidden={persistentSearch}
             type="button"
             className={`roster-icon-button ${searchVisible ? "active" : ""}`}
             aria-label={t(searchVisible ? "검색 닫기" : "검색 열기")}
@@ -364,7 +367,7 @@ export function Roster() {
             </button>
             {canCheck ? (
               <button
-                className={`check-button ${g.status === "checked" ? "is-checked" : "is-pending"}`}
+                className={`check-button ${g.status === "checked" ? "is-checked" : "is-pending"}${queued(g.id) ? " is-queued" : ""}`}
                 aria-label={`${g.name} ${t(g.status === "checked" ? "입장 취소" : "입장 처리")}`}
                 disabled={
                   busy ||

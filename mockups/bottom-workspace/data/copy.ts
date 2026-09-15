@@ -17,6 +17,9 @@ function collect(k: unknown, e: unknown) {
 }
 collect(ko, en);
 const extra: Record<string, string> = {
+  "명단 비교": "Compare roster layouts",
+  "A · 열 정렬": "A · Columns",
+  "B · 이름 중심": "B · Name first",
   "이메일": "Email",
   "사유": "Reason",
   "입력자": "Entered by",

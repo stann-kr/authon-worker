@@ -5,13 +5,13 @@ import { JSDOM, VirtualConsole } from 'jsdom';
 
 // Build the standalone artifact first. These verify state/semantics, not geometry.
 const html = await readFile(new URL('../dist/index.html', import.meta.url), 'utf8');
-async function workspace(route = 'planning/bookings') {
+async function workspace(route = 'planning/bookings', search = '') {
   const errors = [], observers = new Set();
   let frameWidth = 1280;
   const vc = new VirtualConsole();
   vc.on('jsdomError', error => errors.push(error.message));
   const dom = new JSDOM(html, {
-    url: `http://localhost:4176/#${route}`, runScripts: 'dangerously', pretendToBeVisual: true, virtualConsole: vc,
+    url: `http://localhost:4176/${search}#${route}`, runScripts: 'dangerously', pretendToBeVisual: true, virtualConsole: vc,
     beforeParse(w) {
       w.structuredClone = structuredClone;
       w.ResizeObserver = class {
@@ -49,6 +49,60 @@ async function workspace(route = 'planning/bookings') {
   await tick(80);
   return { w, d, tick, button, dialog, click, input, label, resize, navigate, submit, finish };
 }
+
+test('Door comparison keeps the same roster, search, filter, check-in and selected detail between layouts', async () => {
+  const q = await workspace('workspace/door', '?door-compare=1&door-layout=columns');
+  assert.equal(q.d.querySelector('[aria-label="역할 미리보기"]').value, 'door');
+  assert.equal(q.d.querySelectorAll('.guest-list > li').length, 20);
+  const search = q.d.querySelector('.roster-search input');
+  await q.click(q.button('B · 이름 중심'));
+  await q.input(search, '김서윤');
+  assert.equal(q.d.querySelectorAll('.guest-list > li').length, 2);
+  const pendingFilter = q.d.querySelectorAll('.roster-status-filters button')[1];
+  await q.click(pendingFilter);
+  await q.click(q.d.querySelector('.guest-list .check-button'));
+  await q.tick(220);
+  assert.equal(q.d.querySelectorAll('.guest-list > li').length, 1);
+  await q.click(q.button('A · 열 정렬'));
+  assert.equal(q.d.querySelector('.roster-search input'), search);
+  assert.equal(search.value, '김서윤');
+  assert.equal(pendingFilter.getAttribute('aria-pressed'), 'true');
+  assert.equal(q.d.querySelectorAll('.guest-list > li').length, 1);
+  assert.ok(pendingFilter.textContent.includes('13'));
+  const person = q.d.querySelector('.guest-list .guest-person');
+  await q.click(person);
+  const detail = q.dialog();
+  await q.click(q.button('B · 이름 중심'));
+  assert.equal(q.dialog(), detail);
+  assert.equal(person.getAttribute('aria-pressed'), 'true');
+  assert.equal(q.button('B · 이름 중심').getAttribute('aria-pressed'), 'true');
+  assert.equal(new URLSearchParams(q.w.location.search).get('door-layout'), 'identity');
+  q.finish();
+});
+
+test('name-first mobile search remains available and queued check-ins survive comparison changes', async () => {
+  const q = await workspace('workspace/door', '?door-compare=1&door-layout=identity');
+  await q.resize(390);
+  const input = q.d.querySelector('.roster-search input');
+  assert.equal(input.parentElement.hidden, false);
+  await q.input(input, 'Lucas');
+  input.dispatchEvent(new q.w.KeyboardEvent('keydown', {key:'Escape', bubbles:true, cancelable:true}));
+  await q.tick();
+  assert.equal(input.value, '');
+  assert.equal(input.parentElement.hidden, false);
+  await q.input(q.d.querySelector('[aria-label="목업 상태"]'), 'offline');
+  const action = q.d.querySelector('.guest-list .check-button');
+  await q.click(action); await q.tick(220);
+  assert.equal(action.textContent.trim(), '기기 저장');
+  assert.equal(action.disabled, true);
+  await q.click(q.button('A · 열 정렬'));
+  await q.click(q.button('B · 이름 중심'));
+  assert.equal(q.d.querySelector('.guest-list .check-button'), action);
+  assert.equal(action.textContent.trim(), '기기 저장');
+  assert.equal(action.disabled, true);
+  assert.ok(q.d.querySelectorAll('.roster-status-filters button')[2].textContent.includes('6'));
+  q.finish();
+});
 
 test('selected detail changes target and resizes without remounting or losing focus', async () => {
   const q = await workspace();

@@ -28,6 +28,8 @@ import { Events } from "./events/Events";
 import { Reports } from "./events/Reports";
 import { Links } from "./links/Links";
 import { Roster } from "./guests/Roster";
+import { RosterComparison, useRosterLayout } from "./guests/RosterComparison";
+import { initialRosterComparisonData } from "./guests/comparison-fixtures";
 import { QuotaRequests } from "./guests/QuotaRequests";
 import { DoorAttendance, canFinalizeAttendance } from "./door/DoorAttendance";
 import { ExternalView } from "./registration/ExternalView";
@@ -48,14 +50,16 @@ import "./shared/select.css";
 import "./workspace/responsive.css";
 
 export default function App() {
+  const [comparison] = useState(() => new URLSearchParams(window.location.search).get("door-compare") === "1");
   return (
-    <MockProvider>
+    <MockProvider createData={comparison ? initialRosterComparisonData : undefined} initialUserId={comparison ? "door" : "admin"}>
       <Workspace />
     </MockProvider>
   );
 }
 function Workspace() {
   const ctx = useMock();
+  const [rosterLayout, chooseRosterLayout] = useRosterLayout();
   const {
     data,
     user,
@@ -486,7 +490,7 @@ function Workspace() {
       case "analytics":
         return <Analytics />;
       default:
-        return <Roster />;
+        return <Roster layout={rosterLayout} />;
     }
   };
   const allowedViews: View[] = ([
@@ -604,6 +608,9 @@ function Workspace() {
           </button>
         </div>
       </header>
+      {view === "door" && !forbidden && !inactive && (
+        <RosterComparison layout={rosterLayout} onChange={chooseRosterLayout} />
+      )}
       <div className={`preview-frame ${previewSize}`}>
         <div className={`app-shell ${isPublic ? "public" : ""}`} data-view={view}>
           {!isPublic && (

@@ -130,10 +130,14 @@ type Context = {
   setData: React.Dispatch<React.SetStateAction<MockState>>;
 };
 const MockContext = createContext<Context | null>(null);
-export function MockProvider({ children }: { children: ReactNode }) {
+export function MockProvider({ children, createData = initialData, initialUserId = "admin" }: {
+  children: ReactNode;
+  createData?: () => MockState;
+  initialUserId?: string;
+}) {
   const [intent, setIntent] = useState("");
-  const [data, setData] = useState(initialData);
-  const [userId, setUserId] = useState("admin");
+  const [data, setData] = useState(createData);
+  const [userId, setUserId] = useState(initialUserId);
   const [venueId, setVenueId] = useState("faust");
   const [eventId, setEventId] = useState("tonight");
   const [businessDate, setBusinessDate] = useState(MOCK_DATE);
@@ -225,7 +229,7 @@ export function MockProvider({ children }: { children: ReactNode }) {
     setScenario("normal");
   };
   const setVenuePreview = (preview: VenuePreview) => {
-    const next = initialData();
+    const next = createData();
     if (preview === "one") next.venues = next.venues.filter((v) => v.id === (venue.id || user.venueId || "faust"));
     if (preview === "none") next.venues = [];
     if (preview === "inactive") next.venues.forEach((v) => { v.active = false; });
@@ -343,8 +347,8 @@ export function MockProvider({ children }: { children: ReactNode }) {
         mutate,
         reset: () => {
           version.current++;
-          setData(initialData());
-          setUserId("admin");
+          setData(createData());
+          setUserId(initialUserId);
           setVenueId("faust");
           setEventId("tonight");
           setBusinessDate(MOCK_DATE);
@@ -352,7 +356,7 @@ export function MockProvider({ children }: { children: ReactNode }) {
           setIntent("");
           setRoute((route) => ({
             ...route,
-            view: "roster",
+            view: initialUserId === "door" ? "door" : "roster",
             analytics: { granularity: "month", anchorDate: MOCK_DATE },
           }));
           setScenario("normal");

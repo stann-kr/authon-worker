@@ -33,7 +33,8 @@ console.log(
 
 if (process.argv.includes("--serve")) {
   const server = createServer(async (request, response) => {
-    if (request.url !== "/" && request.url !== "/index.html") {
+    const pathname = new URL(request.url ?? "/", "http://localhost").pathname;
+    if (pathname !== "/" && pathname !== "/index.html") {
       response.writeHead(404);
       response.end("Not found");
       return;
