@@ -414,11 +414,16 @@
 }
 @container workspace (max-width: 350px) {
   .roster-controls {
+    grid-template-columns: minmax(0, 1fr);
     padding-inline: 12px;
+  }
+  .roster-controlbar {
+    justify-content: flex-end;
   }
   .roster-status-filters button {
     font-size: 11px;
     gap: 3px;
+    white-space: nowrap;
   }
   .guest-list li {
     margin-inline: 16px;

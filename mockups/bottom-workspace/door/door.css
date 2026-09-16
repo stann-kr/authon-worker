@@ -1,3 +1,4 @@
+.attendance-section { display: grid; gap: 24px; }
 .attendance-overview,
 .attendance-sync,
 .attendance-closeout { display: grid; gap: 16px; min-width: 0; }

@@ -243,12 +243,6 @@ export function AuthViews() {
               defaultValue="milo@example.com"
             />
           </Form>
-          <Action secondary disabled>
-            이메일로 재설정 — 사용 안 함
-          </Action>
-          <Action secondary onClick={() => go("login")}>
-            로그인으로 돌아가기
-          </Action>
         </>
       )}
       {page === "pending" && (
@@ -356,9 +350,6 @@ export function AuthViews() {
               {t("관리자에게 받은 15분짜리 코드를 입력하세요.")}
             </p>
           </Form>
-          <Action secondary onClick={() => go("login")}>
-            로그인으로 돌아가기
-          </Action>
         </>
       )}
       {page === "setup" &&

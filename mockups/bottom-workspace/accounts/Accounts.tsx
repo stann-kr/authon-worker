@@ -297,7 +297,7 @@ export function Accounts() {
               <AccountForm
                 user={selected}
                 roles={
-                  selected.role === "super_admin" ? ["super_admin"] : roles
+                  !manageable ? [selected.role] : roles
                 }
                 disabled={!manageable}
                 onSubmit={async (form) => {

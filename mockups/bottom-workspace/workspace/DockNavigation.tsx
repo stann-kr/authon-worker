@@ -129,15 +129,16 @@ export function DockNavigation({
               const panelId = `${navigationId}-${group.id}`;
               const count = group.items.reduce((total, item) => total + (counts[item.view] ?? 0), 0);
               return <section className="sidebar-group" key={group.id} aria-labelledby={`${panelId}-title`}>
-                <h2 id={`${panelId}-title`}>
-                  {groups.length === 1 ? <span className="sidebar-group-label">{t(group.title)}</span> :
+                <h2>
+                  {groups.length === 1 ? <span className="sidebar-group-label" id={`${panelId}-title`}>{t(group.title)}</span> :
                     <button type="button" className="sidebar-group-toggle"
+                      aria-label={t(group.title)}
                       aria-expanded={isOpen} aria-controls={panelId}
                       aria-describedby={!isOpen && count > 0 ? `${panelId}-count` : undefined}
                       data-current={activeGroup?.id === group.id}
                       onClick={() => setGroupChoice({ context, id: isOpen ? null : group.id })}>
                       <Icon name={isOpen ? "down" : "chevron"} size={14} />
-                      <span>{t(group.title)}</span>
+                      <span id={`${panelId}-title`}>{t(group.title)}</span>
                       {!isOpen && count > 0 && <span className="nav-count" id={`${panelId}-count`}
                         aria-label={t("대기 {count}건", { count })}>{count}</span>}
                     </button>}

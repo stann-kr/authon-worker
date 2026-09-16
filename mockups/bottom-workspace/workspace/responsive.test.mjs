@@ -200,6 +200,13 @@ test('original workspace uses the sidebar across operating screens, roles and em
     assert.equal(q.d.querySelectorAll('nav[aria-label="주요 메뉴"]').length, 1);
     assert.ok(q.d.querySelector('.desktop-chrome nav'));
     assert.equal(q.d.querySelector('.dock-region nav'), null);
+    if (route === 'workspace/users') {
+      await q.click(q.d.querySelector('main .flow-row-button'));
+      const role = q.dialog().querySelector('select[name="role"]');
+      assert.equal(role.value, 'venue_admin', 'read-only account details display the actual current role');
+      assert.equal(role.matches(':disabled'), true, 'displaying the role does not grant edit permission');
+      await q.click(q.button('닫기', q.dialog()));
+    }
   }
   await q.input(q.d.querySelector('[aria-label="역할 미리보기"]'), 'door');
   await q.navigate('workspace/door');
