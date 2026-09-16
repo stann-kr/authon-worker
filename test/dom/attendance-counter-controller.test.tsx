@@ -1650,17 +1650,22 @@ test("product Door actions retain one counter owner while opening and closing th
   let loads = 0;
   let queued = 0;
   const dependencies = createDependencies({
-    fetchDoorAttendanceSummary: async ({ scope }) => { loads++; return { data: createSummary(scope), error: null }; },
+    fetchDoorAttendanceSummary: async ({ scope }) => {
+      loads++;
+      return { data: { ...createSummary(scope), ...(scope.eventId === SCOPE_B.eventId
+        ? { canRecord: false, unavailableReason: "event_inactive" as const } : {}) }, error: null };
+    },
     enqueueAttendanceMutation: async ({ action, reversesIdempotencyKey }) => {
       queued++;
       return createMutation({ idempotencyKey: `action-${queued}`, sequence: queued, action, reversesIdempotencyKey });
     },
   });
-  const frame = (wide: boolean) => <NextIntlClientProvider locale="en" messages={messages}>
+  const frame = (wide: boolean, scope = SCOPE_A) => <NextIntlClientProvider locale="en" messages={messages}>
     <AuthSessionProvider initialUser={null}>
-      <AttendanceCounter scope={SCOPE_A} currentBusinessDate={SCOPE_A.businessDate} checkedInGuests={5}
+      <AttendanceCounter scope={scope} currentBusinessDate={scope.businessDate} checkedInGuests={5}
         hasPendingGuestMutations={false} dependencies={dependencies}>
-        {(actions, details) => <div data-wide={wide}><nav>{actions}</nav>{details}</div>}
+        {(actions, details, entryLocked) => <div data-wide={wide}><nav>{actions}</nav>
+          <button disabled={entryLocked}>Guest entry</button>{details}</div>}
       </AttendanceCounter>
     </AuthSessionProvider>
   </NextIntlClientProvider>;
@@ -1677,4 +1682,7 @@ test("product Door actions retain one counter owner while opening and closing th
   fireEvent.click(screen.getByRole("button", { name: messages.Sheet.close }));
   assert.equal(screen.queryByRole("dialog"), null);
   assert.equal(queued, 1);
+  assert.equal(screen.getByRole("button", { name: "Guest entry" }).hasAttribute("disabled"), false);
+  view.rerender(frame(true, SCOPE_B));
+  await waitFor(() => assert.equal(screen.getByRole("button", { name: "Guest entry" }).hasAttribute("disabled"), true));
 });

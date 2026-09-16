@@ -34,6 +34,7 @@ interface GuestListCardProps {
   onDelete?: () => void;
   isCheckLoading?: boolean;
   isUndoLoading?: boolean;
+  isEntryDisabled?: boolean;
   isDeleteLoading?: boolean;
   isDeleteDisabled?: boolean;
 }
@@ -51,6 +52,7 @@ const GuestListCard: React.FC<GuestListCardProps> = ({
   onDelete,
   isCheckLoading = false,
   isUndoLoading = false,
+  isEntryDisabled = false,
   isDeleteLoading = false,
   isDeleteDisabled = false,
 }) => {
@@ -141,6 +143,7 @@ const GuestListCard: React.FC<GuestListCardProps> = ({
               {onCheck && (
                 <Button
                   onClick={onCheck}
+                  disabled={isEntryDisabled}
                   isLoading={isCheckLoading}
                   variant="confirm"
                   size="md"
@@ -189,6 +192,7 @@ const GuestListCard: React.FC<GuestListCardProps> = ({
               {onUndo && (
                 <Button
                   onClick={() => setUndoConfirmation(confirmationKey)}
+                  disabled={isEntryDisabled}
                   isLoading={isUndoLoading}
                   variant="outline"
                   size="md"
@@ -262,20 +266,20 @@ const GuestListCard: React.FC<GuestListCardProps> = ({
       {onUndo && undoConfirmation === confirmationKey && guest.status === "checked" && <ConfirmDialog open
         title={rosterT("undoTitle")} description={rosterT("undoDescription", { name: guest.name })}
         confirmLabel={rosterT("undoConfirm")} cancelLabel={t("cancel")} isLoading={isUndoLoading}
-        onCancel={() => setUndoConfirmation(null)} onConfirm={() => { setUndoConfirmation(null); onUndo(); }} />}
+        confirmDisabled={isEntryDisabled}
+        onCancel={() => setUndoConfirmation(null)} onConfirm={() => { if (isEntryDisabled) return; setUndoConfirmation(null); onUndo(); }} />}
       {isDetailOpen && <Sheet title={guest.name} presentation="detail" onClose={closeDetail}>
         <StatusLabel tone={guest.status === "checked" ? "checked" : guest.status === "pending" ? "waiting" : "neutral"}>
           {guest.status === "checked" ? t("checkedIn") : guest.status === "pending" ? t("waitingStatus") : t("removed")}
         </StatusLabel>
         <dl className="product-detail-list" aria-label={rosterT("detail")}>
           {djName && <div><dt>{rosterT("owner")}</dt><dd>{djName}</dd></div>}
-          {accountKind === "shared" && <div><dt>{t("sharedAccount")}</dt><dd>{registeredByName || "—"}</dd></div>}
-          {accountKind !== "shared" && registeredByName && <div><dt>{rosterT("operator")}</dt><dd>{registeredByName}</dd></div>}
+          {(accountKind === "shared" || registeredByName) && <div><dt>{rosterT("operator")}</dt><dd>{registeredByName || "—"}</dd></div>}
           {showRegisteredAt && guest.createdAt && <div><dt>{t("registered")}</dt><dd><time dateTime={guest.createdAt}>{formatTime(guest.createdAt)}</time></dd></div>}
           {guest.checkInTime && <div><dt>{t("checkedIn")}</dt><dd><time dateTime={guest.checkInTime}>{formatTime(guest.checkInTime)}</time></dd></div>}
         </dl>
-        {guest.status === "pending" && onCheck && <Button variant="confirm" onClick={onCheck} isLoading={isCheckLoading}>{t("checkIn")}</Button>}
-        {guest.status === "checked" && onUndo && <Button variant="outline" onClick={() => setUndoConfirmation(confirmationKey)} isLoading={isUndoLoading}>{t("undo")}</Button>}
+        {guest.status === "pending" && onCheck && <Button variant="confirm" onClick={onCheck} disabled={isEntryDisabled} isLoading={isCheckLoading}>{t("checkIn")}</Button>}
+        {guest.status === "checked" && onUndo && <Button variant="outline" onClick={() => setUndoConfirmation(confirmationKey)} disabled={isEntryDisabled} isLoading={isUndoLoading}>{t("undo")}</Button>}
       </Sheet>}
       {isDeleteConfirmOpen && guest.status === "checked" && (
         <ConfirmDialog

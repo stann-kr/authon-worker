@@ -1266,6 +1266,32 @@ test("roster columns retain search, row identity and open details through resize
   } finally { HTMLElement.prototype.getBoundingClientRect = originalRect; window.localStorage.removeItem("workspace:rosterColumns"); }
 });
 
+test("closed entry scope locks row, detail, and an already-open undo confirmation", () => {
+  let mutations = 0;
+  const card = (status: "pending" | "checked", locked: boolean) =>
+    <NextIntlClientProvider locale="en" messages={messages}>
+      <GuestListCard guest={{ id: "locked-guest", name: "Shared guest", status }} index={0}
+        accountKind="shared" registeredByName="Fixture operator" isEntryDisabled={locked}
+        onCheck={() => { mutations++; }} onUndo={() => { mutations++; }} />
+    </NextIntlClientProvider>;
+  const view = render(card("pending", true));
+  const check = screen.getByRole("button", { name: messages.Common.checkIn });
+  assert.equal(check.hasAttribute("disabled"), true);
+  fireEvent.click(check);
+  fireEvent.click(screen.getByRole("button", { name: /^Shared guest/ }));
+  const detail = screen.getByRole("dialog", { name: "Shared guest" });
+  assert.equal(within(detail).getByText("Fixture operator").previousElementSibling?.textContent, messages.Roster.operator);
+  assert.equal(within(detail).getByRole("button", { name: messages.Common.checkIn }).hasAttribute("disabled"), true);
+  fireEvent.click(within(detail).getByRole("button", { name: messages.Sheet.close }));
+  view.rerender(card("checked", false));
+  fireEvent.click(screen.getByRole("button", { name: /Undo check-in for/ }));
+  view.rerender(card("checked", true));
+  const confirm = within(screen.getByRole("alertdialog")).getByRole("button", { name: messages.Roster.undoConfirm });
+  assert.equal(confirm.hasAttribute("disabled"), true);
+  fireEvent.click(confirm);
+  assert.equal(mutations, 0);
+});
+
 test("check-in stays immediate while undo requires confirmation for the current guest", () => {
   let checkCalls = 0;
   let undoCalls = 0;

@@ -106,7 +106,7 @@ export default function WorkspaceShell({
         </main>
         <Footer layer={user ? "below-mobile-dock" : footerLayer} />
         {user && <WorkspaceNavigation items={items} activeId={activeId} brandName={brand.name}
-          accountName={user.name} accountRole={<RoleLabel role={user.role} />}
+          accountName={user.name} accountRole={<RoleLabel role={user.account_kind === "shared" ? "shared" : user.role} />}
           disabled={isRouteTransitionActive || adminNavigation?.disabled}
           counts={{ "password-requests": adminNavigation?.pendingPasswordResetCount ?? 0 }}
           actions={actions} onSelect={selectItem} />}

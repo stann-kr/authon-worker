@@ -261,7 +261,7 @@ function DoorPageContent() {
               checkedInGuests={scopeCheckedInGuests}
               hasPendingGuestMutations={hasPendingGuestMutations}
             >
-      {(attendanceActions, attendanceDetails) => <WorkspaceShell
+      {(attendanceActions, attendanceDetails, entryLocked) => <WorkspaceShell
       contentClassName="gap-4 md:pb-8 lg:gap-6"
       footerLayer="below-mobile-dock"
       actions={<>
@@ -426,6 +426,7 @@ function DoorPageContent() {
                       }
                       isCheckLoading={loadingStates[`${guest.id}_check`]}
                       isUndoLoading={loadingStates[`${guest.id}_undo`]}
+                      isEntryDisabled={entryLocked}
                     />;
                   })}
                 </div>

@@ -31,7 +31,7 @@ interface AttendanceCounterProps {
   currentBusinessDate: string;
   checkedInGuests: number;
   hasPendingGuestMutations: boolean;
-  children: (actions: ReactNode, details: ReactNode) => ReactNode;
+  children: (actions: ReactNode, details: ReactNode, entryLocked: boolean) => ReactNode;
   dependencies?: AttendanceCounterDependencies;
 }
 
@@ -219,5 +219,6 @@ export default function AttendanceCounter({
     </Sheet>
     <p className="sr-only" role="status" aria-live="polite" aria-atomic="true">{announcement}</p>
   </>;
-  return children(actions, details);
+  return children(actions, details, Boolean(scopedSummary?.isFinalized ||
+    scopedSummary?.unavailableReason === "scope_closed" || scopedSummary?.unavailableReason === "event_inactive"));
 }

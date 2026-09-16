@@ -552,6 +552,8 @@ export default function AuthenticatedGuestView({ user }: AuthenticatedGuestViewP
                       guest={guest}
                       index={index}
                       mode="registration"
+                      accountKind={user?.account_kind}
+                      registeredByName={guest.registeredByName}
                       onDelete={
                         guest.status === "pending"
                           ? () => handleDelete(guest.id)
