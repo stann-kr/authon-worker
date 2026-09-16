@@ -1,0 +1,23 @@
+/* Shared list and detail primitives for operational records. */
+.record-list { container: records / inline-size; min-width: 0; }
+.record-row { min-width: 0; border-bottom: 1px solid var(--app-border-subtle); }
+.record-summary { display: flex; align-items: center; gap: 16px; min-height: 64px; padding: 8px 16px; }
+.record-open { display: flex; flex: 1; align-items: center; gap: 16px; min-width: 0; min-height: 44px; border: 0; border-radius: 6px; padding: 4px 0; text-align: left; }
+.record-identity { display: block; flex: 1; min-width: 0; }
+.record-identity strong { display: block; font-size: 14px; font-weight: 500; color: var(--app-text); overflow-wrap: anywhere; }
+.record-identity small { display: block; margin-top: 3px; font-size: 12px; color: var(--app-text-muted); overflow-wrap: anywhere; }
+.record-value { font-size: 12px; font-variant-numeric: tabular-nums; color: var(--app-text-muted); }
+.record-status { border-radius: 99px; background: var(--app-surface-active); padding: 5px 9px; font-size: 11px; text-align: center; }
+.record-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.record-form { width: 100%; max-width: 760px; margin-inline: auto; }
+.record-detail-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 140px), 1fr)); gap: 12px; }
+.record-detail-grid > div, .record-detail-grid > p { min-width: 0; overflow-wrap: anywhere; }
+.record-detail-grid dt { color: var(--app-text-muted); font-size: 12px; }
+.record-detail-grid dd { margin-top: 4px; font-size: 15px; font-variant-numeric: tabular-nums; }
+.record-toolbar { display: flex; flex-wrap: wrap; gap: 12px; align-items: end; }
+.record-toolbar > * { flex: 1 1 200px; min-width: 0; }
+@container records (max-width: 479px) {
+  .record-summary, .record-open { gap: 10px; }
+  .record-summary { padding-inline: 12px; flex-wrap: wrap; }
+  .record-open { flex-basis: 100%; }
+}

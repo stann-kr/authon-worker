@@ -165,21 +165,21 @@ export default function EventCloseout({ eventId }: EventCloseoutProps) {
               </p>
             )}
 
-            <dl className="grid grid-cols-2 gap-px border border-border-default bg-border-default sm:grid-cols-4">
+            <dl className="record-detail-grid">
               {[
                 [t("registered"), report.registered],
                 [t("checkedIn"), report.checkedIn],
                 [t("noShow"), report.noShow],
                 [t("entryRate"), `${report.entryRatePercent}%`],
               ].map(([label, value]) => (
-                <div key={String(label)} className="bg-canvas p-3 text-center">
+                <div key={String(label)} className="py-2">
                   <dt className="text-xs text-text-muted">{label}</dt>
-                  <dd className="mt-1 font-mono text-xl text-text-heading">{value}</dd>
+                  <dd className="mt-1 font-mono text-lg text-text-heading">{value}</dd>
                 </div>
               ))}
             </dl>
 
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="record-detail-grid">
               <p className="border border-border-default p-3 text-sm text-text-body">
                 <span className="block text-xs text-text-muted">{t("peak15")}</span>
                 <strong className="mt-1 block font-mono text-text-heading">

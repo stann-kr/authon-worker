@@ -4,6 +4,8 @@ import { fetchEvents } from "@/lib/events/client";
 
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
+import Sheet from "@/components/overlays/Sheet";
+import Button from "@/components/Button";
 import Alert from "@/components/Alert";
 import DatePicker from "@/components/DatePicker";
 import EmptyState from "@/components/EmptyState";
@@ -49,6 +51,8 @@ export default function EventManagement({
     isSuperAdmin,
     currentVenue,
   } = useVenueSelector();
+  const [createOpen, setCreateOpen] = useState(false);
+  const [detailId, setDetailId] = useState<string | null>(selectedEventId);
   const [events, setEvents] = useState<Event[]>([]);
   const [loadedScope, setLoadedScope] = useState("");
   const [isLoading, setIsLoading] = useState(true);
@@ -109,6 +113,8 @@ export default function EventManagement({
     if (pendingTransition) cancelTransitionRef.current?.focus();
   }, [pendingTransition]);
 
+  useEffect(() => { setDetailId(selectedEventId); }, [selectedEventId, scope]);
+
   const scopedEvents = loadedScope === scope ? events : EMPTY_EVENTS;
   const listState = deriveAsyncListState({
     hasStarted: isLoading || loadedScope !== "",
@@ -138,6 +144,7 @@ export default function EventManagement({
       setCapacity("");
       setTargetGuests("");
       setTemplateSourceEventId(null);
+      setCreateOpen(false);
       onSelectedEventChange(response.data.event.id);
       setFeedback({
         type: "success",
@@ -193,111 +200,8 @@ export default function EventManagement({
     transitionTriggerRef.current?.focus({ preventScroll: true });
   };
 
-  return (
-    <div className="space-y-4">
-      {isSuperAdmin && venues.length > 0 && (
-        <VenueSelector
-          venues={venues}
-          selectedVenueId={selectedVenueId}
-          onVenueChange={setSelectedVenueId}
-          disabled={Boolean(busyId)}
-          className="app-panel p-4 sm:p-5"
-        />
-      )}
+  const renderDetails = (event: Event) => {
 
-      <div className="context-bar">
-        <DatePicker
-          value={selectedDate}
-          onChange={onDateChange}
-          businessDate={businessDate}
-          disabled={Boolean(busyId)}
-        />
-      </div>
-
-      {feedback && <Alert type={feedback.type} message={feedback.message} />}
-
-      <section className="app-panel" aria-labelledby="event-create-title">
-        <PanelHeader title={t("createTitle")} headingId="event-create-title" />
-        <form onSubmit={submit} className="p-4 sm:p-5">
-          <fieldset disabled={Boolean(busyId) || !venueId} className="grid gap-4">
-            <div>
-              <label htmlFor="event-name" className="app-label">{t("name")}</label>
-              <input
-                id="event-name"
-                name="event-name"
-                value={name}
-                onChange={(event) => setName(event.target.value)}
-                maxLength={120}
-                required
-                autoComplete="off"
-                className="app-field"
-              />
-            </div>
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div>
-                <label htmlFor="event-capacity" className="app-label">{t("capacity")}</label>
-                <input
-                  id="event-capacity"
-                  name="event-capacity"
-                  type="number"
-                  min="1"
-                  max="100000"
-                  value={capacity}
-                  onChange={(event) => setCapacity(event.target.value)}
-                  className="app-field"
-                />
-              </div>
-              <div>
-                <label htmlFor="event-target" className="app-label">{t("target")}</label>
-                <input
-                  id="event-target"
-                  name="event-target"
-                  type="number"
-                  min="0"
-                  max="100000"
-                  value={targetGuests}
-                  onChange={(event) => setTargetGuests(event.target.value)}
-                  className="app-field"
-                />
-              </div>
-            </div>
-            {templateSourceEventId && (
-              <p className="app-helper" role="status">
-                {t("templateSelected")}
-              </p>
-            )}
-            <button
-              type="submit"
-              disabled={!venueId || !name.trim() || Boolean(busyId)}
-              className="min-h-11 bg-action-primary px-4 py-3 text-sm font-semibold text-action-text disabled:opacity-50"
-            >
-              {busyId === "create" ? t("creating") : t("create")}
-            </button>
-          </fieldset>
-        </form>
-      </section>
-
-      <section className="app-panel" aria-labelledby="event-list-title">
-        <PanelHeader
-          title={t("listTitle")}
-          headingId="event-list-title"
-          count={explicitEvents.length}
-          onRefresh={loadEvents}
-          isLoading={isLoading}
-        />
-        <div className="p-4 sm:p-5">
-          {loadError && <Alert type="error" message={t("loadFailed")} />}
-          {!venueId ? (
-            <p className="border border-border-default bg-canvas p-4 text-sm text-text-muted">
-              {t("selectVenue")}
-            </p>
-          ) : listState === "loading" ? (
-            <Skeleton rows={4} />
-          ) : shouldShowEmptyState(listState) ? (
-            <EmptyState icon="calendar" message={t("empty")} />
-          ) : (
-            <div className="grid gap-3 lg:grid-cols-2">
-              {explicitEvents.map((event) => {
                 const isSelected = selectedEventId === event.id;
                 const eventTransition = pendingTransition?.scope === scope &&
                     pendingTransition.eventId === event.id &&
@@ -312,16 +216,8 @@ export default function EventManagement({
                       : event.state === "closed"
                         ? ["archived"]
                         : [];
-                return (
-                  <article
-                    key={event.id}
-                    ref={(element) => {
-                      if (element) eventCardRefs.current.set(event.id, element);
-                      else eventCardRefs.current.delete(event.id);
-                    }}
-                    tabIndex={-1}
-                    className="border border-border-default bg-canvas p-4"
-                  >
+    return <div tabIndex={-1} ref={(element) => { if (element) eventCardRefs.current.set(event.id, element); }} className="space-y-4">
+      {feedback && <Alert type={feedback.type} message={feedback.message} />}
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
                         <h3 className="type-row-title break-words">{event.name}</h3>
@@ -367,6 +263,8 @@ export default function EventManagement({
                       <button
                         type="button"
                         onClick={() => {
+                          setDetailId(null);
+                          setCreateOpen(true);
                           setName(`${event.name} ${t("copySuffix")}`.trim());
                           setCapacity(event.capacity?.toString() ?? "");
                           setTargetGuests(event.targetGuests?.toString() ?? "");
@@ -441,15 +339,136 @@ export default function EventManagement({
                         </div>
                       </div>
                     )}
-                  </article>
-                );
-              })}
+      <EventCloseout eventId={event.id} />
+    </div>;
+  };
+  const detailEvent = explicitEvents.find((event) => event.id === detailId);
+
+  return (
+    <div className="space-y-4">
+      {isSuperAdmin && venues.length > 0 && (
+        <VenueSelector
+          venues={venues}
+          selectedVenueId={selectedVenueId}
+          onVenueChange={setSelectedVenueId}
+          disabled={Boolean(busyId)}
+          className="app-panel p-4 sm:p-5"
+        />
+      )}
+
+      <div className="context-bar">
+        <DatePicker
+          value={selectedDate}
+          onChange={onDateChange}
+          businessDate={businessDate}
+          disabled={Boolean(busyId)}
+        />
+      </div>
+
+      {feedback && <Alert type={feedback.type} message={feedback.message} />}
+
+
+
+      <section className="app-panel" aria-labelledby="event-list-title">
+        <PanelHeader
+          title={t("listTitle")}
+          headingId="event-list-title"
+          actions={<Button onClick={() => setCreateOpen(true)} disabled={!venueId || Boolean(busyId)}>{t("createTitle")}</Button>}
+          count={explicitEvents.length}
+          onRefresh={loadEvents}
+          isLoading={isLoading}
+        />
+        <div className="p-4 sm:p-5">
+          {loadError && <Alert type="error" message={t("loadFailed")} />}
+          {!venueId ? (
+            <p className="border border-border-default bg-canvas p-4 text-sm text-text-muted">
+              {t("selectVenue")}
+            </p>
+          ) : listState === "loading" ? (
+            <Skeleton rows={4} />
+          ) : shouldShowEmptyState(listState) ? (
+            <EmptyState icon="calendar" message={t("empty")} />
+          ) : (
+            <div className="record-list">
+              {explicitEvents.map((event) => <article key={event.id} className="record-row">
+                <div className="record-summary">
+                  <button type="button" className="record-open" onClick={() => setDetailId(event.id)} aria-haspopup="dialog" aria-expanded={detailId === event.id}>
+                    <span className="record-identity"><strong>{event.name}</strong><small>{event.businessDate}{selectedEventId === event.id ? ` · ${t("selected")}` : ""}</small></span>
+                    <span className="record-value">{t("capacity")} {event.capacity ?? "—"}</span>
+                    <span className="record-status">{t(`state.${event.state}`)}</span>
+                  </button>
+                </div>
+              </article>)}
             </div>
           )}
         </div>
       </section>
 
-      {selectedEventId && <EventCloseout eventId={selectedEventId} />}
+      <Sheet open={createOpen} title={t("createTitle")} onClose={() => {
+        setCreateOpen(false); setName(""); setCapacity(""); setTargetGuests(""); setTemplateSourceEventId(null);
+      }} dirty={Boolean(name || capacity || targetGuests)} busy={Boolean(busyId)}>
+        {feedback && <Alert type={feedback.type} message={feedback.message} />}
+        <form onSubmit={submit} className="p-4 sm:p-5">
+          <fieldset disabled={Boolean(busyId) || !venueId} className="grid gap-4">
+            <div>
+              <label htmlFor="event-name" className="app-label">{t("name")}</label>
+              <input
+                id="event-name"
+                name="event-name"
+                value={name}
+                onChange={(event) => setName(event.target.value)}
+                maxLength={120}
+                required
+                autoComplete="off"
+                className="app-field"
+              />
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div>
+                <label htmlFor="event-capacity" className="app-label">{t("capacity")}</label>
+                <input
+                  id="event-capacity"
+                  name="event-capacity"
+                  type="number"
+                  min="1"
+                  max="100000"
+                  value={capacity}
+                  onChange={(event) => setCapacity(event.target.value)}
+                  className="app-field"
+                />
+              </div>
+              <div>
+                <label htmlFor="event-target" className="app-label">{t("target")}</label>
+                <input
+                  id="event-target"
+                  name="event-target"
+                  type="number"
+                  min="0"
+                  max="100000"
+                  value={targetGuests}
+                  onChange={(event) => setTargetGuests(event.target.value)}
+                  className="app-field"
+                />
+              </div>
+            </div>
+            {templateSourceEventId && (
+              <p className="app-helper" role="status">
+                {t("templateSelected")}
+              </p>
+            )}
+            <button
+              type="submit"
+              disabled={!venueId || !name.trim() || Boolean(busyId)}
+              className="min-h-11 bg-action-primary px-4 py-3 text-sm font-semibold text-action-text disabled:opacity-50"
+            >
+              {busyId === "create" ? t("creating") : t("create")}
+            </button>
+          </fieldset>
+        </form>
+      </Sheet>
+      {detailEvent && <Sheet title={detailEvent.name} presentation="detail" wide onClose={() => { setDetailId(null); setPendingTransition(null); }} busy={Boolean(busyId)}>
+        {renderDetails(detailEvent)}
+      </Sheet>}
     </div>
   );
 }

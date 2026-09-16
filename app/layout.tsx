@@ -4,6 +4,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import "@/components/overlays/sheet.css";
 import "@/components/guests/roster.css";
+import "@/components/records/records.css";
 import "@/components/workspace/workspace.css";
 import DesignSystemProvider from "@/components/DesignSystemProvider";
 import VenueBrandProvider from "@/components/VenueBrandProvider";

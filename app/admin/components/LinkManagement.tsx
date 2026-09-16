@@ -1,10 +1,10 @@
 "use client";
 
+import Sheet from "@/components/overlays/Sheet";
 import { useState, useCallback } from "react";
 import VenueSelector, {
   useVenueSelector,
 } from "../../../components/VenueSelector";
-import StatGrid from "../../../components/StatGrid";
 import PanelHeader from "../../../components/PanelHeader";
 import EmptyState from "../../../components/EmptyState";
 import Alert from "../../../components/Alert";
@@ -286,24 +286,14 @@ export default function LinkManagement({
           </div>
         )}
 
-        {activeTab === "manage" && (
-          <div className="app-panel p-3 sm:p-4">
-            <StatGrid
-              items={[
-                { label: t("total"), value: dashboardStats.total, color: "default" },
-                { label: t("active"), value: dashboardStats.active, color: "checked" },
-                { label: t("attention"), value: dashboardStats.attention, color: "danger" },
-              ]}
-            />
-          </div>
-        )}
+
           </>
         }
       >
 
       <div className="min-w-0">
         {activeTab === "create" && (
-          <div className="space-y-6">
+          <div className="record-form space-y-6">
             <div className="app-panel p-4 sm:p-6">
               <h3 className="type-panel-title mb-6">
                 {t("createAccessLink")}
@@ -776,7 +766,7 @@ export default function LinkManagement({
               ) : listState === "error" ? null : (
                 <div
                   aria-busy={isCurrentScopeFetching}
-                  className={`divide-y divide-border-default lg:overflow-y-auto ${
+                  className={`record-list ${
                     isCurrentScopeFetching ? "pointer-events-none" : ""
                   }`}
                 >
@@ -786,7 +776,7 @@ export default function LinkManagement({
                       message={t("noLinks")}
                     />
                   ) : (
-                    sortedLinks.map((link, index) => {
+                    sortedLinks.map((link) => {
                       const status = deriveLinkStatus(link, now);
                       const guestPageUrl = getGuestPageUrl(link.token, link.guestUrl);
                       const isLinkVisible = visibleLinkId === link.id;
@@ -811,33 +801,21 @@ export default function LinkManagement({
                               : { label: t("active"), tone: "border-status-checked text-status-checked", indicator: "before:bg-status-checked" };
 
                       return (
-                      <article
-                        key={link.id}
-                        className={`relative px-4 py-3.5 before:absolute before:inset-y-0 before:left-0 before:w-0.5 ${primaryStatus.indicator} ${index % 2 === 1 ? "bg-surface-raised" : "bg-surface"}`}
-                      >
-                        <div className="flex flex-wrap items-start justify-between gap-3">
-                          <div className="flex min-w-0 items-start gap-3">
-                            <span className="w-7 shrink-0 font-mono text-xs tabular-nums text-text-dim">
-                              {String(index + 1).padStart(2, "0")}
-                            </span>
-                            <div className="min-w-0">
-                              <h3 className="type-row-title break-words">
-                                {link.djName}
-                              </h3>
-                              <p className="mt-0.5 break-words text-xs text-text-muted">
-                                {link.event || t("untitledEvent")}
-                              </p>
-                              <p className="mt-1 text-xs text-text-dim">
-                                {link.kind === "self_rsvp" ? t("selfRsvpLink") : t("contributorLink")}
-                              </p>
-                            </div>
-                          </div>
-                          <span className={`inline-flex min-h-7 items-center border-l-2 pl-2 text-xs font-semibold ${primaryStatus.tone}`}>
-                            {primaryStatus.label}
-                          </span>
+                      <article key={link.id} className="record-row">
+                        <div className="record-summary">
+                          <button type="button" className="record-open" onClick={() => setVisibleLinkId(link.id)} aria-haspopup="dialog" aria-expanded={isLinkVisible}>
+                            <span className="record-identity"><strong>{link.djName}</strong><small>{link.event || t("untitledEvent")} · {link.date ? formatDateDisplay(link.date, locale) : t("noDate")}</small></span>
+                            <span className="record-value">{link.usedGuests}/{link.maxGuests}</span>
+                            <span className={`record-status ${primaryStatus.tone}`}>{primaryStatus.label}</span>
+                          </button>
+                          <Button variant="secondary" size="sm" onClick={() => shareOrCopyManagedLink(guestPageUrl, link.id)} isLoading={loadingStates[`share_${link.id}`]}>
+                            {completedLinkAction === "shared" ? t("shared") : completedLinkAction === "copied" ? t("copied") : nativeShareAvailable ? t("shareLink") : t("copyLink")}
+                          </Button>
                         </div>
-
-                        <dl className="mt-3 flex flex-wrap gap-x-6 gap-y-2 pl-10 sm:pl-11">
+                        {isLinkVisible && <Sheet title={link.djName} presentation="detail" onClose={() => setVisibleLinkId(null)} busy={Boolean(lifecycleBusyIds[link.id])}>
+                          {scopedManageError && <Alert type="error" message={scopedManageError} />}
+                          <p className="text-sm text-text-muted">{link.event || t("untitledEvent")} · {link.kind === "self_rsvp" ? t("selfRsvpLink") : t("contributorLink")}</p>
+                        <dl className="record-detail-grid">
                           <div>
                             <dt className="text-xs text-text-dim">{t("eventDate")}</dt>
                             <dd className="mt-0.5 font-mono text-xs text-text-muted">
@@ -889,7 +867,7 @@ export default function LinkManagement({
                           </div>
                         </dl>
 
-                        <div className="mt-3 pl-10 sm:pl-11">
+                        <div className="mt-3">
                           <div className="h-1 w-full bg-surface-active">
                             <div
                               className={`h-1 ${usageTone}`}
@@ -901,7 +879,7 @@ export default function LinkManagement({
                         {isLinkVisible && (
                           <div
                             id={`link-url-panel-${link.id}`}
-                            className="mt-3 border border-border-default bg-canvas p-3 sm:ml-11"
+                            className="mt-3 border border-border-default bg-canvas p-3"
                           >
                             <label
                               htmlFor={`link-url-${link.id}`}
@@ -933,7 +911,7 @@ export default function LinkManagement({
                           </div>
                         )}
 
-                        <div className="mt-3 flex flex-wrap justify-end gap-2 sm:pl-11">
+                        <div className="mt-3 flex flex-wrap justify-end gap-2">
                           <Button
                             type="button"
                             onClick={() => handleUseAsTemplate(link)}
@@ -943,26 +921,7 @@ export default function LinkManagement({
                           >
                             {t("useAsTemplate")}
                           </Button>
-                          <Button
-                            type="button"
-                            onClick={() =>
-                              setVisibleLinkId((current) =>
-                                current === link.id ? null : link.id,
-                              )
-                            }
-                            aria-expanded={isLinkVisible}
-                            aria-controls={`link-url-panel-${link.id}`}
-                            variant="secondary"
-                            size="sm"
-                            leftIcon={
-                              <Icon
-                                name={isLinkVisible ? "view-off" : "view"}
-                                size={16}
-                              />
-                            }
-                          >
-                            {isLinkVisible ? t("hide") : t("view")}
-                          </Button>
+
                           <Button
                             type="button"
                             onClick={() =>
@@ -1021,6 +980,7 @@ export default function LinkManagement({
                             {t("delete")}
                           </Button>
                         </div>
+                        </Sheet>}
                       </article>
                     )})
                   )}
@@ -1033,7 +993,7 @@ export default function LinkManagement({
       </OperationsLayout>
 
       {linkActionToast && (
-        <div className="fixed bottom-[calc(1rem+env(safe-area-inset-bottom))] right-4 z-[var(--app-z-toast)] max-w-[calc(100vw-2rem)] border border-border-strong bg-surface-raised px-4 py-3 text-text-heading md:bottom-5 md:right-5" role="status" aria-live="polite" aria-atomic="true">
+        <div className="fixed bottom-[calc(10rem+env(safe-area-inset-bottom))] right-4 z-[var(--app-z-toast)] max-w-[calc(100vw-2rem)] border border-border-strong bg-surface-raised px-4 py-3 text-text-heading md:bottom-5 md:right-5" role="status" aria-live="polite" aria-atomic="true">
           <p className="text-xs font-medium">
             {linkActionToast}
           </p>

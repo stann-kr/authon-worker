@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { registerHooks } from "node:module";
 import { afterEach, test } from "node:test";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { NextIntlClientProvider } from "next-intl";
@@ -1256,4 +1257,43 @@ test("check-in stays immediate while undo requires confirmation for the current 
   const dialog = screen.getByRole("alertdialog", { name: messages.Roster.undoTitle });
   fireEvent.click(within(dialog).getByRole("button", { name: messages.Common.undo }));
   assert.equal(undoCalls, 1);
+});
+
+test("event details hand off a template to a guarded create sheet and retain failed input", async () => {
+  const hooks = registerHooks({
+    resolve(specifier, context, nextResolve) {
+      const suffix = ["lib/events/client", "lib/api/events", "lib/api/closeout", "components/VenueSelector"].find((value) => specifier.endsWith(value));
+      return suffix ? { url: `mock:event-sheet:${suffix}`, shortCircuit: true } : nextResolve(specifier, context);
+    },
+    load(url, context, nextLoad) {
+      if (!url.startsWith("mock:event-sheet:")) return nextLoad(url, context);
+      const sources: Record<string, string> = {
+        "lib/events/client": 'export const fetchEvents = async () => ({ data: [{ id: "event-1", name: "Test night", businessDate: "2026-09-16", state: "draft", compatibilityKey: null, capacity: 100, targetGuests: 30 }], error: null });',
+        "lib/api/events": 'export const createEvent = async () => ({ data: null, error: "SAVE_FAILED" }); export const transitionEventState = createEvent;',
+        "lib/api/closeout": 'export const fetchEventCloseout = async () => ({ data: null, error: "UNAVAILABLE" }); export const confirmEventCloseout = fetchEventCloseout;',
+        "components/VenueSelector": 'export const useVenueSelector = () => ({ venueId: "venue-1", venues: [], selectedVenueId: "venue-1", currentVenue: {}, isSuperAdmin: false }); export default function VenueSelector() { return null; }',
+      };
+      return { format: "module", shortCircuit: true, source: sources[url.replace("mock:event-sheet:", "")] };
+    },
+  });
+  try {
+    const { default: EventManagement } = await import("@/app/admin/components/EventManagement");
+    render(<NextIntlClientProvider locale="en" messages={messages}>
+      <EventManagement selectedDate="2026-09-16" businessDate="2026-09-16" onDateChange={() => {}}
+        selectedEventId={null} onSelectedEventChange={() => {}} onEventsChanged={() => {}} />
+    </NextIntlClientProvider>);
+    fireEvent.click(await screen.findByRole("button", { name: /Test night/ }));
+    assert.ok(screen.getByRole("dialog", { name: "Test night" }));
+    fireEvent.click(screen.getByRole("button", { name: messages.EventAdmin.useTemplate }));
+    const dialog = screen.getByRole("dialog", { name: messages.EventAdmin.createTitle });
+    const name = within(dialog).getByLabelText(messages.EventAdmin.name) as HTMLInputElement;
+    assert.match(name.value, /Test night/);
+    fireEvent.change(name, { target: { value: "New night" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: messages.Sheet.close }));
+    assert.ok(screen.getByRole("group", { name: messages.Sheet.unsaved }));
+    fireEvent.click(screen.getByRole("button", { name: messages.Sheet.continue }));
+    fireEvent.submit(name.closest("form")!);
+    await waitFor(() => assert.ok(within(dialog).getByRole("alert")));
+    assert.equal(name.value, "New night");
+  } finally { cleanup(); hooks.deregister(); }
 });
