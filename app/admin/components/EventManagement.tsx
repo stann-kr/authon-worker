@@ -23,7 +23,7 @@ import { deriveAsyncListState, shouldShowEmptyState } from "@/lib/ui/async-list-
 import EventCloseout from "./EventCloseout";
 
 interface EventManagementProps {
-  scopeSelector?: ReactNode;
+  scopeSelector?: (controls: ReactNode, disabled?: boolean) => ReactNode;
   selectedDate: string;
   onDateChange: (date: string) => void;
   businessDate: string;
@@ -347,14 +347,15 @@ export default function EventManagement({
   };
   const detailEvent = explicitEvents.find((event) => event.id === detailId);
 
+  const scopeControls = <>
+    <DatePicker compact value={selectedDate} onChange={onDateChange} businessDate={businessDate} disabled={Boolean(busyId)} />
+    {isSuperAdmin && venues.length > 0 && <VenueSelector venues={venues} selectedVenueId={selectedVenueId}
+      onVenueChange={setSelectedVenueId} disabled={Boolean(busyId)} className="scope-venue" />}
+  </>;
+
   return (
     <div className="space-y-4">
-      <div className="operations-scope">
-        <DatePicker compact value={selectedDate} onChange={onDateChange} businessDate={businessDate} disabled={Boolean(busyId)} />
-        {isSuperAdmin && venues.length > 0 && <VenueSelector venues={venues} selectedVenueId={selectedVenueId}
-          onVenueChange={setSelectedVenueId} disabled={Boolean(busyId)} className="scope-venue" />}
-        {scopeSelector}
-      </div>
+      {scopeSelector ? scopeSelector(scopeControls, Boolean(busyId)) : <div className="operations-scope">{scopeControls}</div>}
 
       {feedback && <Alert type={feedback.type} message={feedback.message} />}
 

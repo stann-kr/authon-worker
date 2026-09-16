@@ -48,7 +48,7 @@ const EMPTY_DISPLAY_DATA = {
 };
 
 interface GuestListProps {
-  scopeSelector?: ReactNode;
+  scopeSelector?: (controls: ReactNode, disabled?: boolean) => ReactNode;
   selectedDate: string;
   onDateChange: (date: string) => void;
   businessDate: string;
@@ -343,6 +343,12 @@ export default function GuestList({
     activeExtLinkIds.has(l.id),
   );
 
+  const scopeControls = <>
+    <DatePicker compact value={selectedDate} onChange={onDateChange} businessDate={businessDate} />
+    {isSuperAdmin && <VenueSelector venues={venues} selectedVenueId={selectedVenueId}
+      onVenueChange={setSelectedVenueId} className="scope-venue" />}
+  </>;
+
   return (
     <OperationsLayout
       variant="stacked"
@@ -350,12 +356,7 @@ export default function GuestList({
       headingLevel={null}
       dashboard={
         <>
-        <div className="operations-scope">
-          <DatePicker compact value={selectedDate} onChange={onDateChange} businessDate={businessDate} />
-          {isSuperAdmin && <VenueSelector venues={venues} selectedVenueId={selectedVenueId}
-            onVenueChange={setSelectedVenueId} className="scope-venue" />}
-          {scopeSelector}
-        </div>
+        {scopeSelector ? scopeSelector(scopeControls) : <div className="operations-scope">{scopeControls}</div>}
         {feedback && <Alert type="error" message={feedback} />}
         {scopedAttendance && entryDisabled && <p role="status" className="text-sm text-text-muted">
           {doorT(scopedAttendance.isFinalized ? "attendance.scopeClosed" : "attendance.eventInactive")}
@@ -366,7 +367,7 @@ export default function GuestList({
 
       <div className="flex min-w-0 flex-col lg:min-h-0">
         <div className="min-w-0">
-          <RosterView variant="operations" filters={
+          <RosterView variant="operations" filtersActive={selectedDJ !== "all" || sortMode !== "default"} filters={
         <div className="min-w-0">
           <label htmlFor="admin-guest-user-filter" className="sr-only">{t("userFilter")}</label>
               <div className="relative">

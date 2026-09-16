@@ -1,5 +1,7 @@
 {
   "Workspace": {
+    "chooseScope": "베뉴와 행사 선택",
+    "applyScope": "완료",
     "home": "홈",
     "roster": "명단",
     "myRoster": "내 명단",
@@ -1148,6 +1150,8 @@
     "discard": "내용 버리고 닫기"
   },
   "Roster": {
+    "filters": "필터 및 정렬",
+    "filtersApplied": "필터 및 정렬, 변경한 조건 적용 중",
     "guestName": "이름",
     "rowActions": "작업",
     "search": "이름, 담당자, 입력자 검색",

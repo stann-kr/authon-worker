@@ -8,21 +8,21 @@
 .operations-scope-selectors > * { flex: 1 1 160px; min-width: 0; }
 .operations-scope :is(.app-label, .type-context-title), .account-context .app-label { margin-bottom: 6px; font-size: 12px; line-height: 18px; font-weight: 400; }
 .operational-date-control[data-compact="true"] .operational-date-layout { display: flex; align-items: center; gap: 6px; }
-.operational-date-control[data-compact="true"] .operational-date-field { height: 44px; min-width: 138px; }
+.operational-date-control[data-compact="true"] .operational-date-field { height: 46px; min-width: 138px; }
 .operational-date-control[data-compact="true"] .operational-date-field > div { padding-inline: 12px; border-color: var(--app-border); }
-.operational-date-control[data-compact="true"] .operational-date-quick { width: auto; height: 44px; flex-shrink: 0; grid-template-columns: 44px minmax(44px, auto) 44px; border: 0; gap: 3px; }
+.operational-date-control[data-compact="true"] .operational-date-quick { width: auto; height: 46px; flex-shrink: 0; grid-template-columns: 44px minmax(44px, auto) 44px; border: 0; gap: 3px; }
 .operational-date-control[data-compact="true"] .operational-date-quick > button { border: 1px solid var(--app-border); padding-inline: 8px; font-family: inherit; font-weight: 400; }
 .operational-date-control[data-compact="true"] .date-offset-label { display: none; }
-.workspace-shell .app-field, .product-sheet .app-field { min-height: 44px; }
-@media (hover: hover) and (pointer: fine) {
-  .workspace-shell .app-field, .product-sheet .app-field { min-height: 40px; padding-block: 8px; }
-  .workspace-shell .app-button, .product-sheet .app-button { min-height: 40px; }
-  .operational-date-control[data-compact="true"] .operational-date-field,
-  .operational-date-control[data-compact="true"] .operational-date-quick { height: 40px; }
-  .operational-date-control[data-compact="true"] .operational-date-quick { grid-template-columns: 36px minmax(44px, auto) 36px; }
-  .operational-date-control[data-compact="true"] .operational-date-quick > button { min-height: 40px; min-width: 36px; }
-}
 @media (max-width: 767px) {
   .operations-scope { gap: 10px; }
   .operations-scope > .operational-date-control, .operations-scope > .operations-scope-selectors { flex-basis: 100%; }
 }
+
+.operations-scope-bar { min-width: 0; }
+.operations-scope-trigger { display: flex; align-items: center; gap: 6px; width: 100%; min-height: 44px; padding: 0; border: 0; background: transparent; color: var(--app-text-muted); text-align: left; font-size: 12px; font-weight: 500; }
+.operations-scope-dot { flex-shrink: 0; width: 6px; height: 6px; border-radius: 50%; background: var(--app-action); }
+.operations-scope-date { flex-shrink: 0; max-width: 60%; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.operations-scope-name { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.operations-scope-name::before { content: "·"; margin-right: 6px; }
+.operations-scope-trigger > svg { flex-shrink: 0; }
+@media (max-width: 999px) { .operations-scope-bar { padding-bottom: 12px; } }

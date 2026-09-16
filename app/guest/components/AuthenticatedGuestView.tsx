@@ -1,5 +1,8 @@
 "use client";
 
+import WorkspaceAction from "@/components/workspace/WorkspaceAction";
+import OperationsScope from "@/components/operations/OperationsScope";
+
 import Sheet from "@/components/overlays/Sheet";
 import RosterView, { type RosterStatus } from "@/components/guests/RosterView";
 
@@ -463,7 +466,7 @@ export default function AuthenticatedGuestView({ user }: AuthenticatedGuestViewP
 
   return (
     <WorkspaceShell contentClassName="gap-4 pb-8 lg:gap-6" actions={
-      <button type="button" className="workspace-action workspace-action-primary" onClick={() => setEntryOpen(true)}>{t("addGuest")}</button>
+      <WorkspaceAction icon="add" onClick={() => setEntryOpen(true)}>{t("addGuest")}</WorkspaceAction>
     }>
       {venueLoadError && (
         <VenueLoadNotice
@@ -476,31 +479,13 @@ export default function AuthenticatedGuestView({ user }: AuthenticatedGuestViewP
         title={commonT("guest")}
         dashboard={
           <>
-                <div className="operations-scope">
-                  <DatePicker compact
-                    value={selectedDate}
-                    onChange={setSelectedDate}
-                    businessDate={businessDate}
-                    disabled={isBulkSubmitting}
-                  />
-                  <EventScopeSelector
-                    venueId={effectiveVenueId}
-                    businessDate={selectedDate}
-                    value={selectedEventId}
-                    onChange={setSelectedEventId}
-                    disabled={isBulkSubmitting}
-                  />
-                  {isSuperAdmin && (
-                    <div className="context-filter-grid">
-                      <VenueSelector
-                        venues={venues}
-                        selectedVenueId={selectedVenueId}
-                        onVenueChange={setSelectedVenueId}
-                        disabled={isBulkSubmitting}
-                      />
-                    </div>
-                  )}
-                </div>
+                <EventScopeSelector venueId={effectiveVenueId} businessDate={selectedDate}
+                  value={selectedEventId} onChange={setSelectedEventId} disabled={isBulkSubmitting}
+                  renderScope={(selector, label) => <OperationsScope venueName={currentVenue?.brandName || currentVenue?.name} date={selectedDate} label={label} disabled={isBulkSubmitting}>
+                    <DatePicker compact value={selectedDate} onChange={setSelectedDate} businessDate={businessDate} disabled={isBulkSubmitting} />
+                    {isSuperAdmin && <VenueSelector venues={venues} selectedVenueId={selectedVenueId} onVenueChange={setSelectedVenueId} disabled={isBulkSubmitting} />}
+                    {selector}
+                  </OperationsScope>} />
 
                 {error && <Alert type="error" message={error} />}
 
@@ -509,10 +494,14 @@ export default function AuthenticatedGuestView({ user }: AuthenticatedGuestViewP
       >
             <section
               className="min-w-0"
-              aria-labelledby="guest-list-title"
+              aria-label={t("todaysGuests")}
               aria-busy={isCurrentScopeFetching}
             >
-              <RosterView header={<PanelHeader
+              <dl className="product-roster-quota">
+                <div><dt>{commonT("registered")}</dt><dd>{hasCurrentScopeData ? (displayQuota?.used ?? activeGuestsCount) : "—"}</dd></div>
+                <div><dt>{t("remaining")}</dt><dd>{hasCurrentScopeData ? (remaining ?? "∞") : "—"}</dd></div>
+              </dl>
+              <RosterView filtersActive={sortMode !== "default"} header={<PanelHeader
                 title={t("todaysGuests")}
                 headingLevel={2}
                 headingId="guest-list-title"

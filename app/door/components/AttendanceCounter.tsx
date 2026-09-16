@@ -1,5 +1,7 @@
 "use client";
 
+import WorkspaceAction from "@/components/workspace/WorkspaceAction";
+
 import { fetchDoorAttendanceSummary } from "@/lib/attendance/client";
 
 import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
@@ -144,13 +146,13 @@ export default function AttendanceCounter({
   }, [isReconciliationFormVisible]);
 
   const actions = <>
-    <button type="button" className="workspace-action workspace-action-primary" onClick={() => void queueWalkIn()}
+    <WorkspaceAction icon="add" onClick={() => void queueWalkIn()}
       disabled={!canRecord} aria-describedby={unavailableText ? "attendance-counter-unavailable" : undefined}>
       {t("addWalkIn")} +1
-    </button>
-    <button type="button" className="workspace-action" onClick={() => setDetailsOpen(true)} aria-haspopup="dialog">
+    </WorkspaceAction>
+    <WorkspaceAction icon="chart-line" tone="muted" onClick={() => setDetailsOpen(true)} aria-haspopup="dialog">
       {t("title")} · {isLoading ? "—" : displayedCheckedInGuests + walkIns}
-    </button>
+    </WorkspaceAction>
   </>;
   const details = <>
     {unavailableText && <p id="attendance-counter-unavailable" className="text-xs text-text-muted">{unavailableText}</p>}

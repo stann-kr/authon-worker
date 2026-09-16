@@ -67,7 +67,7 @@ const LINK_MANAGE_ACTIONS: LinkManageControllerActions = Object.freeze({
 export type LinkManagementSection = "create" | "manage";
 
 interface LinkManagementProps {
-  scopeSelector?: ReactNode;
+  scopeSelector?: (controls: ReactNode, disabled?: boolean) => ReactNode;
   selectedDate: string;
   onDateChange: (date: string) => void;
   businessDate: string;
@@ -194,6 +194,13 @@ export default function LinkManagement({
     setActiveTab("create");
   };
 
+  const scopeControls = <>
+    {(activeTab === "create" || manageScope === "date") && <DatePicker compact
+      value={selectedDate} onChange={onDateChange} businessDate={businessDate} disabled={isGenerating} />}
+    {isSuperAdmin && venues.length > 0 && <VenueSelector venues={venues} selectedVenueId={selectedVenueId}
+      onVenueChange={setSelectedVenueId} disabled={isGenerating} className="scope-venue" />}
+  </>;
+
   return (
     <>
       <OperationsLayout
@@ -202,13 +209,7 @@ export default function LinkManagement({
         headingLevel={null}
         dashboard={
           <>
-        <div className="operations-scope">
-          {(activeTab === "create" || manageScope === "date") && <DatePicker compact
-            value={selectedDate} onChange={onDateChange} businessDate={businessDate} disabled={isGenerating} />}
-          {isSuperAdmin && venues.length > 0 && <VenueSelector venues={venues} selectedVenueId={selectedVenueId}
-            onVenueChange={setSelectedVenueId} disabled={isGenerating} className="scope-venue" />}
-          {(activeTab === "create" || manageScope === "date") && scopeSelector}
-        </div>
+        {scopeSelector && (activeTab === "create" || manageScope === "date") ? scopeSelector(scopeControls, isGenerating) : <div className="operations-scope">{scopeControls}</div>}
         {(showSectionNavigation || activeTab === "manage") && (
           <div>
             {showSectionNavigation && (

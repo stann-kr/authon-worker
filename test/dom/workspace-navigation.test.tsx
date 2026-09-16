@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { afterEach, test } from "node:test";
 import { useState, type ReactNode } from "react";
-import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { NextIntlClientProvider } from "next-intl";
 import { PathnameContext } from "next/dist/shared/lib/hooks-client-context.shared-runtime";
 import { AuthSessionProvider } from "@/components/AuthSessionProvider";
@@ -9,6 +9,7 @@ import { RouteTransitionProvider } from "@/components/RouteTransitionProvider";
 import WorkspaceShell from "@/components/WorkspaceShell";
 import RouteLoadingShell from "@/components/RouteLoadingShell";
 import WorkspaceNavigation from "@/components/workspace/WorkspaceNavigation";
+import OperationsScope from "@/components/operations/OperationsScope";
 import { getWorkspaceActiveId, getWorkspaceItems, getWorkspacePrimaryItems } from "@/components/workspace/navigation";
 import useAdminWorkspaceNavigation from "@/app/admin/useAdminWorkspaceNavigation";
 import type { AccessSubject } from "@/lib/users/policy";
@@ -95,6 +96,7 @@ function MenuHarness({ subject = admin, initial = "roster", disabled = false }: 
   return <div className="workspace-shell"><div className="page-scroll">
     <input aria-label="Unsubmitted name" defaultValue="Keep this name" />
     <WorkspaceNavigation items={getWorkspaceItems(subject)} activeId={activeId}
+      actions={<button type="button">Add guest</button>}
       brandName="Authon" accountName="Operator" accountRole="Venue admin" disabled={disabled}
       counts={{ "password-requests": 3 }} onSelect={(item, event) => {
         event.preventDefault();
@@ -106,6 +108,9 @@ function MenuHarness({ subject = admin, initial = "roster", disabled = false }: 
 test("mobile all-menu traps focus, restores its trigger, preserves input and exposes every permitted task", () => {
   viewport(false);
   render(<Providers><MenuHarness /></Providers>);
+  const action = screen.getByRole("button", { name: "Add guest" });
+  const navigation = screen.getByRole("navigation", { name: "Main navigation" });
+  assert.ok(action.compareDocumentPosition(navigation) & Node.DOCUMENT_POSITION_FOLLOWING);
   const trigger = screen.getByRole("button", { name: "All menus" });
   trigger.focus();
   fireEvent.click(trigger);
@@ -127,21 +132,21 @@ test("mobile all-menu traps focus, restores its trigger, preserves input and exp
   assert.equal((screen.getByRole("textbox") as HTMLInputElement).value, "Keep this name");
 });
 
-test("desktop groups follow selection, report pending work and recover focus when a group is hidden", () => {
+test("desktop categories remain expanded across task changes and expose pending work on its destination", () => {
   viewport(true);
   render(<Providers><MenuHarness initial="users" /></Providers>);
   const nav = screen.getByRole("navigation", { name: "Main navigation" });
-  const management = within(nav).getByRole("button", { name: "Management" });
-  assert.equal(management.getAttribute("aria-expanded"), "true");
+  assert.ok(within(nav).getByRole("heading", { name: "Management" }));
+  assert.ok(within(nav).getByRole("heading", { name: "Event preparation" }));
+  assert.equal(within(nav).queryByRole("button", { name: "Management" }), null);
   const accounts = within(nav).getByRole("link", { name: "Accounts" });
   accounts.focus();
-  const preparation = within(nav).getByRole("button", { name: "Event preparation" });
-  fireEvent.click(preparation);
-  const managementClosed = within(nav).getByRole("button", { name: /Management/ });
-  assert.equal(managementClosed.getAttribute("aria-expanded"), "false");
-  assert.ok(within(managementClosed).getByLabelText("3 pending"));
+  assert.ok(within(nav).getByRole("link", { name: "Analytics" }));
+  assert.ok(within(nav).getByLabelText("3 pending"));
   fireEvent.click(within(nav).getByRole("link", { name: "Events" }));
   assert.equal(within(nav).getByRole("link", { name: "Events" }).getAttribute("aria-current"), "page");
+  assert.equal(within(nav).getByRole("link", { name: "Accounts" }), accounts);
+  assert.ok(within(nav).getByRole("link", { name: "Analytics" }));
 });
 
 test("changing navigation viewport retains the same body input and recovers focus from an open menu", () => {
@@ -158,6 +163,37 @@ test("changing navigation viewport retains the same body input and recovers focu
   resize(false);
   assert.equal(document.activeElement, screen.getByRole("link", { name: "Door" }));
   assert.equal((input as HTMLInputElement).value, "Still typing");
+});
+
+test("mobile scope choices retain their owner state when the controls move between sheet and desktop", async () => {
+  const resize = viewport(false);
+  function ScopeHarness() {
+    const [event, setEvent] = useState("General roster");
+    return <div className="workspace-shell"><OperationsScope venueName="Test venue" date="2026-09-17" label={event}>
+      <label htmlFor="test-event">Event</label>
+      <select id="test-event" value={event} onChange={(e) => setEvent(e.target.value)}>
+        <option>General roster</option><option>Night event</option>
+      </select>
+    </OperationsScope><output>{event}</output></div>;
+  }
+  render(<Providers><ScopeHarness /></Providers>);
+  const trigger = screen.getByRole("button", { name: messages.Workspace.chooseScope });
+  assert.equal(screen.queryByRole("combobox"), null);
+  trigger.focus(); fireEvent.click(trigger);
+  const selector = screen.getByRole("combobox", { name: "Event" });
+  fireEvent.change(selector, { target: { value: "Night event" } });
+  fireEvent.click(screen.getByRole("button", { name: messages.Workspace.applyScope }));
+  await waitFor(() => assert.equal(document.activeElement === trigger, true));
+  assert.match(trigger.textContent ?? "", /Night event/);
+  fireEvent.click(trigger);
+  screen.getByRole("combobox").focus();
+  resize(true);
+  assert.equal(screen.queryByRole("dialog"), null);
+  assert.equal((screen.getByRole("combobox") as HTMLSelectElement).value, "Night event");
+  assert.equal(document.activeElement, screen.getByRole("combobox"));
+  resize(false);
+  assert.ok(screen.getByRole("dialog", { name: messages.Workspace.chooseScope }));
+  assert.equal((screen.getByRole("combobox") as HTMLSelectElement).value, "Night event");
 });
 
 test("workspace menu and navigation respect the busy lock", () => {
@@ -217,7 +253,6 @@ test("real product shell drives the existing admin hook and restores event scope
   render(<Providers><AdminShellHarness /></Providers>);
   assert.equal(screen.getByTestId("task").textContent, "event-manage");
   assert.equal(screen.getByTestId("event").textContent, "event-a");
-  fireEvent.click(screen.getByRole("button", { name: "Reports" }));
   fireEvent.click(screen.getByRole("link", { name: "Analytics" }));
   assert.equal(screen.getByTestId("task").textContent, "analytics");
   assert.equal(window.location.search, "?tab=analytics");

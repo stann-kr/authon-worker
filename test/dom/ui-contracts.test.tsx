@@ -27,6 +27,7 @@ import GuestListCard from "@/components/GuestListCard";
 import OperationalSectionNav from "@/components/OperationalSectionNav";
 import GuestBulkEntry from "@/components/GuestBulkEntry";
 import EventScopeSelector from "@/components/EventScopeSelector";
+import OperationsScope from "@/components/operations/OperationsScope";
 import {
   RouteTransitionProvider,
   useRouteTransition,
@@ -46,7 +47,7 @@ afterEach(() => {
   document.getElementById("main-content")?.removeAttribute("inert");
 });
 
-test("event selection and parent renders reuse the loaded event list", async () => {
+test("event selection, scope sheet reopening and parent renders reuse the loaded event list", async () => {
   const originalFetch = globalThis.fetch;
   let calls = 0;
   globalThis.fetch = async () => {
@@ -60,19 +61,27 @@ test("event selection and parent renders reuse the loaded event list", async () 
     const [value, setValue] = useState<string | null>(null);
     return <NextIntlClientProvider locale="en" messages={messages}>
       <EventScopeSelector venueId="venue-a" businessDate="2026-09-12" value={value}
-        onChange={(id) => setValue(id)} />
+        onChange={(id) => setValue(id)} renderScope={(control, label) =>
+          <OperationsScope date="2026-09-12" label={label}>{control}</OperationsScope>} />
       <output>{revision}</output>
     </NextIntlClientProvider>;
   }
   try {
     const view = render(<Harness revision={0} />);
+    fireEvent.click(screen.getByRole("button", { name: messages.Workspace.chooseScope }));
     const select = screen.getByRole("combobox") as HTMLSelectElement;
     await waitFor(() => assert.equal(select.disabled, false));
     fireEvent.change(select, { target: { value: "event-a" } });
+    fireEvent.click(screen.getByRole("button", { name: messages.Workspace.applyScope }));
+    assert.equal(screen.queryByRole("combobox"), null);
     view.rerender(<Harness revision={1} />);
     await act(async () => {});
-    assert.equal(select.value, "event-a");
-    assert.equal(select.disabled, false);
+    const scope = screen.getByRole("button", { name: messages.Workspace.chooseScope });
+    assert.match(scope.textContent ?? "", /Event A/);
+    fireEvent.click(scope);
+    const reopened = screen.getByRole("combobox") as HTMLSelectElement;
+    assert.equal(reopened.value, "event-a");
+    assert.equal(reopened.disabled, false);
     assert.equal(calls, 1);
   } finally {
     globalThis.fetch = originalFetch;
@@ -1270,6 +1279,68 @@ test("roster columns retain search, row identity and open details through resize
     assert.equal(screen.getByRole("button", { name: messages.Roster.twoColumns }).getAttribute("aria-pressed"), "true");
     assert.equal(input.value, "Guest");
   } finally { HTMLElement.prototype.getBoundingClientRect = originalRect; window.localStorage.removeItem("workspace:rosterColumns"); }
+});
+
+test("mobile roster expands search with two-step Escape and keeps owner filtering inside the filter sheet", async () => {
+  function Harness() {
+    const [query, setQuery] = useState("");
+    const [owner, setOwner] = useState("all");
+    return <NextIntlClientProvider locale="en" messages={messages}>
+      <div className="workspace-shell"><RosterView query={query} onQueryChange={setQuery}
+        filtersActive={owner !== "all"}
+        status="all" onStatusChange={() => {}} counts={{ all: 1, pending: 1, checked: 0 }}
+        header={<button type="button">Sort names</button>}
+        filters={<label>Owner<select value={owner} onChange={(event) => setOwner(event.target.value)}>
+          <option value="all">All owners</option><option value="dj">DJ</option>
+        </select></label>}>
+        <p>Guest One</p>
+      </RosterView></div>
+    </NextIntlClientProvider>;
+  }
+  render(<Harness />);
+  assert.equal(screen.queryByRole("searchbox"), null);
+  assert.equal(screen.queryByRole("combobox"), null);
+  const searchToggle = screen.getByRole("button", { name: messages.Common.searchGuestNames });
+  fireEvent.click(searchToggle);
+  const search = screen.getByRole("searchbox") as HTMLInputElement;
+  assert.equal(document.activeElement, search);
+  fireEvent.change(search, { target: { value: "Guest" } });
+  fireEvent.keyDown(search, { key: "Escape", isComposing: true });
+  assert.equal(search.value, "Guest");
+  fireEvent.keyDown(search, { key: "Escape" });
+  assert.equal(search.value, "");
+  assert.equal(screen.getByRole("searchbox"), search);
+  fireEvent.keyDown(search, { key: "Escape" });
+  assert.equal(screen.queryByRole("searchbox"), null);
+  assert.equal(document.activeElement, searchToggle);
+  const filters = screen.getByRole("button", { name: messages.Roster.filters });
+  filters.focus(); fireEvent.click(filters);
+  let dialog = screen.getByRole("dialog", { name: messages.Roster.filters });
+  fireEvent.change(within(dialog).getByRole("combobox"), { target: { value: "dj" } });
+  fireEvent.click(within(dialog).getByRole("button", { name: messages.Sheet.close }));
+  await waitFor(() => assert.equal(document.activeElement === filters, true));
+  assert.equal(screen.getByRole("button", { name: messages.Roster.filtersApplied }) === filters, true);
+  fireEvent.click(filters);
+  dialog = screen.getByRole("dialog", { name: messages.Roster.filters });
+  assert.equal((within(dialog).getByRole("combobox") as HTMLSelectElement).value, "dj");
+  assert.ok(within(dialog).getByRole("button", { name: "Sort names" }));
+  within(dialog).getByRole("combobox").focus();
+  const originalRect = HTMLElement.prototype.getBoundingClientRect;
+  let width = 900;
+  HTMLElement.prototype.getBoundingClientRect = function () {
+    return this.classList.contains("product-roster")
+      ? { ...originalRect.call(this), width, right: width } as DOMRect : originalRect.call(this);
+  };
+  try {
+    fireEvent(window, new Event("resize"));
+    assert.equal(screen.queryByRole("dialog"), null);
+    assert.equal((screen.getByRole("combobox") as HTMLSelectElement).value, "dj");
+    assert.equal(document.activeElement === screen.getByRole("searchbox"), true);
+    width = 500; fireEvent(window, new Event("resize"));
+    assert.equal(screen.queryByRole("dialog"), null);
+    assert.equal(document.activeElement === screen.getByRole("searchbox"), true);
+    assert.ok(screen.getByRole("button", { name: messages.Roster.filtersApplied }));
+  } finally { HTMLElement.prototype.getBoundingClientRect = originalRect; }
 });
 
 test("closed entry scope locks row, detail, and an already-open undo confirmation", () => {

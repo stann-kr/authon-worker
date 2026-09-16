@@ -10,6 +10,8 @@ import TransitionLink from "@/components/TransitionLink";
 import LogoutControl from "@/components/LogoutControl";
 import RoleLabel from "@/components/RoleLabel";
 import Footer from "@/components/Footer";
+import Icon from "@/components/Icon";
+import Sheet from "@/components/overlays/Sheet";
 import WorkspaceNavigation from "./workspace/WorkspaceNavigation";
 import { getWorkspaceActiveId, getWorkspaceItems, type WorkspaceItem } from "./workspace/navigation";
 import type { AdminTask } from "@/lib/admin-navigation";
@@ -51,6 +53,7 @@ export default function WorkspaceShell({
   const { brand } = useVenueBrand();
   const { isRouteTransitionActive } = useRouteTransition();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [accountOpen, setAccountOpen] = useState(false);
   useEffect(() => {
     try { setSidebarCollapsed(window.localStorage.getItem("workspace:sidebarCollapsed") === "true"); } catch { /* Optional preference. */ }
   }, []);
@@ -93,16 +96,15 @@ export default function WorkspaceShell({
     <div ref={shellRef} data-sidebar-collapsed={sidebarCollapsed} className={`page-shell workspace-shell${user ? " workspace-shell--authenticated" : ""}`}>
       <header ref={headerRef} className="workspace-header">
         <div className="workspace-heading">
-          <TransitionLink href="/" className="workspace-mobile-brand">{brand.name}</TransitionLink>
           <p className="workspace-title">{title ?? (activeItem ? t(activeItem.label) : brand.name)}</p>
         </div>
         {actions && <div className="workspace-header-actions" role="group" aria-label={t("actions")}>{actions}</div>}
         <div className="workspace-header-account">
-          {user && <TransitionLink href="/profile" className="workspace-profile-link"
-            aria-label={t("profile")} aria-current={pathname === "/profile" ? "page" : undefined}>
-            <span aria-hidden="true">{user.name.charAt(0)}</span>
-          </TransitionLink>}
-          <LogoutControl />
+          {user && <button type="button" className="workspace-profile-link"
+            aria-label={t("profile")} aria-haspopup="dialog" aria-expanded={accountOpen} onClick={() => setAccountOpen(true)}>
+            <Icon name="user" size={21} />
+          </button>}
+          <div className="workspace-desktop-logout"><LogoutControl /></div>
         </div>
       </header>
       <div className={`page-scroll ${bottomInsetClassName}`}>
@@ -121,6 +123,11 @@ export default function WorkspaceShell({
           counts={{ "password-requests": adminNavigation?.pendingPasswordResetCount ?? 0 }}
           actions={actions} onSelect={selectItem} />}
       </div>
+      {user && <Sheet open={accountOpen} title={user.name} onClose={() => setAccountOpen(false)}>
+        <p className="text-sm text-text-muted"><RoleLabel role={user.account_kind === "shared" ? "shared" : user.role} /></p>
+        <TransitionLink href="/profile" className="app-button rounded-control bg-surface-raised px-4 py-3 text-center text-sm" onClick={() => setAccountOpen(false)}>{t("profile")}</TransitionLink>
+        <LogoutControl expanded />
+      </Sheet>}
     </div>
   );
 }

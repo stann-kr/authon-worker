@@ -1,5 +1,7 @@
 "use client";
 
+import WorkspaceAction from "@/components/workspace/WorkspaceAction";
+
 import {
   useCallback,
   useEffect,
@@ -7,6 +9,7 @@ import {
   useMemo,
   useRef,
   useState,
+  type ReactNode,
 } from "react";
 import dynamic from "next/dynamic";
 import GuestList from "./components/GuestList";
@@ -15,6 +18,7 @@ import type { UserManagementSection } from "./components/UserManagement";
 import type { VenueManagementSection } from "./components/VenueManagement";
 import Skeleton from "@/components/Skeleton";
 import EventScopeSelector from "@/components/EventScopeSelector";
+import OperationsScope from "@/components/operations/OperationsScope";
 import type { AdminTaskOption } from "./components/AdminTaskSwitcher";
 import AuthGuard from "../../components/AuthGuard";
 import WorkspaceShell from "../../components/WorkspaceShell";
@@ -185,17 +189,19 @@ function AdminPageContent() {
     ? taskOptions.filter((option) => option.group === activeGroup && option.id !== "password-requests")
     : [];
 
-  const eventScopeSelector = <EventScopeSelector venueId={venueId} businessDate={selectedDate}
-    value={selectedEventId} onChange={setSelectedEventId} reloadKey={eventRefreshKey} />;
+  const eventScopeSelector = (controls: ReactNode, disabled = false) => <EventScopeSelector venueId={venueId} businessDate={selectedDate}
+    value={selectedEventId} onChange={setSelectedEventId} reloadKey={eventRefreshKey} disabled={disabled}
+    renderScope={(selector, label) => <OperationsScope venueName={currentVenue?.brandName || currentVenue?.name}
+      date={selectedDate} label={label} disabled={disabled}>{controls}{selector}</OperationsScope>} />;
 
   return (
     <WorkspaceShell contentClassName="gap-4 pb-8" title={activeTaskLabel}
       adminNavigation={{ activeTask, onTaskChange: changeTask,
         disabled: !isRoleReady, pendingPasswordResetCount }}
       actions={contextTasks.length > 0 && activeTask !== "password-requests" ? contextTasks.map((task) => (
-        <button key={task.id} type="button" className="workspace-action"
+        <WorkspaceAction key={task.id} icon={task.id.endsWith("create") ? "add" : "view"} tone={task.id.endsWith("create") ? "blue" : "muted"}
           aria-pressed={activeTask === task.id} disabled={!isRoleReady || isRouteTransitionActive}
-          onClick={() => changeTask(task.id)}>{task.label}</button>
+          onClick={() => changeTask(task.id)}>{task.label}</WorkspaceAction>
       )) : undefined}>
       <h1 id="admin-page-title" className="sr-only">
         {t("title")}
@@ -227,7 +233,7 @@ function AdminPageContent() {
         </h2>
         {!isRoleReady && <AdminTaskLoading />}
         {isRoleReady && <>
-        {activeTask === "guest-requests" && <div className="operations-scope mb-4">{eventScopeSelector}</div>}
+        {activeTask === "guest-requests" && <div className="mb-4">{eventScopeSelector(null)}</div>}
         {activeTask === "guest-list" && (
           <GuestList scopeSelector={eventScopeSelector}
             selectedDate={selectedDate}

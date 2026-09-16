@@ -1,5 +1,7 @@
 {
   "Workspace": {
+    "chooseScope": "Choose venue and event",
+    "applyScope": "Done",
     "home": "Home",
     "roster": "Roster",
     "myRoster": "My guests",
@@ -1148,6 +1150,8 @@
     "discard": "Discard and close"
   },
   "Roster": {
+    "filters": "Filters and sorting",
+    "filtersApplied": "Filters and sorting, changes applied",
     "guestName": "Guest",
     "rowActions": "Actions",
     "search": "Search name, owner or operator",

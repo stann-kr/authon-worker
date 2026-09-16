@@ -1,5 +1,8 @@
 "use client";
 
+import WorkspaceAction from "@/components/workspace/WorkspaceAction";
+import OperationsScope from "@/components/operations/OperationsScope";
+
 import Sheet from "@/components/overlays/Sheet";
 import RosterView, { type RosterStatus } from "@/components/guests/RosterView";
 
@@ -265,9 +268,9 @@ function DoorPageContent() {
       contentClassName="gap-4 md:pb-8 lg:gap-6"
       footerLayer="below-mobile-dock"
       actions={<>
-        {offlineScope && <button type="button" className="workspace-action" onClick={() => setTool("code")}>{t("guestCodeLookup")}</button>}
+        {offlineScope && <WorkspaceAction icon="search" onClick={() => setTool("code")}>{t("guestCodeLookup")}</WorkspaceAction>}
         {attendanceActions}
-        {offlineScope && <button type="button" className="workspace-action" onClick={() => setTool("offline")}>{t("offlineOperations")} {offlineQueueCounts.queued > 0 ? offlineQueueCounts.queued : ""}</button>}
+        {offlineScope && <WorkspaceAction icon="refresh" tone="muted" onClick={() => setTool("offline")}>{t("offlineOperations")} {offlineQueueCounts.queued > 0 ? offlineQueueCounts.queued : ""}</WorkspaceAction>}
       </>}
     >
       {venueLoadError && (
@@ -282,28 +285,13 @@ function DoorPageContent() {
         dashboard={
           <>
 
-            <div className="operations-scope">
-                  <DatePicker compact
-                    value={selectedDate}
-                    onChange={setSelectedDate}
-                    businessDate={businessDate}
-                  />
-                  <div className="operations-scope-selectors">
-                    {isSuperAdmin && (
-                      <VenueSelector
-                        venues={venues}
-                        selectedVenueId={selectedVenueId}
-                        onVenueChange={setSelectedVenueId}
-                      />
-                    )}
-                    <EventScopeSelector
-                      venueId={venueId}
-                      businessDate={selectedDate}
-                      value={selectedEventId}
-                      onChange={setSelectedEventId}
-                    />
-                  </div>
-                </div>
+            <EventScopeSelector venueId={venueId} businessDate={selectedDate}
+              value={selectedEventId} onChange={setSelectedEventId}
+              renderScope={(selector, label) => <OperationsScope venueName={currentVenue?.brandName || currentVenue?.name} date={selectedDate} label={label}>
+                <DatePicker compact value={selectedDate} onChange={setSelectedDate} businessDate={businessDate} />
+                {isSuperAdmin && <VenueSelector venues={venues} selectedVenueId={selectedVenueId} onVenueChange={setSelectedVenueId} />}
+                {selector}
+              </OperationsScope>} />
 
                 {feedback && <Alert type="error" message={feedback} />}
 
@@ -319,10 +307,10 @@ function DoorPageContent() {
       >
             <section
               className="min-w-0"
-              aria-labelledby="door-guest-list-title"
+              aria-label={t("guestList")}
               aria-busy={isCurrentScopeFetching}
             >
-              <RosterView variant="operations" filters={
+              <RosterView variant="operations" filtersActive={selectedDJ !== "all" || sortMode !== "default" || !prioritizeWaiting} filters={
                     <div className="min-w-0">
                       <label htmlFor="door-user-filter" className="sr-only">
                         {t("guestOwner")}

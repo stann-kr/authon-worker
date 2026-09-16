@@ -35,17 +35,11 @@ export default function WorkspaceNavigation({
   const navigationId = useId();
   const [desktop, setDesktop] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
-  const [groupChoice, setGroupChoice] = useState<{ context: string; group: string | null } | null>(null);
   const navRef = useRef<HTMLElement>(null);
   const dockRef = useRef<HTMLDivElement>(null);
   const restoreFocusRef = useRef(false);
-  const activeGroup = items.find((item) => item.id === activeId)?.group;
   const groups = workspaceGroups.map((id) => ({ id, items: items.filter((item) => item.group === id) }))
     .filter((group) => group.items.length > 0);
-  const context = `${activeId}:${items.map((item) => item.id).join(",")}`;
-  const openGroup = groupChoice?.context === context ? groupChoice.group : activeGroup ?? groups[0]?.id;
-
-  useEffect(() => { setGroupChoice(null); }, [context]);
 
   useEffect(() => {
     const media = window.matchMedia("(min-width: 1000px)");
@@ -113,22 +107,11 @@ export default function WorkspaceNavigation({
         aria-label={t("pendingCount", { count })}>{count}</span>}
     </TransitionLink>;
   };
-  const groupedLinks = (collapsible: boolean) => groups.map((group) => {
-    const open = !collapsible || collapsed || groups.length === 1 || openGroup === group.id;
+  const groupedLinks = (surface: string) => groups.map((group) => {
     const panelId = `${navigationId}-${group.id}`;
-    const count = group.items.reduce((sum, item) => sum + (counts[item.id] ?? 0), 0);
     return <section className="workspace-nav-group" key={group.id} aria-labelledby={`${panelId}-title`}>
-      <h2 id={`${panelId}-title`}>
-        {collapsible && !collapsed && groups.length > 1 ? <button type="button"
-          aria-label={t(`groups.${group.id}`)}
-          aria-describedby={!open && count > 0 ? `${panelId}-count` : undefined}
-          aria-expanded={open} aria-controls={panelId}
-          onClick={() => setGroupChoice({ context, group: open ? null : group.id })}>
-          <span aria-hidden="true">{open ? "⌄" : "›"}</span>{t(`groups.${group.id}`)}
-          {!open && count > 0 && <span id={`${panelId}-count`} className="workspace-nav-count" aria-label={t("pendingCount", { count })}>{count}</span>}
-        </button> : t(`groups.${group.id}`)}
-      </h2>
-      <div id={panelId} className="workspace-group-links" hidden={!open}>{group.items.map((item) => link(item, false, collapsible ? "nav" : "menu"))}</div>
+      <h2 id={`${panelId}-title`}>{t(`groups.${group.id}`)}</h2>
+      <div id={panelId} className="workspace-group-links">{group.items.map((item) => link(item, false, surface))}</div>
     </section>;
   });
   const home = items.find((item) => item.id === "home");
@@ -146,13 +129,14 @@ export default function WorkspaceNavigation({
       </button>}
     </div>
     <nav ref={navRef} aria-label={t("navigation")}>
-      {home && link(home)}{groupedLinks(true)}
+      {home && link(home)}{groupedLinks("nav")}
       {profile && link(profile, true)}
     </nav>
   </aside>;
 
   return <>
     <div className="workspace-dock" ref={dockRef}>
+      {actions && <div className="workspace-context-actions" role="group" aria-label={t("actions")}>{actions}</div>}
       <nav ref={navRef} className="workspace-primary-nav" aria-label={t("navigation")}>
         <div className="workspace-primary-scroll">{getWorkspacePrimaryItems(items, activeId).map((item) => link(item))}</div>
         <button type="button" className="workspace-nav-link workspace-more" aria-haspopup="dialog"
@@ -160,10 +144,9 @@ export default function WorkspaceNavigation({
           aria-controls={menuOpen ? "workspace-all-menu" : undefined}
           disabled={disabled} onClick={() => setMenuOpen(true)}>{t("more")}</button>
       </nav>
-      {actions && <div className="workspace-context-actions" role="group" aria-label={t("actions")}>{actions}</div>}
     </div>
     {menuOpen && <WorkspaceMenu title={t("allMenu")} closeLabel={t("close")} onClose={() => setMenuOpen(false)}>
-      <nav aria-label={t("allMenu")}>{home && link(home, false, "menu")}{groupedLinks(false)}{profile && link(profile, false, "menu")}</nav>
+      <nav aria-label={t("allMenu")}>{home && link(home, false, "menu")}{groupedLinks("menu")}{profile && link(profile, false, "menu")}</nav>
     </WorkspaceMenu>}
   </>;
 }

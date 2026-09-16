@@ -1,14 +1,31 @@
-.product-roster { container: roster / inline-size; --guest-actions-width: 88px; --guest-owner-width: 176px; --guest-status-width: 96px; }
+.product-roster { container: roster / inline-size; display: flex; flex-direction: column; min-width: 0; min-height: 0; overflow: visible; --guest-actions-width: 88px; --guest-owner-width: 176px; --guest-status-width: 96px; }
+.product-roster-quota { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 16px; padding-block: 8px; border-bottom: 1px solid var(--app-border-subtle); }
+.product-roster-quota > div { display: flex; align-items: baseline; gap: 5px; min-width: 0; }
+.product-roster-quota dt { color: var(--app-text-muted); font-size: 12px; line-height: 1.5; }
+.product-roster-quota dd { font-size: 16px; line-height: 1.5; font-weight: 500; font-variant-numeric: tabular-nums; }
+.product-roster-controls { position: sticky; top: var(--app-header-height); z-index: 2; display: grid; gap: 8px; padding-block: 8px; border-bottom: 1px solid var(--app-border-subtle); background: var(--app-canvas); }
+.product-roster-controls[data-wide="true"] { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "tools tools" "summary options"; }
+.product-roster-controls[data-wide="true"] .product-roster-tools { grid-area: tools; }
+.product-roster-controls[data-wide="true"] .product-roster-summary { grid-area: summary; }
+.product-roster-desktop-options { grid-area: options; display: flex; align-items: center; flex-wrap: wrap; justify-content: end; gap: 12px; }
 .product-roster:has(.product-guest-row[data-can-delete="true"]) { --guest-actions-width: 132px; }
-.product-roster-tools { display: flex; flex-wrap: wrap; align-items: end; gap: 12px; padding: 0 0 12px; }
+.product-roster-tools { display: flex; flex-wrap: wrap; align-items: end; gap: 12px; }
+.product-roster-tools[hidden] { display: none; }
 .product-roster-tools > div:first-child { flex: 1 1 240px; min-width: 0; padding: 0; border: 0; background: transparent; }
 .product-roster-owner-filter { flex: 0 1 240px; min-width: min(100%, 200px); }
-.product-roster-summary { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; padding-bottom: 12px; }
+.product-roster-summary { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .product-roster-filters, .product-roster-columns { display: flex; gap: 3px; align-items: center; }
-.product-roster-filters button, .product-roster-columns button { border: 1px solid transparent; border-radius: 6px; padding: 7px 10px; min-height: 44px; font-size: 12px; white-space: nowrap; color: var(--app-text-muted); }
-.product-roster-filters button[aria-pressed="true"], .product-roster-columns button[aria-pressed="true"] { color: var(--app-text); background: var(--app-surface-raised); border-color: var(--app-border); }
+.product-roster-filters button, .product-roster-columns button { border: 0; border-radius: 10px; padding: 7px 10px; min-height: 44px; font-size: 12px; white-space: nowrap; color: var(--app-text-muted); }
+.product-roster-filters button[aria-pressed="true"], .product-roster-columns button[aria-pressed="true"] { color: var(--app-text); background: var(--app-surface-active); }
 .product-roster-filters span { margin-left: 6px; font-variant-numeric: tabular-nums; }
 .product-roster-columns { display: none; }
+.product-roster-icon-actions { display: flex; flex-shrink: 0; gap: 8px; }
+.product-roster-icon { display: grid; place-items: center; width: 44px; min-height: 44px; border: 1px solid var(--app-border-subtle); border-radius: 50%; background: var(--app-surface-raised); color: var(--app-text-muted); }
+.product-roster-icon[aria-expanded="true"], .product-roster-icon[data-active="true"] { color: var(--app-action); border-color: var(--app-action); }
+.product-roster-filter-panel { display: grid; gap: 16px; }
+.product-roster-filter-actions .collection-heading { border: 0; padding: 0; }
+.product-roster-filter-actions .collection-heading > :is(h1, h2, h3) { display: none; }
+.product-roster-filter-actions .collection-heading > div { justify-content: flex-start; }
 .product-roster-extra { margin-left: auto; }
 .product-roster-extra .collection-heading { display: contents; }
 .product-roster-extra .collection-heading > :is(h1, h2, h3) { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
@@ -49,17 +66,21 @@
   .product-guest-row[data-mode="operations"] .product-guest-line { grid-template-columns: minmax(0, 1fr) var(--guest-actions-width); }
   .product-guest-owner, .product-guest-status { display: none; }
   .product-guest-row[data-mode="operations"] .product-guest-name small { display: block; }
-  .product-roster-extra { width: 100%; }
-  .product-roster-extra .collection-heading > div { justify-content: flex-start; }
 }
-@container roster (max-width: 359px) {
-  .product-roster-filters { width: 100%; justify-content: space-between; }
-  .product-roster-owner-filter { flex-basis: 100%; }
-  .product-guest-row { padding-inline: 4px; }
+@container roster (max-width: 699px) {
+  .product-roster-filters { flex: 1; min-width: 0; gap: 2px; }
+  .product-roster-filters button { flex: 1; min-width: 0; padding: 6px 4px; white-space: normal; overflow-wrap: anywhere; }
+  .product-roster-filters span { margin-left: 4px; font-size: 11px; opacity: 0.7; }
+  .product-guest-row { padding: 12px 0; }
+  .product-guest-line { min-height: 44px; gap: 12px; }
+  .product-guest-index { display: none; }
+  .product-guest-name strong { font-size: 15px; }
+  .product-guest-name small { font-size: 13px; }
+  .product-guest-actions .app-button { min-width: 64px; border-radius: 99px; font-weight: 500; padding: 8px 10px; }
+  .product-guest-actions .app-button[data-variant="confirm"] { background: var(--app-surface-raised); border-color: transparent; color: var(--app-text); }
+  .product-guest-row[data-status="checked"] .app-button[data-variant="outline"] { background: rgb(59 130 246 / 0.1); border-color: transparent; color: #75aaff; }
 }
 @media (hover: hover) and (pointer: fine) {
   .product-guest-actions .app-button[data-variant="ghost"] { min-width: 40px; }
   .product-guest-row:hover { background: var(--app-surface-hover); }
-  .product-roster-filters button, .product-roster-columns button { min-height: 36px; }
-  .product-roster-extra button { min-height: 36px; }
 }

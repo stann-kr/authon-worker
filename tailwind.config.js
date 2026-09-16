@@ -22,8 +22,8 @@ module.exports = {
           focus: "#3b82f6",
         },
         action: {
-          primary: "#60a5fa",
-          hover: "#93c5fd",
+          primary: "#3b82f6",
+          hover: "#60a5fa",
           text: "#071a31",
         },
         status: {
@@ -34,13 +34,13 @@ module.exports = {
         text: {
           muted: "var(--app-text-muted)",
           dim: "#99999f",
-          body: "#dedede",
+          body: "var(--app-text-body)",
           heading: "var(--app-text)",
         }
       },
       borderRadius: {
-        control: "8px",
-        panel: "10px",
+        control: "10px",
+        panel: "12px",
       },
       boxShadow: {
         panel: "none",
