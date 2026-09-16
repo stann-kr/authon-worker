@@ -2,6 +2,7 @@
 
 import { useEffect, useId, useRef, type ReactNode } from "react";
 import { createPortal } from "react-dom";
+import { lockModalBackground } from "../overlays/modal-lock";
 
 export default function WorkspaceMenu({ title, closeLabel, onClose, children }: {
   title: string;
@@ -17,11 +18,8 @@ export default function WorkspaceMenu({ title, closeLabel, onClose, children }: 
 
   useEffect(() => {
     const previousFocus = document.activeElement as HTMLElement | null;
-    const shell = document.querySelector(".workspace-shell");
-    const wasInert = shell?.hasAttribute("inert");
-    const overflow = document.body.style.overflow;
-    shell?.setAttribute("inert", "");
-    document.body.style.overflow = "hidden";
+    const shell = document.querySelector<HTMLElement>(".workspace-shell");
+    const unlock = lockModalBackground(shell);
     closeRef.current?.focus();
     const keydown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
@@ -49,8 +47,7 @@ export default function WorkspaceMenu({ title, closeLabel, onClose, children }: 
     document.addEventListener("keydown", keydown, true);
     return () => {
       document.removeEventListener("keydown", keydown, true);
-      document.body.style.overflow = overflow;
-      if (!wasInert) shell?.removeAttribute("inert");
+      unlock();
       if (previousFocus?.isConnected && !previousFocus.closest("[inert]")) {
         previousFocus.focus({ preventScroll: true });
       } else {

@@ -5,6 +5,8 @@ import { createPortal } from "react-dom";
 import { useTranslations } from "next-intl";
 import Button from "../Button";
 import Icon from "../Icon";
+import { lockModalBackground } from "./modal-lock";
+import { useIsRouteTransitionActive } from "../RouteTransitionProvider";
 
 interface SheetProps {
   open?: boolean;
@@ -22,32 +24,32 @@ type Control = HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement;
 const controlValue = (field: Control) =>
   field instanceof window.HTMLInputElement && ["checkbox", "radio"].includes(field.type)
     ? String(field.checked) : field.value;
+const controlDefaultValue = (field: Control) => {
+  if (field instanceof window.HTMLSelectElement)
+    return field.querySelector<HTMLOptionElement>("option[selected]")?.value ?? field.options[0]?.value ?? "";
+  if (field instanceof window.HTMLInputElement && ["checkbox", "radio"].includes(field.type))
+    return String(field.defaultChecked);
+  return field.defaultValue;
+};
+const draftControls = "input:not([data-preserve-on-close]), select:not([data-preserve-on-close]), textarea:not([data-preserve-on-close])";
 
-const modalLocks = new Map<HTMLElement, { count: number; wasInert: boolean }>();
-let scrollLocks = 0;
-let unlockedOverflow = "";
-function lockBackground(shell: HTMLElement | null) {
-  if (scrollLocks++ === 0) { unlockedOverflow = document.body.style.overflow; document.body.style.overflow = "hidden"; }
-  if (shell) {
-    const lock = modalLocks.get(shell) ?? { count: 0, wasInert: shell.hasAttribute("inert") };
-    lock.count++;
-    modalLocks.set(shell, lock);
-    shell.setAttribute("inert", "");
+function canRestoreFocus(target: HTMLElement | null): target is HTMLElement {
+  if (!target?.isConnected || target === document.body || target.closest("[hidden], [inert]") || target.matches(":disabled")) return false;
+  for (let element: HTMLElement | null = target; element; element = element.parentElement) {
+    const style = getComputedStyle(element);
+    if (style.display === "none" || style.visibility === "hidden") return false;
   }
-  return () => {
-    if (--scrollLocks === 0) document.body.style.overflow = unlockedOverflow;
-    const lock = shell && modalLocks.get(shell);
-    if (shell && lock && --lock.count === 0) {
-      if (!lock.wasInert) shell.removeAttribute("inert");
-      modalLocks.delete(shell);
-    }
-  };
+  return true;
 }
+
+const inlinePanels = new Set<HTMLElement>();
 
 // The same panel and form stay mounted when the available workspace changes.
 export default function Sheet({ open = true, title, children, onClose, presentation = "modal",
   wide = false, busy = false, dirty = false, protectEdits = false }: SheetProps) {
   const t = useTranslations("Sheet");
+  const transitioning = useIsRouteTransitionActive();
+  const layerRef = useRef<HTMLDivElement>(null);
   const titleId = useId();
   const panelRef = useRef<HTMLDivElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
@@ -68,8 +70,8 @@ export default function Sheet({ open = true, title, children, onClose, presentat
     const state = latest.current;
     if (state.busy) return;
     if (state.discard) { keepEditing(); return; }
-    const hasChangedFields = protectEdits && [...(panelRef.current?.querySelectorAll<Control>("input, select, textarea") ?? [])]
-      .some((field) => controlValue(field) !== (baseline.current.get(field) ?? ""));
+    const hasChangedFields = protectEdits && [...(panelRef.current?.querySelectorAll<Control>(draftControls) ?? [])]
+      .some((field) => controlValue(field) !== (baseline.current.get(field) ?? controlDefaultValue(field)));
     if (state.dirty || hasChangedFields) {
       editFocus.current = document.activeElement as HTMLElement;
       setDiscard(true);
@@ -83,7 +85,7 @@ export default function Sheet({ open = true, title, children, onClose, presentat
     const panel = panelRef.current;
     const opener = document.activeElement as HTMLElement | null;
     baseline.current.clear();
-    panel?.querySelectorAll<Control>("input, select, textarea").forEach((field) => baseline.current.set(field, controlValue(field)));
+    panel?.querySelectorAll<Control>(draftControls).forEach((field) => baseline.current.set(field, controlValue(field)));
     closeRef.current?.focus({ preventScroll: true });
     return () => {
       const active = document.activeElement;
@@ -91,8 +93,9 @@ export default function Sheet({ open = true, title, children, onClose, presentat
       queueMicrotask(() => {
         // Wait for this layer's inert/scroll cleanup before restoring focus.
         if (document.activeElement !== document.body && document.activeElement?.isConnected) return;
-        const target = opener?.isConnected && !opener.closest("[inert]") && !opener.matches(":disabled")
-          ? opener : document.getElementById("main-content");
+        const remainingSheet = [...document.querySelectorAll<HTMLElement>(".product-sheet")].at(-1);
+        const target = canRestoreFocus(opener) ? opener
+          : remainingSheet?.querySelector<HTMLElement>("button:not(:disabled)") ?? document.getElementById("main-content");
         target?.focus({ preventScroll: true });
       });
     };
@@ -112,14 +115,25 @@ export default function Sheet({ open = true, title, children, onClose, presentat
     if (!open) return;
     const main = document.querySelector<HTMLElement>(".workspace-shell #main-content");
     const header = document.querySelector<HTMLElement>(".workspace-header");
+    const panel = panelRef.current;
     const measure = () => {
+      const viewport = window.visualViewport;
+      const visibleHeight = viewport?.height ?? window.innerHeight;
+      const top = viewport?.offsetTop ?? 0;
+      layerRef.current?.style.setProperty("--sheet-viewport-top", `${top}px`);
+      layerRef.current?.style.setProperty("--sheet-viewport-bottom", `${Math.max(0, window.innerHeight - top - visibleHeight)}px`);
+      layerRef.current?.style.setProperty("--sheet-max-height", `${Math.max(120, visibleHeight - 32)}px`);
       const width = main?.getBoundingClientRect().width ?? 0;
-      const canShowInline = presentation === "detail" && !dirty && !edited && width >= 980 && window.innerHeight >= 480;
+      const canShowInline = presentation === "detail" && !dirty && !edited && width >= 980 && visibleHeight >= 480;
       setInline(canShowInline);
-      main?.classList.toggle("workspace-has-detail", canShowInline);
+      if (panel) {
+        if (canShowInline) inlinePanels.add(panel);
+        else inlinePanels.delete(panel);
+      }
+      main?.classList.toggle("workspace-has-detail", inlinePanels.size > 0);
       if (panelRef.current && main) {
         panelRef.current.style.setProperty("--sheet-right", `${Math.max(16, window.innerWidth - main.getBoundingClientRect().right + 24)}px`);
-        panelRef.current.style.setProperty("--sheet-top", `${Math.max(16, header?.getBoundingClientRect().bottom ?? 72) + 16}px`);
+        panelRef.current.style.setProperty("--sheet-top", `${Math.max(0, (header?.getBoundingClientRect().bottom ?? 72) - top) + 16}px`);
       }
     };
     measure();
@@ -127,23 +141,35 @@ export default function Sheet({ open = true, title, children, onClose, presentat
     if (main) observer?.observe(main);
     if (header) observer?.observe(header);
     window.addEventListener("resize", measure);
-    return () => { observer?.disconnect(); window.removeEventListener("resize", measure); main?.classList.remove("workspace-has-detail"); };
+    window.visualViewport?.addEventListener("resize", measure);
+    window.visualViewport?.addEventListener("scroll", measure);
+    return () => {
+      observer?.disconnect(); window.removeEventListener("resize", measure);
+      window.visualViewport?.removeEventListener("resize", measure);
+      window.visualViewport?.removeEventListener("scroll", measure);
+      if (panel) inlinePanels.delete(panel);
+      main?.classList.toggle("workspace-has-detail", inlinePanels.size > 0);
+    };
   }, [open, presentation, dirty, edited]);
 
   useLayoutEffect(() => {
     if (!open) return;
     const shell = document.querySelector<HTMLElement>(".workspace-shell") ?? document.getElementById("main-content");
-    const unlock = !inline ? lockBackground(shell) : undefined;
+    const unlock = !inline ? lockModalBackground(shell) : undefined;
     const keydown = (event: KeyboardEvent) => {
       // A confirmation opened from this sheet owns its own keyboard scope.
-      if (event.defaultPrevented || document.querySelector(".app-dialog-backdrop")) return;
+      if (transitioning || event.defaultPrevented || document.querySelector(".app-dialog-backdrop")) return;
       const panel = panelRef.current;
       if (![...document.querySelectorAll(".product-sheet-layer")].at(-1)?.contains(panel)) return;
       if (!panel || (inline && !panel.contains(document.activeElement))) return;
       if (event.key === "Escape") { event.preventDefault(); requestCloseRef.current(); }
       if (event.key !== "Tab" || inline) return;
-      const controls = [...panel.querySelectorAll<HTMLElement>('button:not(:disabled), a[href], input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex="0"]')]
-        .filter((element) => !element.closest("[hidden], [inert]"));
+      const controls = [...panel.querySelectorAll<HTMLElement>('button:not(:disabled), a[href], input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex="0"], summary:not([aria-disabled="true"])')]
+         .filter((element) => {
+          const collapsed = element.closest("details:not([open])");
+          return !element.closest("[hidden], [inert]") && element.getAttribute("type") !== "hidden" &&
+            (!collapsed || collapsed.querySelector("summary") === element);
+        });
       const first = controls[0] ?? panel;
       const last = controls.at(-1) ?? panel;
       if (!panel.contains(document.activeElement) || (!event.shiftKey && document.activeElement === last)) {
@@ -157,17 +183,25 @@ export default function Sheet({ open = true, title, children, onClose, presentat
       document.removeEventListener("keydown", keydown);
       unlock?.();
     };
-  }, [open, inline]);
+  }, [open, inline, transitioning]);
 
   if (!open || typeof document === "undefined") return null;
   return createPortal(
-    <div className="product-sheet-layer" data-inline={inline} onClick={(event) => { if (event.target === event.currentTarget) requestClose(); }}>
+    <div ref={layerRef} className="product-sheet-layer" data-inline={inline} data-transitioning={transitioning} inert={transitioning || undefined} aria-hidden={transitioning || undefined} onClick={(event) => { if (event.target === event.currentTarget) requestClose(); }}>
       <div ref={panelRef} className="product-sheet" data-wide={wide} role="dialog" aria-modal={!inline}
         aria-labelledby={titleId} aria-busy={busy} tabIndex={-1}
+        onFocusCapture={() => {
+          panelRef.current?.querySelectorAll<Control>(draftControls).forEach((field) => {
+            if (!baseline.current.has(field)) baseline.current.set(field, controlValue(field));
+          });
+        }}
         onChangeCapture={() => {
           if (!protectEdits) return;
-          setEdited([...panelRef.current!.querySelectorAll<Control>("input, select, textarea")].some((field) =>
-            controlValue(field) !== (baseline.current.get(field) ?? "")));
+          const fields = [...panelRef.current!.querySelectorAll<Control>(draftControls)];
+          fields.forEach((field) => {
+            if (!baseline.current.has(field)) baseline.current.set(field, controlDefaultValue(field));
+          });
+          setEdited(fields.some((field) => controlValue(field) !== baseline.current.get(field)));
         }}>
         <header className="product-sheet-header">
           <h2 id={titleId}>{title}</h2>

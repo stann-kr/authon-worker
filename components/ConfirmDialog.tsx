@@ -10,6 +10,7 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import Button from "./Button";
+import { lockModalBackground } from "./overlays/modal-lock";
 
 interface ConfirmDialogProps {
   open: boolean;
@@ -108,14 +109,9 @@ export default function ConfirmDialog({
     if (!open) return;
 
     previousFocusRef.current = document.activeElement as HTMLElement | null;
-    const previousOverflow = document.body.style.overflow;
     const mainContent = document.getElementById("main-content");
     const dialogElement = dialogRef.current;
-    const mainContentWasInert = mainContent?.hasAttribute("inert") ?? false;
-    document.body.style.overflow = "hidden";
-    if (mainContent && !mainContentWasInert) {
-      mainContent.setAttribute("inert", "");
-    }
+    const unlock = lockModalBackground(mainContent);
     cancelRef.current?.focus();
 
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -155,10 +151,7 @@ export default function ConfirmDialog({
     document.addEventListener("keydown", handleKeyDown);
     return () => {
       document.removeEventListener("keydown", handleKeyDown);
-      document.body.style.overflow = previousOverflow;
-      if (mainContent && !mainContentWasInert) {
-        mainContent.removeAttribute("inert");
-      }
+      unlock();
       const activeElement = document.activeElement as HTMLElement | null;
       const focusWasLostWithDialog =
         !activeElement ||

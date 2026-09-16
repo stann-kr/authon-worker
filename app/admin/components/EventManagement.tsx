@@ -216,7 +216,7 @@ export default function EventManagement({
                       : event.state === "closed"
                         ? ["archived"]
                         : [];
-    return <div tabIndex={-1} ref={(element) => { if (element) eventCardRefs.current.set(event.id, element); }} className="space-y-4">
+    return <div tabIndex={-1} ref={(element) => { if (element) eventCardRefs.current.set(event.id, element); else eventCardRefs.current.delete(event.id); }} className="space-y-4">
       {feedback && <Alert type={feedback.type} message={feedback.message} />}
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
@@ -367,8 +367,6 @@ export default function EventManagement({
 
       {feedback && <Alert type={feedback.type} message={feedback.message} />}
 
-
-
       <section className="app-panel" aria-labelledby="event-list-title">
         <PanelHeader
           title={t("listTitle")}
@@ -392,7 +390,7 @@ export default function EventManagement({
             <div className="record-list">
               {explicitEvents.map((event) => <article key={event.id} className="record-row">
                 <div className="record-summary">
-                  <button type="button" className="record-open" onClick={() => setDetailId(event.id)} aria-haspopup="dialog" aria-expanded={detailId === event.id}>
+                  <button type="button" className="record-open" onClick={() => setDetailId(event.id)} disabled={Boolean(busyId)} aria-haspopup="dialog" aria-expanded={detailId === event.id}>
                     <span className="record-identity"><strong>{event.name}</strong><small>{event.businessDate}{selectedEventId === event.id ? ` · ${t("selected")}` : ""}</small></span>
                     <span className="record-value">{t("capacity")} {event.capacity ?? "—"}</span>
                     <span className="record-status">{t(`state.${event.state}`)}</span>

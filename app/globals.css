@@ -239,7 +239,7 @@ input[type="date"] {
   }
 
   .type-row-title {
-    @apply text-sm font-semibold leading-tight text-text-heading ;
+    @apply text-sm font-semibold leading-tight text-text-heading;
   }
 
   .type-body {
@@ -417,12 +417,6 @@ input[type="date"] {
   }
 }
 
-@media (hover: hover) and (pointer: fine) {
-  .home-workspace-card:hover {
-    transform: translateY(-0.125rem);
-  }
-}
-
 /* Interactive elements use one keyboard-focus treatment across the app. */
 :where(
   a[href],
@@ -473,10 +467,6 @@ main[tabindex="-1"][data-route-focus="true"]:focus-visible {
   button:active:not(:disabled),
   .pressable:active:not(:disabled) {
     transform: none !important;
-  }
-
-  .home-workspace-card:hover {
-    transform: none;
   }
 
   .app-dialog-panel {

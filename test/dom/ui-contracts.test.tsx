@@ -1323,3 +1323,69 @@ test("a credential result sheet owns Escape while the underlying detail keeps th
   assert.equal(document.querySelector(".workspace-shell")?.hasAttribute("inert"), false);
   assert.notEqual(document.body.style.overflow, "hidden");
 });
+
+test("removing a sheet and its confirmation in one commit releases all modal locks", async () => {
+  function Harness() {
+    const [open, setOpen] = useState(true);
+    const [confirm, setConfirm] = useState(false);
+    return <NextIntlClientProvider locale="en" messages={messages}>
+      <div className="workspace-shell"><button>Workspace</button></div>
+      {open && <Sheet title="Record" onClose={() => setOpen(false)}>
+        <button onClick={() => setConfirm(true)}>Delete record</button>
+        <ConfirmDialog open={confirm} title="Delete record?" confirmLabel="Remove" cancelLabel="Cancel"
+          onCancel={() => setConfirm(false)} onConfirm={() => setOpen(false)} />
+      </Sheet>}
+    </NextIntlClientProvider>;
+  }
+  render(<Harness />);
+  fireEvent.click(screen.getByRole("button", { name: "Delete record" }));
+  assert.equal(document.body.style.overflow, "hidden");
+  fireEvent.click(screen.getByRole("button", { name: "Remove" }));
+  await act(async () => {});
+  assert.equal(screen.queryByRole("dialog"), null);
+  assert.equal(screen.queryByRole("alertdialog"), null);
+  assert.notEqual(document.body.style.overflow, "hidden");
+  assert.equal(document.querySelector(".workspace-shell")?.hasAttribute("inert"), false);
+  assert.equal(document.getElementById("main-content")?.hasAttribute("inert"), false);
+});
+
+test("route loading locks a portal sheet without replacing its draft", () => {
+  let start: ((href: string) => boolean) | undefined;
+  function Harness() {
+    start = useRouteTransition().startRouteTransition;
+    return <Sheet title="Draft" onClose={() => {}}><label>Draft name<input defaultValue="" /></label></Sheet>;
+  }
+  render(<NextIntlClientProvider locale="en" messages={messages}><RouteTransitionProvider><Harness /></RouteTransitionProvider></NextIntlClientProvider>);
+  const input = screen.getByLabelText("Draft name") as HTMLInputElement;
+  fireEvent.change(input, { target: { value: "Retained" } });
+  act(() => { start?.("/other"); });
+  const layer = input.closest(".product-sheet-layer");
+  assert.equal(layer?.hasAttribute("inert"), true);
+  assert.equal(layer?.getAttribute("aria-hidden"), "true");
+  assert.equal(input.value, "Retained");
+  assert.equal(input.isConnected, true);
+});
+
+test("saved input and a persistent operator do not produce a false discard prompt", () => {
+  function Harness() {
+    const [open, setOpen] = useState(true);
+    const [quotaReady, setQuotaReady] = useState(false);
+    return <NextIntlClientProvider locale="en" messages={messages}>
+      <Sheet open={open} title="Registration" protectEdits onClose={() => setOpen(false)}>
+        <label>Operator<input defaultValue="" data-preserve-on-close /></label>
+        <form onSubmit={(event) => { event.preventDefault(); event.currentTarget.reset(); }}>
+          <label>Guest draft<input defaultValue="" /></label><button type="submit">Save</button>
+        </form>
+        <button onClick={() => setQuotaReady(true)}>Load quota</button>
+        {quotaReady && <label>Quota request<input defaultValue="1" /></label>}
+      </Sheet>
+    </NextIntlClientProvider>;
+  }
+  render(<Harness />);
+  fireEvent.change(screen.getByLabelText("Operator"), { target: { value: "Operator name" } });
+  fireEvent.change(screen.getByLabelText("Guest draft"), { target: { value: "Guest name" } });
+  fireEvent.click(screen.getByRole("button", { name: "Save" }));
+  fireEvent.click(screen.getByRole("button", { name: "Load quota" }));
+  fireEvent.click(screen.getByRole("button", { name: messages.Sheet.close }));
+  assert.equal(screen.queryByRole("dialog"), null);
+});

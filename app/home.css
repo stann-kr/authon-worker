@@ -11,4 +11,6 @@
 .home-workspace-copy p { margin-top: 6px; font-size: 12px; line-height: 1.6; color: var(--app-text-muted); }
 .home-workspace-card kbd { color: var(--app-text-muted); font-size: 11px; }
 .home-pending { display: flex; align-items: center; gap: 12px; padding: 14px 16px; border: 1px solid var(--app-border-subtle); border-radius: 12px; background: var(--app-surface); color: #d5b479; }
-@media (hover: hover) and (pointer: fine) { .home-workspace-card:hover { background: var(--app-surface-hover); } }
+@media (hover: hover) and (pointer: fine) { .home-workspace-card:hover { background: var(--app-surface-hover); transform: translateY(-0.125rem); } }
+
+@media (prefers-reduced-motion: reduce) { .home-workspace-card:hover { transform: none; } }

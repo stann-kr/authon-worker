@@ -323,6 +323,11 @@ export function RouteTransitionProvider({ children }: { children: ReactNode }) {
   );
 }
 
+/** Portal overlays share the route lock, including when rendered outside the inert page. */
+export function useIsRouteTransitionActive() {
+  return useContext(RouteTransitionContext)?.isRouteTransitionActive ?? false;
+}
+
 export function useRouteTransition() {
   const context = useContext(RouteTransitionContext);
 

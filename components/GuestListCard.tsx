@@ -268,9 +268,9 @@ const GuestListCard: React.FC<GuestListCardProps> = ({
           {guest.status === "checked" ? t("checkedIn") : guest.status === "pending" ? t("waitingStatus") : t("removed")}
         </StatusLabel>
         <dl className="product-detail-list" aria-label={rosterT("detail")}>
-          {djName && <div><dt>{t("byName", { name: "" })}</dt><dd>{djName}</dd></div>}
+          {djName && <div><dt>{rosterT("owner")}</dt><dd>{djName}</dd></div>}
           {accountKind === "shared" && <div><dt>{t("sharedAccount")}</dt><dd>{registeredByName || "—"}</dd></div>}
-          {accountKind !== "shared" && registeredByName && <div><dt>{t("registeredByName", { name: "" })}</dt><dd>{registeredByName}</dd></div>}
+          {accountKind !== "shared" && registeredByName && <div><dt>{rosterT("operator")}</dt><dd>{registeredByName}</dd></div>}
           {showRegisteredAt && guest.createdAt && <div><dt>{t("registered")}</dt><dd><time dateTime={guest.createdAt}>{formatTime(guest.createdAt)}</time></dd></div>}
           {guest.checkInTime && <div><dt>{t("checkedIn")}</dt><dd><time dateTime={guest.checkInTime}>{formatTime(guest.checkInTime)}</time></dd></div>}
         </dl>

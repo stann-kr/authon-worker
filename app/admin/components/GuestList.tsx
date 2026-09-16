@@ -395,7 +395,7 @@ export default function GuestList({
             isLoading={isCurrentScopeFetching}
           />} query={searchQuery} onQueryChange={setSearchQuery}
             status={rosterStatus} onStatusChange={setRosterStatus}
-            loading={!hasCurrentScopeData} counts={{ all: pendingGuests.length + checkedGuests.length, pending: pendingGuests.length, checked: checkedGuests.length }}>
+            loading={!hasCurrentScopeData} counts={{ all: filteredGuests.length, pending: pendingGuests.length, checked: checkedGuests.length }}>
 
 
 

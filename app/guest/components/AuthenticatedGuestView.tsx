@@ -504,8 +504,6 @@ export default function AuthenticatedGuestView({ user }: AuthenticatedGuestViewP
 
                 {error && <Alert type="error" message={error} />}
 
-
-
           </>
         }
       >
@@ -529,10 +527,7 @@ export default function AuthenticatedGuestView({ user }: AuthenticatedGuestViewP
                 isLoading={isCurrentScopeFetching}
               />} query={searchQuery} onQueryChange={setSearchQuery}
             status={rosterStatus} onStatusChange={setRosterStatus}
-            loading={!hasCurrentScopeData} counts={{ all: pendingGuests.length + checkedGuests.length, pending: pendingGuests.length, checked: checkedGuests.length }}>
-
-
-
+            loading={!hasCurrentScopeData} counts={{ all: filteredGuests.length, pending: pendingGuests.length, checked: checkedGuests.length }}>
 
               {listState === "loading" ? (
                 <Skeleton rows={5} />
@@ -571,7 +566,10 @@ export default function AuthenticatedGuestView({ user }: AuthenticatedGuestViewP
           </RosterView>
             </section>
       </OperationsLayout>
-      <Sheet open={entryOpen} title={t("addGuest")} onClose={() => { setEntryOpen(false); setGuestName(""); }}
+      <Sheet open={entryOpen} title={t("addGuest")} onClose={() => {
+        setEntryOpen(false); setGuestName("");
+        guestLimitRequestController.updateRequestDraft({ requestedExtra: "1", requestReason: "" });
+      }}
         busy={isLoading || isBulkSubmitting || guestLimitRequestController.isRequestingExtra} protectEdits dirty={Boolean(guestName.trim())}>
                   <div className="relative flex items-center justify-between gap-4 border-b border-border-subtle px-4 py-3 sm:px-5">
                     <h2 id="add-guest-title" className="type-panel-title">
@@ -594,6 +592,7 @@ export default function AuthenticatedGuestView({ user }: AuthenticatedGuestViewP
                         <input
                           id="shared-operator-name"
                           name="shared-operator-name"
+                          data-preserve-on-close
                           type="text"
                           value={registeredByName}
                           onChange={(event) => handleOperatorChange(event.target.value)}
