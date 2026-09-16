@@ -400,7 +400,7 @@ export default function PasswordResetRequestManagement({
                         {request.userEmail}
                       </p>
                     </div>
-                    <RoleLabel role={request.userRole} colored />
+                    <RoleLabel role={request.userAccountKind === "shared" ? "shared" : request.userRole} colored />
                   </div>
                   <dl className="mt-4 grid grid-cols-2 gap-3 text-xs">
                     <div>
