@@ -1137,5 +1137,18 @@
     "unsaved": "You have unsaved changes.",
     "continue": "Keep editing",
     "discard": "Discard and close"
+  },
+  "Roster": {
+    "search": "Search name, owner or operator",
+    "status": "Admission status",
+    "all": "All",
+    "pending": "Waiting",
+    "checked": "Checked in",
+    "columns": "Roster columns",
+    "oneColumn": "1 column",
+    "twoColumns": "2 columns",
+    "detail": "Guest details",
+    "undoTitle": "Undo check-in?",
+    "undoDescription": "Remove the check-in for {name}."
   }
 }

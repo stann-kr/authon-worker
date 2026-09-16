@@ -1137,5 +1137,18 @@
     "unsaved": "아직 저장하지 않은 내용이 있습니다.",
     "continue": "계속 작성",
     "discard": "내용 버리고 닫기"
+  },
+  "Roster": {
+    "search": "이름, 담당자, 입력자 검색",
+    "status": "입장 상태",
+    "all": "전체",
+    "pending": "미입장",
+    "checked": "입장",
+    "columns": "명단 열 수",
+    "oneColumn": "1열",
+    "twoColumns": "2열",
+    "detail": "게스트 상세",
+    "undoTitle": "입장을 취소할까요?",
+    "undoDescription": "{name}님의 입장 기록을 취소합니다."
   }
 }

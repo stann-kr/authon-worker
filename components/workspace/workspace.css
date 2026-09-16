@@ -137,3 +137,6 @@
 @media (prefers-reduced-motion: reduce) {
   .workspace-shell :is(a, button), .workspace-menu-backdrop :is(a, button) { transition: none; }
 }
+
+.workspace-action.workspace-action-primary { background: var(--app-action); color: var(--app-action-text); font-weight: 600; }
+.workspace-action.workspace-action-primary:not(:disabled):hover { background: var(--app-action-hover); color: var(--app-action-text); }

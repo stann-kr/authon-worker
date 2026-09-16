@@ -47,7 +47,9 @@ export default function Sheet({ open = true, title, children, onClose, presentat
     const state = latest.current;
     if (state.busy) return;
     if (state.discard) { keepEditing(); return; }
-    if (state.dirty || state.edited) {
+    const hasChangedFields = protectEdits && [...(panelRef.current?.querySelectorAll<Control>("input, select, textarea") ?? [])]
+      .some((field) => controlValue(field) !== (baseline.current.get(field) ?? ""));
+    if (state.dirty || hasChangedFields) {
       editFocus.current = document.activeElement as HTMLElement;
       setDiscard(true);
     } else state.onClose();

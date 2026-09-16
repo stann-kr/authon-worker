@@ -1,8 +1,10 @@
-import React, { useEffect, useId, useRef, useState } from "react";
+import React, { useContext, useEffect, useId, useRef, useState } from "react";
 import Button from "./Button";
 import Icon from "./Icon";
 import StatusLabel from "./StatusLabel";
 import ConfirmDialog from "./ConfirmDialog";
+import Sheet from "./overlays/Sheet";
+import { RosterSelection } from "./guests/RosterView";
 import { useTranslations } from "next-intl";
 
 export interface Guest {
@@ -53,6 +55,13 @@ const GuestListCard: React.FC<GuestListCardProps> = ({
   isDeleteDisabled = false,
 }) => {
   const t = useTranslations("Common");
+  const rosterT = useTranslations("Roster");
+  const selection = useContext(RosterSelection);
+  const [localDetail, setLocalDetail] = useState(false);
+  const isDetailOpen = selection ? selection.selectedId === guest.id : localDetail;
+  const openDetail = () => selection ? selection.select(guest.id) : setLocalDetail(true);
+  const closeDetail = () => selection ? selection.select(null) : setLocalDetail(false);
+  const [undoConfirmation, setUndoConfirmation] = useState<string | null>(null);
   const [deleteConfirmation, setDeleteConfirmation] = useState<string | null>(null);
   const deleteTriggerRef = useRef<HTMLButtonElement>(null);
   const cancelDeleteRef = useRef<HTMLButtonElement>(null);
@@ -68,13 +77,14 @@ const GuestListCard: React.FC<GuestListCardProps> = ({
   const isInlineDeleteOpen = isDeleteConfirmOpen && guest.status === "pending";
 
   useEffect(() => {
+    if (undoConfirmation && undoConfirmation !== confirmationKey) setUndoConfirmation(null);
     if (deleteConfirmation && (deleteConfirmation !== confirmationKey || !onDelete)) {
       setDeleteConfirmation(null);
       if (document.activeElement === document.body) {
         rowRef.current?.focus({ preventScroll: true });
       }
     }
-  }, [confirmationKey, deleteConfirmation, onDelete]);
+  }, [confirmationKey, deleteConfirmation, onDelete, undoConfirmation]);
 
   useEffect(() => {
     if (isInlineDeleteOpen) cancelDeleteRef.current?.focus();
@@ -95,12 +105,6 @@ const GuestListCard: React.FC<GuestListCardProps> = ({
       rowRef.current?.focus({ preventScroll: true });
     }
   };
-  const indicatorTone =
-    guest.status === "checked"
-      ? "before:bg-status-checked"
-      : guest.status === "deleted"
-        ? "before:bg-border-strong"
-        : "before:bg-status-waiting";
   const handleDelete = () => {
     if (!onDelete || !isDeleteConfirmOpen || isDeleteDisabled || isDeleteLoading) return;
     if (isInlineDeleteOpen) {
@@ -116,67 +120,21 @@ const GuestListCard: React.FC<GuestListCardProps> = ({
     <article
       ref={rowRef}
       tabIndex={-1}
-      className={`guest-list-row relative overflow-hidden bg-surface px-4 py-3 transition-colors before:absolute before:inset-y-0 before:left-0 before:w-0.5 sm:px-5 ${indicatorTone}`}
+      className="product-guest-row"
+      data-status={guest.status}
+      data-selected={isDetailOpen}
     >
-      <div className="flex items-center justify-between gap-3">
-        <div className="flex min-w-0 flex-1 items-start gap-3 sm:gap-4">
-          <span className="mt-0.5 w-7 shrink-0 font-mono text-xs tabular-nums text-text-dim">
-            {String(index + 1).padStart(2, "0")}
+      <div className="product-guest-line">
+        <button type="button" className="product-guest-identity" onClick={openDetail}
+          aria-haspopup="dialog" aria-expanded={isDetailOpen}>
+          <span className="product-guest-index" aria-hidden="true">{String(index + 1).padStart(2, "0")}</span>
+          <span className="product-guest-name">
+            <strong>{guest.name}</strong>
+            {(djName || registeredByName) && <small>{djName || registeredByName}</small>}
           </span>
-          <div className="min-w-0">
-            <p className="type-row-title break-words">
-              {guest.name}
-            </p>
-            {(djName || registeredByName) && (
-              <div className="mt-0.5 flex flex-wrap items-center gap-2 text-xs text-text-muted">
-                {accountKind === "shared" && (
-                  <span className="border border-border-strong bg-canvas px-1.5 py-0.5 font-mono uppercase tracking-wider text-text-heading">
-                    {t("sharedAccount")}
-                  </span>
-                )}
-                {djName ? (
-                  <span className="min-w-0 break-words">
-                    {t("byName", { name: djName })}
-                  </span>
-                ) : null}
-                {registeredByName && (
-                  <span className="min-w-0 break-words">
-                    {t("registeredByName", { name: registeredByName })}
-                  </span>
-                )}
-              </div>
-            )}
+        </button>
 
-            {((showRegisteredAt && guest.createdAt) || guest.checkInTime) && (
-              <div className="mt-1.5 flex flex-wrap items-center gap-x-5 gap-y-1">
-                {showRegisteredAt && guest.createdAt && (
-                  <span className="flex items-baseline gap-2 text-xs text-text-dim">
-                    <span>{t("registered")}</span>
-                    <time
-                      dateTime={guest.createdAt}
-                      className="font-mono tabular-nums text-text-muted"
-                    >
-                      {formatTime(guest.createdAt)}
-                    </time>
-                  </span>
-                )}
-                {guest.checkInTime && (
-                  <span className="flex items-baseline gap-2 text-xs text-status-checked">
-                    <span>{t("checkedIn")}</span>
-                    <time
-                      dateTime={guest.checkInTime}
-                      className="font-mono tabular-nums"
-                    >
-                      {formatTime(guest.checkInTime)}
-                    </time>
-                  </span>
-                )}
-              </div>
-            )}
-          </div>
-        </div>
-
-        <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
+        <div className="product-guest-actions">
           {guest.status === "pending" && (
             <>
               <span className="sr-only">{t("waitingStatus")}</span>
@@ -186,7 +144,7 @@ const GuestListCard: React.FC<GuestListCardProps> = ({
                   isLoading={isCheckLoading}
                   variant="confirm"
                   size="md"
-                  className="w-28 px-3 sm:w-36 sm:px-4"
+                  className="min-w-16"
                 >
                   {t("checkIn")}
                 </Button>
@@ -230,12 +188,12 @@ const GuestListCard: React.FC<GuestListCardProps> = ({
               <span className="sr-only">{t("checkedInStatus")}</span>
               {onUndo && (
                 <Button
-                  onClick={onUndo}
+                  onClick={() => setUndoConfirmation(confirmationKey)}
                   isLoading={isUndoLoading}
                   variant="outline"
                   size="md"
                   leftIcon={<Icon name="undo" size={16} />}
-                  className="w-28 px-3 sm:w-36 sm:px-4"
+                  className="min-w-16"
                   aria-label={t("undoCheckIn", { name: guest.name })}
                 >
                   {t("undo")}
@@ -301,6 +259,24 @@ const GuestListCard: React.FC<GuestListCardProps> = ({
         </div>
       )}
     </article>
+      {onUndo && undoConfirmation === confirmationKey && guest.status === "checked" && <ConfirmDialog open
+        title={rosterT("undoTitle")} description={rosterT("undoDescription", { name: guest.name })}
+        confirmLabel={t("undo")} cancelLabel={t("cancel")} isLoading={isUndoLoading}
+        onCancel={() => setUndoConfirmation(null)} onConfirm={() => { setUndoConfirmation(null); onUndo(); }} />}
+      {isDetailOpen && <Sheet title={guest.name} presentation="detail" onClose={closeDetail}>
+        <StatusLabel tone={guest.status === "checked" ? "checked" : guest.status === "pending" ? "waiting" : "neutral"}>
+          {guest.status === "checked" ? t("checkedIn") : guest.status === "pending" ? t("waitingStatus") : t("removed")}
+        </StatusLabel>
+        <dl className="product-detail-list" aria-label={rosterT("detail")}>
+          {djName && <div><dt>{t("byName", { name: "" })}</dt><dd>{djName}</dd></div>}
+          {accountKind === "shared" && <div><dt>{t("sharedAccount")}</dt><dd>{registeredByName || "—"}</dd></div>}
+          {accountKind !== "shared" && registeredByName && <div><dt>{t("registeredByName", { name: "" })}</dt><dd>{registeredByName}</dd></div>}
+          {showRegisteredAt && guest.createdAt && <div><dt>{t("registered")}</dt><dd><time dateTime={guest.createdAt}>{formatTime(guest.createdAt)}</time></dd></div>}
+          {guest.checkInTime && <div><dt>{t("checkedIn")}</dt><dd><time dateTime={guest.checkInTime}>{formatTime(guest.checkInTime)}</time></dd></div>}
+        </dl>
+        {guest.status === "pending" && onCheck && <Button variant="confirm" onClick={onCheck} isLoading={isCheckLoading}>{t("checkIn")}</Button>}
+        {guest.status === "checked" && onUndo && <Button variant="outline" onClick={() => setUndoConfirmation(confirmationKey)} isLoading={isUndoLoading}>{t("undo")}</Button>}
+      </Sheet>}
       {isDeleteConfirmOpen && guest.status === "checked" && (
         <ConfirmDialog
           open

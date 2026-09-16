@@ -2,7 +2,7 @@
 
 import { fetchDoorAttendanceSummary } from "@/lib/attendance/client";
 
-import { useLayoutEffect, useRef } from "react";
+import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { useTranslations } from "next-intl";
 import { useAuthSession } from "@/components/AuthSessionProvider";
 import {
@@ -23,13 +23,16 @@ import useAttendanceCounterController, {
   type AttendanceCounterDependencies,
 } from "./useAttendanceCounterController";
 import AttendanceReconciliationForm from "./AttendanceReconciliationForm";
-import useMobileDockInset from "./useMobileDockInset";
+import Sheet from "@/components/overlays/Sheet";
+import Button from "@/components/Button";
 
 interface AttendanceCounterProps {
   scope: AttendanceScope | null;
   currentBusinessDate: string;
   checkedInGuests: number;
   hasPendingGuestMutations: boolean;
+  children: (actions: ReactNode, details: ReactNode) => ReactNode;
+  dependencies?: AttendanceCounterDependencies;
 }
 
 const ATTENDANCE_COUNTER_DEPENDENCIES: AttendanceCounterDependencies =
@@ -52,10 +55,12 @@ export default function AttendanceCounter({
   currentBusinessDate,
   checkedInGuests,
   hasPendingGuestMutations,
+  children,
+  dependencies = ATTENDANCE_COUNTER_DEPENDENCIES,
 }: AttendanceCounterProps) {
   const t = useTranslations("Door.attendance");
   const { user } = useAuthSession();
-  const mobileDockRef = useRef<HTMLElement>(null);
+  const [detailsOpen, setDetailsOpen] = useState(false);
   const reconciliationStatusRef = useRef<HTMLParagraphElement>(null);
   const adjustmentSubmitRef = useRef<HTMLButtonElement>(null);
   const adjustmentCancelRef = useRef<HTMLButtonElement>(null);
@@ -79,7 +84,6 @@ export default function AttendanceCounter({
     isReconciliationBelowCheckedGuests,
     isReconciliationDeltaOutOfRange,
     isReconciliationTargetInvalid,
-    isSyncing,
     isUndoing,
     loadSummary,
     notice,
@@ -102,10 +106,9 @@ export default function AttendanceCounter({
     hasPendingGuestMutations,
     canAdjust,
     translate: t,
-    dependencies: ATTENDANCE_COUNTER_DEPENDENCIES,
+    dependencies,
   });
 
-  useMobileDockInset(mobileDockRef);
 
   useLayoutEffect(() => {
     if (isAdjustmentConfirmationOpen) adjustmentCancelRef.current?.focus();
@@ -140,95 +143,36 @@ export default function AttendanceCounter({
     reconciliationStatusRef.current?.focus({ preventScroll: true });
   }, [isReconciliationFormVisible]);
 
-  return (
-    <>
-      <section
-        ref={mobileDockRef}
-        className="fixed inset-x-0 bottom-0 z-30 border-t border-border-strong bg-canvas pb-[env(safe-area-inset-bottom)] md:sticky md:inset-x-auto md:bottom-auto md:top-[calc(var(--app-header-height)+1rem)] md:z-auto md:border"
-        aria-labelledby="attendance-counter-title"
-        aria-busy={isLoading || isSyncing}
-      >
-        <div className="mx-auto max-w-[1440px] px-3 py-1 sm:px-4 md:px-4 md:py-3">
-          <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3">
-            <div className="min-w-0">
-              <h2 id="attendance-counter-title" className="truncate text-xs font-semibold text-text-heading md:text-sm">
-                {t("title")}
-              </h2>
-              {statusText && (
-                <p className="mt-0.5 truncate text-[11px] leading-4 text-text-muted md:text-xs">
-                  {statusText}
-                </p>
-              )}
-            </div>
-            <p className="shrink-0 text-[11px] leading-4 text-text-dim sm:text-xs md:hidden">
-              {t("checkedInGuests")} {displayedCheckedInGuests} · {t("walkIns")} {walkIns}
-            </p>
-          </div>
-
-          <dl className="mt-2 hidden grid-cols-2 gap-px bg-border-subtle text-center text-xs md:grid">
-            <div className="bg-surface-raised px-2 py-2">
-              <dt className="text-text-muted">{t("checkedInGuests")}</dt>
-              <dd className="mt-1 font-mono text-lg tabular-nums text-text-heading">
-                {displayedCheckedInGuests}
-              </dd>
-            </div>
-            <div className="bg-surface-raised px-2 py-2">
-              <dt className="text-text-muted">{t("walkIns")}</dt>
-              <dd className="mt-1 font-mono text-lg tabular-nums text-text-heading">
-                {walkIns}
-              </dd>
-            </div>
-          </dl>
-
-          <div className="mt-1 grid grid-cols-[minmax(0,1fr)_auto] gap-1.5 md:mt-2 md:gap-2">
-            <button
-              type="button"
-              onClick={() => void queueWalkIn()}
-              disabled={!canRecord}
-              aria-describedby={unavailableText ? "attendance-counter-unavailable" : undefined}
-              className="pressable flex min-h-11 items-center justify-center gap-1.5 border border-action-primary bg-action-primary px-2 py-1 text-xs font-semibold text-action-text disabled:cursor-not-allowed disabled:opacity-50 md:min-h-14 md:gap-2 md:px-3 md:py-2 md:text-sm"
-            >
-              <span>{t("addWalkIn")}</span>
-              <span className="font-mono text-xl leading-none md:text-2xl" aria-hidden="true">+1</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => void queueUndo()}
-              disabled={!canRecord || !undoableKey || isUndoing}
-              className="pressable min-h-11 min-w-20 border border-border-default bg-surface-raised px-2 py-1 text-[11px] font-medium leading-tight text-text-heading disabled:cursor-not-allowed disabled:opacity-40 md:py-2 md:text-xs"
-            >
-              {t("undoLast")}
-            </button>
-          </div>
-          {unavailableText && (
-            <p
-              id="attendance-counter-unavailable"
-              className="mt-1 text-[11px] leading-4 text-text-dim md:text-xs md:leading-snug"
-            >
-              {unavailableText}
-            </p>
-          )}
-
-          {notice && (
-            <p className="mt-1 border-l-2 border-status-danger bg-status-danger/10 px-2 py-1.5 text-xs text-status-danger md:mt-1.5 md:px-3 md:py-2" role="alert">
-              {t(`notice.${notice}`)}
-            </p>
-          )}
-          {failedMutations.length > 0 && (
-            <div className="mt-1 flex items-center justify-between gap-2 border-l-2 border-status-waiting bg-status-waiting/10 px-2 py-1.5 text-xs text-text-muted md:mt-1.5 md:gap-3 md:px-3 md:py-2">
-              <span>{t("failedItems", { count: failedMutations.length })}</span>
-              <button
-                type="button"
-                onClick={() => void clearFailedResults()}
-                className="min-h-11 shrink-0 underline underline-offset-4"
-              >
-                {t("clearFailed")}
-              </button>
-            </div>
-          )}
-        </div>
-      </section>
-
+  const actions = <>
+    <button type="button" className="workspace-action workspace-action-primary" onClick={() => void queueWalkIn()}
+      disabled={!canRecord} aria-describedby={unavailableText ? "attendance-counter-unavailable" : undefined}>
+      {t("addWalkIn")} +1
+    </button>
+    <button type="button" className="workspace-action" onClick={() => setDetailsOpen(true)} aria-haspopup="dialog">
+      {t("title")} · {isLoading ? "—" : displayedCheckedInGuests + walkIns}
+    </button>
+  </>;
+  const details = <>
+    {unavailableText && <p id="attendance-counter-unavailable" className="text-xs text-text-muted">{unavailableText}</p>}
+    {statusText && <p className="text-xs text-text-muted" role="status">{statusText}</p>}
+    {notice && <p className="text-sm text-status-danger" role="alert">{t(`notice.${notice}`)}</p>}
+    {failedMutations.length > 0 && <button type="button" className="text-left text-xs text-status-waiting" onClick={() => setDetailsOpen(true)}>
+      {t("failedItems", { count: failedMutations.length })}
+    </button>}
+    <Sheet open={detailsOpen} title={t("title")} onClose={() => setDetailsOpen(false)}
+      busy={isAdjusting} protectEdits>
+      <dl className="product-detail-list">
+        <div><dt>{t("checkedInGuests")}</dt><dd>{displayedCheckedInGuests}</dd></div>
+        <div><dt>{t("walkIns")}</dt><dd>{walkIns}</dd></div>
+      </dl>
+      <Button variant="outline" onClick={() => void queueUndo()} disabled={!canRecord || !undoableKey || isUndoing}>
+        {t("undoLast")}
+      </Button>
+      {notice && <p className="text-sm text-status-danger" role="alert">{t(`notice.${notice}`)}</p>}
+      {failedMutations.length > 0 && <div className="space-y-2">
+        <p className="text-sm text-status-waiting">{t("failedItems", { count: failedMutations.length })}</p>
+        <Button variant="outline" onClick={() => void clearFailedResults()}>{t("clearFailed")}</Button>
+      </div>}
       {canAdjust && scope && (
         <AttendanceReconciliationForm
           scope={scope}
@@ -271,9 +215,9 @@ export default function AttendanceCounter({
         />
       )}
 
-      <p className="sr-only" role="status" aria-live="polite" aria-atomic="true">
-        {announcement}
-      </p>
-    </>
-  );
+
+    </Sheet>
+    <p className="sr-only" role="status" aria-live="polite" aria-atomic="true">{announcement}</p>
+  </>;
+  return children(actions, details);
 }

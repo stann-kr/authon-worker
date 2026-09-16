@@ -1,5 +1,7 @@
 "use client";
 
+import RosterView, { type RosterStatus } from "@/components/guests/RosterView";
+
 import { fetchGuestsByDate } from "@/lib/guests/client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
@@ -11,8 +13,8 @@ import {
   useScopedOperationGuard,
 } from "../../../lib/hooks";
 import GuestListCard from "../../../components/GuestListCard";
-import GuestSearchInput from "../../../components/GuestSearchInput";
-import StatGrid from "../../../components/StatGrid";
+
+
 import PanelHeader from "../../../components/PanelHeader";
 import EmptyState from "../../../components/EmptyState";
 import Alert from "../../../components/Alert";
@@ -23,7 +25,6 @@ import OperationsLayout from "../../../components/OperationsLayout";
 import VenueSelector, {
   useVenueSelector,
 } from "../../../components/VenueSelector";
-import { formatDateDisplay } from "../../../lib/date";
 import {
   deriveAsyncListState,
   shouldShowEmptyState,
@@ -75,6 +76,7 @@ export default function GuestList({
     "idle" | "success" | "partial" | "error"
   >("idle");
   const [feedback, setFeedback] = useState<string | null>(null);
+  const [rosterStatus, setRosterStatus] = useState<RosterStatus>("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [sortMode, setSortMode] = useLocalStorage<"default" | "alpha">(
     "guestlist:sortMode",
@@ -297,11 +299,10 @@ export default function GuestList({
           const timeB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
           return timeA - timeB;
         });
-  const displayGuests = searchQuery
-    ? sortedGuests.filter((g) =>
-        (g.name || "").toLowerCase().includes(searchQuery.toLowerCase()),
-      )
-    : sortedGuests;
+  const displayGuests = sortedGuests.filter((guest) =>
+    (rosterStatus === "all" || guest.status === rosterStatus) &&
+    [guest.name, guest.registeredByName, getContributor(guest).name].some((value) =>
+      value?.toLocaleLowerCase().includes(searchQuery.trim().toLocaleLowerCase())));
   const listState = deriveAsyncListState({
     hasStarted: isFetching || loadOutcome !== "idle",
     isLoading: isCurrentScopeFetching,
@@ -309,25 +310,6 @@ export default function GuestList({
     hasError: loadOutcome === "error",
     isPartial: loadOutcome === "partial",
   });
-
-  const getSelectedDJInfo = () => {
-    if (selectedDJ === "all")
-      return { name: t("allUsers"), event: t("totalOverview") };
-    if (selectedDJ.startsWith("ext:")) {
-      const link = displayData.externalLinks.find(
-        (l) => l.id === selectedDJ.replace("ext:", ""),
-      );
-      return link
-        ? { name: link.djName, event: t("externalDj") }
-        : { name: "", event: "" };
-    }
-    const u = displayData.users.find((u) => u.id === selectedDJ);
-    return u
-      ? { name: u.name, event: u.role.toUpperCase() }
-      : { name: "", event: "" };
-  };
-
-  const selectedDJInfo = getSelectedDJInfo();
 
   // Only show users/links who registered guests on the selected date
   const activeUserIds = new Set(
@@ -366,23 +348,8 @@ export default function GuestList({
             className="app-panel p-4 sm:p-5"
           />
         )}
-        <div className="app-panel p-4 sm:p-5">
-          <div className="mb-4">
-            <label htmlFor="admin-guest-user-filter" className="type-context-title mb-3">
-              {t("userFilter")}
-            </label>
-            <div className="space-y-2">
-              <button
-                type="button"
-                onClick={() => setSelectedDJ("all")}
-                className={`w-full p-3 text-sm font-medium transition-colors ${
-                  selectedDJ === "all"
-                    ? "border border-border-default border-l-2 border-l-action-primary bg-surface-raised text-text-heading"
-                    : "bg-surface-raised text-text-muted hover:text-text-heading border border-border-default"
-                }`}
-              >
-                {t("allUsers")}
-              </button>
+        <div className="min-w-0">
+          <label htmlFor="admin-guest-user-filter" className="app-label">{t("userFilter")}</label>
               <div className="relative">
                 <select
                   id="admin-guest-user-filter"
@@ -390,7 +357,7 @@ export default function GuestList({
                   value={selectedDJ === "all" ? "" : selectedDJ}
                   autoComplete="off"
                   onChange={(e) => setSelectedDJ(e.target.value || "all")}
-                  className="app-field min-h-[52px] appearance-none py-4 pr-10 font-medium"
+                  className="app-field min-h-11 appearance-none pr-10 font-medium"
                 >
                   <option value="">{t("selectUser")}</option>
                   {filteredUsers.map((u) => (
@@ -410,52 +377,14 @@ export default function GuestList({
                 </select>
                 <Icon name="chevron-down" size={18} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-text-muted" />
               </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="app-panel p-4 sm:p-5">
-          <div className="mb-4">
-            <h3 className="type-panel-title mb-1 break-words">
-              {selectedDJInfo.name}
-            </h3>
-            <p className="mb-1 break-words text-sm text-text-muted">
-              {selectedDJInfo.event}
-            </p>
-            <p className="text-sm text-text-muted">
-              {formatDateDisplay(selectedDate, locale)}
-            </p>
-          </div>
-          <div className="mb-4 text-center" aria-busy={!hasCurrentScopeData}>
-            <div className="text-text-heading font-mono text-3xl sm:text-4xl tracking-wider">
-              {hasCurrentScopeData
-                ? pendingGuests.length + checkedGuests.length
-                : "-"}
-            </div>
-            <div className="text-xs font-medium text-text-muted">
-              {t("totalGuests")}
-            </div>
-          </div>
-
-          <StatGrid
-            isLoading={!hasCurrentScopeData}
-            items={[
-              {
-                label: t("waiting"),
-                value: pendingGuests.length,
-                color: "waiting",
-              },
-              { label: t("checked"), value: checkedGuests.length, color: "checked" },
-            ]}
-          />
         </div>
         </>
       }
     >
 
       <div className="flex min-w-0 flex-col lg:min-h-0">
-        <div className="main-content-panel lg:min-h-0 lg:max-h-full">
-          <PanelHeader
+        <div className="min-w-0">
+          <RosterView header={<PanelHeader
             title={t("guestList")}
             count={displayGuests.length}
             sortMode={sortMode}
@@ -464,23 +393,23 @@ export default function GuestList({
             }
             onRefresh={loadData}
             isLoading={isCurrentScopeFetching}
-          />
+          />} query={searchQuery} onQueryChange={setSearchQuery}
+            status={rosterStatus} onStatusChange={setRosterStatus}
+            loading={!hasCurrentScopeData} counts={{ all: pendingGuests.length + checkedGuests.length, pending: pendingGuests.length, checked: checkedGuests.length }}>
 
-          <GuestSearchInput
-            value={searchQuery}
-            onChange={setSearchQuery}
-          />
+
+
 
           {listState === "loading" ? (
             <Skeleton rows={6} />
           ) : shouldShowEmptyState(listState) ? (
             <EmptyState
               icon="user"
-              message={searchQuery ? t("noSearchResults") : t("noGuestsForDate")}
+              message={searchQuery || rosterStatus !== "all" ? t("noSearchResults") : t("noGuestsForDate")}
             />
           ) : (
             <div
-              className={`divide-y divide-border-default lg:overflow-y-auto ${isCurrentScopeFetching ? "pointer-events-none" : ""}`}
+              className={`product-roster-rows ${isCurrentScopeFetching ? "pointer-events-none" : ""}`}
             >
               {displayGuests.map((guest, index) => {
                 const contributor = getContributor(guest);
@@ -517,6 +446,7 @@ export default function GuestList({
               })}
             </div>
           )}
+          </RosterView>
         </div>
       </div>
     </OperationsLayout>

@@ -1,5 +1,8 @@
 "use client";
 
+import Sheet from "@/components/overlays/Sheet";
+import RosterView, { type RosterStatus } from "@/components/guests/RosterView";
+
 import { useState, useEffect, useRef, useCallback } from "react";
 import {
   useLocalStorage,
@@ -7,7 +10,7 @@ import {
   useLatestRequestGuard,
   useLatestRef,
 } from "@/lib/hooks";
-import StatGrid from "@/components/StatGrid";
+
 import PanelHeader from "@/components/PanelHeader";
 import WorkspaceShell from "@/components/WorkspaceShell";
 import VenueLoadNotice from "@/components/VenueLoadNotice";
@@ -18,7 +21,7 @@ import DatePicker from "@/components/DatePicker";
 import Button from "@/components/Button";
 import GuestBulkEntry from "@/components/GuestBulkEntry";
 import GuestListCard from "@/components/GuestListCard";
-import GuestSearchInput from "@/components/GuestSearchInput";
+
 import Skeleton from "@/components/Skeleton";
 import OperationsLayout from "@/components/OperationsLayout";
 import GuestCapacityIndicator from "@/components/GuestCapacityIndicator";
@@ -69,6 +72,7 @@ export default function AuthenticatedGuestView({ user }: AuthenticatedGuestViewP
   const locale = useLocale() as "en" | "ko";
   const [selectedDate, setSelectedDate] = useState<string>(getBusinessDate());
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
+  const [entryOpen, setEntryOpen] = useState(false);
   const [guestName, setGuestName] = useState<string>("");
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [isBulkSubmitting, setIsBulkSubmitting] = useState<boolean>(false);
@@ -79,6 +83,7 @@ export default function AuthenticatedGuestView({ user }: AuthenticatedGuestViewP
   const [error, setError] = useState<string | null>(null);
   const [guests, setGuests] = useState<Guest[]>([]);
   const [loadedScopeKey, setLoadedScopeKey] = useState("");
+  const [rosterStatus, setRosterStatus] = useState<RosterStatus>("all");
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [quota, setQuota] = useState<GuestQuota | null>(null);
   const [verifiedQuotaScopeKey, setVerifiedQuotaScopeKey] = useState("");
@@ -102,7 +107,7 @@ export default function AuthenticatedGuestView({ user }: AuthenticatedGuestViewP
     venueLoadError,
     refreshVenues,
   } = useVenueSelector();
-  
+
   const effectiveVenueId = isSuperAdmin
     ? selectedVenueId
     : (user?.venue_id ?? "");
@@ -403,11 +408,11 @@ export default function AuthenticatedGuestView({ user }: AuthenticatedGuestViewP
     (guest) =>
       guest.date === selectedDate && guest.createdByUserId === user?.id,
   );
-  
+
   const pendingGuests = filteredGuests.filter((g) => g.status === "pending");
   const checkedGuests = filteredGuests.filter((g) => g.status === "checked");
   const activeGuestsCount = filteredGuests.filter((g) => g.status !== "deleted").length;
-  
+
   const effectiveLimit = displayQuota?.effectiveLimit ?? user?.guest_limit ?? null;
   const remaining = displayQuota?.remaining ??
     (effectiveLimit === null ? null : Math.max(0, effectiveLimit - activeGuestsCount));
@@ -443,12 +448,11 @@ export default function AuthenticatedGuestView({ user }: AuthenticatedGuestViewP
     sortMode === "alpha"
       ? sortGuestsByName(filteredGuests)
       : sortGuestsByCreatedAt(filteredGuests);
-      
-  const displayGuests = searchQuery
-    ? sortedGuests.filter((g) =>
-        g.name.toLowerCase().includes(searchQuery.toLowerCase()),
-      )
-    : sortedGuests;
+
+  const displayGuests = sortedGuests.filter((guest) =>
+    (rosterStatus === "all" || guest.status === rosterStatus) &&
+    [guest.name, guest.registeredByName].some((value) =>
+      value?.toLocaleLowerCase().includes(searchQuery.trim().toLocaleLowerCase())));
   const listState = deriveAsyncListState({
     hasStarted: isFetching || loadOutcome !== "idle",
     isLoading: isCurrentScopeFetching,
@@ -458,7 +462,9 @@ export default function AuthenticatedGuestView({ user }: AuthenticatedGuestViewP
   });
 
   return (
-    <WorkspaceShell contentClassName="gap-4 pb-8 lg:gap-6">
+    <WorkspaceShell contentClassName="gap-4 pb-8 lg:gap-6" actions={
+      <button type="button" className="workspace-action workspace-action-primary" onClick={() => setEntryOpen(true)}>{t("addGuest")}</button>
+    }>
       {venueLoadError && (
         <VenueLoadNotice
           onRetry={refreshVenues}
@@ -466,6 +472,7 @@ export default function AuthenticatedGuestView({ user }: AuthenticatedGuestViewP
         />
       )}
       <OperationsLayout
+        variant="stacked"
         title={commonT("guest")}
         dashboard={
           <>
@@ -497,7 +504,75 @@ export default function AuthenticatedGuestView({ user }: AuthenticatedGuestViewP
 
                 {error && <Alert type="error" message={error} />}
 
-                <section className="app-panel" aria-labelledby="add-guest-title">
+
+
+          </>
+        }
+      >
+            <section
+              className="min-w-0"
+              aria-labelledby="guest-list-title"
+              aria-busy={isCurrentScopeFetching}
+            >
+              <RosterView header={<PanelHeader
+                title={t("todaysGuests")}
+                headingLevel={2}
+                headingId="guest-list-title"
+                count={displayGuests.length}
+                sortMode={sortMode}
+                onSortToggle={() =>
+                  setSortMode((prev) =>
+                    prev === "default" ? "alpha" : "default",
+                  )
+                }
+                onRefresh={loadGuests}
+                isLoading={isCurrentScopeFetching}
+              />} query={searchQuery} onQueryChange={setSearchQuery}
+            status={rosterStatus} onStatusChange={setRosterStatus}
+            loading={!hasCurrentScopeData} counts={{ all: pendingGuests.length + checkedGuests.length, pending: pendingGuests.length, checked: checkedGuests.length }}>
+
+
+
+
+              {listState === "loading" ? (
+                <Skeleton rows={5} />
+              ) : shouldShowEmptyState(listState) ? (
+                <EmptyState
+                  icon="user-add"
+                  message={
+                    searchQuery || rosterStatus !== "all"
+                      ? t("noSearchResults")
+                      : t("noGuestsForDate")
+                  }
+                />
+              ) : (
+                <div
+                  className={`product-roster-rows ${
+                    isCurrentScopeFetching ? "pointer-events-none" : ""
+                  }`}
+                >
+                  {displayGuests.map((guest, index) => (
+                    <GuestListCard
+                      key={guest.id}
+                      guest={guest}
+                      index={index}
+                      mode="registration"
+                      onDelete={
+                        guest.status === "pending"
+                          ? () => handleDelete(guest.id)
+                          : undefined
+                      }
+                      isDeleteLoading={isLoading}
+                      isDeleteDisabled={isBulkSubmitting}
+                    />
+                  ))}
+                </div>
+              )}
+          </RosterView>
+            </section>
+      </OperationsLayout>
+      <Sheet open={entryOpen} title={t("addGuest")} onClose={() => { setEntryOpen(false); setGuestName(""); }}
+        busy={isLoading || isBulkSubmitting || guestLimitRequestController.isRequestingExtra} protectEdits dirty={Boolean(guestName.trim())}>
                   <div className="relative flex items-center justify-between gap-4 border-b border-border-subtle px-4 py-3 sm:px-5">
                     <h2 id="add-guest-title" className="type-panel-title">
                       {t("addGuest")}
@@ -509,7 +584,8 @@ export default function AuthenticatedGuestView({ user }: AuthenticatedGuestViewP
                     />
                   </div>
 
-                  <div className="px-4 py-4 sm:px-5">
+                  <div className="space-y-4">
+                    {error && <Alert type="error" message={error} />}
                     {user?.account_kind === "shared" && (
                       <div className="mb-3">
                         <label htmlFor="shared-operator-name" className="app-label">
@@ -605,92 +681,7 @@ export default function AuthenticatedGuestView({ user }: AuthenticatedGuestViewP
                       controller={guestLimitRequestController}
                     />
                   </div>
-                </section>
-
-          </>
-        }
-      >
-            <section
-              className="main-content-panel"
-              aria-labelledby="guest-list-title"
-              aria-busy={isCurrentScopeFetching}
-            >
-              <PanelHeader
-                title={t("todaysGuests")}
-                headingLevel={2}
-                headingId="guest-list-title"
-                count={displayGuests.length}
-                sortMode={sortMode}
-                onSortToggle={() =>
-                  setSortMode((prev) =>
-                    prev === "default" ? "alpha" : "default",
-                  )
-                }
-                onRefresh={loadGuests}
-                isLoading={isCurrentScopeFetching}
-              />
-              <GuestSearchInput
-                value={searchQuery}
-                onChange={setSearchQuery}
-              />
-              <StatGrid
-                variant="embedded"
-                isLoading={!hasCurrentScopeData}
-                items={[
-                  {
-                    label: t("waiting"),
-                    value: pendingGuests.length,
-                    color: "waiting",
-                  },
-                  {
-                    label: t("checkedIn"),
-                    value: checkedGuests.length,
-                    color: "checked",
-                  },
-                  {
-                    label: t("total"),
-                    value: activeGuestsCount,
-                    color: "default",
-                  },
-                ]}
-              />
-
-              {listState === "loading" ? (
-                <Skeleton rows={5} />
-              ) : shouldShowEmptyState(listState) ? (
-                <EmptyState
-                  icon="user-add"
-                  message={
-                    searchQuery
-                      ? t("noSearchResults")
-                      : t("noGuestsForDate")
-                  }
-                />
-              ) : (
-                <div
-                  className={`divide-y divide-border-subtle ${
-                    isCurrentScopeFetching ? "pointer-events-none" : ""
-                  }`}
-                >
-                  {displayGuests.map((guest, index) => (
-                    <GuestListCard
-                      key={guest.id}
-                      guest={guest}
-                      index={index}
-                      mode="registration"
-                      onDelete={
-                        guest.status === "pending"
-                          ? () => handleDelete(guest.id)
-                          : undefined
-                      }
-                      isDeleteLoading={isLoading}
-                      isDeleteDisabled={isBulkSubmitting}
-                    />
-                  ))}
-                </div>
-              )}
-            </section>
-      </OperationsLayout>
+      </Sheet>
     </WorkspaceShell>
   );
 }

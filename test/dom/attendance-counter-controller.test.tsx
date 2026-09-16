@@ -6,6 +6,10 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-libra
 import useAttendanceCounterController, {
   type AttendanceCounterDependencies,
 } from "@/app/door/components/useAttendanceCounterController";
+import { registerHooks } from "node:module";
+import { AuthSessionProvider } from "@/components/AuthSessionProvider";
+import { NextIntlClientProvider } from "next-intl";
+import messages from "@/messages/en.json";
 import AttendanceReconciliationForm from "@/app/door/components/AttendanceReconciliationForm";
 import type {
   AttendanceScope,
@@ -13,6 +17,21 @@ import type {
   OfflineAttendanceMutation,
 } from "@/lib/attendance/domain";
 import type { DoorAttendanceSummary } from "@/lib/attendance/types";
+
+Object.defineProperty(globalThis, "localStorage", { configurable: true, value: window.localStorage });
+
+// Next replaces server actions with client references; the DOM runner injects the real controller adapter.
+registerHooks({
+  resolve(specifier, context, nextResolve) {
+    if (specifier.endsWith("lib/api/attendance")) return { url: "mock:attendance-actions", shortCircuit: true };
+    return nextResolve(specifier, context);
+  },
+  load(url, context, nextLoad) {
+    if (url === "mock:attendance-actions") return { format: "module", shortCircuit: true,
+      source: 'export const reconcileDoorAttendance = () => { throw new Error("Unexpected default adapter"); }; export const syncDoorAttendanceMutations = reconcileDoorAttendance;' };
+    return nextLoad(url, context);
+  },
+});
 
 const SCOPE_A: AttendanceScope = {
   venueId: "venue-0001",
@@ -1624,4 +1643,38 @@ test("an unmounted online refresh cannot start a follow-up summary request", asy
   view.unmount();
   await act(async () => queued.resolve([]));
   assert.equal(reads, 1);
+});
+
+test("product Door actions retain one counter owner while opening and closing the detail sheet", async () => {
+  const { default: AttendanceCounter } = await import("@/app/door/components/AttendanceCounter");
+  let loads = 0;
+  let queued = 0;
+  const dependencies = createDependencies({
+    fetchDoorAttendanceSummary: async ({ scope }) => { loads++; return { data: createSummary(scope), error: null }; },
+    enqueueAttendanceMutation: async ({ action, reversesIdempotencyKey }) => {
+      queued++;
+      return createMutation({ idempotencyKey: `action-${queued}`, sequence: queued, action, reversesIdempotencyKey });
+    },
+  });
+  const frame = (wide: boolean) => <NextIntlClientProvider locale="en" messages={messages}>
+    <AuthSessionProvider initialUser={null}>
+      <AttendanceCounter scope={SCOPE_A} currentBusinessDate={SCOPE_A.businessDate} checkedInGuests={5}
+        hasPendingGuestMutations={false} dependencies={dependencies}>
+        {(actions, details) => <div data-wide={wide}><nav>{actions}</nav>{details}</div>}
+      </AttendanceCounter>
+    </AuthSessionProvider>
+  </NextIntlClientProvider>;
+  const view = render(frame(false));
+  await waitFor(() => assert.equal(screen.getByRole("button", { name: /Walk-in.*\+1/ }).hasAttribute("disabled"), false));
+  const initialLoads = loads;
+  view.rerender(frame(true));
+  assert.equal(loads, initialLoads);
+  fireEvent.click(screen.getByRole("button", { name: /Walk-in.*\+1/ }));
+  await waitFor(() => assert.equal(queued, 1));
+  fireEvent.click(screen.getByRole("button", { name: new RegExp(messages.Door.attendance.title) }));
+  assert.ok(screen.getByRole("dialog", { name: messages.Door.attendance.title }));
+  assert.ok(screen.getByRole("button", { name: messages.Door.attendance.undoLast }));
+  fireEvent.click(screen.getByRole("button", { name: messages.Sheet.close }));
+  assert.equal(screen.queryByRole("dialog"), null);
+  assert.equal(queued, 1);
 });

@@ -21,6 +21,7 @@ import ExternalEventCombobox from "@/app/admin/components/ExternalEventCombobox"
 import AsyncListContent from "@/components/AsyncListContent";
 import ConfirmDialog from "@/components/ConfirmDialog";
 import Sheet from "@/components/overlays/Sheet";
+import RosterView, { type RosterStatus } from "@/components/guests/RosterView";
 import GuestListCard from "@/components/GuestListCard";
 import OperationalSectionNav from "@/components/OperationalSectionNav";
 import GuestBulkEntry from "@/components/GuestBulkEntry";
@@ -1197,4 +1198,62 @@ test("product detail changes between side panel and modal without replacing the 
     assert.equal(panel.getAttribute("aria-modal"), "false");
     assert.equal(document.activeElement === input, true);
   } finally { HTMLElement.prototype.getBoundingClientRect = originalRect; }
+});
+
+test("roster columns retain search, row identity and open details through resize", () => {
+  let width = 1200;
+  const originalRect = HTMLElement.prototype.getBoundingClientRect;
+  HTMLElement.prototype.getBoundingClientRect = function () {
+    return this.classList.contains("product-roster") || this.id === "main-content"
+      ? { ...originalRect.call(this), width, right: width } as DOMRect : originalRect.call(this);
+  };
+  function Harness() {
+    const [query, setQuery] = useState("");
+    const [status, setStatus] = useState<RosterStatus>("all");
+    return <NextIntlClientProvider locale="en" messages={messages}>
+      <div className="workspace-shell"><main id="main-content"><RosterView header={<h2>Guests</h2>}
+        query={query} onQueryChange={setQuery} status={status} onStatusChange={setStatus} counts={{ all: 1, pending: 1, checked: 0 }}>
+        <div className="product-roster-rows"><GuestListCard guest={{ id: "g1", name: "Guest One", status: "pending" }} index={0} /></div>
+      </RosterView></main></div>
+    </NextIntlClientProvider>;
+  }
+  try {
+    window.localStorage.removeItem("workspace:rosterColumns");
+    render(<Harness />);
+    const input = screen.getByRole("searchbox") as HTMLInputElement;
+    fireEvent.change(input, { target: { value: "Guest" } });
+    const row = screen.getByRole("article");
+    fireEvent.click(screen.getByRole("button", { name: messages.Roster.twoColumns }));
+    assert.equal(screen.getByRole("article") === row, true);
+    assert.equal(input.value, "Guest");
+    fireEvent.click(screen.getByRole("button", { name: "Guest One" }));
+    const detail = screen.getByRole("dialog", { name: "Guest One" });
+    width = 500; fireEvent(window, new Event("resize"));
+    assert.equal(screen.getByRole("dialog", { name: "Guest One" }) === detail, true);
+    assert.equal(detail.getAttribute("aria-modal"), "true");
+    assert.equal(screen.getByRole("article") === row, true);
+    width = 1200; fireEvent(window, new Event("resize"));
+    assert.equal(detail.getAttribute("aria-modal"), "false");
+    assert.equal(screen.getByRole("button", { name: messages.Roster.twoColumns }).getAttribute("aria-pressed"), "true");
+    assert.equal(input.value, "Guest");
+  } finally { HTMLElement.prototype.getBoundingClientRect = originalRect; window.localStorage.removeItem("workspace:rosterColumns"); }
+});
+
+test("check-in stays immediate while undo requires confirmation for the current guest", () => {
+  let checkCalls = 0;
+  let undoCalls = 0;
+  const card = (status: "pending" | "checked") => <NextIntlClientProvider locale="en" messages={messages}>
+    <GuestListCard guest={{ id: "g1", name: "Guest One", status }} index={0}
+      onCheck={() => { checkCalls++; }} onUndo={() => { undoCalls++; }} />
+  </NextIntlClientProvider>;
+  const view = render(card("pending"));
+  fireEvent.click(screen.getByRole("button", { name: messages.Common.checkIn }));
+  assert.equal(checkCalls, 1);
+  assert.equal(screen.queryByRole("alertdialog"), null);
+  view.rerender(card("checked"));
+  fireEvent.click(screen.getByRole("button", { name: /Undo check-in/ }));
+  assert.equal(undoCalls, 0);
+  const dialog = screen.getByRole("alertdialog", { name: messages.Roster.undoTitle });
+  fireEvent.click(within(dialog).getByRole("button", { name: messages.Common.undo }));
+  assert.equal(undoCalls, 1);
 });
