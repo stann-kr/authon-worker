@@ -7,8 +7,10 @@ import GuestSearchInput from "../GuestSearchInput";
 export type RosterStatus = "all" | "pending" | "checked";
 export const RosterSelection = createContext<{ selectedId: string | null; select: (id: string | null) => void } | null>(null);
 
-export default function RosterView({ header, query, onQueryChange, status, onStatusChange, counts, loading = false, children }: {
+export default function RosterView({ header, filters, variant = "registration", query, onQueryChange, status, onStatusChange, counts, loading = false, children }: {
   header: ReactNode;
+  filters?: ReactNode;
+  variant?: "registration" | "operations";
   query: string;
   onQueryChange: (value: string) => void;
   status: RosterStatus;
@@ -42,10 +44,12 @@ export default function RosterView({ header, query, onQueryChange, status, onSta
     return () => { observer?.disconnect(); window.removeEventListener("resize", measure); };
   }, []);
   return <RosterSelection.Provider value={{ selectedId, select }}>
-    <div ref={ref} className="product-roster main-content-panel" data-columns={canUseTwo ? columns : 1}>
-      {header}
+    <div ref={ref} className="product-roster main-content-panel" data-columns={canUseTwo ? columns : 1} data-variant={variant}>
       <div className="product-roster-tools">
         <GuestSearchInput value={query} onChange={onQueryChange} placeholder={t("search")} />
+        {filters && <div className="product-roster-owner-filter">{filters}</div>}
+      </div>
+      <div className="product-roster-summary">
         <div className="product-roster-filters" role="group" aria-label={t("status")}>
           {(["all", "pending", "checked"] as const).map((value) => <button type="button" key={value}
             aria-pressed={status === value} onClick={() => onStatusChange(value)}>
@@ -59,7 +63,11 @@ export default function RosterView({ header, query, onQueryChange, status, onSta
               try { window.localStorage.setItem("workspace:rosterColumns", String(count)); } catch { /* Keep the in-memory choice. */ }
             }}>{t(count === 1 ? "oneColumn" : "twoColumns")}</button>)}
         </div>
+        <div className="product-roster-extra">{header}</div>
       </div>
+      {variant === "operations" && <div className="product-roster-headings" aria-hidden="true">
+        <span>{t("guestName")}</span><span>{t("owner")}</span><span>{t("status")}</span><span>{t("rowActions")}</span>
+      </div>}
       {children}
     </div>
   </RosterSelection.Provider>;

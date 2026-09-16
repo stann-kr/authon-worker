@@ -476,8 +476,8 @@ export default function AuthenticatedGuestView({ user }: AuthenticatedGuestViewP
         title={commonT("guest")}
         dashboard={
           <>
-                <div className="context-bar">
-                  <DatePicker
+                <div className="operations-scope">
+                  <DatePicker compact
                     value={selectedDate}
                     onChange={setSelectedDate}
                     businessDate={businessDate}

@@ -23,7 +23,7 @@ interface StatGridProps {
   /** 라벨 텍스트 크기 오버라이드 (기본: 'text-xs') */
   labelClassName?: string;
   /** list panel 안에서는 필요한 하단 구획선과 inset을 함께 제공한다. */
-  variant?: "quiet" | "embedded";
+  variant?: "quiet" | "embedded" | "inline";
 }
 
 export default function StatGrid({
@@ -32,6 +32,19 @@ export default function StatGrid({
   labelClassName,
   variant = "quiet",
 }: StatGridProps) {
+  if (variant === "inline") {
+    return (
+      <dl className="record-summary-strip" aria-busy={isLoading}>
+        {items.map((item) => (
+          <div key={item.label}>
+            <dt>{item.label}</dt>
+            <dd>{isLoading ? "—" : item.value}</dd>
+          </div>
+        ))}
+      </dl>
+    );
+  }
+
   const colsClass =
     items.length === 1
       ? "grid-cols-1"

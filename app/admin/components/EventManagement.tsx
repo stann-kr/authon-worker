@@ -2,7 +2,7 @@
 
 import { fetchEvents } from "@/lib/events/client";
 
-import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import Sheet from "@/components/overlays/Sheet";
 import Button from "@/components/Button";
@@ -23,6 +23,7 @@ import { deriveAsyncListState, shouldShowEmptyState } from "@/lib/ui/async-list-
 import EventCloseout from "./EventCloseout";
 
 interface EventManagementProps {
+  scopeSelector?: ReactNode;
   selectedDate: string;
   onDateChange: (date: string) => void;
   businessDate: string;
@@ -34,6 +35,7 @@ interface EventManagementProps {
 const EMPTY_EVENTS: Event[] = [];
 
 export default function EventManagement({
+  scopeSelector,
   selectedDate,
   onDateChange,
   businessDate,
@@ -347,28 +349,16 @@ export default function EventManagement({
 
   return (
     <div className="space-y-4">
-      {isSuperAdmin && venues.length > 0 && (
-        <VenueSelector
-          venues={venues}
-          selectedVenueId={selectedVenueId}
-          onVenueChange={setSelectedVenueId}
-          disabled={Boolean(busyId)}
-          className="app-panel p-4 sm:p-5"
-        />
-      )}
-
-      <div className="context-bar">
-        <DatePicker
-          value={selectedDate}
-          onChange={onDateChange}
-          businessDate={businessDate}
-          disabled={Boolean(busyId)}
-        />
+      <div className="operations-scope">
+        <DatePicker compact value={selectedDate} onChange={onDateChange} businessDate={businessDate} disabled={Boolean(busyId)} />
+        {isSuperAdmin && venues.length > 0 && <VenueSelector venues={venues} selectedVenueId={selectedVenueId}
+          onVenueChange={setSelectedVenueId} disabled={Boolean(busyId)} className="scope-venue" />}
+        {scopeSelector}
       </div>
 
       {feedback && <Alert type={feedback.type} message={feedback.message} />}
 
-      <section className="app-panel" aria-labelledby="event-list-title">
+      <section className="record-collection" aria-labelledby="event-list-title">
         <PanelHeader
           title={t("listTitle")}
           headingId="event-list-title"
@@ -377,7 +367,7 @@ export default function EventManagement({
           onRefresh={loadEvents}
           isLoading={isLoading}
         />
-        <div className="p-4 sm:p-5">
+        <div className="record-collection-body">
           {loadError && <Alert type="error" message={t("loadFailed")} />}
           {!venueId ? (
             <p className="border border-border-default bg-canvas p-4 text-sm text-text-muted">
@@ -465,7 +455,7 @@ export default function EventManagement({
           </fieldset>
         </form>
       </Sheet>
-      {detailEvent && <Sheet title={detailEvent.name} presentation="detail" wide onClose={() => { setDetailId(null); setPendingTransition(null); }} busy={Boolean(busyId)}>
+      {detailEvent && <Sheet title={detailEvent.name} presentation="detail" size="record" onClose={() => { setDetailId(null); setPendingTransition(null); }} busy={Boolean(busyId)}>
         {renderDetails(detailEvent)}
       </Sheet>}
     </div>

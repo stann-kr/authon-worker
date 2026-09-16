@@ -125,9 +125,12 @@ const GuestListCard: React.FC<GuestListCardProps> = ({
       className="product-guest-row"
       data-status={guest.status}
       data-selected={isDetailOpen}
+      data-mode={mode}
+      data-can-delete={mode === "operations" && Boolean(onDelete)}
     >
       <div className="product-guest-line">
         <button type="button" className="product-guest-identity" onClick={openDetail}
+          aria-label={[guest.name, djName, registeredByName !== djName ? registeredByName : null].filter(Boolean).join(" ")}
           aria-haspopup="dialog" aria-expanded={isDetailOpen}>
           <span className="product-guest-index" aria-hidden="true">{String(index + 1).padStart(2, "0")}</span>
           <span className="product-guest-name">
@@ -135,6 +138,16 @@ const GuestListCard: React.FC<GuestListCardProps> = ({
             {(djName || registeredByName) && <small>{djName || registeredByName}</small>}
           </span>
         </button>
+
+        {mode === "operations" && <>
+          <div className="product-guest-owner" aria-hidden="true"><span>{djName || "—"}</span>
+            {registeredByName && <small>{registeredByName}</small>}
+          </div>
+          <span className="product-guest-status" aria-hidden="true">
+            {guest.status === "checked" ? <><Icon name="check" size={14} />{guest.checkInTime ? formatTime(guest.checkInTime) : rosterT("checked")}</>
+              : guest.status === "pending" ? rosterT("pending") : t("removed")}
+          </span>
+        </>}
 
         <div className="product-guest-actions">
           {guest.status === "pending" && (

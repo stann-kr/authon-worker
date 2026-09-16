@@ -7,6 +7,7 @@ interface OperationsLayoutProps {
   variant?: "split" | "stacked";
   headingLevel?: 1 | 2 | 3 | null;
   headingId?: string;
+  contextClassName?: string;
 }
 
 export default function OperationsLayout({
@@ -16,6 +17,7 @@ export default function OperationsLayout({
   variant = "split",
   headingLevel = 1,
   headingId,
+  contextClassName = "",
 }: OperationsLayoutProps) {
   const Heading =
     headingLevel === 1 ? "h1" : headingLevel === 2 ? "h2" : "h3";
@@ -29,7 +31,7 @@ export default function OperationsLayout({
         {headingLevel !== null && (
           <Heading id={headingId} className="sr-only">{title}</Heading>
         )}
-        <div className="space-y-4">{dashboard}</div>
+        <div className={`operations-context ${contextClassName}`}>{dashboard}</div>
       </div>
       <div className="min-w-0">{children}</div>
     </div>

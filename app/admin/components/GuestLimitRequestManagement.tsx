@@ -158,10 +158,10 @@ export default function GuestLimitRequestManagement({
           venues={venues}
           selectedVenueId={selectedVenueId}
           onVenueChange={setSelectedVenueId}
-          className="app-panel p-4 sm:p-5"
+          className="record-scope-selector"
         />
       )}
-      <section className="app-panel" aria-labelledby="guest-limit-requests-title">
+      <section className="record-collection" aria-labelledby="guest-limit-requests-title">
         <PanelHeader
           title={t("title")}
           headingId="guest-limit-requests-title"
@@ -169,7 +169,7 @@ export default function GuestLimitRequestManagement({
           onRefresh={loadRequests}
           isLoading={isCurrentVenueLoading}
         />
-        <div className="space-y-4 p-4 sm:p-5">
+        <div className="record-collection-body space-y-4">
           {loadError && <Alert type="error" message={loadError} />}
           {feedback && <Alert type={feedback.type} message={feedback.message} />}
           {!venueId ? (

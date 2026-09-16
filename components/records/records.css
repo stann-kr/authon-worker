@@ -1,4 +1,11 @@
 /* Shared list and detail primitives for operational records. */
+.record-collection { min-width: 0; }
+.record-collection-body { padding-block: 16px; }
+.record-scope-selector { width: min(100%, 320px); }
+.record-summary-strip { display: flex; flex-wrap: wrap; gap: 10px 24px; padding-block: 8px; }
+.record-summary-strip > div { display: flex; align-items: baseline; gap: 8px; }
+.record-summary-strip dt { font-size: 12px; color: var(--app-text-muted); }
+.record-summary-strip dd { font-size: 14px; font-variant-numeric: tabular-nums; color: var(--app-text); }
 .record-list { container: records / inline-size; min-width: 0; }
 .record-row { min-width: 0; border-bottom: 1px solid var(--app-border-subtle); }
 .record-summary { display: flex; align-items: center; gap: 16px; min-height: 64px; padding: 8px 16px; }
@@ -14,6 +21,11 @@
 .record-detail-grid > div, .record-detail-grid > p { min-width: 0; overflow-wrap: anywhere; }
 .record-detail-grid dt { color: var(--app-text-muted); font-size: 12px; }
 .record-detail-grid dd { margin-top: 4px; font-size: 15px; font-variant-numeric: tabular-nums; }
+.record-information-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; }
+.record-information-grid > * { min-width: 0; }
+@container sheet-content (max-width: 619px) {
+  .record-information-grid { grid-template-columns: minmax(0, 1fr); }
+}
 .record-toolbar { display: flex; flex-wrap: wrap; gap: 12px; align-items: end; }
 .record-toolbar > * { flex: 1 1 200px; min-width: 0; }
 @container records (max-width: 479px) {

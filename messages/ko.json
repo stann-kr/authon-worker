@@ -860,6 +860,13 @@
     "typePrivate": "프라이빗"
   },
   "UserAdmin": {
+    "permissions": "권한",
+    "basicInformation": "기본 정보",
+    "loginAndRecovery": "로그인 및 복구",
+    "passwordSetup": "비밀번호 설정",
+    "passwordConfigured": "설정 완료",
+    "moreActions": "추가 계정 작업",
+    "noRecentActivity": "최근 조회 범위에 이 계정의 관리 기록이 없습니다.",
     "title": "관리자 사용자 관리",
     "loadFailed": "사용자를 불러오지 못했습니다. 다시 시도해주세요.",
     "connectionLoadFailed": "사용자를 불러오지 못했습니다. 네트워크 상태를 확인해주세요.",
@@ -1141,6 +1148,8 @@
     "discard": "내용 버리고 닫기"
   },
   "Roster": {
+    "guestName": "이름",
+    "rowActions": "작업",
     "search": "이름, 담당자, 입력자 검색",
     "status": "입장 상태",
     "all": "전체",

@@ -233,18 +233,24 @@ async function renderUserCard({
   isBusy = false,
   actionsDisabled = false,
   onUpdate = async () => true,
+  actorRole = "super_admin",
+  activity,
+  activityUnavailable = false,
 }: {
   user?: User;
   isBusy?: boolean;
   actionsDisabled?: boolean;
   onUpdate?: (id: string, updates: object) => Promise<boolean>;
+  actorRole?: User["role"];
+  activity?: Array<{ id: string; actor: string; action: string; createdAt: string; displayTime: string }>;
+  activityUnavailable?: boolean;
 } = {}) {
   const { UserCard } = await loadUserManagementModule();
   const view = render(
     <NextIntlClientProvider locale="en" messages={messages}>
-      <UserCard
+      <table><tbody><UserCard
         user={user}
-        actorRole="super_admin"
+        actorRole={actorRole}
         currentUserId="actor"
         timeZone="Asia/Seoul"
         isBusy={isBusy}
@@ -253,12 +259,49 @@ async function renderUserCard({
         onToggleActive={async () => {}}
         onResetPassword={async () => {}}
         onDelete={async () => {}}
-      />
+        venueName="Test venue"
+        activity={activity}
+        activityUnavailable={activityUnavailable}
+      /></tbody></table>
     </NextIntlClientProvider>,
   );
   if (!actionsDisabled) fireEvent.click(screen.getByRole("button", { name: new RegExp(user.name) }));
   return { ...view, UserCard };
 }
+
+test("account detail shows effective Door access and preserves audit visibility and failure meaning", async () => {
+  const activity = [{
+    id: "audit-a", actor: "QA reviewer", action: "updated",
+    createdAt: "2026-09-16T00:00:00.000Z", displayTime: "Sep 16, 09:00",
+  }];
+  for (const scenario of [
+    { actorRole: "super_admin" as const, activityUnavailable: false, doorAccessEnabled: true },
+    { actorRole: "venue_admin" as const, activityUnavailable: false, doorAccessEnabled: false },
+    { actorRole: "super_admin" as const, activityUnavailable: true, doorAccessEnabled: true },
+  ]) {
+    const view = await renderUserCard({
+      user: { ...USER_A, role: "staff", accountKind: "shared", doorAccessEnabled: scenario.doorAccessEnabled },
+      actorRole: scenario.actorRole, activityUnavailable: scenario.activityUnavailable, activity,
+    });
+    const dialog = screen.getByRole("dialog", { name: USER_A.name });
+    assert.equal(dialog.getAttribute("aria-modal"), "true");
+    assert.ok(within(dialog).getByRole("heading", { name: messages.UserAdmin.basicInformation }));
+    assert.ok(within(dialog).getByText("Test venue"));
+    assert.equal(
+      within(dialog).getByText(messages.UserAdmin.doorAccess).nextElementSibling?.textContent,
+      scenario.doorAccessEnabled ? messages.UserAdmin.enabled : messages.UserAdmin.disabled,
+    );
+    assert.equal(Boolean(within(dialog).queryByText(/QA reviewer/)),
+      scenario.actorRole === "super_admin" && !scenario.activityUnavailable);
+    assert.equal(Boolean(within(dialog).queryByRole("heading", { name: messages.UserAdmin.activityTitle })),
+      scenario.actorRole === "super_admin");
+    if (scenario.activityUnavailable) {
+      assert.ok(within(dialog).getByText(messages.UserAdmin.activityLoadFailed));
+      assert.equal(within(dialog).queryByText(messages.UserAdmin.noRecentActivity), null);
+    }
+    view.unmount();
+  }
+});
 
 test("UserCard moves focus across edit subtree replacement", async () => {
   await renderUserCard();
@@ -334,7 +377,7 @@ test("a scope-wide disabled state removes every user card action", async () => {
   render(
     <NextIntlClientProvider locale="en" messages={messages}>
       <section data-testid="user-a-card">
-        <UserCard
+        <table><tbody><UserCard
           user={USER_A}
           actorRole="super_admin"
           currentUserId="actor"
@@ -344,10 +387,10 @@ test("a scope-wide disabled state removes every user card action", async () => {
           onToggleActive={async () => {}}
           onResetPassword={async () => {}}
           onDelete={async () => {}}
-        />
+        /></tbody></table>
       </section>
       <section data-testid="user-b-card">
-        <UserCard
+        <table><tbody><UserCard
           user={USER_B}
           actorRole="super_admin"
           currentUserId="actor"
@@ -357,7 +400,7 @@ test("a scope-wide disabled state removes every user card action", async () => {
           onToggleActive={async () => {}}
           onResetPassword={async () => {}}
           onDelete={async () => {}}
-        />
+        /></tbody></table>
       </section>
     </NextIntlClientProvider>,
   );

@@ -860,6 +860,13 @@
     "typePrivate": "Private"
   },
   "UserAdmin": {
+    "permissions": "Permissions",
+    "basicInformation": "Basic information",
+    "loginAndRecovery": "Sign-in and recovery",
+    "passwordSetup": "Password setup",
+    "passwordConfigured": "Complete",
+    "moreActions": "More account actions",
+    "noRecentActivity": "No activity for this account in the loaded recent records.",
     "title": "Admin user management",
     "loadFailed": "Unable to load users. Please try again.",
     "connectionLoadFailed": "Unable to load users. Please check your connection.",
@@ -1141,6 +1148,8 @@
     "discard": "Discard and close"
   },
   "Roster": {
+    "guestName": "Guest",
+    "rowActions": "Actions",
     "search": "Search name, owner or operator",
     "status": "Admission status",
     "all": "All",

@@ -185,6 +185,9 @@ function AdminPageContent() {
     ? taskOptions.filter((option) => option.group === activeGroup && option.id !== "password-requests")
     : [];
 
+  const eventScopeSelector = <EventScopeSelector venueId={venueId} businessDate={selectedDate}
+    value={selectedEventId} onChange={setSelectedEventId} reloadKey={eventRefreshKey} />;
+
   return (
     <WorkspaceShell contentClassName="gap-4 pb-8" title={activeTaskLabel}
       adminNavigation={{ activeTask, onTaskChange: changeTask,
@@ -224,25 +227,9 @@ function AdminPageContent() {
         </h2>
         {!isRoleReady && <AdminTaskLoading />}
         {isRoleReady && <>
-        {[
-          "guest-list",
-          "guest-requests",
-          "event-manage",
-          "link-create",
-          "link-manage",
-        ].includes(activeTask) && (
-          <div className="context-bar mb-4">
-            <EventScopeSelector
-              venueId={venueId}
-              businessDate={selectedDate}
-              value={selectedEventId}
-              onChange={setSelectedEventId}
-              reloadKey={eventRefreshKey}
-            />
-          </div>
-        )}
+        {activeTask === "guest-requests" && <div className="operations-scope mb-4">{eventScopeSelector}</div>}
         {activeTask === "guest-list" && (
-          <GuestList
+          <GuestList scopeSelector={eventScopeSelector}
             selectedDate={selectedDate}
             onDateChange={setSelectedDate}
             businessDate={businessDate}
@@ -256,7 +243,7 @@ function AdminPageContent() {
           />
         )}
         {activeTask === "event-manage" && (
-          <EventManagement
+          <EventManagement scopeSelector={eventScopeSelector}
             selectedDate={selectedDate}
             onDateChange={setSelectedDate}
             businessDate={businessDate}
@@ -266,7 +253,7 @@ function AdminPageContent() {
           />
         )}
         {(activeTask === "link-create" || activeTask === "link-manage") && (
-          <LinkManagement
+          <LinkManagement scopeSelector={eventScopeSelector}
             selectedDate={selectedDate}
             onDateChange={setSelectedDate}
             businessDate={businessDate}

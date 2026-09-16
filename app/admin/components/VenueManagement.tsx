@@ -160,8 +160,10 @@ export default function VenueManagement({
         )}
 
         {activeTab === "list" && (
-          <div className="app-panel p-3 sm:p-4">
+          <div>
             <StatGrid
+              variant="inline"
+              isLoading={isLoading}
               items={[
                 {
                   label: t("totalVenues"),
@@ -241,7 +243,7 @@ export default function VenueManagement({
                         }
                       className={`min-h-11 border p-3 text-xs font-medium transition-colors ${
                           formData.type === opt.value
-                            ? "border-action-primary bg-action-primary text-action-text"
+                            ? "border-border-strong bg-surface-active text-text-heading"
                             : "bg-canvas text-text-muted border-border-default hover:text-text-heading hover:border-border-strong"
                         }`}
                       >
@@ -461,14 +463,14 @@ export default function VenueManagement({
         )}
 
         {activeTab === "list" && (
-          <div className="app-panel">
+          <div className="record-collection">
             <PanelHeader
               title={t("venueList")}
               count={venues.length}
               onRefresh={loadVenues}
               isLoading={isLoading}
             />
-            <div className="p-4">
+            <div className="record-collection-body">
               {listError && <Alert type="error" message={listError} className="mb-4" />}
               {listState === "loading" ? (
                 <Skeleton rows={4} />
@@ -675,17 +677,17 @@ export function VenueCard({
             <span className="record-status">{venue.active ? t("active") : t("inactive")}</span>
           </button>
         </div>
-      {detail.open && <Sheet title={venue.name} presentation="detail" onClose={() => { handleCancelEdit(); detail.close(); }}
+      {detail.open && <Sheet title={venue.name} presentation="detail" size="record" onClose={() => { handleCancelEdit(); detail.close(); }}
         busy={actionsDisabled || isSaving || isTogglingActive} dirty={isEditing && JSON.stringify(editData) !== JSON.stringify(createVenueEditData(venue))}>
         {error && <Alert type="error" message={error} />}
       {!isEditing ? (
-        <div>
+        <div className="record-information-grid">
           {venue.description && (
-            <p className="mb-3 break-words text-sm leading-relaxed text-text-muted">
+            <p className="col-span-full break-words text-sm leading-relaxed text-text-muted">
               {venue.description}
             </p>
           )}
-          <div className="mb-3 border border-border-subtle bg-canvas p-3">
+          <div className="border-b border-border-subtle pb-4">
             <p className="app-label">{t("brandDomain")}</p>
             <p className="break-words text-sm font-medium text-text-heading">
               {venue.brandName || venue.name}
@@ -697,7 +699,7 @@ export function VenueCard({
               {t("defaultLanguage")}: {venue.defaultLocale || "en"}
             </p>
           </div>
-          <div className="grid grid-cols-2 gap-2 mb-3">
+          <div className="grid grid-cols-2 gap-4 border-b border-border-subtle pb-4">
             <div>
               <p className="text-xs text-text-dim mb-1">
                 {t("status")}
@@ -719,14 +721,14 @@ export function VenueCard({
               </p>
             </div>
           </div>
-          <div className="mb-3 border border-border-subtle bg-canvas p-3">
+          <div className="col-span-full border-b border-border-subtle pb-4">
             <p className="app-label">{t("localOperations")}</p>
             <p className="font-mono text-sm text-text-heading">{venue.timezone}</p>
             <p className="mt-1 font-mono text-xs text-text-muted">
               {venue.openingTime} - {venue.closingTime}
             </p>
           </div>
-          <div className="grid grid-cols-2 gap-2">
+          <div className="col-span-full flex flex-wrap gap-2">
             <Button
               ref={editButtonRef}
               type="button"
@@ -734,7 +736,6 @@ export function VenueCard({
               disabled={actionsDisabled}
               variant="secondary"
               size="sm"
-              fullWidth
             >
               {t("edit")}
             </Button>
@@ -751,7 +752,6 @@ export function VenueCard({
               }}
               variant={venue.active ? "danger" : "secondary"}
               size="sm"
-              fullWidth
             >
               {venue.active ? t("deactivate") : t("activate")}
             </Button>
@@ -760,7 +760,7 @@ export function VenueCard({
       ) : (
         <fieldset
           disabled={isSaving || actionsDisabled}
-          className="space-y-3"
+          className="record-form space-y-4"
           aria-busy={isSaving || actionsDisabled}
         >
           <div>
@@ -810,7 +810,7 @@ export function VenueCard({
                   }
                   className={`min-h-11 border p-2 text-xs font-medium transition-colors ${
                     editData.type === opt.value
-                      ? "border-action-primary bg-action-primary text-action-text"
+                      ? "border-border-strong bg-surface-active text-text-heading"
                       : "bg-surface-raised text-text-muted border-border-strong hover:text-text-heading hover:border-border-strong"
                   }`}
                 >

@@ -1,7 +1,7 @@
 "use client";
 
 import Sheet from "@/components/overlays/Sheet";
-import { useState, useCallback } from "react";
+import { useState, useCallback, type ReactNode } from "react";
 import VenueSelector, {
   useVenueSelector,
 } from "../../../components/VenueSelector";
@@ -67,6 +67,7 @@ const LINK_MANAGE_ACTIONS: LinkManageControllerActions = Object.freeze({
 export type LinkManagementSection = "create" | "manage";
 
 interface LinkManagementProps {
+  scopeSelector?: ReactNode;
   selectedDate: string;
   onDateChange: (date: string) => void;
   businessDate: string;
@@ -77,6 +78,7 @@ interface LinkManagementProps {
 }
 
 export default function LinkManagement({
+  scopeSelector,
   selectedDate,
   onDateChange,
   businessDate,
@@ -200,26 +202,13 @@ export default function LinkManagement({
         headingLevel={null}
         dashboard={
           <>
-        {(activeTab === "create" || manageScope === "date") && (
-          <div className="context-bar">
-            <DatePicker
-              value={selectedDate}
-              onChange={onDateChange}
-              businessDate={businessDate}
-              disabled={isGenerating}
-            />
-          </div>
-        )}
-        {/* Venue selector for super_admin */}
-        {isSuperAdmin && venues.length > 0 && (
-          <VenueSelector
-            venues={venues}
-            selectedVenueId={selectedVenueId}
-            onVenueChange={setSelectedVenueId}
-            disabled={isGenerating}
-            className="app-panel p-4 sm:p-5"
-          />
-        )}
+        <div className="operations-scope">
+          {(activeTab === "create" || manageScope === "date") && <DatePicker compact
+            value={selectedDate} onChange={onDateChange} businessDate={businessDate} disabled={isGenerating} />}
+          {isSuperAdmin && venues.length > 0 && <VenueSelector venues={venues} selectedVenueId={selectedVenueId}
+            onVenueChange={setSelectedVenueId} disabled={isGenerating} className="scope-venue" />}
+          {(activeTab === "create" || manageScope === "date") && scopeSelector}
+        </div>
         {(showSectionNavigation || activeTab === "manage") && (
           <div>
             {showSectionNavigation && (
@@ -236,10 +225,11 @@ export default function LinkManagement({
             )}
             {activeTab === "manage" && (
               <div
-                className={`app-panel p-4 sm:p-5 ${showSectionNavigation ? "mt-4" : ""}`}
+                className={`flex flex-wrap items-end gap-4 ${showSectionNavigation ? "mt-4" : ""}`}
               >
+                <div>
                 <p className="app-label">{t("view")}</p>
-                <div className="grid grid-cols-2 gap-2">
+                <div className="flex gap-2">
                   {(["date", "recent"] as const).map((scope) => (
                     <button
                       key={scope}
@@ -251,7 +241,7 @@ export default function LinkManagement({
                       }}
                       className={`min-h-11 border px-3 py-2 text-xs font-medium ${
                         manageScope === scope
-                          ? "border-action-primary bg-action-primary text-action-text"
+                          ? "border-border-strong bg-surface-active text-text-heading"
                           : "border-border-default bg-surface-raised text-text-muted"
                       }`}
                     >
@@ -259,10 +249,11 @@ export default function LinkManagement({
                     </button>
                   ))}
                 </div>
+                </div>
                 {manageScope === "recent" && (
-                  <div className="mt-3">
+                  <div>
                     <p className="app-label">{t("items")}</p>
-                    <div className="grid grid-cols-2 gap-2">
+                    <div className="flex gap-2">
                       {([5, 10] as const).map((limit) => (
                         <button
                           key={limit}
@@ -271,7 +262,7 @@ export default function LinkManagement({
                           onClick={() => setRecentLimit(limit)}
                           className={`min-h-11 border px-3 py-2 font-mono text-xs ${
                             recentLimit === limit
-                              ? "border-action-primary bg-action-primary text-action-text"
+                              ? "border-border-strong bg-surface-active text-text-heading"
                               : "border-border-default bg-surface-raised text-text-muted"
                           }`}
                         >
@@ -590,7 +581,7 @@ export default function LinkManagement({
                         }}
                         className={`min-h-11 border px-3 py-2 text-xs font-medium disabled:cursor-not-allowed disabled:opacity-50 ${
                           formData.localeMode === option.value
-                            ? "border-action-primary bg-action-primary text-action-text"
+                            ? "border-border-strong bg-surface-active text-text-heading"
                             : "border-border-default bg-canvas text-text-muted hover:border-border-strong hover:text-text-heading"
                         }`}
                       >
@@ -691,7 +682,7 @@ export default function LinkManagement({
             {scopedManageError && <Alert type="error" message={scopedManageError} />}
             {scopedSuccess && <Alert type="success" message={scopedSuccess} />}
 
-            <div className="app-panel">
+            <div className="record-collection">
               <PanelHeader
                 title={t("linkList")}
                 count={sortedLinks.length}
@@ -699,7 +690,7 @@ export default function LinkManagement({
                 isLoading={isCurrentScopeFetching}
               />
 
-              <div className="border-b border-border-subtle p-4 sm:p-5">
+              <div className="border-b border-border-subtle py-3">
                 <div className="flex flex-wrap items-end justify-between gap-3">
                   <div className="flex flex-wrap gap-2">
                     {[
@@ -714,7 +705,7 @@ export default function LinkManagement({
                         aria-pressed={manageFilter === filter.key}
                         className={`min-h-11 border px-3 py-2 text-xs font-medium transition-colors ${
                           manageFilter === filter.key
-                            ? "border-action-primary bg-action-primary text-action-text"
+                            ? "border-border-strong bg-surface-active text-text-heading"
                             : "border-border-default bg-canvas text-text-muted hover:border-border-strong hover:text-text-heading"
                         }`}
                       >

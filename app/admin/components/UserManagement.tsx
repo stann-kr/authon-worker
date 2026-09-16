@@ -8,7 +8,6 @@ import InviteUser from "./InviteUser";
 import VenueSelector, {
   useVenueSelector,
 } from "../../../components/VenueSelector";
-import StatGrid from "../../../components/StatGrid";
 import PanelHeader from "../../../components/PanelHeader";
 import RoleLabel from "../../../components/RoleLabel";
 import Alert from "../../../components/Alert";
@@ -27,7 +26,7 @@ import {
 } from "../../../lib/api/users";
 import type { User } from "@/lib/users/types";
 import { useLocale, useTranslations } from "next-intl";
-import { isVenueManagedRole } from "@/lib/users/policy";
+import { hasAccess, isVenueManagedRole } from "@/lib/users/policy";
 import { formatVenueDateTime } from "@/lib/date";
 import { shouldShowEmptyState } from "@/lib/ui/async-list-state";
 import {
@@ -226,6 +225,7 @@ export default function UserManagement({
     <>
     <OperationsLayout
       variant="stacked"
+      contextClassName="account-context"
       title={t("title")}
       headingLevel={null}
       dashboard={
@@ -237,7 +237,7 @@ export default function UserManagement({
             selectedVenueId={selectedVenueId}
             onVenueChange={setSelectedVenueId}
             placeholder={t("allVenues")}
-            className="app-panel p-4 sm:p-5"
+            className="account-venue"
           />
         )}
         {showSectionNavigation && (
@@ -252,70 +252,14 @@ export default function UserManagement({
           />
         )}
 
-        {activeTab === "users" && (
-          <div className="app-panel space-y-3 p-3 sm:p-4">
-            <StatGrid
-              items={[
-                {
-                  label: t("totalUsers"),
-                  value: currentUsers.length,
-                  color: "default",
-                },
-                {
-                  label: t("ready"),
-                  value: currentUsers.filter(
-                    (u) =>
-                      u.active &&
-                      (u.migrationStatus !== "pending_reset" ||
-                        !!u.passwordSetAt),
-                  ).length,
-                  color: "default",
-                },
-                {
-                  label: t("setupPending"),
-                  value: currentUsers.filter(
-                    (u) =>
-                      u.active &&
-                      u.migrationStatus === "pending_reset" &&
-                      !u.passwordSetAt,
-                  ).length,
-                  color: "waiting",
-                },
-                {
-                  label: t("inactive"),
-                  value: currentUsers.filter((u) => !u.active).length,
-                  color: "danger",
-                },
-              ]}
-            />
-            <div className="space-y-3">
-              <StatGrid
-                items={[
-                  {
-                    label: "DJ",
-                    value: currentUsers.filter((u) => u.role === "dj").length,
-                    color: "default",
-                  },
-                  {
-                    label: t("staff"),
-                    value: currentUsers.filter((u) => u.role === "staff").length,
-                    color: "default",
-                  },
-                  {
-                    label: t("door"),
-                    value: currentUsers.filter((u) => u.role === "door_staff").length,
-                    color: "default",
-                  },
-                  {
-                    label: t("admin"),
-                    value: currentUsers.filter((u) => u.role === "venue_admin").length,
-                    color: "danger",
-                  },
-                ]}
-              />
-            </div>
-          </div>
-        )}
+        {activeTab === "users" && <dl className="account-summary">
+          {[
+            { label: t("totalUsers"), value: currentUsers.length },
+            { label: t("ready"), value: currentUsers.filter((u) => u.active && (u.migrationStatus !== "pending_reset" || !!u.passwordSetAt)).length },
+            { label: t("setupPending"), value: currentUsers.filter((u) => u.active && u.migrationStatus === "pending_reset" && !u.passwordSetAt).length },
+            { label: t("inactive"), value: currentUsers.filter((u) => !u.active).length },
+          ].map((item) => <div key={item.label}><dt>{item.label}</dt><dd>{isCurrentScopeLoading ? "—" : item.value}</dd></div>)}
+        </dl>}
         </>
       }
     >
@@ -323,14 +267,14 @@ export default function UserManagement({
       <div className="min-w-0">
         {activeTab === "create" && <div className="record-form"><InviteUser /></div>}
         {activeTab === "users" && (
-          <div className="app-panel">
+          <div className="account-directory">
             <PanelHeader
               title={t("userList")}
               count={filteredUsers.length}
               onRefresh={loadUsers}
               isLoading={isCurrentScopeLoading}
             />
-            <div className="p-4">
+            <div className="account-directory-body">
               {loadError && <Alert type="error" message={loadError} className="mb-4" />}
               {scopedFeedback && (
                 <Alert type={scopedFeedback.type} message={scopedFeedback.message} className="mb-4" />
@@ -400,9 +344,9 @@ export default function UserManagement({
                 </div>
               </Sheet>}
 
-              <div className="mb-4 grid gap-2 xl:grid-cols-[minmax(0,1fr)_180px_180px]">
+              <div className="account-filters">
                 <div>
-                  <label htmlFor="user-search" className="app-label">
+                  <label htmlFor="user-search" className="sr-only">
                     {t("searchUsers")}
                   </label>
                   <input
@@ -419,7 +363,7 @@ export default function UserManagement({
                   />
                 </div>
                 <div>
-                  <label htmlFor="user-role-filter" className="app-label">
+                  <label htmlFor="user-role-filter" className="sr-only">
                     {t("roleFilter")}
                   </label>
                   <select
@@ -442,7 +386,7 @@ export default function UserManagement({
                   </select>
                 </div>
                 <div>
-                  <label htmlFor="user-status-filter" className="app-label">
+                  <label htmlFor="user-status-filter" className="sr-only">
                     {t("statusFilter")}
                   </label>
                   <select
@@ -481,7 +425,16 @@ export default function UserManagement({
                     isCurrentScopeLoading ? "pointer-events-none" : ""
                   }`}
                 >
-                  {filteredUsers.map((user) => (
+                  <table className="account-table" aria-label={t("userList")}>
+                    <thead><tr>
+                      <th scope="col" className="account-name-cell">{t("name")}</th>
+                      <th scope="col" className="account-role-cell">{t("role")}</th>
+                      <th scope="col" className="account-limit-cell">{t("guestLimit")}</th>
+                      <th scope="col" className="account-door-cell">{t("door")}</th>
+                      <th scope="col" className="account-status-cell">{t("status")}</th>
+                      <th scope="col" className="account-login-cell">{t("lastLoginAt")}</th>
+                    </tr></thead>
+                    <tbody>{filteredUsers.map((user) => (
                     <UserCard
                       key={user.id}
                       user={user}
@@ -491,6 +444,12 @@ export default function UserManagement({
                         venues.find((venue) => venue.id === user.venueId)?.timezone ??
                         currentVenue?.timezone
                       }
+                      venueName={venues.find((venue) => venue.id === user.venueId)?.name ?? currentVenue?.name}
+                      activity={isSuperAdmin ? scopedAuditEvents.filter((event) => event.targetUserId === user.id).map((event) => ({
+                        id: event.id, actor: resolveAuditUserName(event.actorUserId), action: getAuditActionLabel(event.action),
+                        createdAt: event.createdAt, displayTime: formatActivityDate(event.createdAt, event.venueId),
+                      })) : undefined}
+                      activityUnavailable={listState === "partial"}
                       feedback={scopedFeedback}
                       isBusy={busyUserId === user.id}
                       actionsDisabled={
@@ -505,17 +464,17 @@ export default function UserManagement({
                         setPendingUserAction({ kind: "delete", user })
                       }
                     />
-                  ))}
+                  ))}</tbody>
+                  </table>
                 </RecordList>
               )}
 
               {isSuperAdmin && (
-              <div className="mt-6 border-t border-border-default pt-5">
-                <div className="mb-3 flex items-center justify-between gap-3">
-                  <h3 className="type-panel-title">{t("activityTitle")}</h3>
-                  <span className="font-mono text-xs text-text-dim">{scopedAuditEvents.length}</span>
-                </div>
-                {scopedAuditEvents.length === 0 ? (
+              <details className="account-audit">
+                <summary>{t("activityTitle")} <span>{scopedAuditEvents.length}</span></summary>
+                {listState === "partial" ? (
+                  <p className="py-3 text-xs text-text-muted" role="status">{t("activityLoadFailed")}</p>
+                ) : scopedAuditEvents.length === 0 ? (
                   <p className="border border-border-default bg-canvas p-4 text-xs text-text-muted">
                     {t("noActivity")}
                   </p>
@@ -539,7 +498,7 @@ export default function UserManagement({
                     ))}
                   </div>
                 )}
-              </div>
+              </details>
               )}
             </div>
           </div>
@@ -573,6 +532,9 @@ export function UserCard({
   actorRole,
   currentUserId,
   timeZone,
+  venueName,
+  activity,
+  activityUnavailable = false,
   isBusy,
   feedback,
   actionsDisabled,
@@ -585,6 +547,9 @@ export function UserCard({
   actorRole: User["role"] | null;
   currentUserId: string | null;
   timeZone?: string | null;
+  venueName?: string;
+  activity?: Array<{ id: string; actor: string; action: string; createdAt: string; displayTime: string }>;
+  activityUnavailable?: boolean;
   isBusy: boolean;
   feedback?: { type: "success" | "error"; message: string } | null;
   actionsDisabled: boolean;
@@ -730,132 +695,92 @@ export function UserCard({
 
   const dirty = isEditing && (editData.name !== user.name || editData.role !== user.role ||
     editData.accountKind !== user.accountKind || editData.doorAccessEnabled !== user.doorAccessEnabled || editData.guestLimit !== user.guestLimit);
+  const doorAllowed = hasAccess({ role: user.role, accountKind: user.accountKind, doorAccessEnabled: user.doorAccessEnabled }, ["door"]);
+  const role = user.accountKind === "shared" ? "shared" : user.role;
   return (
-    <article className="record-row" aria-busy={isBusy}>
-      <div className="record-summary">
-        <button type="button" className="record-open" onClick={detail.show} disabled={actionsDisabled} aria-haspopup="dialog" aria-expanded={detail.open}>
-          <span className="record-identity"><strong>{user.name}</strong><small>{isDeleted ? t("deletedAccount") : user.email}</small></span>
-          <span className="record-value"><RoleLabel role={user.accountKind === "shared" ? "shared" : user.role} /></span>
-          <span className="record-status">{statusLabel}</span>
+    <>
+    <tr className="account-row" aria-busy={isBusy} data-selected={detail.open}>
+      <td className="account-name-cell">
+        <button type="button" className="account-open" onClick={detail.show} disabled={actionsDisabled} aria-haspopup="dialog" aria-expanded={detail.open}>
+          <strong>{user.name}</strong><small>{isDeleted ? t("deletedAccount") : user.email}</small>
+          <span className="account-mobile-role"><RoleLabel role={role} /></span>
         </button>
-      </div>
-      {detail.open && <Sheet title={user.name} presentation="detail" onClose={() => { closeEditor(); detail.close(); }} busy={actionsDisabled} dirty={dirty}>
-        {feedback && <Alert type={feedback.type} message={feedback.message} />}
-        <p className="break-all text-xs text-text-muted">{isDeleted ? t("deletedAccount") : user.email}</p>
+      </td>
+      <td className="account-role-cell"><RoleLabel role={role} /></td>
+      <td className="account-limit-cell">{user.guestLimit ?? "—"}</td>
+      <td className="account-door-cell">{doorAllowed ? t("enabled") : t("disabled")}</td>
+      <td className="account-status-cell"><span className="record-status" data-tone={isSetupPending ? "waiting" : !user.active || isDeleted ? "inactive" : "neutral"}>{statusLabel}</span></td>
+      <td className="account-login-cell">{user.lastLoginAt ? <time dateTime={user.lastLoginAt}>{formatDate(user.lastLoginAt)}</time> : t("never")}</td>
+    </tr>
+    {detail.open && <Sheet title={user.name} presentation="detail" size="record" onClose={() => { closeEditor(); detail.close(); }} busy={actionsDisabled} dirty={dirty}>
+      {feedback && <Alert type={feedback.type} message={feedback.message} />}
       {!isEditing ? (
-        <div>
-          <div className="mb-4 grid grid-cols-2 gap-x-4 gap-y-3">
-            <div>
-              <p className="text-xs text-text-dim mb-1">
-                {t("guestLimit")}
-              </p>
-              <p className="text-text-heading font-mono text-xs sm:text-sm">
-                {user.guestLimit ?? "-"}
-              </p>
-            </div>
-            <div>
-              <p className="text-xs text-text-dim mb-1">
-                {t("status")}
-              </p>
-              <p className={`font-mono text-xs sm:text-sm ${user.active && !isDeleted ? "text-text-heading" : "text-status-danger"}`}>
-                {statusLabel}
-              </p>
-            </div>
-            <div>
-              <p className="mb-1 text-xs text-text-dim">{t("accountType")}</p>
-              <p className="font-mono text-xs text-text-heading">
-                {user.accountKind === "shared" ? t("sharedAccount") : t("personalAccount")}
-              </p>
-            </div>
-            <div>
-              <p className="mb-1 text-xs text-text-dim">{t("doorAccess")}</p>
-              <p className="font-mono text-xs text-text-heading">
-                {user.accountKind === "shared"
-                  ? user.doorAccessEnabled
-                    ? t("enabled")
-                    : t("disabled")
-                  : t("roleBased")}
-              </p>
-            </div>
-            <div>
-              <p className="mb-1 text-xs text-text-dim">{t("createdAt")}</p>
-              <p className="font-mono text-xs text-text-heading">{formatDate(user.createdAt)}</p>
-            </div>
-            <div>
-              <p className="mb-1 text-xs text-text-dim">{t("lastLoginAt")}</p>
-              <p className="font-mono text-xs text-text-heading">{formatDate(user.lastLoginAt)}</p>
-            </div>
+        <>
+          <div className="account-detail-top">
+            <div className="account-detail-status"><RoleLabel role={role} /><span className="record-status">{statusLabel}</span></div>
+            {canManage && <div className="account-detail-actions">
+              {canEditDetails && <Button ref={editButtonRef} onClick={beginEditing} disabled={actionsDisabled} size="sm">{t("edit")}</Button>}
+              <Button onClick={() => onResetPassword(user)} disabled={actionsDisabled || !user.active}
+                title={!user.active ? t("inactiveResetUnavailable") : undefined} variant="outline" size="sm">
+                {isSetupPending ? t("reissueInvitation") : t("issuePasswordResetLink")}
+              </Button>
+              <details className="account-more-actions" onKeyDown={(event) => {
+                if (event.key === "Escape" && event.currentTarget.open) {
+                  event.preventDefault(); event.currentTarget.open = false;
+                  event.currentTarget.querySelector("summary")?.focus();
+                }
+              }}>
+                <summary aria-label={t("moreActions")} aria-disabled={actionsDisabled} tabIndex={actionsDisabled ? -1 : 0}
+                  onClick={(event) => { if (actionsDisabled) event.preventDefault(); }}>···</summary>
+                <div>
+                  <Button onClick={() => onToggleActive(user)} disabled={actionsDisabled}
+                    variant={user.active ? "danger" : "secondary"} size="sm" fullWidth>{user.active ? t("deactivate") : t("activate")}</Button>
+                  {!user.active && <Button onClick={() => onDelete(user)} disabled={actionsDisabled} variant="danger" size="sm" fullWidth>{t("delete")}</Button>}
+                </div>
+              </details>
+            </div>}
           </div>
-          {isSetupPending && (
-            <div className="mb-3 border border-status-waiting/60 bg-status-waiting/10 p-3">
-              <p className="text-xs font-semibold text-status-waiting">
-                {t("firstLoginIncomplete")}
-              </p>
-              <p className="mt-1 text-xs leading-relaxed text-text-muted">
-                {t("firstLoginHelp")}
-              </p>
+          <div className="account-detail-columns">
+            <div className="account-detail-main">
+              <section className="account-detail-section">
+                <h3>{t("permissions")}</h3>
+                <dl className="account-properties">
+                  <div><dt>{t("accountType")}</dt><dd>{user.accountKind === "shared" ? t("sharedAccount") : t("personalAccount")}</dd></div>
+                  <div><dt>{t("role")}</dt><dd><RoleLabel role={role} /></dd></div>
+                  <div><dt>{t("doorAccess")}</dt><dd>{doorAllowed ? t("enabled") : t("disabled")}</dd></div>
+                  <div><dt>{t("guestLimit")}</dt><dd>{user.guestLimit ?? "—"}</dd></div>
+                </dl>
+              </section>
+              <section className="account-detail-section">
+                <h3>{t("loginAndRecovery")}</h3>
+                <dl className="account-properties">
+                  <div><dt>{t("passwordSetup")}</dt><dd>{user.migrationStatus === "pending_reset" && !user.passwordSetAt ? t("setupPending") : t("passwordConfigured")}</dd></div>
+                </dl>
+                {isSetupPending && <p className="account-detail-notice">{t("firstLoginHelp")}</p>}
+                {isSelf && !isDeleted && <p className="account-detail-notice">{t("selfManagementHelp")}</p>}
+              </section>
+              {actorRole === "super_admin" && activity && <section className="account-detail-section">
+                <h3>{t("activityTitle")}</h3>
+                {activityUnavailable ? <p className="account-detail-notice" role="status">{t("activityLoadFailed")}</p>
+                  : activity.length === 0 ? <p className="account-detail-notice">{t("noRecentActivity")}</p>
+                    : <ul className="account-activity">{activity.map((event) => <li key={event.id}>
+                      <span>{event.actor} {event.action} {user.name}</span><time dateTime={event.createdAt}>{event.displayTime}</time>
+                    </li>)}</ul>}
+              </section>}
             </div>
-          )}
-          {isSelf && !isDeleted && (
-            <p className="mb-3 border border-border-default bg-canvas p-3 text-xs text-text-muted">
-              {t("selfManagementHelp")}
-            </p>
-          )}
-          {canManage && (
-            <div className="grid grid-cols-2 gap-2">
-              {canEditDetails && (
-                <Button
-                  ref={editButtonRef}
-                  type="button"
-                  onClick={beginEditing}
-                  disabled={actionsDisabled}
-                  variant="secondary"
-                  size="sm"
-                  fullWidth
-                >
-                  {t("edit")}
-                </Button>
-              )}
-              <Button
-                type="button"
-                onClick={() => onResetPassword(user)}
-                disabled={actionsDisabled || !user.active}
-                title={!user.active ? t("inactiveResetUnavailable") : undefined}
-                variant="outline"
-                size="sm"
-                fullWidth
-              >
-                {isSetupPending
-                  ? t("reissueInvitation")
-                  : t("issuePasswordResetLink")}
-              </Button>
-              <Button
-                type="button"
-                onClick={() => onToggleActive(user)}
-                disabled={actionsDisabled}
-                variant={user.active ? "danger" : "primary"}
-                size="sm"
-                fullWidth
-              >
-                {user.active ? t("deactivate") : t("activate")}
-              </Button>
-              {!user.active && (
-                <Button
-                  type="button"
-                  onClick={() => onDelete(user)}
-                  disabled={actionsDisabled}
-                  variant="danger"
-                  size="sm"
-                  fullWidth
-                >
-                  {t("delete")}
-                </Button>
-              )}
-            </div>
-          )}
-        </div>
+            <section className="account-detail-section account-basic-information">
+              <h3>{t("basicInformation")}</h3>
+              <dl className="account-properties">
+                <div><dt>{t("emailAddress")}</dt><dd>{isDeleted ? t("deletedAccount") : user.email}</dd></div>
+                {venueName && <div><dt>{t("venue")}</dt><dd>{venueName}</dd></div>}
+                <div><dt>{t("createdAt")}</dt><dd><time dateTime={user.createdAt}>{formatDate(user.createdAt)}</time></dd></div>
+                <div><dt>{t("lastLoginAt")}</dt><dd>{user.lastLoginAt ? <time dateTime={user.lastLoginAt}>{formatDate(user.lastLoginAt)}</time> : t("never")}</dd></div>
+              </dl>
+            </section>
+          </div>
+        </>
       ) : (
-        <div ref={editRegionRef} className="space-y-3">
+        <div ref={editRegionRef} className="account-editor">
           <div>
             <label htmlFor={`user-name-${user.id}`} className="app-label">
               {t("name")}
@@ -894,7 +819,7 @@ export function UserCard({
                     disabled={actionsDisabled}
                     className={`min-h-11 border p-2 text-xs font-medium transition-colors disabled:opacity-50 sm:p-3 ${
                       editData.accountKind === accountKind
-                        ? "border-action-primary bg-action-primary text-action-text"
+                        ? "border-border-strong bg-surface-active text-text-heading"
                         : "border-border-strong bg-surface-raised text-text-muted hover:text-text-heading"
                     }`}
                   >
@@ -922,7 +847,7 @@ export function UserCard({
                     disabled={actionsDisabled}
                     className={`min-h-11 border p-2 text-xs font-medium transition-colors disabled:opacity-50 sm:p-3 ${
                       editData.role === role
-                        ? "border-action-primary bg-action-primary text-action-text"
+                        ? "border-border-strong bg-surface-active text-text-heading"
                         : "bg-surface-raised text-text-muted border-border-strong hover:text-text-heading hover:border-border-strong"
                     }`}
                   >
@@ -997,6 +922,6 @@ export function UserCard({
         </div>
       )}
       </Sheet>}
-    </article>
+    </>
   );
 }

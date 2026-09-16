@@ -282,13 +282,13 @@ function DoorPageContent() {
         dashboard={
           <>
 
-            <div className="context-bar">
-                  <DatePicker
+            <div className="operations-scope">
+                  <DatePicker compact
                     value={selectedDate}
                     onChange={setSelectedDate}
                     businessDate={businessDate}
                   />
-                  <div className="context-filter-grid">
+                  <div className="operations-scope-selectors">
                     {isSuperAdmin && (
                       <VenueSelector
                         venues={venues}
@@ -302,8 +302,29 @@ function DoorPageContent() {
                       value={selectedEventId}
                       onChange={setSelectedEventId}
                     />
+                  </div>
+                </div>
+
+                {feedback && <Alert type="error" message={feedback} />}
+
+                {attendanceDetails}
+                {(isOfflineMode || offlineQueueCounts.queued > 0 || hasResolvedOfflineMutations || offlineNotice) &&
+                  <button type="button" className="text-left text-xs text-status-waiting" onClick={() => setTool("offline")}>
+                    {isOfflineMode ? t("offlineCachedRoster") : t("offlineOperations")} · {t("offlineQueued")} {offlineQueueCounts.queued}
+                    {offlineNotice ? ` · ${t(`offlineNotice.${offlineNotice}`)}` : ""}
+                  </button>}
+
+          </>
+        }
+      >
+            <section
+              className="min-w-0"
+              aria-labelledby="door-guest-list-title"
+              aria-busy={isCurrentScopeFetching}
+            >
+              <RosterView variant="operations" filters={
                     <div className="min-w-0">
-                      <label htmlFor="door-user-filter" className="type-context-title">
+                      <label htmlFor="door-user-filter" className="sr-only">
                         {t("guestOwner")}
                       </label>
                       <div className="relative">
@@ -334,27 +355,7 @@ function DoorPageContent() {
                         />
                       </div>
                     </div>
-                  </div>
-                </div>
-
-                {feedback && <Alert type="error" message={feedback} />}
-
-                {attendanceDetails}
-                {(isOfflineMode || offlineQueueCounts.queued > 0 || hasResolvedOfflineMutations || offlineNotice) &&
-                  <button type="button" className="text-left text-xs text-status-waiting" onClick={() => setTool("offline")}>
-                    {isOfflineMode ? t("offlineCachedRoster") : t("offlineOperations")} · {t("offlineQueued")} {offlineQueueCounts.queued}
-                    {offlineNotice ? ` · ${t(`offlineNotice.${offlineNotice}`)}` : ""}
-                  </button>}
-
-          </>
-        }
-      >
-            <section
-              className="min-w-0"
-              aria-labelledby="door-guest-list-title"
-              aria-busy={isCurrentScopeFetching}
-            >
-              <RosterView header={<PanelHeader
+              } header={<PanelHeader
                 title={t("guestList")}
                 headingLevel={2}
                 headingId="door-guest-list-title"

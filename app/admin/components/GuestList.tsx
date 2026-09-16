@@ -4,7 +4,7 @@ import RosterView, { type RosterStatus } from "@/components/guests/RosterView";
 
 import { fetchGuestsByDate } from "@/lib/guests/client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, type ReactNode } from "react";
 import {
   useLocalStorage,
   useGuestPolling,
@@ -48,6 +48,7 @@ const EMPTY_DISPLAY_DATA = {
 };
 
 interface GuestListProps {
+  scopeSelector?: ReactNode;
   selectedDate: string;
   onDateChange: (date: string) => void;
   businessDate: string;
@@ -55,6 +56,7 @@ interface GuestListProps {
 }
 
 export default function GuestList({
+  scopeSelector,
   selectedDate,
   onDateChange,
   businessDate,
@@ -348,27 +350,25 @@ export default function GuestList({
       headingLevel={null}
       dashboard={
         <>
-        <div className="context-bar">
-          <DatePicker
-            value={selectedDate}
-            onChange={onDateChange}
-            businessDate={businessDate}
-          />
+        <div className="operations-scope">
+          <DatePicker compact value={selectedDate} onChange={onDateChange} businessDate={businessDate} />
+          {isSuperAdmin && <VenueSelector venues={venues} selectedVenueId={selectedVenueId}
+            onVenueChange={setSelectedVenueId} className="scope-venue" />}
+          {scopeSelector}
         </div>
         {feedback && <Alert type="error" message={feedback} />}
         {scopedAttendance && entryDisabled && <p role="status" className="text-sm text-text-muted">
           {doorT(scopedAttendance.isFinalized ? "attendance.scopeClosed" : "attendance.eventInactive")}
         </p>}
-        {isSuperAdmin && (
-          <VenueSelector
-            venues={venues}
-            selectedVenueId={selectedVenueId}
-            onVenueChange={setSelectedVenueId}
-            className="app-panel p-4 sm:p-5"
-          />
-        )}
+        </>
+      }
+    >
+
+      <div className="flex min-w-0 flex-col lg:min-h-0">
         <div className="min-w-0">
-          <label htmlFor="admin-guest-user-filter" className="app-label">{t("userFilter")}</label>
+          <RosterView variant="operations" filters={
+        <div className="min-w-0">
+          <label htmlFor="admin-guest-user-filter" className="sr-only">{t("userFilter")}</label>
               <div className="relative">
                 <select
                   id="admin-guest-user-filter"
@@ -397,13 +397,7 @@ export default function GuestList({
                 <Icon name="chevron-down" size={18} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-text-muted" />
               </div>
         </div>
-        </>
-      }
-    >
-
-      <div className="flex min-w-0 flex-col lg:min-h-0">
-        <div className="min-w-0">
-          <RosterView header={<PanelHeader
+          } header={<PanelHeader
             title={t("guestList")}
             count={displayGuests.length}
             sortMode={sortMode}

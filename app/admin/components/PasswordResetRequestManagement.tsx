@@ -325,7 +325,7 @@ export default function PasswordResetRequestManagement({
       <section
         ref={requestsPanelRef}
         tabIndex={-1}
-        className="app-panel focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-border-focus"
+        className="record-collection focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-border-focus"
         aria-labelledby="password-reset-requests-title"
       >
         <PanelHeader
@@ -335,7 +335,7 @@ export default function PasswordResetRequestManagement({
           onRefresh={loadRequests}
           isLoading={isLoading}
         />
-        <div className="space-y-4 p-4 sm:p-5">
+        <div className="record-collection-body space-y-4">
           <p className="text-sm leading-relaxed text-text-muted">
             {t("description")}
           </p>

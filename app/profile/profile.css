@@ -1,4 +1,4 @@
-.profile-workspace { width: 100%; max-width: 760px; margin-inline: auto; display: grid; gap: 20px; }
+.profile-workspace { width: 100%; max-width: 960px; margin-inline: 0; display: grid; gap: 20px; }
 .profile-summary { display: grid; gap: 16px; }
 .profile-identity { display: flex; align-items: center; gap: 12px; }
 .profile-identity > span { display: grid; place-items: center; width: 44px; height: 44px; flex-shrink: 0; border-radius: 50%; background: var(--app-surface-raised); }
@@ -9,5 +9,5 @@
 .profile-facts dt { font-size: 12px; color: var(--app-text-muted); }
 .profile-facts dd { font-size: 13px; }
 .profile-tabs { display: flex; gap: 6px; }
-.profile-tabs button { flex: 1; border: 0; border-radius: 99px; background: transparent; color: var(--app-text-muted); }
-.profile-tabs button[aria-pressed="true"] { background: var(--app-surface-active); color: var(--app-text); }
+.profile-tabs button { flex: 1; border: 1px solid transparent; border-radius: 8px; background: transparent; color: var(--app-text-muted); }
+.profile-tabs button[aria-pressed="true"] { background: var(--app-surface-active); border-color: var(--app-border); color: var(--app-text); }

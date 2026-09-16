@@ -203,6 +203,10 @@ input[type="date"] {
     gap: 1rem;
   }
 
+  .operations-context {
+    @apply grid gap-3;
+  }
+
   .operations-layout {
     @apply grid min-w-0 grid-cols-1 items-start gap-4;
   }
