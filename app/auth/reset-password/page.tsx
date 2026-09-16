@@ -359,22 +359,15 @@ function ResetPasswordContent() {
   }
 
   return (
-    <main id="main-content" tabIndex={-1} className="flex min-h-[100dvh] items-center justify-center bg-canvas px-4 py-10 sm:px-6 lg:px-8">
-      <div className="w-full max-w-sm sm:max-w-md">
-        <div className="app-panel p-6 sm:p-8 lg:p-10">
+    <main id="main-content" tabIndex={-1} className="auth-page flex items-center justify-center bg-canvas">
+      <div className="auth-frame">
+        <div className="auth-panel">
           <div className="mb-5 flex justify-end">
             <LanguageSwitcher compact />
           </div>
-          <div className="mb-8 text-center">
-            <div className="mx-auto mb-5 grid h-11 w-11 place-items-center border border-border-strong bg-surface font-mono text-sm font-semibold text-text-heading">
-              {brand.name.charAt(0).toUpperCase()}
-            </div>
-            <h1 className="mb-2 text-2xl font-semibold tracking-[-0.03em] text-text-heading sm:text-3xl">
-              {brand.name}
-            </h1>
-            <p className="text-sm text-text-muted">
-              {t("tagline")}
-            </p>
+          <div className="auth-heading">
+            <p className="auth-brand">{brand.name}</p>
+            <h1>{t("tagline")}</h1>
           </div>
 
           <StepIndicator

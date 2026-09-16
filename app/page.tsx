@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { logout, hasAccess } from "../lib/auth";
 import RouteLoadingFallback from "@/components/RouteLoadingFallback";
+import RoleLabel from "@/components/RoleLabel";
 import Icon, { type IconName } from "@/components/Icon";
 import TransitionLink from "@/components/TransitionLink";
 import { useRouteTransition } from "@/components/RouteTransitionProvider";
@@ -168,27 +169,19 @@ export default function Home() {
     return <RouteLoadingFallback />;
   }
 
-  const workspaceWidthClass =
-    accessibleMenus.length === 1
-      ? "max-w-[28rem]"
-      : accessibleMenus.length === 2
-        ? "max-w-[58rem]"
-        : "max-w-none";
-  const workspaceGridClass =
-    accessibleMenus.length === 1
-      ? "md:grid-cols-1"
-      : accessibleMenus.length === 2
-        ? "md:grid-cols-2"
-        : "md:grid-cols-3";
-
   return (
     <WorkspaceShell contentClassName="gap-4 pb-8 sm:gap-5">
       <h1 className="sr-only">{t("availableWorkspaces")}</h1>
+      <div className="home-overview">
+        <div className="home-account"><span aria-hidden="true">{user.name.charAt(0)}</span>
+          <div><h2>{user.name}</h2><p><RoleLabel role={user.account_kind === "shared" ? "shared" : user.role} /></p></div>
+        </div>
+      </div>
 
       {user.role === "venue_admin" && pendingGuestRequestCount > 0 && (
         <TransitionLink
           href="/admin?tab=guests&view=requests"
-          className="pressable group flex min-h-14 items-center gap-3 border border-status-waiting/70 bg-status-waiting/10 px-4 py-3 text-status-waiting hover:border-status-waiting sm:px-5"
+          className="home-pending home-overview pressable"
         >
           <Icon name="warning" size={20} />
           <span className="min-w-0 flex-1 text-sm font-semibold text-text-heading">
@@ -202,7 +195,7 @@ export default function Home() {
         pendingPasswordResetCount > 0 && (
           <TransitionLink
             href="/admin?tab=users&view=password-requests"
-            className="pressable group flex min-h-14 items-center gap-3 border border-status-waiting/70 bg-status-waiting/10 px-4 py-3 text-status-waiting hover:border-status-waiting sm:px-5"
+            className="home-pending home-overview pressable"
           >
             <Icon name="key" size={20} />
             <span className="min-w-0 flex-1 text-sm font-semibold text-text-heading">
@@ -217,7 +210,7 @@ export default function Home() {
       {accessibleMenus.length > 0 && (
         <nav aria-label={t("availableWorkspaces")} className="w-full">
           <div
-            className={`home-workspace-grid mx-auto grid gap-3 sm:gap-4 ${workspaceWidthClass} ${workspaceGridClass}`}
+            className="home-workspace-grid home-overview"
           >
             {accessibleMenus.map((item, index) => (
               <WorkspaceLink key={item.id} item={item} index={index} />
@@ -240,37 +233,12 @@ function WorkspaceLink({
     <TransitionLink
       href={item.href}
       aria-keyshortcuts={String(index + 1)}
-      className="home-workspace-card pressable group relative flex h-full min-h-[11rem] flex-col overflow-hidden border border-border-default bg-surface p-5 hover:border-border-strong hover:bg-surface-raised focus-visible:border-border-strong focus-visible:bg-surface-raised sm:min-h-[13rem] sm:p-6"
+      className="home-workspace-card pressable"
     >
-      <div className="flex items-center justify-between gap-4">
-        <p className="text-xs font-medium text-text-muted">
-          {item.category}
-        </p>
-        <kbd className="font-mono text-xs font-semibold tabular-nums text-text-dim transition-colors group-hover:text-text-muted">
-          [{index + 1}]
-        </kbd>
-      </div>
-
-      <div className="mt-5 grid min-w-0 grid-cols-[auto_minmax(0,1fr)] items-center gap-x-3 gap-y-3 sm:mt-6 sm:items-start sm:gap-x-4 sm:gap-y-2">
-        <span className="grid h-10 w-10 shrink-0 place-items-center border border-border-default bg-canvas text-text-muted transition-colors group-hover:border-border-strong group-hover:text-text-heading sm:row-span-2 sm:h-11 sm:w-11">
-          <Icon name={item.icon} size={22} />
-        </span>
-        <h2 className="min-w-0 text-xl font-semibold tracking-[-0.025em] text-text-heading sm:text-2xl">
-          {item.title}
-        </h2>
-        <p className="col-span-2 text-pretty text-sm leading-6 text-text-muted sm:col-span-1">
-          {item.description}
-        </p>
-      </div>
-
-      <div className="mt-5 flex items-center justify-between border-t border-border-subtle pt-4 transition-colors group-hover:border-border-default sm:mt-auto">
-        <span className="text-xs font-semibold text-text-muted transition-colors group-hover:text-text-heading">
-          {item.action}
-        </span>
-        <span className="grid h-8 w-8 shrink-0 place-items-center text-text-dim transition-[color,transform] duration-150 group-hover:translate-x-1 group-hover:text-text-heading">
-          <Icon name="arrow-right" size={19} />
-        </span>
-      </div>
+      <span className="home-workspace-icon"><Icon name={item.icon} size={22} /></span>
+      <div className="home-workspace-copy"><h2>{item.title}</h2><p>{item.description}</p></div>
+      <kbd aria-hidden="true">{index + 1}</kbd>
+      <Icon name="chevron-right" size={16} />
     </TransitionLink>
   );
 }

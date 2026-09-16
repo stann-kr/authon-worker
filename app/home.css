@@ -1,0 +1,14 @@
+.home-overview { width: 100%; max-width: 1000px; margin-inline: auto; }
+.home-account { display: flex; align-items: center; gap: 12px; padding: 8px 0 20px; }
+.home-account > span { display: grid; place-items: center; width: 44px; height: 44px; border-radius: 50%; background: var(--app-surface-raised); font-size: 18px; }
+.home-account h2 { font-size: 18px; font-weight: 600; }
+.home-account p { color: var(--app-text-muted); font-size: 12px; margin-top: 3px; }
+.home-workspace-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr)); gap: 12px; }
+.home-workspace-card { display: flex; align-items: center; gap: 14px; min-height: 100px; min-width: 0; border: 1px solid var(--app-border-subtle); border-radius: 16px; padding: 20px; background: var(--app-surface); }
+.home-workspace-icon { color: var(--app-text-muted); }
+.home-workspace-copy { flex: 1; min-width: 0; }
+.home-workspace-copy h2 { font-size: 16px; font-weight: 600; color: var(--app-text); }
+.home-workspace-copy p { margin-top: 6px; font-size: 12px; line-height: 1.6; color: var(--app-text-muted); }
+.home-workspace-card kbd { color: var(--app-text-muted); font-size: 11px; }
+.home-pending { display: flex; align-items: center; gap: 12px; padding: 14px 16px; border: 1px solid var(--app-border-subtle); border-radius: 12px; background: var(--app-surface); color: #d5b479; }
+@media (hover: hover) and (pointer: fine) { .home-workspace-card:hover { background: var(--app-surface-hover); } }

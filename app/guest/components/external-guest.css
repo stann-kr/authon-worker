@@ -1,0 +1,6 @@
+.external-guest-workspace .page-container { max-width: 1040px; padding-bottom: 24px; }
+.external-guest-workspace[data-rsvp="true"] .page-container { max-width: 600px; }
+.external-guest-context { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 180px), 1fr)); gap: 16px; margin-bottom: 20px; padding: 16px 0; border-bottom: 1px solid var(--app-border-subtle); }
+.external-guest-context .type-context-title { font-size: 12px; }
+.external-guest-brand { min-width: 0; font-size: 18px; font-weight: 600; letter-spacing: -0.4px; overflow-wrap: anywhere; }
+.external-guest-workspace .product-guest-row { padding-block: 6px; }
