@@ -261,7 +261,7 @@ const GuestListCard: React.FC<GuestListCardProps> = ({
     </article>
       {onUndo && undoConfirmation === confirmationKey && guest.status === "checked" && <ConfirmDialog open
         title={rosterT("undoTitle")} description={rosterT("undoDescription", { name: guest.name })}
-        confirmLabel={t("undo")} cancelLabel={t("cancel")} isLoading={isUndoLoading}
+        confirmLabel={rosterT("undoConfirm")} cancelLabel={t("cancel")} isLoading={isUndoLoading}
         onCancel={() => setUndoConfirmation(null)} onConfirm={() => { setUndoConfirmation(null); onUndo(); }} />}
       {isDetailOpen && <Sheet title={guest.name} presentation="detail" onClose={closeDetail}>
         <StatusLabel tone={guest.status === "checked" ? "checked" : guest.status === "pending" ? "waiting" : "neutral"}>

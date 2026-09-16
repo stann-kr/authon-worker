@@ -913,6 +913,32 @@ test("CSV mapping and line preview controls keep native labels and file boundari
   assert.equal(screen.getByLabelText("Names to paste").tagName, "TEXTAREA");
 });
 
+test("a completed CSV submission clears the import draft before the sheet closes", async () => {
+  let closed = false;
+  render(<NextIntlClientProvider locale="en" messages={messages}>
+    <Sheet title="Add guests" protectEdits onClose={() => { closed = true; }}>
+      <GuestBulkEntry existingNames={[]} remaining={10}
+        onSubmitChunk={async (names) => ({ data: { items: names.map((_, index) => ({
+          index, status: "created", guest: {},
+        })) }, error: null })} />
+    </Sheet>
+  </NextIntlClientProvider>);
+  const fileInput = screen.getByLabelText(messages.BulkGuestEntry.csv.fileLabel) as HTMLInputElement;
+  const file = new File(["name\nCSV Guest"], "guests.csv", { type: "text/csv" });
+  Object.defineProperty(file, "text", { value: async () => "name\nCSV Guest" });
+  // JSDOM does not populate the native file input value when its files change.
+  Object.defineProperty(fileInput, "value", { configurable: true, writable: true, value: "C:\\fakepath\\guests.csv" });
+  await act(async () => { fireEvent.change(fileInput, { target: { files: [file] } }); });
+  fireEvent.click(screen.getByRole("button", { name: messages.BulkGuestEntry.csv.apply }));
+  await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Add 1" })); });
+  assert.equal((screen.getByLabelText("Names to paste") as HTMLTextAreaElement).value, "");
+  assert.equal(fileInput.value, "");
+  assert.equal(screen.queryByLabelText(messages.BulkGuestEntry.csv.columnLabel), null);
+  fireEvent.click(screen.getByRole("button", { name: messages.Sheet.close }));
+  assert.equal(closed, true);
+  assert.equal(screen.queryByRole("group", { name: messages.Sheet.unsaved }), null);
+});
+
 test("bulk guest submit uses a synchronous ref latch for same-tick clicks", async () => {
   let resolve!: (value: {
     data: {
@@ -1255,7 +1281,7 @@ test("check-in stays immediate while undo requires confirmation for the current 
   fireEvent.click(screen.getByRole("button", { name: /Undo check-in/ }));
   assert.equal(undoCalls, 0);
   const dialog = screen.getByRole("alertdialog", { name: messages.Roster.undoTitle });
-  fireEvent.click(within(dialog).getByRole("button", { name: messages.Common.undo }));
+  fireEvent.click(within(dialog).getByRole("button", { name: messages.Roster.undoConfirm }));
   assert.equal(undoCalls, 1);
 });
 

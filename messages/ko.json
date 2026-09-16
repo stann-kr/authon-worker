@@ -1149,6 +1149,7 @@
     "twoColumns": "2열",
     "detail": "게스트 상세",
     "undoTitle": "입장을 취소할까요?",
+    "undoConfirm": "입장 취소",
     "undoDescription": "{name}님의 입장 기록을 취소합니다.",
     "owner": "등록 담당자",
     "operator": "입력자"

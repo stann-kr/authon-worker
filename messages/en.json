@@ -1149,6 +1149,7 @@
     "twoColumns": "2 columns",
     "detail": "Guest details",
     "undoTitle": "Undo check-in?",
+    "undoConfirm": "Undo check-in",
     "undoDescription": "Remove the check-in for {name}.",
     "owner": "Registration owner",
     "operator": "Operator"
