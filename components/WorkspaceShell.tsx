@@ -1,6 +1,6 @@
 "use client";
 
-import { useLayoutEffect, useRef, type MouseEvent, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type MouseEvent, type ReactNode } from "react";
 import { usePathname } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { useAuthSession } from "@/components/AuthSessionProvider";
@@ -31,7 +31,7 @@ interface WorkspaceShellProps {
 }
 
 const widthClasses = {
-  default: "max-w-[1440px]",
+  default: "workspace-content-wide",
   narrow: "max-w-[1040px]",
 } as const;
 
@@ -50,6 +50,15 @@ export default function WorkspaceShell({
   const { user } = useAuthSession();
   const { brand } = useVenueBrand();
   const { isRouteTransitionActive } = useRouteTransition();
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  useEffect(() => {
+    try { setSidebarCollapsed(window.localStorage.getItem("workspace:sidebarCollapsed") === "true"); } catch { /* Optional preference. */ }
+  }, []);
+  const toggleSidebar = () => {
+    const next = !sidebarCollapsed;
+    setSidebarCollapsed(next);
+    try { window.localStorage.setItem("workspace:sidebarCollapsed", String(next)); } catch { /* Keep the current layout in memory. */ }
+  };
   const shellRef = useRef<HTMLDivElement>(null);
   const headerRef = useRef<HTMLElement>(null);
   useLayoutEffect(() => {
@@ -81,7 +90,7 @@ export default function WorkspaceShell({
     }
   };
   return (
-    <div ref={shellRef} className={`page-shell workspace-shell${user ? " workspace-shell--authenticated" : ""}`}>
+    <div ref={shellRef} data-sidebar-collapsed={sidebarCollapsed} className={`page-shell workspace-shell${user ? " workspace-shell--authenticated" : ""}`}>
       <header ref={headerRef} className="workspace-header">
         <div className="workspace-heading">
           <TransitionLink href="/" className="workspace-mobile-brand">{brand.name}</TransitionLink>
@@ -107,6 +116,7 @@ export default function WorkspaceShell({
         <Footer layer={user ? "below-mobile-dock" : footerLayer} />
         {user && <WorkspaceNavigation items={items} activeId={activeId} brandName={brand.name}
           accountName={user.name} accountRole={<RoleLabel role={user.account_kind === "shared" ? "shared" : user.role} />}
+          collapsed={sidebarCollapsed} onToggleSidebar={toggleSidebar}
           disabled={isRouteTransitionActive || adminNavigation?.disabled}
           counts={{ "password-requests": adminNavigation?.pendingPasswordResetCount ?? 0 }}
           actions={actions} onSelect={selectItem} />}

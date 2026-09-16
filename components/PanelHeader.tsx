@@ -51,7 +51,7 @@ export default function PanelHeader({
   const displayedCount = isLoading && count === 0 ? "-" : count;
 
   return (
-    <div className="flex flex-shrink-0 flex-wrap items-center justify-between gap-3 border-b border-border-subtle px-4 py-3 sm:px-5">
+    <div className="collection-heading">
       <Heading id={headingId} className="type-panel-title">
         {title}
         {displayedCount !== undefined && (

@@ -182,7 +182,7 @@ export default function ConfirmDialog({
 
   return createPortal(
     <div
-      className="app-dialog-backdrop fixed inset-0 z-[var(--app-z-dialog)] flex items-center justify-center bg-canvas/80 p-4"
+      className="app-dialog-backdrop fixed inset-0 z-[var(--app-z-dialog)] flex items-center justify-center bg-black/80 p-4"
       data-state={isClosing ? "closing" : "open"}
     >
       <div

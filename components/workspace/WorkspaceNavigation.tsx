@@ -3,6 +3,7 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState, type MouseEvent, type ReactNode } from "react";
 import { useTranslations } from "next-intl";
 import TransitionLink from "@/components/TransitionLink";
+import Icon, { type IconName } from "@/components/Icon";
 import WorkspaceMenu from "./WorkspaceMenu";
 import { getWorkspacePrimaryItems, workspaceGroups, type WorkspaceItem } from "./navigation";
 
@@ -15,11 +16,20 @@ export interface WorkspaceNavigationProps {
   actions?: ReactNode;
   counts?: Record<string, number>;
   disabled?: boolean;
+  collapsed?: boolean;
+  onToggleSidebar?: () => void;
   onSelect: (item: WorkspaceItem, event: MouseEvent<HTMLAnchorElement>) => void;
 }
 
+const navigationIcons: Record<string, IconName> = {
+  home: "home", events: "calendar", roster: "users", guest: "user-add", door: "login",
+  links: "link", requests: "user-add", analytics: "chart-line", users: "user-admin",
+  "password-requests": "key", venues: "store", profile: "user",
+};
+
 export default function WorkspaceNavigation({
   items, activeId, brandName, accountName, accountRole, actions, counts = {}, disabled, onSelect,
+  collapsed = false, onToggleSidebar,
 }: WorkspaceNavigationProps) {
   const t = useTranslations("Workspace");
   const navigationId = useId();
@@ -84,6 +94,7 @@ export default function WorkspaceNavigation({
       className={account ? "workspace-account" : "workspace-nav-link"}
       aria-current={activeId === item.id ? "page" : undefined}
       aria-disabled={disabled}
+      aria-label={desktop && collapsed ? account ? `${accountName} · ${t("profile")}` : t(item.label) : undefined}
       aria-describedby={count > 0 ? `${navigationId}-${surface}-${item.id}-count` : undefined}
       onClick={(event) => {
         if (disabled) { event.preventDefault(); return; }
@@ -93,18 +104,22 @@ export default function WorkspaceNavigation({
         }
       }}>
       {account ? <><span className="workspace-avatar" aria-hidden="true">{accountName.charAt(0)}</span>
-        <span><strong>{accountName}</strong><small>{accountRole}</small></span></> : <span>{t(item.label)}</span>}
+        <span className="workspace-account-label"><strong>{accountName}</strong><small>{accountRole}</small></span></> : <>
+          <Icon name={navigationIcons[item.id] ?? "settings"} size={18} className="workspace-nav-icon" />
+          <span className="workspace-nav-label">{t(item.label)}</span>
+        </>}
+      {desktop && collapsed && <span className="workspace-nav-tooltip" aria-hidden="true">{account ? accountName : t(item.label)}</span>}
       {count > 0 && <span id={`${navigationId}-${surface}-${item.id}-count`} className="workspace-nav-count"
         aria-label={t("pendingCount", { count })}>{count}</span>}
     </TransitionLink>;
   };
   const groupedLinks = (collapsible: boolean) => groups.map((group) => {
-    const open = !collapsible || groups.length === 1 || openGroup === group.id;
+    const open = !collapsible || collapsed || groups.length === 1 || openGroup === group.id;
     const panelId = `${navigationId}-${group.id}`;
     const count = group.items.reduce((sum, item) => sum + (counts[item.id] ?? 0), 0);
     return <section className="workspace-nav-group" key={group.id} aria-labelledby={`${panelId}-title`}>
       <h2 id={`${panelId}-title`}>
-        {collapsible && groups.length > 1 ? <button type="button"
+        {collapsible && !collapsed && groups.length > 1 ? <button type="button"
           aria-label={t(`groups.${group.id}`)}
           aria-describedby={!open && count > 0 ? `${panelId}-count` : undefined}
           aria-expanded={open} aria-controls={panelId}
@@ -119,8 +134,17 @@ export default function WorkspaceNavigation({
   const home = items.find((item) => item.id === "home");
   const profile = items.find((item) => item.id === "profile");
 
-  if (desktop) return <aside className="workspace-sidebar">
-    <TransitionLink href="/" className="workspace-brand">{brandName}</TransitionLink>
+  if (desktop) return <aside className="workspace-sidebar" data-collapsed={collapsed}>
+    <div className="workspace-sidebar-heading">
+      <TransitionLink href="/" className="workspace-brand" aria-label={brandName}>
+        <span className="workspace-brand-full">{brandName}</span><span className="workspace-brand-short" aria-hidden="true">{brandName.charAt(0)}</span>
+      </TransitionLink>
+      {onToggleSidebar && <button type="button" className="workspace-sidebar-toggle"
+        onClick={onToggleSidebar} disabled={disabled} aria-expanded={!collapsed}
+        aria-label={t(collapsed ? "expandSidebar" : "collapseSidebar")}>
+        <Icon name={collapsed ? "chevron-right" : "chevron-left"} size={18} />
+      </button>}
+    </div>
     <nav ref={navRef} aria-label={t("navigation")}>
       {home && link(home)}{groupedLinks(true)}
       {profile && link(profile, true)}

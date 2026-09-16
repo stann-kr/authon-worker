@@ -13,6 +13,8 @@
     "venues": "베뉴",
     "profile": "내 계정",
     "navigation": "주요 메뉴",
+    "collapseSidebar": "사이드바 접기",
+    "expandSidebar": "사이드바 펼치기",
     "allMenu": "전체 메뉴",
     "more": "전체",
     "close": "닫기",

@@ -5,17 +5,17 @@
 :root {
   color-scheme: dark;
   font-size: 16px;
-  --app-canvas: #000000;
-  --app-surface: #141414;
-  --app-surface-raised: #1c1c1c;
-  --app-surface-hover: #242424;
-  --app-surface-active: #2a2a2a;
-  --app-border-subtle: #252525;
-  --app-border: #383838;
+  --app-canvas: #121212;
+  --app-surface: #1c1c1c;
+  --app-surface-raised: #252525;
+  --app-surface-hover: #292929;
+  --app-surface-active: #303030;
+  --app-border-subtle: #303030;
+  --app-border: #3c3c3c;
   --app-border-strong: #555555;
-  --app-text: #ffffff;
+  --app-text: #ededed;
   --app-text-body: #dedede;
-  --app-text-muted: #b7b7bb;
+  --app-text-muted: #a6a6a6;
   --app-action: #60a5fa;
   --app-action-text: #071a31;
   --app-action-hover: #93c5fd;
@@ -77,7 +77,7 @@ button,
 input,
 select,
 textarea {
-  border-radius: 10px;
+  border-radius: 8px;
 }
 
 button {
@@ -169,7 +169,7 @@ input[type="date"] {
   }
 
   .context-bar {
-    @apply grid gap-3 rounded-panel border border-border-subtle bg-surface px-4 py-2.5 sm:px-5;
+    @apply grid gap-3;
     grid-template-columns: minmax(0, 1fr);
     align-items: end;
   }
@@ -213,7 +213,7 @@ input[type="date"] {
   }
 
   .app-field {
-    @apply w-full rounded-control border border-border-default bg-surface-black px-3 py-3 text-sm text-text-heading outline-none placeholder:text-text-dim disabled:cursor-not-allowed disabled:opacity-50;
+    @apply w-full rounded-control border border-border-default bg-surface-raised px-3 py-2.5 text-sm text-text-heading outline-none placeholder:text-text-dim disabled:cursor-not-allowed disabled:opacity-50;
     transition: border-color var(--app-duration-release) var(--app-ease-out),
       background-color var(--app-duration-release) var(--app-ease-out);
   }

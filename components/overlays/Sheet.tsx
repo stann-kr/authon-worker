@@ -15,6 +15,7 @@ interface SheetProps {
   onClose: () => void;
   presentation?: "modal" | "detail";
   wide?: boolean;
+  size?: "default" | "record";
   busy?: boolean;
   dirty?: boolean;
   protectEdits?: boolean;
@@ -46,7 +47,7 @@ const inlinePanels = new Set<HTMLElement>();
 
 // The same panel and form stay mounted when the available workspace changes.
 export default function Sheet({ open = true, title, children, onClose, presentation = "modal",
-  wide = false, busy = false, dirty = false, protectEdits = false }: SheetProps) {
+  wide = false, size = "default", busy = false, dirty = false, protectEdits = false }: SheetProps) {
   const t = useTranslations("Sheet");
   const transitioning = useIsRouteTransitionActive();
   const layerRef = useRef<HTMLDivElement>(null);
@@ -124,7 +125,7 @@ export default function Sheet({ open = true, title, children, onClose, presentat
       layerRef.current?.style.setProperty("--sheet-viewport-bottom", `${Math.max(0, window.innerHeight - top - visibleHeight)}px`);
       layerRef.current?.style.setProperty("--sheet-max-height", `${Math.max(120, visibleHeight - 32)}px`);
       const width = main?.getBoundingClientRect().width ?? 0;
-      const canShowInline = presentation === "detail" && !dirty && !edited && width >= 980 && visibleHeight >= 480;
+      const canShowInline = presentation === "detail" && size !== "record" && !dirty && !edited && width >= 980 && visibleHeight >= 480;
       setInline(canShowInline);
       if (panel) {
         if (canShowInline) inlinePanels.add(panel);
@@ -150,7 +151,7 @@ export default function Sheet({ open = true, title, children, onClose, presentat
       if (panel) inlinePanels.delete(panel);
       main?.classList.toggle("workspace-has-detail", inlinePanels.size > 0);
     };
-  }, [open, presentation, dirty, edited]);
+  }, [open, presentation, size, dirty, edited]);
 
   useLayoutEffect(() => {
     if (!open) return;
@@ -188,7 +189,7 @@ export default function Sheet({ open = true, title, children, onClose, presentat
   if (!open || typeof document === "undefined") return null;
   return createPortal(
     <div ref={layerRef} className="product-sheet-layer" data-inline={inline} data-transitioning={transitioning} inert={transitioning || undefined} aria-hidden={transitioning || undefined} onClick={(event) => { if (event.target === event.currentTarget) requestClose(); }}>
-      <div ref={panelRef} className="product-sheet" data-wide={wide} role="dialog" aria-modal={!inline}
+      <div ref={panelRef} className="product-sheet" data-wide={wide} data-size={size} role="dialog" aria-modal={!inline}
         aria-labelledby={titleId} aria-busy={busy} tabIndex={-1}
         onFocusCapture={() => {
           panelRef.current?.querySelectorAll<Control>(draftControls).forEach((field) => {

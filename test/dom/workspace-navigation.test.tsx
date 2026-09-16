@@ -178,12 +178,38 @@ function AdminShellHarness() {
     account_kind: "personal", door_access_enabled: false, guest_limit: null,
   }}>
     <WorkspaceShell adminNavigation={{ activeTask: navigation.activeTask, onTaskChange: navigation.changeTask }}>
+      <input aria-label="Workspace draft" defaultValue="Keep draft" />
       <output data-testid="task">{navigation.activeTask}</output>
       <output data-testid="event">{navigation.selectedEventId}</output>
       <output data-testid="date">{navigation.selectedDate}</output>
     </WorkspaceShell>
   </AuthSessionProvider>;
 }
+
+test("sidebar collapse exposes named destinations and preserves the workspace across viewport changes", () => {
+  const resize = viewport(true);
+  render(<Providers><AdminShellHarness /></Providers>);
+  const draft = screen.getByRole("textbox", { name: "Workspace draft" });
+  fireEvent.change(draft, { target: { value: "Still editing" } });
+  const collapse = screen.getByRole("button", { name: messages.Workspace.collapseSidebar });
+  collapse.focus();
+  fireEvent.click(collapse);
+  const expand = screen.getByRole("button", { name: messages.Workspace.expandSidebar });
+  assert.equal(expand.getAttribute("aria-expanded"), "false");
+  assert.equal(document.activeElement, expand);
+  assert.equal(window.localStorage.getItem("workspace:sidebarCollapsed"), "true");
+  assert.ok(screen.getByRole("link", { name: "Accounts" }));
+  assert.ok(screen.getByRole("link", { name: "Venues" }));
+  resize(false);
+  assert.equal(screen.queryByRole("button", { name: messages.Workspace.expandSidebar }), null);
+  assert.ok(screen.getByRole("button", { name: "All menus" }));
+  assert.equal(screen.getByRole("textbox", { name: "Workspace draft" }), draft);
+  resize(true);
+  fireEvent.click(screen.getByRole("button", { name: messages.Workspace.expandSidebar }));
+  assert.equal(screen.getByRole("button", { name: messages.Workspace.collapseSidebar }).getAttribute("aria-expanded"), "true");
+  assert.equal((draft as HTMLInputElement).value, "Still editing");
+  assert.equal(window.localStorage.getItem("workspace:sidebarCollapsed"), "false");
+});
 
 test("real product shell drives the existing admin hook and restores event scope through browser history", () => {
   viewport(true);

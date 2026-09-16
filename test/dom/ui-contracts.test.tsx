@@ -1205,12 +1205,13 @@ test("product detail changes between side panel and modal without replacing the 
     return this.id === "main-content" ? { ...originalRect.call(this), width, right: width } as DOMRect : originalRect.call(this);
   };
   try {
-    render(<NextIntlClientProvider locale="en" messages={messages}>
+    const frame = (size: "default" | "record" = "default") => <NextIntlClientProvider locale="en" messages={messages}>
       <div className="workspace-shell"><main id="main-content" /></div>
-      <Sheet title="Guest detail" presentation="detail" onClose={() => {}}>
+      <Sheet title="Guest detail" presentation="detail" size={size} onClose={() => {}}>
         <label>Note<input defaultValue="Selected guest" /></label>
       </Sheet>
-    </NextIntlClientProvider>);
+    </NextIntlClientProvider>;
+    const view = render(frame());
     const panel = screen.getByRole("dialog", { name: "Guest detail" });
     assert.equal(panel.getAttribute("aria-modal"), "false");
     const input = screen.getByLabelText("Note") as HTMLInputElement;
@@ -1224,6 +1225,11 @@ test("product detail changes between side panel and modal without replacing the 
     width = 1200; fireEvent(window, new Event("resize"));
     assert.equal(panel.getAttribute("aria-modal"), "false");
     assert.equal(document.activeElement === input, true);
+    view.rerender(frame("record"));
+    assert.equal(panel.getAttribute("aria-modal"), "true");
+    assert.equal(screen.getByLabelText("Note"), input);
+    assert.equal(input.selectionStart, 2);
+    assert.equal(document.querySelector(".workspace-shell")?.hasAttribute("inert"), true);
   } finally { HTMLElement.prototype.getBoundingClientRect = originalRect; }
 });
 
