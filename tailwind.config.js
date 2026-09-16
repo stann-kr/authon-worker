@@ -22,9 +22,9 @@ module.exports = {
           focus: "#3b82f6",
         },
         action: {
-          primary: "#10b981",
-          hover: "#34d399",
-          text: "#001c13",
+          primary: "#60a5fa",
+          hover: "#93c5fd",
+          text: "#071a31",
         },
         status: {
           checked: "#34d399",
