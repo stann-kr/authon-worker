@@ -34,6 +34,8 @@ import {
   deleteGuest,
 } from "../../../lib/api/guests";
 import { fetchGuestOperationsSnapshot } from "@/lib/guest-snapshots/client";
+import { fetchDoorAttendanceSummary } from "@/lib/attendance/client";
+import type { DoorAttendanceSummary } from "@/lib/attendance/types";
 import type { ExternalLinkDirectoryEntry } from "@/lib/external-links/types";
 import type { Guest } from "@/lib/guests/types";
 import type { UserDirectoryEntry } from "@/lib/users/types";
@@ -70,6 +72,7 @@ export default function GuestList({
   const [externalLinks, setExternalLinks] =
     useState<ExternalLinkDirectoryEntry[]>([]);
   const [guests, setGuests] = useState<Guest[]>([]);
+  const [attendance, setAttendance] = useState<DoorAttendanceSummary | null>(null);
   const [isFetching, setIsFetching] = useState(true);
   const [loadedScopeKey, setLoadedScopeKey] = useState("");
   const [loadOutcome, setLoadOutcome] = useState<
@@ -118,6 +121,12 @@ export default function GuestList({
   }, [externalLinks, guests, isFetching, loadedScopeKey, requestScopeKey, users]);
 
   const hasCurrentScopeData = loadedScopeKey === requestScopeKey;
+  const scopedAttendance = attendance?.venueId === venueId &&
+    attendance.businessDate === selectedDate && attendance.eventId === eventId ? attendance : null;
+  // Named Events can be finalized only after closure; general date rosters can be finalized at any time.
+  const scopeClosed = Boolean(scopedAttendance?.isFinalized || (eventId && scopedAttendance?.canFinalize));
+  const entryDisabled = !scopedAttendance || scopeClosed || scopedAttendance.unavailableReason === "event_inactive";
+  const deleteDisabled = !scopedAttendance || scopeClosed;
   const isCurrentScopeFetching = isFetching || !hasCurrentScopeData;
   const displayData = !hasCurrentScopeData
     ? EMPTY_DISPLAY_DATA
@@ -134,6 +143,7 @@ export default function GuestList({
     pollingGuard.invalidateRequests();
     const isLatestRequest = requestGuard.beginRequest();
     if (!venueId) {
+      setAttendance(null);
       setGuests([]);
       setUsers([]);
       setExternalLinks([]);
@@ -145,12 +155,12 @@ export default function GuestList({
     setIsFetching(true);
     setFeedback(null);
     try {
-      const { data, error } = await fetchGuestOperationsSnapshot(
-        selectedDate,
-        venueId,
-        eventId,
-      );
+      const [{ data, error }, summary] = await Promise.all([
+        fetchGuestOperationsSnapshot(selectedDate, venueId, eventId),
+        fetchDoorAttendanceSummary({ scope: { venueId, businessDate: selectedDate, eventId } }),
+      ]);
       if (!isLatestRequest()) return;
+      setAttendance(summary.data);
       if (!data) {
         setGuests([]);
         setUsers([]);
@@ -158,7 +168,7 @@ export default function GuestList({
         setFeedback(doorTRef.current("loadFailed"));
         setLoadOutcome("error");
       } else {
-        if (error) {
+        if (error || !summary.data) {
           setFeedback(doorTRef.current("partialLoadFailed"));
           setLoadOutcome("partial");
         } else {
@@ -172,6 +182,7 @@ export default function GuestList({
     } catch (err) {
       if (!isLatestRequest()) return;
       console.error("Failed to load data:", err);
+      setAttendance(null);
       setGuests([]);
       setUsers([]);
       setExternalLinks([]);
@@ -191,9 +202,13 @@ export default function GuestList({
   const pollGuests = useCallback(async () => {
     if (!venueId || loadedScopeKey !== requestScopeKey) return;
     const isLatestRequest = pollingGuard.beginRequest();
-    const { data } = await fetchGuestsByDate(selectedDate, venueId, eventId);
-    if (isLatestRequest() && loadedScopeKey === requestScopeKey && data) {
-      setGuests(data);
+    const [{ data }, summary] = await Promise.all([
+      fetchGuestsByDate(selectedDate, venueId, eventId),
+      fetchDoorAttendanceSummary({ scope: { venueId, businessDate: selectedDate, eventId } }),
+    ]);
+    if (isLatestRequest() && loadedScopeKey === requestScopeKey) {
+      if (data) setGuests(data);
+      if (summary.data) setAttendance(summary.data);
     }
   }, [eventId, loadedScopeKey, pollingGuard, requestScopeKey, selectedDate, venueId]);
 
@@ -212,6 +227,7 @@ export default function GuestList({
     newStatus: Guest["status"],
     action: string,
   ) => {
+    if (newStatus === "deleted" ? deleteDisabled : entryDisabled) return;
     const operationScopeKey = requestScopeKey;
     const busyKey = `${id}_${action}`;
     const operation = mutationGuard.beginOperation(
@@ -340,6 +356,9 @@ export default function GuestList({
           />
         </div>
         {feedback && <Alert type="error" message={feedback} />}
+        {scopedAttendance && entryDisabled && <p role="status" className="text-sm text-text-muted">
+          {doorT(scopedAttendance.isFinalized ? "attendance.scopeClosed" : "attendance.eventInactive")}
+        </p>}
         {isSuperAdmin && (
           <VenueSelector
             venues={venues}
@@ -440,6 +459,8 @@ export default function GuestList({
                     }
                     isCheckLoading={loadingStates[`${guest.id}_check`]}
                     isUndoLoading={loadingStates[`${guest.id}_undo`]}
+                    isEntryDisabled={entryDisabled}
+                    isDeleteDisabled={deleteDisabled}
                     isDeleteLoading={loadingStates[`${guest.id}_remove`]}
                   />
                 );

@@ -220,5 +220,6 @@ export default function AttendanceCounter({
     <p className="sr-only" role="status" aria-live="polite" aria-atomic="true">{announcement}</p>
   </>;
   return children(actions, details, Boolean(scopedSummary?.isFinalized ||
+    (scope?.eventId && scopedSummary?.canFinalize) ||
     scopedSummary?.unavailableReason === "scope_closed" || scopedSummary?.unavailableReason === "event_inactive"));
 }

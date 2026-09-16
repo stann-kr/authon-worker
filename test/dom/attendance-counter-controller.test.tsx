@@ -1652,8 +1652,8 @@ test("product Door actions retain one counter owner while opening and closing th
   const dependencies = createDependencies({
     fetchDoorAttendanceSummary: async ({ scope }) => {
       loads++;
-      return { data: { ...createSummary(scope), ...(scope.eventId === SCOPE_B.eventId
-        ? { canRecord: false, unavailableReason: "event_inactive" as const } : {}) }, error: null };
+      return { data: { ...createSummary(scope), canFinalize: false, ...(scope.eventId === SCOPE_B.eventId
+        ? { canFinalize: true, canRecord: false, unavailableReason: "past_date" as const } : {}) }, error: null };
     },
     enqueueAttendanceMutation: async ({ action, reversesIdempotencyKey }) => {
       queued++;
