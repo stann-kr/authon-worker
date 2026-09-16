@@ -1,5 +1,4 @@
-import AuthenticatedHeader from "@/components/AuthenticatedHeader";
-import Footer from "./Footer";
+import WorkspaceShell from "./WorkspaceShell";
 
 /**
  * 로그인 후 route 전환 중 현재 앱 chrome을 유지하는 빈 loading shell.
@@ -7,15 +6,6 @@ import Footer from "./Footer";
  */
 export default function RouteLoadingShell() {
   return (
-    <div className="flex min-h-[100dvh] flex-col bg-canvas">
-      <AuthenticatedHeader />
-      <main
-        id="main-content"
-        tabIndex={-1}
-        className="flex-1 pt-[var(--app-header-height)]"
-        aria-hidden="true"
-      />
-      <Footer />
-    </div>
+    <WorkspaceShell><div aria-hidden="true" /></WorkspaceShell>
   );
 }

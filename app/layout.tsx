@@ -2,6 +2,7 @@ import { measureServerOperation } from "@/lib/observability/server-performance";
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
+import "@/components/workspace/workspace.css";
 import DesignSystemProvider from "@/components/DesignSystemProvider";
 import VenueBrandProvider from "@/components/VenueBrandProvider";
 import { RouteTransitionProvider } from "@/components/RouteTransitionProvider";

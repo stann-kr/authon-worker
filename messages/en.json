@@ -1,4 +1,30 @@
 {
+  "Workspace": {
+    "home": "Home",
+    "roster": "Roster",
+    "myRoster": "My guests",
+    "door": "Door",
+    "events": "Events",
+    "links": "Guest links",
+    "requests": "Quota requests",
+    "analytics": "Analytics",
+    "users": "Accounts",
+    "passwordRequests": "Reset requests",
+    "venues": "Venues",
+    "profile": "My account",
+    "navigation": "Main navigation",
+    "allMenu": "All menus",
+    "more": "More",
+    "close": "Close",
+    "actions": "Current page actions",
+    "pendingCount": "{count} pending",
+    "groups": {
+      "preparation": "Event preparation",
+      "operations": "Live operations",
+      "records": "Reports",
+      "management": "Management"
+    }
+  },
   "Common": {
     "language": "Language",
     "english": "English",

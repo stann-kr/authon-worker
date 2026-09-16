@@ -15,9 +15,7 @@ import type { UserManagementSection } from "./components/UserManagement";
 import type { VenueManagementSection } from "./components/VenueManagement";
 import Skeleton from "@/components/Skeleton";
 import EventScopeSelector from "@/components/EventScopeSelector";
-import AdminTaskSwitcher, {
-  type AdminTaskOption,
-} from "./components/AdminTaskSwitcher";
+import type { AdminTaskOption } from "./components/AdminTaskSwitcher";
 import AuthGuard from "../../components/AuthGuard";
 import WorkspaceShell from "../../components/WorkspaceShell";
 import VenueLoadNotice from "../../components/VenueLoadNotice";
@@ -29,7 +27,6 @@ import {
   useRouteLoadingTask,
   useRouteTransition,
 } from "../../components/RouteTransitionProvider";
-import { type AdminTaskGroup } from "../../lib/admin-navigation";
 import { fetchPendingPasswordResetRequestCount } from "@/lib/api/password-reset-requests";
 import useAdminWorkspaceNavigation, {
   focusAdminWorkspaceAfterTaskChange,
@@ -166,15 +163,6 @@ function AdminPageContent() {
   );
 
 
-  const groupLabels: Record<AdminTaskGroup, string> = {
-    guests: t("guests"),
-    events: t("events"),
-    links: t("links"),
-    users: t("users"),
-    analytics: t("analytics"),
-    venues: t("venues"),
-  };
-
   const handleLinkSectionChange = useCallback(
     (section: LinkManagementSection) =>
       changeTask(section === "create" ? "link-create" : "link-manage"),
@@ -192,9 +180,20 @@ function AdminPageContent() {
   );
   const activeTaskLabel =
     taskOptions.find((option) => option.id === activeTask)?.label ?? t("title");
+  const activeGroup = taskOptions.find((option) => option.id === activeTask)?.group;
+  const contextTasks = ["links", "users", "venues"].includes(activeGroup ?? "")
+    ? taskOptions.filter((option) => option.group === activeGroup && option.id !== "password-requests")
+    : [];
 
   return (
-    <WorkspaceShell contentClassName="gap-4 pb-8">
+    <WorkspaceShell contentClassName="gap-4 pb-8" title={activeTaskLabel}
+      adminNavigation={{ activeTask, onTaskChange: changeTask,
+        disabled: !isRoleReady, pendingPasswordResetCount }}
+      actions={contextTasks.length > 0 && activeTask !== "password-requests" ? contextTasks.map((task) => (
+        <button key={task.id} type="button" className="workspace-action"
+          aria-pressed={activeTask === task.id} disabled={!isRoleReady || isRouteTransitionActive}
+          onClick={() => changeTask(task.id)}>{task.label}</button>
+      )) : undefined}>
       <h1 id="admin-page-title" className="sr-only">
         {t("title")}
       </h1>
@@ -212,18 +211,6 @@ function AdminPageContent() {
           isLoading={isLoadingVenues}
         />
       )}
-
-      <div className="grid min-h-0 gap-4 lg:grid-cols-[14rem_minmax(0,1fr)] lg:items-start lg:gap-6">
-        <aside className="lg:sticky lg:top-[calc(var(--app-header-height)+2rem)] lg:self-start">
-          <AdminTaskSwitcher
-            label={t("sections")}
-            groupLabels={groupLabels}
-            options={taskOptions}
-            value={activeTask}
-            onChange={changeTask}
-            disabled={!isRoleReady || isRouteTransitionActive}
-          />
-        </aside>
 
         <section
           ref={workspaceRef}
@@ -317,7 +304,6 @@ function AdminPageContent() {
         )}
         </>}
         </section>
-      </div>
     </WorkspaceShell>
   );
 }

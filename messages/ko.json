@@ -1,4 +1,30 @@
 {
+  "Workspace": {
+    "home": "홈",
+    "roster": "명단",
+    "myRoster": "내 명단",
+    "door": "도어",
+    "events": "행사",
+    "links": "등록 링크",
+    "requests": "인원 요청",
+    "analytics": "통계",
+    "users": "계정",
+    "passwordRequests": "재설정 요청",
+    "venues": "베뉴",
+    "profile": "내 계정",
+    "navigation": "주요 메뉴",
+    "allMenu": "전체 메뉴",
+    "more": "전체",
+    "close": "닫기",
+    "actions": "현재 화면 작업",
+    "pendingCount": "대기 {count}건",
+    "groups": {
+      "preparation": "공연 준비",
+      "operations": "현장 운영",
+      "records": "운영 기록",
+      "management": "관리"
+    }
+  },
   "Common": {
     "language": "언어",
     "english": "English",
