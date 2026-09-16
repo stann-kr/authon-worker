@@ -24,7 +24,7 @@ const script = result.outputFiles
 const styles = result.outputFiles.find((file) =>
   file.path.endsWith(".css"),
 ).text;
-const html = `<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="robots" content="noindex,nofollow"><meta name="color-scheme" content="dark"><title>Authon — 하단 중심 작업 화면 목업</title><style>${styles}</style></head><body><div id="root"></div><script>${script}</script></body></html>`;
+const html = `<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="robots" content="noindex,nofollow"><meta name="color-scheme" content="dark"><title>Authon — 운영 화면 목업</title><style>${styles}</style></head><body><div id="root"></div><script>${script}</script></body></html>`;
 await mkdir(dirname(destination), { recursive: true });
 await writeFile(destination, html);
 console.log(

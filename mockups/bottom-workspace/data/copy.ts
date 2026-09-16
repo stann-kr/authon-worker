@@ -17,6 +17,12 @@ function collect(k: unknown, e: unknown) {
 }
 collect(ko, en);
 const extra: Record<string, string> = {
+  "명단 보기": "Roster view",
+  "1열": "1 column",
+  "2열": "2 columns",
+  "1열 보기": "One-column view",
+  "2열 보기": "Two-column view",
+  "넓은 영역에서 2열을 사용할 수 있습니다.": "Two columns are available in a wider area.",
   "데스크톱 메뉴 비교": "Compare desktop navigation",
   "데스크톱 메뉴": "Desktop navigation",
   "A · 좌측 사이드바": "A · Left sidebar",

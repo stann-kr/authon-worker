@@ -29,6 +29,7 @@ import { Reports } from "./events/Reports";
 import { Links } from "./links/Links";
 import { Roster } from "./guests/Roster";
 import { RosterComparison, useRosterLayout } from "./guests/RosterComparison";
+import { useRosterColumns } from "./guests/RosterViewOptions";
 import { initialRosterComparisonData } from "./guests/comparison-fixtures";
 import { QuotaRequests } from "./guests/QuotaRequests";
 import { DoorAttendance, canFinalizeAttendance } from "./door/DoorAttendance";
@@ -62,8 +63,10 @@ export default function App() {
 function Workspace() {
   const ctx = useMock();
   const frameRef = useRef<HTMLDivElement>(null);
-  const { layout: workspaceLayout, chooseLayout: chooseWorkspaceLayout, desktop } = useWorkspaceLayout(frameRef);
+  const { layout: workspaceLayout, comparing: workspaceComparing, chooseLayout: chooseWorkspaceLayout, desktop } = useWorkspaceLayout(frameRef);
   const [rosterLayout, chooseRosterLayout] = useRosterLayout();
+  const [rosterColumns, chooseRosterColumns] = useRosterColumns();
+  const [rosterComparing] = useState(() => ["columns", "identity"].includes(new URLSearchParams(window.location.search).get("door-layout") ?? ""));
   const {
     data,
     user,
@@ -489,7 +492,10 @@ function Workspace() {
       case "analytics":
         return <Analytics />;
       default:
-        return <Roster layout={desktopActive ? "compact" : workspaceLayout ? "columns" : rosterLayout} />;
+        return <Roster
+          layout={rosterComparing && !workspaceComparing ? rosterLayout : desktopActive ? "compact" : "columns"}
+          columns={rosterColumns} onColumnsChange={chooseRosterColumns}
+        />;
     }
   };
   const allowedViews: View[] = ([
@@ -548,7 +554,7 @@ function Workspace() {
     </div>
   );
   return (
-    <div className={`preview-root${workspaceLayout ? " preview-root--workspace" : ""}`}>
+    <div className="preview-root preview-root--workspace">
       <header className="preview-toolbar">
         <a
           href="#"
@@ -639,8 +645,8 @@ function Workspace() {
           </button>
         </div>
       </header>
-      {workspaceLayout && <WorkspaceComparison layout={workspaceLayout} onChange={chooseWorkspaceLayout} />}
-      {!workspaceLayout && view === "door" && !forbidden && !inactive && (
+      {workspaceComparing && <WorkspaceComparison layout={workspaceLayout} onChange={chooseWorkspaceLayout} />}
+      {!workspaceComparing && rosterComparing && view === "door" && !forbidden && !inactive && (
         <RosterComparison layout={rosterLayout} onChange={chooseRosterLayout} />
       )}
       <div className={`preview-frame ${previewSize}`} ref={frameRef}>

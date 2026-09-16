@@ -11,17 +11,16 @@ export function useWorkspaceLayout(frameRef: RefObject<HTMLDivElement | null>) {
   });
   const [wide, setWide] = useState(false);
   const pendingFocus = useRef<{ label: string | null; text: string | null } | null>(null);
-  const enabled = layout !== null;
   useLayoutEffect(() => {
     const frame = frameRef.current;
-    if (!frame || !enabled) return;
+    if (!frame) return;
     let previous: boolean | undefined;
     const resize = () => {
       const next = frame.getBoundingClientRect().width >= 1000;
       if (previous !== undefined && previous !== next) {
         const active = document.activeElement;
         if (active instanceof HTMLElement && frame.contains(active) &&
-          active.closest(".dock-nav, .dock-tools, .account-button")) {
+          active.closest(".dock-nav, .dock-tools, .account-button, [data-responsive-control]")) {
           pendingFocus.current = { label: active.getAttribute("aria-label"), text: active.textContent };
         }
       }
@@ -36,12 +35,12 @@ export function useWorkspaceLayout(frameRef: RefObject<HTMLDivElement | null>) {
       observer?.disconnect();
       window.removeEventListener("resize", resize);
     };
-  }, [enabled, frameRef]);
+  }, [frameRef]);
   useLayoutEffect(() => {
     const target = pendingFocus.current;
     if (!target) return;
     pendingFocus.current = null;
-    const controls = frameRef.current?.querySelectorAll<HTMLElement>(".dock-nav button, .dock-tools button, .account-button");
+    const controls = frameRef.current?.querySelectorAll<HTMLElement>(".dock-nav button, .dock-tools button, .account-button, [data-responsive-control] button");
     const replacement = [...(controls ?? [])].find((button) => target.label
       ? button.getAttribute("aria-label") === target.label
       : button.textContent === target.text);
@@ -53,7 +52,7 @@ export function useWorkspaceLayout(frameRef: RefObject<HTMLDivElement | null>) {
     window.history.replaceState(window.history.state, "", url);
     setLayout(next);
   };
-  return { layout, chooseLayout, desktop: enabled && wide };
+  return { layout: layout ?? "sidebar", comparing: layout !== null, chooseLayout, desktop: wide };
 }
 
 export function WorkspaceComparison({ layout, onChange }: {

@@ -7,7 +7,7 @@ import { JSDOM, VirtualConsole } from 'jsdom';
 const html = await readFile(new URL('../dist/index.html', import.meta.url), 'utf8');
 async function workspace(route = 'planning/bookings', search = '') {
   const errors = [], observers = new Set();
-  let frameWidth = 1280;
+  let frameWidth = 1280, contentWidth = 1280;
   const vc = new VirtualConsole();
   vc.on('jsdomError', error => errors.push(error.message));
   const dom = new JSDOM(html, {
@@ -21,7 +21,8 @@ async function workspace(route = 'planning/bookings', search = '') {
       };
       w.HTMLElement.prototype.getBoundingClientRect = function () {
         const top = this.matches('.workspace-scroll') ? 160 : this.matches('.dock-region') ? 700 : 50;
-        return { x: 0, y: top, left: 0, right: frameWidth, width: frameWidth, top, bottom: 850, height: 850 - top };
+        const width = this.matches('.workspace-scroll') ? contentWidth : frameWidth;
+        return { x: 0, y: top, left: 0, right: width, width, top, bottom: 850, height: 850 - top };
       };
       w.HTMLDialogElement.prototype.show = w.HTMLDialogElement.prototype.showModal = function () {
         this.open = true; this.querySelector('h2')?.focus();
@@ -42,7 +43,7 @@ async function workspace(route = 'planning/bookings', search = '') {
     await tick();
   };
   const label = name => [...d.querySelectorAll('label')].find(el => el.querySelector('span')?.textContent.replace(' *','') === name)?.querySelector('input,select,textarea');
-  const resize = async width => { frameWidth = width; [...observers].forEach(o => o.callback()); await tick(); };
+  const resize = async (width, mainWidth = width) => { frameWidth = width; contentWidth = mainWidth; [...observers].forEach(o => o.callback()); await tick(); };
   const navigate = async route => { w.location.hash = `#${route}`; await tick(70); };
   const submit = async () => { dialog().querySelector('form').dispatchEvent(new w.Event('submit', { bubbles: true, cancelable: true })); await tick(230); };
   const finish = () => { assert.deepEqual(errors, []); dom.window.close(); };
@@ -180,6 +181,98 @@ test('desktop actions, menu focus and open forms survive return to the mobile do
   await q.click(q.button('B · 상단 메뉴'));
   assert.equal(activeNav().textContent.trim(), '아티스트', 'top menu keeps the selected destination visible');
   q.finish();
+});
+
+test('original workspace uses the sidebar across operating screens, roles and empty scopes', async () => {
+  const q = await workspace();
+  assert.equal(q.d.querySelector('[aria-label="데스크톱 메뉴 비교"]'), null);
+  assert.equal(q.d.querySelector('[aria-label="명단 비교"]'), null);
+  const routes = [
+    'planning/artists', 'planning/bookings', 'planning/schedule', 'planning/preparation',
+    'workspace/events', 'workspace/roster', 'workspace/door', 'workspace/attendance',
+    'workspace/links', 'workspace/users', 'workspace/analytics', 'workspace/requests',
+    'workspace/report', 'workspace/profile', 'workspace/home',
+  ];
+  for (const route of routes) {
+    await q.navigate(route);
+    assert.equal(q.d.querySelector('.app-shell').dataset.view, route.split('/')[1]);
+    assert.equal(q.d.querySelector('.app-shell').dataset.workspaceLayout, 'sidebar');
+    assert.equal(q.d.querySelectorAll('nav[aria-label="주요 메뉴"]').length, 1);
+    assert.ok(q.d.querySelector('.desktop-chrome nav'));
+    assert.equal(q.d.querySelector('.dock-region nav'), null);
+  }
+  await q.input(q.d.querySelector('[aria-label="역할 미리보기"]'), 'door');
+  await q.navigate('workspace/door');
+  assert.equal(q.button('계정', q.d.querySelector('nav')), undefined);
+  await q.input(q.label('베뉴 구성'), 'none');
+  assert.equal(q.button('도어', q.d.querySelector('nav')), undefined);
+  assert.equal(q.d.querySelectorAll('.workspace-header .action-pill').length, 0);
+  assert.ok(q.button('내 계정 열기'));
+  await q.resize(834);
+  assert.ok(q.d.querySelector('.dock-region nav'));
+  await q.resize(1280);
+  assert.ok(q.d.querySelector('.desktop-chrome nav'));
+  for (const role of ['auth', 'external']) {
+    await q.input(q.d.querySelector('[aria-label="역할 미리보기"]'), role);
+    assert.equal(q.d.querySelector('.desktop-chrome'), null);
+    assert.equal(q.d.querySelector('nav[aria-label="주요 메뉴"]'), null);
+  }
+  q.finish();
+});
+
+test('roster column choice preserves ordering, check-ins and detail, and survives narrow views and navigation', async () => {
+  const q = await workspace('workspace/door', '?door-compare=1');
+  assert.equal(q.button('1열 보기').getAttribute('aria-pressed'), 'true');
+  const rows = [...q.d.querySelectorAll('.guest-list > li')];
+  await q.click(q.button('2열 보기'));
+  assert.equal(q.button('2열 보기').getAttribute('aria-pressed'), 'true');
+  assert.deepEqual([...q.d.querySelectorAll('.guest-list > li')], rows, 'same people and reading order');
+  const search = q.d.querySelector('.roster-search input');
+  await q.input(search, '김서윤');
+  const pending = q.d.querySelectorAll('.roster-status-filters button')[1];
+  await q.click(pending);
+  await q.click(q.d.querySelector('.guest-list .check-button')); await q.tick(220);
+  await q.click(q.button('1열 보기'));
+  assert.equal(q.d.querySelector('.roster-search input'), search);
+  assert.equal(search.value, '김서윤');
+  assert.equal(pending.getAttribute('aria-pressed'), 'true');
+  assert.equal(q.d.querySelectorAll('.guest-list > li').length, 1);
+  assert.ok(pending.textContent.includes('13'));
+  await q.click(q.d.querySelector('.guest-person'));
+  const detail = q.dialog();
+  await q.click(q.button('2열 보기'));
+  assert.equal(q.dialog(), detail);
+  await q.resize(1280, 700);
+  assert.equal(q.button('1열 보기').getAttribute('aria-pressed'), 'true');
+  assert.equal(q.button('2열 보기').disabled, true);
+  await q.resize(1280);
+  assert.equal(q.button('2열 보기').getAttribute('aria-pressed'), 'true');
+  await q.click(q.button('닫기', detail));
+  q.button('2열 보기').focus();
+  await q.resize(390);
+  assert.equal(q.button('2열 보기'), undefined);
+  assert.equal(q.d.activeElement, q.d.querySelector('main'));
+  assert.equal(q.d.querySelector('.roster-search input'), search);
+  assert.equal(search.value, '김서윤');
+  await q.resize(1280);
+  assert.equal(q.button('2열 보기').getAttribute('aria-pressed'), 'true');
+  await q.input(q.d.querySelector('[aria-label="목업 상태"]'), 'offline');
+  const action = q.d.querySelector('.guest-list .check-button');
+  await q.click(action); await q.tick(220);
+  await q.click(q.button('1열 보기'));
+  assert.equal(q.d.querySelector('.guest-list .check-button'), action);
+  assert.equal(action.textContent.trim(), '기기 저장');
+  assert.equal(action.disabled, true);
+  await q.click(q.button('2열 보기'));
+  await q.navigate('workspace/roster');
+  assert.equal(q.button('2열 보기').getAttribute('aria-pressed'), 'true');
+  assert.equal(q.d.querySelector('.check-button'), null, 'Door account cannot check in through its personal roster');
+  const savedSearch = q.w.location.search;
+  assert.equal(new URLSearchParams(savedSearch).get('roster-columns'), '2');
+  q.finish();
+  const restored = await workspace('workspace/door', savedSearch);
+  assert.equal(restored.button('2열 보기').getAttribute('aria-pressed'), 'true');
+  restored.finish();
 });
 
 test('selected detail changes target and resizes without remounting or losing focus', async () => {

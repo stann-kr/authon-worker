@@ -26,6 +26,7 @@ import {
 } from "../shared/ui";
 import { GuestEntry } from "./GuestEntry";
 import type { RosterLayout } from "./RosterComparison";
+import { RosterViewOptions, type RosterColumns } from "./RosterViewOptions";
 import "./compact-roster.css";
 export function performCheck(guest: MockGuest, checked: boolean) {
   guest.history ??= guest.checkedAt
@@ -37,7 +38,11 @@ export function performCheck(guest: MockGuest, checked: boolean) {
   if (checked) guest.checkIns++;
   else guest.cancellations++;
 }
-export function Roster({ layout = "columns" }: { layout?: RosterLayout | "compact" }) {
+export function Roster({ layout = "columns", columns = 1, onColumnsChange }: {
+  layout?: RosterLayout | "compact";
+  columns?: RosterColumns;
+  onColumnsChange?: (columns: RosterColumns) => void;
+}) {
   const {
     data,
     user,
@@ -61,20 +66,24 @@ export function Roster({ layout = "columns" }: { layout?: RosterLayout | "compac
   const searchToggleRef = useRef<HTMLButtonElement>(null);
   const searchId = useId();
   const [searchOpen, setSearchOpen] = useState(false);
-  const [wideSearch, setWideSearch] = useState(false);
+  const [contentWidth, setContentWidth] = useState(0);
+  const wideSearch = contentWidth >= 700;
+  const allowTwoColumns = contentWidth >= 760;
+  const twoColumns = layout === "compact" && columns === 2 && allowTwoColumns;
   const persistentSearch = wideSearch || identityLayout;
   useLayoutEffect(() => {
     const content = searchRef.current?.closest("main");
     if (!content) return;
     let wasWide = false;
     const update = () => {
-      const wide = content.getBoundingClientRect().width >= 700;
+      const width = content.getBoundingClientRect().width;
+      const wide = width >= 700;
       if (!wide && wasWide && document.activeElement === searchRef.current)
         setSearchOpen(true);
       if (wide && document.activeElement === searchToggleRef.current)
         requestAnimationFrame(() => searchRef.current?.focus({ preventScroll: true }));
       wasWide = wide;
-      setWideSearch(wide);
+      setContentWidth(width);
     };
     update();
     const observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(update);
@@ -189,7 +198,7 @@ export function Roster({ layout = "columns" }: { layout?: RosterLayout | "compac
     );
   };
   return (
-    <div className={`roster${identityLayout ? " roster--identity" : ""}${layout === "compact" ? " roster--compact" : ""}`}>
+    <div className={`roster${identityLayout ? " roster--identity" : ""}${layout === "compact" ? " roster--compact" : ""}${twoColumns ? " roster--two-columns" : ""}`}>
       {!isAdmin && !isDoor && <dl className="stat-strip" aria-label={t("선택한 행사 요약")}>
         <div className="stat"><dt>{t("내 등록")}</dt><dd><strong>{quota.used}</strong></dd></div>
         <div className="stat"><dt>{t("남은 한도")}</dt><dd><strong>{quota.remaining ?? "∞"}</strong></dd></div>
@@ -288,6 +297,10 @@ export function Roster({ layout = "columns" }: { layout?: RosterLayout | "compac
             <Icon name="sliders" size={19} />
           </button>
         </div>
+        {layout === "compact" && onColumnsChange && <RosterViewOptions
+          columns={twoColumns ? 2 : 1} allowTwo={allowTwoColumns}
+          listId={`${searchId}-list`} onChange={onColumnsChange}
+        />}
         {(owner !== "all" || sort !== "registered" || waiting) && (
           <div className="roster-applied" aria-label={t("적용한 조건")}>
             {owner !== "all" && (
@@ -349,7 +362,7 @@ export function Roster({ layout = "columns" }: { layout?: RosterLayout | "compac
         <span>{t("게스트")}</span><span>{t("입장 상태")}</span>
         <span>{t("등록 담당자")}</span><span className="guest-operator">{t("입력자")}</span><span>{t("입장 시각")}</span>
       </div>}
-      <ul className="guest-list">
+      <ul className="guest-list" id={`${searchId}-list`}>
         {list.map((g) => (
           <li key={g.id}>
             <button
@@ -362,7 +375,7 @@ export function Roster({ layout = "columns" }: { layout?: RosterLayout | "compac
                 <strong>{g.name}</strong>
                 <small className="guest-mobile-meta">
                   {contributorName(data, g.ownerId, g.externalLinkId)}
-                  {g.operator ? ` · ${g.operator}` : ""}
+                  {g.operator && layout !== "compact" ? ` · ${g.operator}` : ""}
                 </small>
               </span>
             </button>

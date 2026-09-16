@@ -20,9 +20,47 @@
 .roster--compact .guest-list-columns > :nth-child(n+4) { display: none; }
 .roster--compact .guest-list .guest-owner { display: block; grid-area: owner; font-size: 13px; }
 .roster--compact .check-button { grid-area: action; justify-content: center; }
+.roster--compact .guest-list > li > .status-badge { grid-area: action; justify-self: center; }
 .roster--compact .check-button.is-queued .status-badge { background: #3b82f614; color: #75aaff; }
-.roster.roster--compact .roster-controls { padding: 10px 24px; gap: 8px 16px; }
+.roster.roster--compact .roster-controls {
+  grid-template-columns: minmax(0, 1fr) minmax(230px, 340px) auto;
+  padding: 10px 24px;
+  gap: 8px 16px;
+}
 .roster--compact .roster-status-filters button { padding-inline: 10px; }
+.roster-view-options { display: flex; flex-shrink: 0; gap: 2px; padding: 2px; border: 1px solid var(--line); border-radius: 10px; }
+.roster-view-options > button {
+  min-width: 44px;
+  min-height: 44px;
+  padding: 8px;
+  border: 0;
+  border-radius: 7px;
+  background: none;
+  color: var(--muted);
+  font-size: 12px;
+}
+.roster-view-options > button[aria-pressed="true"] { background: var(--pill-active); color: var(--text); }
+.roster.roster--two-columns .guest-list-columns { display: none; }
+.roster--two-columns .guest-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0 24px;
+  margin-inline: 24px;
+}
+.roster.roster--compact.roster--two-columns .guest-list li {
+  grid-template-columns: minmax(0, 1fr) 96px;
+  grid-template-areas: "person action";
+  gap: 12px;
+  margin: 0;
+  padding-block: 6px;
+}
+.roster--two-columns .guest-person strong { margin-bottom: 2px; }
+.roster--two-columns .guest-person .guest-mobile-meta { display: block; font-size: 12px; }
+.roster--two-columns .guest-list .guest-owner { display: none; }
+@container content (max-width: 759px) {
+  .roster.roster--compact .roster-controls { grid-template-columns: minmax(0, 1fr) auto; }
+  .roster--compact .roster-filter-row { grid-column: 1 / -1; }
+}
 /* A selected detail can narrow the list without hiding the owner's identity. */
 @container content (max-width: 620px) {
   .roster.roster--compact .guest-list-columns { display: none; }
