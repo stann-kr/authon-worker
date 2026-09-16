@@ -340,7 +340,7 @@ export default function EventManagement({
                         </div>
                       </div>
                     )}
-      <EventCloseout eventId={event.id} />
+      <EventCloseout eventId={event.id} eventState={event.state} timeZone={currentVenue?.timezone} />
     </div>;
   };
   const detailEvent = explicitEvents.find((event) => event.id === detailId);

@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import Alert from "@/components/Alert";
 import ConfirmDialog from "@/components/ConfirmDialog";
 import EmptyState from "@/components/EmptyState";
@@ -14,9 +14,13 @@ import {
 } from "@/lib/api/closeout";
 import { nightCloseoutToCsv } from "@/lib/closeout/domain";
 import { useLatestRequestGuard } from "@/lib/hooks";
+import { DEFAULT_VENUE_TIMEZONE, isValidTimeZone } from "@/lib/date";
+import type { Event } from "@/lib/events/types";
 
 interface EventCloseoutProps {
   eventId: string;
+  eventState: Event["state"];
+  timeZone?: string | null;
 }
 
 function formatDuration(seconds: number | null): string {
@@ -29,8 +33,9 @@ function formatDuration(seconds: number | null): string {
   return remainingMinutes > 0 ? `${hours}h ${remainingMinutes}m` : `${hours}h`;
 }
 
-export default function EventCloseout({ eventId }: EventCloseoutProps) {
+export default function EventCloseout({ eventId, eventState, timeZone }: EventCloseoutProps) {
   const t = useTranslations("EventCloseout");
+  const locale = useLocale();
   const [view, setView] = useState<EventCloseoutView | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isConfirming, setIsConfirming] = useState(false);
@@ -58,7 +63,7 @@ export default function EventCloseout({ eventId }: EventCloseoutProps) {
     setView(null);
     setFeedback(null);
     void load();
-  }, [load]);
+  }, [load, eventState]);
 
   const confirm = async () => {
     if (isConfirming) return;
@@ -186,7 +191,10 @@ export default function EventCloseout({ eventId }: EventCloseoutProps) {
                   {report.peak15Minutes
                     ? t("peakValue", {
                         count: report.peak15Minutes.entries,
-                        time: report.peak15Minutes.startedAt.slice(11, 16),
+                        time: new Intl.DateTimeFormat(locale, {
+                          hour: "2-digit", minute: "2-digit", hourCycle: "h23",
+                          timeZone: isValidTimeZone(timeZone) ? timeZone : DEFAULT_VENUE_TIMEZONE,
+                        }).format(new Date(report.peak15Minutes.startedAt)),
                       })
                     : "—"}
                 </strong>
