@@ -1,7 +1,8 @@
-import { useLayoutEffect, useRef, useState } from "react";
+import { useId, useLayoutEffect, useRef, useState } from "react";
 import { useMock } from "../data/MockData";
 import type { View } from "../data/types";
-import { navigationLabel } from "./navigation";
+import { Icon } from "../shared/Icon";
+import { navigationGroups, navigationLabel, navigationPendingCounts } from "./navigation";
 import "./dock.css";
 
 function reveal(button: HTMLElement, scroller: HTMLElement, vertical = false) {
@@ -31,16 +32,23 @@ export function DockNavigation({
   expanded?: boolean;
   onSelect: (view: View | "more") => void;
 }) {
-  const { view, user, locale, isAdmin, t } = useMock();
+  const { view, user, locale, isAdmin, t, data, event, venue } = useMock();
+  const navigationId = useId();
   const navRef = useRef<HTMLElement>(null);
   const scrollerRef = useRef<HTMLDivElement>(null);
   const [itemLimit, setItemLimit] = useState(5);
-  const visible = expanded
-    ? [...items, ...allowedViews.filter((target) => !items.includes(target) && target !== "home" && target !== "profile")]
-        .filter((target) => allowedViews.includes(target))
-    : items.slice(0, itemLimit);
+  const groups = navigationGroups.map((group) => ({ ...group,
+    items: group.items.filter((item) => allowedViews.includes(item.view) && item.view !== "home" && item.view !== "profile"),
+  })).filter((group) => group.items.length > 0);
+  const context = `${user.id}:${venue.id}:${view}`;
+  const [groupChoice, setGroupChoice] = useState<{ context: string; id: string | null } | null>(null);
+  if (groupChoice && groupChoice.context !== context) setGroupChoice(null);
+  const activeGroup = groups.find((group) => group.items.some((item) => item.view === view));
+  const openGroup = groupChoice?.context === context ? groupChoice.id : activeGroup?.id ?? groups[0]?.id;
+  const counts = navigationPendingCounts(data, event.id, venue.id, user.id, isAdmin);
+  const visible = items.slice(0, itemLimit);
   if (allowedViews.includes(view) && !visible.includes(view)) {
-    if (expanded || visible.length < itemLimit) visible.push(view);
+    if (visible.length < itemLimit) visible.push(view);
     else visible[visible.length - 1] = view;
   }
   const refreshEdges = () => {
@@ -59,7 +67,10 @@ export function DockNavigation({
       const width = workspaceWidth ? workspaceWidth - 24 : navRef.current?.clientWidth;
       if (width) setItemLimit(width < 340 ? 4 : 5);
       const selected = el.querySelector<HTMLElement>('[aria-current="page"]');
-      if (selected) reveal(selected, expanded && navRef.current ? navRef.current : el, expanded);
+      if (selected && !selected.closest("[hidden]")) {
+        if (el.contains(document.activeElement) && document.activeElement?.closest("[hidden]")) selected.focus({ preventScroll: true });
+        reveal(selected, expanded && navRef.current ? navRef.current : el, expanded);
+      }
       refreshEdges();
     };
     resize();
@@ -70,9 +81,10 @@ export function DockNavigation({
     const workspace = navRef.current?.closest(".app-shell");
     if (workspace) observer?.observe(workspace);
     return () => observer?.disconnect();
-  }, [view, user.id, locale, items.length, itemLimit, expanded]);
+  }, [view, user.id, locale, items.length, itemLimit, expanded, openGroup]);
   const button = (target: View) => {
-    const showCount = pendingCount > 0 && !isAdmin && target === "requests";
+    const count = expanded ? counts[target] ?? 0 : !isAdmin && target === "requests" ? pendingCount : 0;
+    const countId = `${navigationId}-${target}-count`;
     return (
       <button
         type="button"
@@ -80,17 +92,17 @@ export function DockNavigation({
         className="navigation-pill"
         aria-current={view === target ? "page" : undefined}
         aria-label={t(navigationLabel(target, isAdmin))}
-        aria-describedby={showCount ? "workspace-request-count" : undefined}
+        aria-describedby={count > 0 ? countId : undefined}
         onClick={() => onSelect(target)}
       >
         <span>{t(navigationLabel(target, isAdmin))}</span>
-        {showCount && (
+        {count > 0 && (
           <span
             className="nav-count"
-            id="workspace-request-count"
-            aria-label={t("대기 {count}건", { count: pendingCount })}
+            id={countId}
+            aria-label={t("대기 {count}건", { count })}
           >
-            {pendingCount}
+            {count}
           </span>
         )}
       </button>
@@ -110,7 +122,32 @@ export function DockNavigation({
             }
           }}
         >
-          {visible.map(button)}
+          {expanded ? <>
+            {allowedViews.includes("home") && button("home")}
+            {groups.map((group) => {
+              const isOpen = groups.length === 1 || openGroup === group.id;
+              const panelId = `${navigationId}-${group.id}`;
+              const count = group.items.reduce((total, item) => total + (counts[item.view] ?? 0), 0);
+              return <section className="sidebar-group" key={group.id} aria-labelledby={`${panelId}-title`}>
+                <h2 id={`${panelId}-title`}>
+                  {groups.length === 1 ? <span className="sidebar-group-label">{t(group.title)}</span> :
+                    <button type="button" className="sidebar-group-toggle"
+                      aria-expanded={isOpen} aria-controls={panelId}
+                      aria-describedby={!isOpen && count > 0 ? `${panelId}-count` : undefined}
+                      data-current={activeGroup?.id === group.id}
+                      onClick={() => setGroupChoice({ context, id: isOpen ? null : group.id })}>
+                      <Icon name={isOpen ? "down" : "chevron"} size={14} />
+                      <span>{t(group.title)}</span>
+                      {!isOpen && count > 0 && <span className="nav-count" id={`${panelId}-count`}
+                        aria-label={t("대기 {count}건", { count })}>{count}</span>}
+                    </button>}
+                </h2>
+                <div className="sidebar-group-items" id={panelId} hidden={!isOpen}>
+                  {group.items.map((item) => button(item.view))}
+                </div>
+              </section>;
+            })}
+          </> : visible.map(button)}
         </div>
         <span className="dock-edge previous" aria-hidden="true">
           ‹
@@ -119,7 +156,7 @@ export function DockNavigation({
           ›
         </span>
       </div>
-      <button
+      {!expanded && <button
         type="button"
         className="dock-more"
         aria-label={t("전체 메뉴")}
@@ -141,7 +178,7 @@ export function DockNavigation({
             {pendingCount}
           </span>
         )}
-      </button>
+      </button>}
     </nav>
   );
 }

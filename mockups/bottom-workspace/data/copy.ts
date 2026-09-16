@@ -67,6 +67,8 @@ const extra: Record<string, string> = {
   보관됨: "Archived",
   "운영 종료": "Event closed",
   "현장 운영": "On-site operations",
+  "운영 기록": "Reports and analytics",
+  관리: "Administration",
   "작업 공간과 대기 요청": "Workspaces and pending requests",
   "등록·검색·명단 관리": "Register, search and manage guests",
   "게스트 확인과 입장 처리": "Find guests and check them in",

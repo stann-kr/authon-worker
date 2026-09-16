@@ -101,13 +101,35 @@
 .desktop-chrome--sidebar .desktop-brand { display: flex; align-items: center; min-height: 72px; padding-left: 12px; }
 .desktop-chrome--sidebar .dock-nav { flex: 1; width: 100%; flex-direction: column; overflow-y: auto; gap: 6px; padding: 8px 0; }
 .desktop-chrome--sidebar .dock-nav-window { flex: 0 0 auto; }
-.desktop-chrome--sidebar .dock-nav-scroll { flex-direction: column; overflow: visible; gap: 4px; margin: 0; padding: 4px; }
-.desktop-chrome--sidebar .navigation-pill,
-.desktop-chrome--sidebar .dock-more { justify-content: flex-start; width: 100%; padding-inline: 12px; background: none; }
+.desktop-chrome--sidebar .dock-nav-scroll { flex-direction: column; overflow: visible; gap: 8px; margin: 0; padding: 4px; }
+.desktop-chrome--sidebar .navigation-pill { justify-content: flex-start; width: 100%; padding-inline: 12px; background: none; white-space: normal; text-align: left; }
+.desktop-chrome--sidebar .navigation-pill > span:first-child { min-width: 0; overflow-wrap: anywhere; }
+.desktop-chrome--sidebar .nav-count { margin-left: auto; flex-shrink: 0; }
 .desktop-chrome--sidebar .navigation-pill[aria-current="page"] { background: #e7e7e7; }
-.desktop-chrome--sidebar .dock-more { width: calc(100% - 8px); margin-inline: 4px; }
+.sidebar-group { flex-shrink: 0; }
+.sidebar-group h2 { margin: 0; font-size: 12px; font-weight: 500; }
+.sidebar-group-toggle,
+.sidebar-group-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 44px;
+  padding: 8px;
+  color: var(--muted);
+  background: none;
+  border: 0;
+  border-radius: 8px;
+  text-align: left;
+  font: inherit;
+}
+.sidebar-group-toggle > svg { flex-shrink: 0; }
+.sidebar-group-toggle[data-current="true"] { color: var(--text); }
+.sidebar-group-items { padding-left: 8px; }
+.sidebar-group-items:not([hidden]) { display: grid; gap: 2px; }
 .desktop-chrome--sidebar .dock-nav .dock-edge { display: none; }
 .desktop-chrome--sidebar .account-button { margin-top: 12px; flex-shrink: 0; border-top: 1px solid var(--line); border-radius: 0; }
+.desktop-chrome--sidebar .account-button[aria-current="page"] { background: var(--pill-active); }
 .desktop-chrome--top {
   display: flex;
   align-items: center;
@@ -127,5 +149,5 @@
 @media (hover: hover) and (pointer: fine) {
   .desktop-chrome .account-button:hover,
   .desktop-chrome--sidebar .navigation-pill:not([aria-current="page"]):hover,
-  .desktop-chrome--sidebar .dock-more:hover { background: var(--pill-active); }
+  .sidebar-group-toggle:hover { background: var(--pill-active); }
 }

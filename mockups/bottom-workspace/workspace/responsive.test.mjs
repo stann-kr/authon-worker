@@ -220,6 +220,63 @@ test('original workspace uses the sidebar across operating screens, roles and em
   q.finish();
 });
 
+test('sidebar groups destinations, discloses pending work and follows navigation without losing mobile access', async () => {
+  const q = await workspace('workspace/door');
+  const nav = () => q.d.querySelector('nav[aria-label="주요 메뉴"]');
+  const group = name => [...nav().querySelectorAll('.sidebar-group')].find(section => section.querySelector('h2 span').textContent === name);
+  const toggle = name => group(name).querySelector('h2 button');
+  const panel = name => group(name).querySelector('.sidebar-group-items');
+  assert.deepEqual([...nav().querySelectorAll('h2 button > span:first-of-type')].map(el => el.textContent),
+    ['공연 준비', '현장 운영', '운영 기록', '관리']);
+  assert.equal(q.button('전체 메뉴', nav()), undefined);
+  assert.ok(q.button('홈', nav()));
+  assert.equal(toggle('현장 운영').getAttribute('aria-expanded'), 'true');
+  assert.equal(panel('공연 준비').hidden, true);
+  assert.deepEqual([...panel('현장 운영').querySelectorAll('button')].map(el => el.getAttribute('aria-label')),
+    ['명단', '등록 링크', '인원 요청', '도어', '입장 집계']);
+  assert.ok(toggle('관리').querySelector('[aria-label$="pending"], [aria-label^="대기 "]'));
+  const search = q.d.querySelector('.roster-search input');
+  await q.input(search, '김서윤');
+  await q.click(toggle('공연 준비'));
+  assert.equal(panel('현장 운영').hidden, true);
+  assert.ok(toggle('현장 운영').querySelector('.nav-count'), 'pending work remains visible while collapsed');
+  assert.equal(q.d.querySelector('.roster-search input'), search);
+  assert.equal(search.value, '김서윤');
+  const destination = q.button('부킹', panel('공연 준비'));
+  await q.click(destination);
+  assert.equal(q.w.location.hash, '#planning/bookings');
+  assert.equal(panel('공연 준비').hidden, false);
+  assert.equal(destination.getAttribute('aria-current'), 'page');
+  assert.equal(q.d.activeElement, destination);
+  await q.navigate('workspace/door');
+  assert.equal(panel('현장 운영').hidden, false, 'returning to a previous screen does not restore an unrelated open group');
+  assert.equal(q.d.activeElement, q.button('도어', nav()), 'focus leaves the newly hidden group');
+  await q.navigate('workspace/requests');
+  assert.equal(panel('현장 운영').hidden, false, 'direct navigation opens its destination group');
+  assert.equal(panel('공연 준비').hidden, true);
+  const requests = q.button('인원 요청', nav());
+  assert.ok(q.d.getElementById(requests.getAttribute('aria-describedby')));
+  requests.focus();
+  await q.resize(390);
+  assert.equal(q.d.activeElement.getAttribute('aria-label'), '인원 요청');
+  await q.click(q.button('전체 메뉴'));
+  assert.ok(q.dialog().textContent.includes('운영 기록'));
+  await q.click(q.button('아티스트 관리', q.dialog()));
+  await q.resize(1280);
+  assert.equal(panel('공연 준비').hidden, false);
+  assert.equal(q.d.activeElement.getAttribute('aria-label'), '아티스트');
+  await q.input(q.d.querySelector('[aria-label="역할 미리보기"]'), 'door');
+  await q.navigate('workspace/door');
+  assert.equal(nav().querySelectorAll('.sidebar-group').length, 1);
+  assert.equal(nav().querySelector('h2 button'), null, 'a single permitted group needs no disclosure');
+  assert.equal(nav().querySelector('.sidebar-group-items').hidden, false);
+  assert.equal(q.button('계정', nav()), undefined);
+  await q.navigate('workspace/profile');
+  assert.equal(q.button('내 계정 열기').getAttribute('aria-current'), 'page');
+  assert.equal(q.button('프로필', nav()), undefined);
+  q.finish();
+});
+
 test('roster column choice preserves ordering, check-ins and detail, and survives narrow views and navigation', async () => {
   const q = await workspace('workspace/door', '?door-compare=1');
   assert.equal(q.button('1열 보기').getAttribute('aria-pressed'), 'true');

@@ -39,7 +39,7 @@ import { WorkspaceMenu } from "./workspace/WorkspaceMenu";
 import { DockNavigation } from "./workspace/DockNavigation";
 import { WorkspaceComparison, useWorkspaceLayout } from "./workspace/WorkspaceComparison";
 import { WorkspaceActions, type WorkspaceAction } from "./workspace/WorkspaceActions";
-import { navigationLabel } from "./workspace/navigation";
+import { navigationLabel, navigationPendingCounts } from "./workspace/navigation";
 import { useAdminShortcuts } from "./workspace/useAdminShortcuts";
 import { Artists } from "./planning/Artists";
 import { Bookings } from "./planning/Bookings";
@@ -432,20 +432,8 @@ function Workspace() {
   // Door starts with lookup; walk-ins remain the adjacent secondary action.
   if (view === "door") tools.reverse();
   if (scopeUnavailable || eventUnavailable) tools = [];
-  const pendingCount =
-    data.requests.filter(
-      (r) =>
-        r.eventId === event.id &&
-        r.state === "pending" &&
-        (isAdmin || r.userId === user.id),
-    ).length +
-    (isAdmin
-      ? data.resetRequests.filter(
-          (r) =>
-            r.state === "pending" &&
-            data.users.find((u) => u.id === r.userId)?.venueId === venue.id,
-        ).length
-      : 0);
+  const pendingCounts = navigationPendingCounts(data, event.id, venue.id, user.id, isAdmin);
+  const pendingCount = (pendingCounts.requests ?? 0) + (pendingCounts["password-requests"] ?? 0);
   const scopeState = attendanceFor(data, event.id).finalized
     ? "집계 마감"
     : event.state === "open"
@@ -533,7 +521,7 @@ function Workspace() {
   );
   const actions = <WorkspaceActions actions={tools} disabled={busy || forbidden || inactive} />;
   const account = (
-    <button className="account-button" onClick={() => open("account")} aria-label={t("내 계정 열기")}>
+    <button className="account-button" onClick={() => open("account")} aria-label={t("내 계정 열기")} aria-current={desktopActive && workspaceLayout === "sidebar" && view === "profile" ? "page" : undefined}>
       <Icon name="user" size={21} />
       {desktopActive && <span>{user.name}</span>}
     </button>
