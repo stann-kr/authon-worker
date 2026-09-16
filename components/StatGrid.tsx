@@ -54,7 +54,7 @@ export default function StatGrid({
         return (
           <div
             key={item.label}
-            className="flex min-w-0 flex-col items-center justify-center bg-surface-raised px-3 py-3 text-center sm:px-4"
+            className="flex min-w-0 flex-col items-center justify-center px-3 py-2 text-center sm:px-4"
           >
             <dt
               className={`${statLabelColorMap[item.color ?? "default"]} order-2 mt-0.5 font-medium leading-tight ${labelClassName ?? "text-xs"}`}
@@ -62,7 +62,7 @@ export default function StatGrid({
               {item.label}
             </dt>
             <dd
-              className={`order-1 font-mono text-lg tabular-nums sm:text-xl ${statColorMap[item.color ?? "default"]}`}
+              className={`order-1 font-mono text-base tabular-nums ${statColorMap[item.color ?? "default"]}`}
             >
               {isLoading ? "-" : item.value}
             </dd>

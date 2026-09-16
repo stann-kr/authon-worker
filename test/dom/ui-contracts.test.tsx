@@ -20,6 +20,7 @@ import ExternalDjCombobox from "@/app/admin/components/ExternalDjCombobox";
 import ExternalEventCombobox from "@/app/admin/components/ExternalEventCombobox";
 import AsyncListContent from "@/components/AsyncListContent";
 import ConfirmDialog from "@/components/ConfirmDialog";
+import Sheet from "@/components/overlays/Sheet";
 import GuestListCard from "@/components/GuestListCard";
 import OperationalSectionNav from "@/components/OperationalSectionNav";
 import GuestBulkEntry from "@/components/GuestBulkEntry";
@@ -1131,4 +1132,69 @@ test("a cancelled route-owned target restore falls back to main after overlay re
     window.cancelAnimationFrame = originalCancelAnimationFrame;
     setupMain?.setAttribute("id", "main-content");
   }
+});
+
+test("product sheet protects changed input, blocks dismissal while saving and restores focus", async () => {
+  function Harness() {
+    const [open, setOpen] = useState(false);
+    const [busy, setBusy] = useState(false);
+    return <NextIntlClientProvider locale="en" messages={messages}>
+      <div className="workspace-shell"><button onClick={() => setOpen(true)}>Open form</button></div>
+      <Sheet open={open} title="Edit guest" onClose={() => setOpen(false)} protectEdits busy={busy}>
+        <form onSubmit={(event) => { event.preventDefault(); setBusy(true); }}>
+          <label>Name<input name="name" defaultValue="" /></label>
+          <button type="submit">Save draft</button>
+        </form>
+        <button onClick={() => setBusy(false)}>Simulate save failure</button>
+      </Sheet>
+    </NextIntlClientProvider>;
+  }
+  render(<Harness />);
+  const opener = screen.getByRole("button", { name: "Open form" });
+  opener.focus(); fireEvent.click(opener);
+  assert.equal(document.querySelector(".workspace-shell")?.hasAttribute("inert"), true);
+  const input = screen.getByLabelText("Name") as HTMLInputElement;
+  fireEvent.change(input, { target: { value: "Retained guest" } });
+  fireEvent.click(screen.getByRole("button", { name: "Save draft" }));
+  fireEvent.keyDown(document, { key: "Escape" });
+  assert.ok(screen.getByRole("dialog", { name: "Edit guest" }));
+  fireEvent.click(screen.getByRole("button", { name: "Simulate save failure" }));
+  assert.equal(input.value, "Retained guest");
+  fireEvent.keyDown(document, { key: "Escape" });
+  assert.ok(screen.getByRole("group", { name: messages.Sheet.unsaved }));
+  fireEvent.click(screen.getByRole("button", { name: messages.Sheet.continue }));
+  assert.equal(screen.getByLabelText("Name") === input, true);
+  fireEvent.keyDown(document, { key: "Escape" });
+  fireEvent.click(screen.getByRole("button", { name: messages.Sheet.discard }));
+  await waitFor(() => assert.equal(document.activeElement === opener, true));
+  assert.equal(document.querySelector(".workspace-shell")?.hasAttribute("inert"), false);
+});
+
+test("product detail changes between side panel and modal without replacing the form or selection", () => {
+  let width = 1200;
+  const originalRect = HTMLElement.prototype.getBoundingClientRect;
+  HTMLElement.prototype.getBoundingClientRect = function () {
+    return this.id === "main-content" ? { ...originalRect.call(this), width, right: width } as DOMRect : originalRect.call(this);
+  };
+  try {
+    render(<NextIntlClientProvider locale="en" messages={messages}>
+      <div className="workspace-shell"><main id="main-content" /></div>
+      <Sheet title="Guest detail" presentation="detail" onClose={() => {}}>
+        <label>Note<input defaultValue="Selected guest" /></label>
+      </Sheet>
+    </NextIntlClientProvider>);
+    const panel = screen.getByRole("dialog", { name: "Guest detail" });
+    assert.equal(panel.getAttribute("aria-modal"), "false");
+    const input = screen.getByLabelText("Note") as HTMLInputElement;
+    input.focus(); input.setSelectionRange(2, 5);
+    width = 600; fireEvent(window, new Event("resize"));
+    assert.equal(panel.getAttribute("aria-modal"), "true");
+    assert.equal(screen.getByLabelText("Note") === input, true);
+    assert.equal(document.activeElement === input, true);
+    assert.equal(input.selectionStart, 2);
+    assert.equal(input.selectionEnd, 5);
+    width = 1200; fireEvent(window, new Event("resize"));
+    assert.equal(panel.getAttribute("aria-modal"), "false");
+    assert.equal(document.activeElement === input, true);
+  } finally { HTMLElement.prototype.getBoundingClientRect = originalRect; }
 });

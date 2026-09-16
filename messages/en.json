@@ -1131,5 +1131,11 @@
     "inviteInstructions": "An administrator created your account. Use the link below to set a password and complete sign-in.",
     "setPasswordButton": "Set password",
     "inviteExpiry": "This link is valid for 7 days."
+  },
+  "Sheet": {
+    "close": "Close",
+    "unsaved": "You have unsaved changes.",
+    "continue": "Keep editing",
+    "discard": "Discard and close"
   }
 }

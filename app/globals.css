@@ -5,26 +5,26 @@
 :root {
   color-scheme: dark;
   font-size: 16px;
-  --app-canvas: #0a0b0c;
-  --app-surface: #111315;
-  --app-surface-raised: #181b1e;
-  --app-surface-hover: #202428;
-  --app-surface-active: #292e33;
-  --app-border-subtle: #2a2e32;
-  --app-border: #42484e;
-  --app-border-strong: #626b73;
-  --app-text: #f4f5f5;
-  --app-text-body: #d4d7d9;
-  --app-text-muted: #aab0b5;
-  --app-action: #e7eaec;
-  --app-action-text: #111315;
-  --app-action-hover: #f4f5f5;
-  --app-action-active: #d4d7d9;
-  --app-action-confirm: #d4d7d9;
-  --app-action-confirm-hover: #e1e4e6;
-  --app-action-confirm-active: #c4c9cc;
-  --app-focus: #f4f5f5;
-  --app-status-waiting: #c2a56c;
+  --app-canvas: #000000;
+  --app-surface: #141414;
+  --app-surface-raised: #1c1c1c;
+  --app-surface-hover: #242424;
+  --app-surface-active: #2a2a2a;
+  --app-border-subtle: #252525;
+  --app-border: #383838;
+  --app-border-strong: #555555;
+  --app-text: #ffffff;
+  --app-text-body: #dedede;
+  --app-text-muted: #b7b7bb;
+  --app-action: #10b981;
+  --app-action-text: #001c13;
+  --app-action-hover: #34d399;
+  --app-action-active: #059669;
+  --app-action-confirm: #10b981;
+  --app-action-confirm-hover: #34d399;
+  --app-action-confirm-active: #059669;
+  --app-focus: #3b82f6;
+  --app-status-waiting: #d5b479;
   --app-header-height: calc(4.5rem + env(safe-area-inset-top));
   --app-z-route-overlay: 40;
   --app-z-chrome: 45;
@@ -77,7 +77,7 @@ button,
 input,
 select,
 textarea {
-  border-radius: 0;
+  border-radius: 10px;
 }
 
 button {
@@ -161,15 +161,15 @@ input[type="date"] {
   }
 
   .main-content-panel {
-    @apply flex min-h-0 flex-col overflow-hidden border border-border-subtle bg-surface;
+    @apply flex min-h-0 flex-col overflow-hidden rounded-panel border border-border-subtle bg-surface;
   }
 
   .app-panel {
-    @apply border border-border-subtle bg-surface;
+    @apply rounded-panel border border-border-subtle bg-surface;
   }
 
   .context-bar {
-    @apply grid gap-3 border border-border-subtle bg-surface px-4 py-2.5 sm:px-5;
+    @apply grid gap-3 rounded-panel border border-border-subtle bg-surface px-4 py-2.5 sm:px-5;
     grid-template-columns: minmax(0, 1fr);
     align-items: end;
   }
@@ -213,10 +213,14 @@ input[type="date"] {
   }
 
   .app-field {
-    @apply w-full rounded-control border border-border-strong bg-surface-raised px-4 py-3 text-sm text-text-heading outline-none placeholder:text-text-dim disabled:cursor-not-allowed disabled:opacity-50;
+    @apply w-full rounded-control border border-border-default bg-surface-black px-3 py-3 text-sm text-text-heading outline-none placeholder:text-text-dim disabled:cursor-not-allowed disabled:opacity-50;
     transition: border-color var(--app-duration-release) var(--app-ease-out),
       background-color var(--app-duration-release) var(--app-ease-out);
   }
+
+  .app-field[aria-invalid="true"] { border-color: #fb7185; }
+
+  .app-field:focus { border-color: var(--app-focus); }
 
   .app-label {
     @apply mb-2 block text-sm font-medium leading-tight text-text-muted;
@@ -235,7 +239,7 @@ input[type="date"] {
   }
 
   .type-row-title {
-    @apply text-sm font-semibold leading-tight text-text-heading sm:text-base;
+    @apply text-sm font-semibold leading-tight text-text-heading ;
   }
 
   .type-body {

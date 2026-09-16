@@ -7,40 +7,40 @@ module.exports = {
   theme: {
     extend: {
       colors: {
-        canvas: "#0A0B0C",
+        canvas: "#000000",
         surface: {
-          DEFAULT: "#111315",
-          raised: "#181B1E",
-          hover: "#202428",
-          active: "#292E33",
-          black: "#0A0B0C",
+          DEFAULT: "#141414",
+          raised: "#1c1c1c",
+          hover: "#242424",
+          active: "#2a2a2a",
+          black: "#000000",
         },
         border: {
-          subtle: "#2A2E32",
-          default: "#42484E",
-          strong: "#626B73",
-          focus: "#F4F5F5",
+          subtle: "#252525",
+          default: "#383838",
+          strong: "#555555",
+          focus: "#3b82f6",
         },
         action: {
-          primary: "#E7EAEC",
-          hover: "#F4F5F5",
-          text: "#111315",
+          primary: "#10b981",
+          hover: "#34d399",
+          text: "#001c13",
         },
         status: {
-          checked: "#86A98D",
-          waiting: "#C2A56C",
-          danger: "#CC7770",
+          checked: "#34d399",
+          waiting: "#d5b479",
+          danger: "#fb7185",
         },
         text: {
-          muted: "#AAB0B5",
-          dim: "#7D858C",
-          body: "#D4D7D9",
-          heading: "#F4F5F5",
+          muted: "#b7b7bb",
+          dim: "#99999f",
+          body: "#dedede",
+          heading: "#ffffff",
         }
       },
       borderRadius: {
-        control: "0",
-        panel: "0",
+        control: "10px",
+        panel: "16px",
       },
       boxShadow: {
         panel: "none",

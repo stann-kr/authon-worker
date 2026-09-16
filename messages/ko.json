@@ -1131,5 +1131,11 @@
     "inviteInstructions": "관리자가 계정을 생성했습니다. 아래 링크에서 비밀번호를 설정하고 로그인을 완료하세요.",
     "setPasswordButton": "비밀번호 설정",
     "inviteExpiry": "이 링크는 7일 동안 유효합니다."
+  },
+  "Sheet": {
+    "close": "닫기",
+    "unsaved": "아직 저장하지 않은 내용이 있습니다.",
+    "continue": "계속 작성",
+    "discard": "내용 버리고 닫기"
   }
 }
