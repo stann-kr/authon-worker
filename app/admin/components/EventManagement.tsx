@@ -264,6 +264,7 @@ export default function EventManagement({
                         type="button"
                         onClick={() => {
                           setDetailId(null);
+                          setFeedback(null);
                           setCreateOpen(true);
                           setName(`${event.name} ${t("copySuffix")}`.trim());
                           setCapacity(event.capacity?.toString() ?? "");
@@ -371,7 +372,7 @@ export default function EventManagement({
         <PanelHeader
           title={t("listTitle")}
           headingId="event-list-title"
-          actions={<Button onClick={() => setCreateOpen(true)} disabled={!venueId || Boolean(busyId)}>{t("createTitle")}</Button>}
+          actions={<Button onClick={() => { setFeedback(null); setCreateOpen(true); }} disabled={!venueId || Boolean(busyId)}>{t("createTitle")}</Button>}
           count={explicitEvents.length}
           onRefresh={loadEvents}
           isLoading={isLoading}
