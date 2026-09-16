@@ -17,6 +17,11 @@ function collect(k: unknown, e: unknown) {
 }
 collect(ko, en);
 const extra: Record<string, string> = {
+  "데스크톱 메뉴 비교": "Compare desktop navigation",
+  "데스크톱 메뉴": "Desktop navigation",
+  "A · 좌측 사이드바": "A · Left sidebar",
+  "B · 상단 메뉴": "B · Top navigation",
+  "좁은 화면에서는 하단 메뉴를 사용합니다.": "Narrow screens use the bottom menu.",
   "명단 비교": "Compare roster layouts",
   "A · 열 정렬": "A · Columns",
   "B · 이름 중심": "B · Name first",

@@ -26,6 +26,7 @@ import {
 } from "../shared/ui";
 import { GuestEntry } from "./GuestEntry";
 import type { RosterLayout } from "./RosterComparison";
+import "./compact-roster.css";
 export function performCheck(guest: MockGuest, checked: boolean) {
   guest.history ??= guest.checkedAt
     ? [{ kind: "check", at: guest.checkedAt }]
@@ -36,7 +37,7 @@ export function performCheck(guest: MockGuest, checked: boolean) {
   if (checked) guest.checkIns++;
   else guest.cancellations++;
 }
-export function Roster({ layout = "columns" }: { layout?: RosterLayout }) {
+export function Roster({ layout = "columns" }: { layout?: RosterLayout | "compact" }) {
   const {
     data,
     user,
@@ -188,7 +189,7 @@ export function Roster({ layout = "columns" }: { layout?: RosterLayout }) {
     );
   };
   return (
-    <div className={`roster${identityLayout ? " roster--identity" : ""}`}>
+    <div className={`roster${identityLayout ? " roster--identity" : ""}${layout === "compact" ? " roster--compact" : ""}`}>
       {!isAdmin && !isDoor && <dl className="stat-strip" aria-label={t("선택한 행사 요약")}>
         <div className="stat"><dt>{t("내 등록")}</dt><dd><strong>{quota.used}</strong></dd></div>
         <div className="stat"><dt>{t("남은 한도")}</dt><dd><strong>{quota.remaining ?? "∞"}</strong></dd></div>

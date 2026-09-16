@@ -18,7 +18,7 @@ import {
   type VenuePreview,
 } from "./data/types";
 import { coverage } from "./data/coverage";
-import { Icon, type IconName } from "./shared/Icon";
+import { Icon } from "./shared/Icon";
 import { Sheet } from "./shared/Sheet";
 import { Action, Empty, Field, Notice, Row, Select } from "./shared/ui";
 import { AuthViews, ProfileView } from "./auth/AuthViews";
@@ -36,6 +36,8 @@ import { ExternalView } from "./registration/ExternalView";
 import { Analytics } from "./analytics/Analytics";
 import { WorkspaceMenu } from "./workspace/WorkspaceMenu";
 import { DockNavigation } from "./workspace/DockNavigation";
+import { WorkspaceComparison, useWorkspaceLayout } from "./workspace/WorkspaceComparison";
+import { WorkspaceActions, type WorkspaceAction } from "./workspace/WorkspaceActions";
 import { navigationLabel } from "./workspace/navigation";
 import { useAdminShortcuts } from "./workspace/useAdminShortcuts";
 import { Artists } from "./planning/Artists";
@@ -59,6 +61,8 @@ export default function App() {
 }
 function Workspace() {
   const ctx = useMock();
+  const frameRef = useRef<HTMLDivElement>(null);
+  const { layout: workspaceLayout, chooseLayout: chooseWorkspaceLayout, desktop } = useWorkspaceLayout(frameRef);
   const [rosterLayout, chooseRosterLayout] = useRosterLayout();
   const {
     data,
@@ -116,6 +120,7 @@ function Workspace() {
     document.documentElement.lang = locale;
   }, [locale]);
   const isPublic = view === "auth" || view === "external";
+  const desktopActive = desktop && !isPublic;
   const dockRef = useRef<HTMLDivElement>(null);
   useLayoutEffect(() => {
     const dock = dockRef.current;
@@ -189,13 +194,7 @@ function Workspace() {
           ...(canRequest ? ["requests" as const] : []),
           ...(canDoor ? ["door" as const] : []),
         ];
-  type Tool = {
-    label: string;
-    icon: IconName;
-    color: "green" | "blue" | "gray";
-    action: () => void;
-    disabled?: boolean;
-  };
+  type Tool = WorkspaceAction;
   let tools: Tool[] = [];
   if (view === "roster")
     tools = [
@@ -490,7 +489,7 @@ function Workspace() {
       case "analytics":
         return <Analytics />;
       default:
-        return <Roster layout={rosterLayout} />;
+        return <Roster layout={desktopActive ? "compact" : workspaceLayout ? "columns" : rosterLayout} />;
     }
   };
   const allowedViews: View[] = ([
@@ -516,8 +515,40 @@ function Workspace() {
     "profile",
   ] as View[]).filter((next) => canOpenView(user, next) &&
     (venue.id || next === "home" || !needsVenue(next)));
+  const navigation = (
+    <DockNavigation
+      items={nav}
+      allowedViews={allowedViews}
+      pendingCount={pendingCount}
+      menuOpen={modal === "more"}
+      expanded={desktopActive && workspaceLayout === "sidebar"}
+      onSelect={(next) => next === "more" ? open("more") : go(next)}
+    />
+  );
+  const actions = <WorkspaceActions actions={tools} disabled={busy || forbidden || inactive} />;
+  const account = (
+    <button className="account-button" onClick={() => open("account")} aria-label={t("내 계정 열기")}>
+      <Icon name="user" size={21} />
+      {desktopActive && <span>{user.name}</span>}
+    </button>
+  );
+  const scopeContext = (
+    <div className="workspace-context">
+      {venue.id ? (
+        <button className="scope-button" onClick={() => open("scope")} disabled={busy} aria-label={t("베뉴와 행사 선택")}>
+          <span className={`live-dot ${!writable ? "inactive" : ""}`} />
+          <span className="scope-name">
+            {venue.brandName || venue.name} · {isTeamView ? t("운영팀") : event.date.slice(5).replace("-", ".")}{" "}
+          </span>
+          <span className="scope-description" title={scopeLabel}>{scopeLabel}</span>
+          <Icon name="down" size={12} />
+        </button>
+      ) : <span className="scope-button">Authon</span>}
+      {!isTeamView && event.id && <span className={`scope-status ${writable ? "live" : ""}`}>{t(scopeState)}</span>}
+    </div>
+  );
   return (
-    <div className="preview-root">
+    <div className={`preview-root${workspaceLayout ? " preview-root--workspace" : ""}`}>
       <header className="preview-toolbar">
         <a
           href="#"
@@ -608,51 +639,26 @@ function Workspace() {
           </button>
         </div>
       </header>
-      {view === "door" && !forbidden && !inactive && (
+      {workspaceLayout && <WorkspaceComparison layout={workspaceLayout} onChange={chooseWorkspaceLayout} />}
+      {!workspaceLayout && view === "door" && !forbidden && !inactive && (
         <RosterComparison layout={rosterLayout} onChange={chooseRosterLayout} />
       )}
-      <div className={`preview-frame ${previewSize}`}>
-        <div className={`app-shell ${isPublic ? "public" : ""}`} data-view={view}>
+      <div className={`preview-frame ${previewSize}`} ref={frameRef}>
+        <div className={`app-shell ${isPublic ? "public" : ""}${desktopActive ? " workspace-desktop" : ""}`} data-view={view} data-workspace-layout={desktopActive ? workspaceLayout : undefined}>
           {!isPublic && (
             <>
+              {desktopActive && <div className={`desktop-chrome desktop-chrome--${workspaceLayout}`}>
+                <span className="desktop-brand">authon</span>
+                {navigation}
+                {account}
+              </div>}
               <header className="workspace-header">
                 <div className="header-title">
                   <h1 aria-live="polite">{t(navigationLabel(view, isAdmin))}</h1>
                 </div>
-                <button
-                  className="account-button"
-                  onClick={() => open("account")}
-                  aria-label={t("내 계정 열기")}
-                >
-                  <Icon name="user" size={21} />
-                </button>
+                {desktopActive ? <>{scopeContext}{actions}</> : account}
               </header>
-              <div className="workspace-context">
-                  {venue.id ? (
-                  <button
-                    className="scope-button"
-                    onClick={() => open("scope")}
-                    disabled={busy}
-                    aria-label={t("베뉴와 행사 선택")}
-                  >
-                    <span
-                      className={`live-dot ${!writable ? "inactive" : ""}`}
-                    />
-                    <span className="scope-name">
-                      {venue.brandName || venue.name} ·{" "}
-                      {isTeamView
-                        ? t("운영팀")
-                        : event.date.slice(5).replace("-", ".")}{" "}
-                    </span>
-                    <span className="scope-description" title={scopeLabel}>{scopeLabel}</span>
-                    <Icon name="down" size={12} />
-                  </button>
-                  ) : <span className="scope-button">Authon</span>}
-
-                {!isTeamView && event.id && <span className={`scope-status ${writable ? "live" : ""}`}>
-                  {t(scopeState)}
-                </span>}
-              </div>
+              {!desktopActive && scopeContext}
             </>
           )}
           <main
@@ -778,28 +784,7 @@ function Workspace() {
                   </button>
                 </div>
               )}
-              <div className="dock-tools" data-action-count={tools.length} aria-label={t("현재 화면 작업")}>
-                {tools.map((tool) => (
-                  <button
-                    className="action-pill"
-                    key={tool.label}
-                    disabled={tool.disabled || busy || forbidden || inactive}
-                    onClick={tool.action}
-                  >
-                    <span className={`circle-icon ${tool.color}`}>
-                      <Icon name={tool.icon} size={14} />
-                    </span>
-                    <span>{t(tool.label)}</span>
-                  </button>
-                ))}
-              </div>
-              <DockNavigation
-                items={nav}
-                allowedViews={allowedViews}
-                pendingCount={pendingCount}
-                menuOpen={modal === "more"}
-                onSelect={(next) => next === "more" ? open("more") : go(next)}
-              />
+              {!desktopActive && <>{actions}{navigation}</>}
             </div>
           )}
           {isPublic && notice && (
@@ -918,7 +903,7 @@ function Workspace() {
             onNavigate={(next) => {
               go(next);
               requestAnimationFrame(() => {
-                dockRef.current
+                frameRef.current
                   ?.querySelector<HTMLElement>('[aria-current="page"]')
                   ?.focus({ preventScroll: true });
               });

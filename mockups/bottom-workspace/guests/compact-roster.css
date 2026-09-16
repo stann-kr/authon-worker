@@ -1,0 +1,32 @@
+.roster.roster--compact .guest-list-columns,
+.roster.roster--compact .guest-list li {
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) minmax(130px, 0.6fr) 96px;
+  grid-template-areas: "person owner action";
+  gap: 16px;
+  margin-inline: 24px;
+}
+.roster.roster--compact .guest-list-columns { padding-block: 10px; }
+.roster--compact .guest-list-columns > :first-child { grid-area: person; }
+.roster--compact .guest-list-columns > :nth-child(2) { grid-area: action; }
+.roster--compact .guest-list-columns > :nth-child(3) { grid-area: owner; text-align: left; }
+.roster.roster--compact .guest-list li { padding-block: 4px; }
+.roster--compact .guest-person { grid-area: person; min-height: 44px; }
+.roster--compact .guest-person strong { font-size: 16px; margin-bottom: 0; }
+.roster--compact .guest-person .guest-mobile-meta,
+.roster--compact .guest-list .guest-operator,
+.roster--compact .guest-list .guest-check-time,
+.roster--compact .guest-tablet-operator,
+.roster--compact .guest-list-columns > :nth-child(n+4) { display: none; }
+.roster--compact .guest-list .guest-owner { display: block; grid-area: owner; font-size: 13px; }
+.roster--compact .check-button { grid-area: action; justify-content: center; }
+.roster--compact .check-button.is-queued .status-badge { background: #3b82f614; color: #75aaff; }
+.roster.roster--compact .roster-controls { padding: 10px 24px; gap: 8px 16px; }
+.roster--compact .roster-status-filters button { padding-inline: 10px; }
+/* A selected detail can narrow the list without hiding the owner's identity. */
+@container content (max-width: 620px) {
+  .roster.roster--compact .guest-list-columns { display: none; }
+  .roster.roster--compact .guest-list li { grid-template-columns: minmax(0, 1fr) 96px; grid-template-areas: "person action"; }
+  .roster--compact .guest-list .guest-owner { display: none; }
+  .roster--compact .guest-person .guest-mobile-meta { display: block; }
+}

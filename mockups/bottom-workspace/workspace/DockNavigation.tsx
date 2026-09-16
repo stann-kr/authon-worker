@@ -4,10 +4,13 @@ import type { View } from "../data/types";
 import { navigationLabel } from "./navigation";
 import "./dock.css";
 
-function reveal(button: HTMLElement, scroller: HTMLElement) {
+function reveal(button: HTMLElement, scroller: HTMLElement, vertical = false) {
   const item = button.getBoundingClientRect(),
     box = scroller.getBoundingClientRect();
-  if (item.left < box.left + 20)
+  if (vertical) {
+    if (item.top < box.top + 4) scroller.scrollTop -= box.top + 4 - item.top;
+    else if (item.bottom > box.bottom - 4) scroller.scrollTop += item.bottom - box.bottom + 4;
+  } else if (item.left < box.left + 20)
     scroller.scrollLeft -= box.left + 20 - item.left;
   else if (item.right > box.right - 20)
     scroller.scrollLeft += item.right - box.right + 20;
@@ -18,21 +21,26 @@ export function DockNavigation({
   allowedViews,
   pendingCount,
   menuOpen,
+  expanded = false,
   onSelect,
 }: {
   items: View[];
   allowedViews: View[];
   pendingCount: number;
   menuOpen: boolean;
+  expanded?: boolean;
   onSelect: (view: View | "more") => void;
 }) {
   const { view, user, locale, isAdmin, t } = useMock();
   const navRef = useRef<HTMLElement>(null);
   const scrollerRef = useRef<HTMLDivElement>(null);
   const [itemLimit, setItemLimit] = useState(5);
-  const visible = items.slice(0, itemLimit);
+  const visible = expanded
+    ? [...items, ...allowedViews.filter((target) => !items.includes(target) && target !== "home" && target !== "profile")]
+        .filter((target) => allowedViews.includes(target))
+    : items.slice(0, itemLimit);
   if (allowedViews.includes(view) && !visible.includes(view)) {
-    if (visible.length < itemLimit) visible.push(view);
+    if (expanded || visible.length < itemLimit) visible.push(view);
     else visible[visible.length - 1] = view;
   }
   const refreshEdges = () => {
@@ -51,7 +59,7 @@ export function DockNavigation({
       const width = workspaceWidth ? workspaceWidth - 24 : navRef.current?.clientWidth;
       if (width) setItemLimit(width < 340 ? 4 : 5);
       const selected = el.querySelector<HTMLElement>('[aria-current="page"]');
-      if (selected) reveal(selected, el);
+      if (selected) reveal(selected, expanded && navRef.current ? navRef.current : el, expanded);
       refreshEdges();
     };
     resize();
@@ -62,7 +70,7 @@ export function DockNavigation({
     const workspace = navRef.current?.closest(".app-shell");
     if (workspace) observer?.observe(workspace);
     return () => observer?.disconnect();
-  }, [view, user.id, locale, items.length, itemLimit]);
+  }, [view, user.id, locale, items.length, itemLimit, expanded]);
   const button = (target: View) => {
     const showCount = pendingCount > 0 && !isAdmin && target === "requests";
     return (
@@ -97,7 +105,7 @@ export function DockNavigation({
           onScroll={refreshEdges}
           onFocusCapture={(event) => {
             if (scrollerRef.current && event.target instanceof HTMLElement) {
-              reveal(event.target, scrollerRef.current);
+              reveal(event.target, expanded && navRef.current ? navRef.current : scrollerRef.current, expanded);
               refreshEdges();
             }
           }}

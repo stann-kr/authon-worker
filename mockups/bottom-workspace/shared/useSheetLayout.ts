@@ -12,6 +12,7 @@ export function useSheetLayout(
     const dialog = ref.current;
     const frame = document.querySelector<HTMLElement>(".preview-frame");
     const main = frame?.querySelector<HTMLElement>(".workspace-scroll");
+    const header = frame?.querySelector<HTMLElement>(".workspace-header");
     const dock = frame?.querySelector<HTMLElement>(".dock-region");
     if (!dialog || !frame) return;
     const layout = () => {
@@ -21,7 +22,8 @@ export function useSheetLayout(
       const bottom = Math.min(box.bottom, (viewport?.offsetTop ?? 0) + (viewport?.height ?? window.innerHeight));
       const panelTop = Math.max(top + 12, main?.getBoundingClientRect().top ?? top);
       const panelBottom = Math.min(bottom - 12, dock?.getBoundingClientRect().top ?? bottom - 12);
-      const inline = presentation === "detail" && !locked && box.width >= 980 && panelBottom - panelTop >= 240;
+      const contentWidth = frame.querySelector(".workspace-header")?.getBoundingClientRect().width ?? box.width;
+      const inline = presentation === "detail" && !locked && contentWidth >= 980 && panelBottom - panelTop >= 240;
       const wide = !inline && size === "wide" && box.width >= 768;
       const width = inline ? 360 : Math.min(box.width, wide ? 800 : 560);
       const inset = box.width >= 768 && !inline ? 16 : 0;
@@ -50,6 +52,7 @@ export function useSheetLayout(
     layout();
     const observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(layout);
     observer?.observe(frame);
+    if (header) observer?.observe(header);
     if (dock) observer?.observe(dock);
     window.addEventListener("resize", layout);
     window.visualViewport?.addEventListener("resize", layout);
