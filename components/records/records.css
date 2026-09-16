@@ -21,3 +21,9 @@
   .record-summary { padding-inline: 12px; flex-wrap: wrap; }
   .record-open { flex-basis: 100%; }
 }
+
+.record-review-row { display: grid; gap: 12px; min-width: 0; padding: 16px 0; border-bottom: 1px solid var(--app-border-subtle); }
+.record-review-row > * { margin-block: 0; min-width: 0; }
+@container records (min-width: 760px) {
+  .record-review-row { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(240px, 0.9fr); align-items: center; gap: 20px; }
+}

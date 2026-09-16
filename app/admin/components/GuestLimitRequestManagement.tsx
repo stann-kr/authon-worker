@@ -181,9 +181,9 @@ export default function GuestLimitRequestManagement({
           ) : shouldShowEmptyState(listState) ? (
             <EmptyState icon="user" message={t("noPending")} />
           ) : (
-            <div className="grid gap-3 lg:grid-cols-2">
+            <div className="record-list">
               {pending.map((request) => (
-                <article key={request.id} className="border border-border-default bg-canvas p-4">
+                <article key={request.id} className="record-review-row">
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     <h3 className="type-row-title break-words">{request.userName}</h3>

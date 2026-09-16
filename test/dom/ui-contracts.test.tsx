@@ -1297,3 +1297,29 @@ test("event details hand off a template to a guarded create sheet and retain fai
     assert.equal(name.value, "New night");
   } finally { cleanup(); hooks.deregister(); }
 });
+
+test("a credential result sheet owns Escape while the underlying detail keeps the workspace locked", async () => {
+  function Harness() {
+    const [result, setResult] = useState(false);
+    const [details, setDetails] = useState(true);
+    return <NextIntlClientProvider locale="en" messages={messages}>
+      <div className="workspace-shell"><button>Workspace</button></div>
+      <Sheet open={details} title="Account details" onClose={() => setDetails(false)}>
+        <button onClick={() => setResult(true)}>Issue credential</button>
+      </Sheet>
+      <Sheet open={result} title="Credential result" onClose={() => setResult(false)}><p>Result</p></Sheet>
+    </NextIntlClientProvider>;
+  }
+  render(<Harness />);
+  fireEvent.click(screen.getByRole("button", { name: "Issue credential" }));
+  fireEvent.keyDown(document, { key: "Escape" });
+  assert.equal(screen.queryByRole("dialog", { name: "Credential result" }), null);
+  assert.ok(screen.getByRole("dialog", { name: "Account details" }));
+  assert.equal(document.querySelector(".workspace-shell")?.hasAttribute("inert"), true);
+  assert.equal(document.body.style.overflow, "hidden");
+  fireEvent.keyDown(document, { key: "Escape" });
+  assert.equal(screen.queryByRole("dialog"), null);
+  await act(async () => {});
+  assert.equal(document.querySelector(".workspace-shell")?.hasAttribute("inert"), false);
+  assert.notEqual(document.body.style.overflow, "hidden");
+});

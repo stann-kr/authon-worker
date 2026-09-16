@@ -256,6 +256,7 @@ async function renderUserCard({
       />
     </NextIntlClientProvider>,
   );
+  if (!actionsDisabled) fireEvent.click(screen.getByRole("button", { name: new RegExp(user.name) }));
   return { ...view, UserCard };
 }
 
@@ -363,13 +364,9 @@ test("a scope-wide disabled state removes every user card action", async () => {
 
   for (const cardId of ["user-a-card", "user-b-card"]) {
     const card = within(screen.getByTestId(cardId));
-    const editButton = card.getByRole("button", {
-      name: messages.UserAdmin.edit,
-    }) as HTMLButtonElement;
-    const deactivateButton = card.getByRole("button", {
-      name: messages.UserAdmin.deactivate,
-    }) as HTMLButtonElement;
-    assert.equal(editButton.disabled, true);
-    assert.equal(deactivateButton.disabled, true);
+    const openButton = card.getByRole("button") as HTMLButtonElement;
+    assert.equal(openButton.disabled, true);
+    fireEvent.click(openButton);
+    assert.equal(screen.queryByRole("dialog"), null);
   }
 });

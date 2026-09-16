@@ -1,5 +1,8 @@
 "use client";
 
+import Sheet from "@/components/overlays/Sheet";
+import RecordList, { useRecordDetail } from "@/components/records/RecordList";
+
 import { fetchVenues } from "@/lib/venues/client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -186,7 +189,7 @@ export default function VenueManagement({
       {/* Main content */}
       <div className="min-w-0">
         {activeTab === "create" && (
-          <div className="space-y-6">
+          <div className="record-form space-y-6">
             <div className="app-panel p-4 sm:p-5">
               <h3 className="type-section-title mb-4">
                 {t("createNew")}
@@ -472,9 +475,9 @@ export default function VenueManagement({
               ) : shouldShowEmptyState(listState) ? (
                 <EmptyState icon="store" message={t("noVenues")} />
               ) : (
-                <div
+                <RecordList
                   aria-busy={isLoading}
-                  className={`grid grid-cols-1 gap-4 md:grid-cols-2 ${
+                  className={`${
                     isLoading ? "pointer-events-none" : ""
                   }`}
                 >
@@ -482,12 +485,13 @@ export default function VenueManagement({
                     <VenueCard
                       key={venue.id}
                       venue={venue}
+                      error={listError}
                       actionsDisabled={isLoading || isMutating}
                       onToggleActive={handleToggleActive}
                       onSave={handleSave}
                     />
                   ))}
-                </div>
+                </RecordList>
               )}
             </div>
           </div>
@@ -533,11 +537,13 @@ function createVenueEditData(venue: Venue): VenueEditData {
 
 export function VenueCard({
   venue,
+  error,
   actionsDisabled,
   onToggleActive,
   onSave,
 }: {
   venue: Venue;
+  error?: string | null;
   actionsDisabled: boolean;
   onToggleActive: (venue: Venue) => Promise<VenueDirectoryMutationResult>;
   onSave: (
@@ -554,6 +560,7 @@ export function VenueCard({
     festival: t("typeFestival"),
     private: t("typePrivate"),
   };
+  const detail = useRecordDetail(venue.id);
   const [isEditing, setIsEditing] = useState(false);
   const [editData, setEditData] = useState(() => createVenueEditData(venue));
   const [editNameError, setEditNameError] = useState("");
@@ -660,32 +667,17 @@ export function VenueCard({
 
   return (
     <>
-      <div className="app-panel p-4 sm:p-5">
-      <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div className="min-w-0">
-          <h3 className="type-row-title break-words">
-            {venue.name}
-          </h3>
-          {venue.address && (
-            <p className="mt-1 break-words text-xs leading-relaxed text-text-dim">
-              {venue.address}
-            </p>
-          )}
+      <article className="record-row">
+        <div className="record-summary">
+          <button type="button" className="record-open" onClick={detail.show} disabled={actionsDisabled} aria-haspopup="dialog" aria-expanded={detail.open}>
+            <span className="record-identity"><strong>{venue.name}</strong><small>{venue.primaryDomain || venue.address || venueTypeLabels[venue.type]}</small></span>
+            <span className="record-value">{venueTypeLabels[venue.type]}</span>
+            <span className="record-status">{venue.active ? t("active") : t("inactive")}</span>
+          </button>
         </div>
-        <div className="flex items-center gap-2">
-          <span
-            className={`text-xs font-medium ${getVenueTypeColor(venue.type)}`}
-          >
-            {venueTypeLabels[venue.type]}
-          </span>
-          {!venue.active && (
-            <span className="border border-status-danger/70 bg-status-danger/10 px-2 py-1 font-mono text-xs uppercase tracking-wider text-status-danger">
-              {t("inactive")}
-            </span>
-          )}
-        </div>
-      </div>
-
+      {detail.open && <Sheet title={venue.name} presentation="detail" onClose={() => { handleCancelEdit(); detail.close(); }}
+        busy={actionsDisabled || isSaving || isTogglingActive} dirty={isEditing && JSON.stringify(editData) !== JSON.stringify(createVenueEditData(venue))}>
+        {error && <Alert type="error" message={error} />}
       {!isEditing ? (
         <div>
           {venue.description && (
@@ -804,7 +796,7 @@ export function VenueCard({
             <legend className="app-label">
               {t("type")}
             </legend>
-            <div className="grid grid-cols-2 gap-1 sm:grid-cols-3 xl:grid-cols-5">
+            <div className="grid grid-cols-2 gap-1">
               {VENUE_TYPES.map((opt) => (
                 <button
                   key={opt.value}
@@ -888,7 +880,7 @@ export function VenueCard({
 
           <fieldset>
             <legend className="app-label">{t("operatingHours")}</legend>
-            <div className="grid gap-3 sm:grid-cols-2">
+            <div className="record-detail-grid">
               <div>
                 <label htmlFor={`venue-opening-time-${venue.id}`} className="app-label">
                   {t("openingTime")}
@@ -927,7 +919,7 @@ export function VenueCard({
             <p className="app-helper">{t("operatingHoursHelp")}</p>
           </fieldset>
 
-          <div className="grid gap-3 sm:grid-cols-2">
+          <div className="record-detail-grid">
             <div>
               <label htmlFor={`venue-brand-name-${venue.id}`} className="app-label">
                 {t("displayName")}
@@ -1023,7 +1015,8 @@ export function VenueCard({
           </div>
         </fieldset>
       )}
-      </div>
+      </Sheet>}
+      </article>
       <ConfirmDialog
         open={isDeactivateConfirmOpen}
         title={t("deactivateTitle")}

@@ -384,11 +384,11 @@ export default function PasswordResetRequestManagement({
             loading={<Skeleton rows={4} />}
             empty={<EmptyState icon="key" message={t("noPending")} />}
           >
-            <div className="grid gap-3 lg:grid-cols-2">
+            <div className="record-list">
               {pendingRequests.map((request) => (
                 <article
                   key={request.id}
-                  className="border border-border-default bg-canvas p-4"
+                  className="record-review-row"
                   aria-busy={busyRequestId === request.id}
                 >
                   <div className="flex items-start justify-between gap-3">

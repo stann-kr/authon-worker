@@ -2,6 +2,8 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useLocalStorage } from "../../../lib/hooks";
+import Sheet from "@/components/overlays/Sheet";
+import RecordList, { useRecordDetail } from "@/components/records/RecordList";
 import InviteUser from "./InviteUser";
 import VenueSelector, {
   useVenueSelector,
@@ -319,7 +321,7 @@ export default function UserManagement({
     >
 
       <div className="min-w-0">
-        {activeTab === "create" && <InviteUser />}
+        {activeTab === "create" && <div className="record-form"><InviteUser /></div>}
         {activeTab === "users" && (
           <div className="app-panel">
             <PanelHeader
@@ -333,7 +335,8 @@ export default function UserManagement({
               {scopedFeedback && (
                 <Alert type={scopedFeedback.type} message={scopedFeedback.message} className="mb-4" />
               )}
-              {scopedPasswordLink && (
+              {scopedPasswordLink && <Sheet title={scopedPasswordLink.userName} onClose={closePasswordLink} busy={isSharingPasswordLink}>
+                {scopedFeedback && <Alert type={scopedFeedback.type} message={scopedFeedback.message} />}
                 <div
                   ref={passwordLinkPanelRef}
                   className="mb-4 border border-status-waiting/70 bg-status-waiting/10 p-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-border-focus"
@@ -395,7 +398,7 @@ export default function UserManagement({
                     </div>
                   </div>
                 </div>
-              )}
+              </Sheet>}
 
               <div className="mb-4 grid gap-2 xl:grid-cols-[minmax(0,1fr)_180px_180px]">
                 <div>
@@ -471,9 +474,10 @@ export default function UserManagement({
                   }
                 />
               ) : (
-                <div
+                <RecordList
+                  key={`${effectiveVenueId}:${searchQuery}:${statusFilter}:${roleFilter}`}
                   aria-busy={isCurrentScopeLoading}
-                  className={`grid grid-cols-1 gap-4 md:grid-cols-2 ${
+                  className={`${
                     isCurrentScopeLoading ? "pointer-events-none" : ""
                   }`}
                 >
@@ -487,6 +491,7 @@ export default function UserManagement({
                         venues.find((venue) => venue.id === user.venueId)?.timezone ??
                         currentVenue?.timezone
                       }
+                      feedback={scopedFeedback}
                       isBusy={busyUserId === user.id}
                       actionsDisabled={
                         isUserMutationPending || isCurrentScopeLoading
@@ -501,7 +506,7 @@ export default function UserManagement({
                       }
                     />
                   ))}
-                </div>
+                </RecordList>
               )}
 
               {isSuperAdmin && (
@@ -569,6 +574,7 @@ export function UserCard({
   currentUserId,
   timeZone,
   isBusy,
+  feedback,
   actionsDisabled,
   onUpdate,
   onToggleActive,
@@ -580,6 +586,7 @@ export function UserCard({
   currentUserId: string | null;
   timeZone?: string | null;
   isBusy: boolean;
+  feedback?: { type: "success" | "error"; message: string } | null;
   actionsDisabled: boolean;
   onUpdate: (
     id: string,
@@ -598,6 +605,7 @@ export function UserCard({
   const t = useTranslations("UserAdmin");
   const commonT = useTranslations("Common");
   const locale = useLocale();
+  const detail = useRecordDetail(user.id);
   const [isEditing, setIsEditing] = useState(false);
   const editButtonRef = useRef<HTMLButtonElement>(null);
   const editRegionRef = useRef<HTMLDivElement>(null);
@@ -720,36 +728,20 @@ export function UserCard({
         : t("active")
       : t("inactive");
 
+  const dirty = isEditing && (editData.name !== user.name || editData.role !== user.role ||
+    editData.accountKind !== user.accountKind || editData.doorAccessEnabled !== user.doorAccessEnabled || editData.guestLimit !== user.guestLimit);
   return (
-    <div className="app-panel p-4 sm:p-5" aria-busy={isBusy}>
-      <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div className="min-w-0">
-          <h3 className="type-row-title break-words">
-            {user.name}
-          </h3>
-          <p className="truncate text-text-muted font-mono text-xs sm:text-sm">
-            {isDeleted ? t("deletedAccount") : user.email}
-          </p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2 sm:justify-end">
-          {isSetupPending && (
-            <span
-              className="border border-status-waiting/70 bg-status-waiting/10 px-2 py-1 font-mono text-xs uppercase tracking-wider text-status-waiting"
-            >
-              {t("setupPending")}
-            </span>
-          )}
-          {isDeleted && (
-            <span className="border border-border-strong bg-canvas px-2 py-1 font-mono text-xs uppercase tracking-wider text-text-dim">
-              {t("deletedStatus")}
-            </span>
-          )}
-          <span className="text-xs font-medium">
-            <RoleLabel role={user.accountKind === "shared" ? "shared" : user.role} colored />
-          </span>
-        </div>
+    <article className="record-row" aria-busy={isBusy}>
+      <div className="record-summary">
+        <button type="button" className="record-open" onClick={detail.show} disabled={actionsDisabled} aria-haspopup="dialog" aria-expanded={detail.open}>
+          <span className="record-identity"><strong>{user.name}</strong><small>{isDeleted ? t("deletedAccount") : user.email}</small></span>
+          <span className="record-value"><RoleLabel role={user.accountKind === "shared" ? "shared" : user.role} /></span>
+          <span className="record-status">{statusLabel}</span>
+        </button>
       </div>
-
+      {detail.open && <Sheet title={user.name} presentation="detail" onClose={() => { closeEditor(); detail.close(); }} busy={actionsDisabled} dirty={dirty}>
+        {feedback && <Alert type={feedback.type} message={feedback.message} />}
+        <p className="break-all text-xs text-text-muted">{isDeleted ? t("deletedAccount") : user.email}</p>
       {!isEditing ? (
         <div>
           <div className="mb-4 grid grid-cols-2 gap-x-4 gap-y-3">
@@ -918,7 +910,7 @@ export function UserCard({
               <legend className="app-label">
                 {t("role")}
               </legend>
-              <div className="grid grid-cols-2 gap-1 sm:grid-cols-4">
+              <div className="grid grid-cols-2 gap-1">
                 {editableRoles.map((role) => (
                   <button
                     key={role}
@@ -1004,6 +996,7 @@ export function UserCard({
           </div>
         </div>
       )}
-    </div>
+      </Sheet>}
+    </article>
   );
 }

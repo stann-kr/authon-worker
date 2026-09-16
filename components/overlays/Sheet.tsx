@@ -23,6 +23,27 @@ const controlValue = (field: Control) =>
   field instanceof window.HTMLInputElement && ["checkbox", "radio"].includes(field.type)
     ? String(field.checked) : field.value;
 
+const modalLocks = new Map<HTMLElement, { count: number; wasInert: boolean }>();
+let scrollLocks = 0;
+let unlockedOverflow = "";
+function lockBackground(shell: HTMLElement | null) {
+  if (scrollLocks++ === 0) { unlockedOverflow = document.body.style.overflow; document.body.style.overflow = "hidden"; }
+  if (shell) {
+    const lock = modalLocks.get(shell) ?? { count: 0, wasInert: shell.hasAttribute("inert") };
+    lock.count++;
+    modalLocks.set(shell, lock);
+    shell.setAttribute("inert", "");
+  }
+  return () => {
+    if (--scrollLocks === 0) document.body.style.overflow = unlockedOverflow;
+    const lock = shell && modalLocks.get(shell);
+    if (shell && lock && --lock.count === 0) {
+      if (!lock.wasInert) shell.removeAttribute("inert");
+      modalLocks.delete(shell);
+    }
+  };
+}
+
 // The same panel and form stay mounted when the available workspace changes.
 export default function Sheet({ open = true, title, children, onClose, presentation = "modal",
   wide = false, busy = false, dirty = false, protectEdits = false }: SheetProps) {
@@ -112,13 +133,12 @@ export default function Sheet({ open = true, title, children, onClose, presentat
   useLayoutEffect(() => {
     if (!open) return;
     const shell = document.querySelector<HTMLElement>(".workspace-shell") ?? document.getElementById("main-content");
-    const wasInert = shell?.hasAttribute("inert");
-    const previousOverflow = document.body.style.overflow;
-    if (!inline) { shell?.setAttribute("inert", ""); document.body.style.overflow = "hidden"; }
+    const unlock = !inline ? lockBackground(shell) : undefined;
     const keydown = (event: KeyboardEvent) => {
       // A confirmation opened from this sheet owns its own keyboard scope.
       if (event.defaultPrevented || document.querySelector(".app-dialog-backdrop")) return;
       const panel = panelRef.current;
+      if (![...document.querySelectorAll(".product-sheet-layer")].at(-1)?.contains(panel)) return;
       if (!panel || (inline && !panel.contains(document.activeElement))) return;
       if (event.key === "Escape") { event.preventDefault(); requestCloseRef.current(); }
       if (event.key !== "Tab" || inline) return;
@@ -135,7 +155,7 @@ export default function Sheet({ open = true, title, children, onClose, presentat
     document.addEventListener("keydown", keydown);
     return () => {
       document.removeEventListener("keydown", keydown);
-      if (!inline) { if (!wasInert) shell?.removeAttribute("inert"); document.body.style.overflow = previousOverflow; }
+      unlock?.();
     };
   }, [open, inline]);
 
