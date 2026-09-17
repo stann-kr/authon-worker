@@ -9,19 +9,23 @@ import useAdminWorkspaceNavigation, {
 } from "@/app/admin/useAdminWorkspaceNavigation";
 
 type HarnessProps = Partial<{
+  businessDate: string;
+  hasCurrentVenue: boolean;
   isRouteTransitionActive: boolean;
   isSuperAdmin: boolean;
   venueId: string;
 }>;
 
 function NavigationHarness({
+  businessDate = "2026-08-20",
+  hasCurrentVenue = true,
   isRouteTransitionActive = false,
   isSuperAdmin = false,
   venueId = "venue-a",
 }: HarnessProps) {
   const navigation = useAdminWorkspaceNavigation({
-    businessDate: "2026-08-20",
-    hasCurrentVenue: true,
+    businessDate,
+    hasCurrentVenue,
     isRouteTransitionActive,
     isSuperAdmin,
     venueId,
@@ -47,6 +51,9 @@ function NavigationHarness({
         Open guest list
       </button>
       <input aria-label="Task filter" />
+      <input aria-label="Operating date" type="date" value={navigation.selectedDate}
+        onChange={(event) => navigation.setSelectedDate(event.target.value)} />
+      <button onClick={() => navigation.setSelectedDate(businessDate)}>Today</button>
       <section
         ref={workspaceRef}
         id="admin-workspace"
@@ -76,6 +83,62 @@ afterEach(() => {
   cleanup();
   window.localStorage.clear();
   setLocation("");
+});
+
+test("an explicitly selected operating date survives leaving and reopening Admin", () => {
+  const view = render(<NavigationHarness />);
+  fireEvent.change(screen.getByLabelText("Operating date"), {
+    target: { value: "2026-08-12" },
+  });
+  view.unmount();
+  window.history.replaceState(null, "", "/");
+  setLocation("?tab=guests&view=list");
+  const reopened = render(<NavigationHarness />);
+  assert.equal(screen.getByTestId("selected-date").textContent, "2026-08-12");
+
+  reopened.rerender(<NavigationHarness businessDate="2026-08-21" />);
+  assert.equal(screen.getByTestId("selected-date").textContent, "2026-08-12");
+  fireEvent.click(screen.getByRole("button", { name: "Today" }));
+  assert.equal(screen.getByTestId("selected-date").textContent, "2026-08-21");
+});
+
+test("legacy saved dates restore while invalid values use the current venue business date", () => {
+  for (const saved of ["2026-08-12", "2026-02-30", 42]) {
+    window.localStorage.setItem("admin:selectedDate", JSON.stringify(saved));
+    const view = render(<NavigationHarness />);
+    assert.equal(screen.getByTestId("selected-date").textContent,
+      saved === "2026-08-12" ? saved : "2026-08-20");
+    view.unmount();
+  }
+});
+
+test("default dates follow venue readiness and selections do not leak into another venue", () => {
+  const view = render(<NavigationHarness hasCurrentVenue={false} venueId="" />);
+  view.rerender(<NavigationHarness businessDate="2026-08-19" />);
+  assert.equal(screen.getByTestId("selected-date").textContent, "2026-08-19");
+  fireEvent.change(screen.getByLabelText("Operating date"), {
+    target: { value: "2026-08-12" },
+  });
+  view.unmount();
+
+  const otherVenue = render(<NavigationHarness venueId="venue-b" businessDate="2026-08-18" />);
+  assert.equal(screen.getByTestId("selected-date").textContent, "2026-08-18");
+  fireEvent.change(screen.getByLabelText("Operating date"), {
+    target: { value: "2026-08-10" },
+  });
+  otherVenue.rerender(<NavigationHarness venueId="venue-a" businessDate="2026-08-19" />);
+  assert.equal(screen.getByTestId("selected-date").textContent, "2026-08-19");
+});
+
+test("a current-venue event deep link takes precedence over a saved operating date", () => {
+  window.localStorage.setItem("admin:selectedDate", JSON.stringify("2026-08-12"));
+  setLocation("?tab=events&view=manage&venue=venue-a&eventId=event-1&date=2026-08-19");
+  const view = render(<NavigationHarness />);
+  assert.equal(screen.getByTestId("selected-date").textContent, "2026-08-19");
+  assert.equal(screen.getByTestId("selected-event").textContent, "event-1");
+  view.rerender(<NavigationHarness businessDate="2026-08-21" />);
+  assert.equal(screen.getByTestId("selected-date").textContent, "2026-08-19");
+  assert.equal(screen.getByTestId("selected-event").textContent, "event-1");
 });
 
 test("event scope only accepts a current-venue event with a business date", () => {
