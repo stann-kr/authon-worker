@@ -3,9 +3,9 @@
     "chooseScope": "베뉴와 행사 선택",
     "applyScope": "완료",
     "home": "홈",
-    "roster": "명단",
+    "roster": "명단 관리",
     "myRoster": "내 명단",
-    "door": "도어",
+    "door": "입장 확인",
     "events": "행사",
     "links": "등록 링크",
     "requests": "인원 요청",
@@ -78,7 +78,7 @@
     "venue": "베뉴",
     "selectVenue": "-- 베뉴 선택 --",
     "admin": "관리자",
-    "door": "도어",
+    "door": "입장 확인",
     "guest": "게스트",
     "profile": "프로필",
     "brandHome": "{brand} 홈",
@@ -488,7 +488,7 @@
     "sections": "관리자 섹션",
     "guests": "게스트",
     "guestSections": "게스트 관리 섹션",
-    "guestList": "게스트 목록",
+    "guestList": "명단 관리",
     "requests": "추가 요청",
     "activeTaskAnnouncement": "현재 작업: {task}",
     "links": "링크",
@@ -1184,5 +1184,12 @@
     "undoDescription": "{name}님의 입장 기록을 취소합니다.",
     "owner": "등록 담당자",
     "operator": "입력자"
+  },
+  "DateField": {
+    "chooseDate": "날짜 선택",
+    "previousMonth": "이전 달",
+    "nextMonth": "다음 달",
+    "month": "월",
+    "year": "연도"
   }
 }

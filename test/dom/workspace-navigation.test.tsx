@@ -163,11 +163,11 @@ test("changing navigation viewport retains the same body input and recovers focu
   fireEvent.click(screen.getByRole("button", { name: "All menus" }));
   resize(true);
   assert.equal(screen.queryByRole("dialog"), null);
-  const door = screen.getByRole("link", { name: "Door" });
+  const door = screen.getByRole("link", { name: messages.Workspace.door });
   assert.equal(document.activeElement, door);
   assert.equal(screen.getByRole("textbox"), input);
   resize(false);
-  assert.equal(document.activeElement, screen.getByRole("link", { name: "Door" }));
+  assert.equal(document.activeElement, screen.getByRole("link", { name: messages.Workspace.door }));
   assert.equal((input as HTMLInputElement).value, "Still typing");
 });
 
@@ -206,8 +206,8 @@ test("workspace menu and navigation respect the busy lock", () => {
   viewport(false);
   render(<Providers><MenuHarness disabled /></Providers>);
   assert.equal((screen.getByRole("button", { name: "All menus" }) as HTMLButtonElement).disabled, true);
-  fireEvent.click(screen.getByRole("link", { name: "Door" }));
-  assert.equal(screen.getByRole("link", { name: "Roster" }).getAttribute("aria-current"), "page");
+  fireEvent.click(screen.getByRole("link", { name: messages.Workspace.door }));
+  assert.equal(screen.getByRole("link", { name: messages.Workspace.roster }).getAttribute("aria-current"), "page");
 });
 
 function AdminShellHarness({ loading = false, capture }: {
@@ -341,7 +341,7 @@ for (const desktop of [true, false]) {
       fireEvent.click(screen.getByRole("button", { name: messages.Workspace.collapseSidebar }));
       fireEvent.click(screen.getByRole("button", { name: messages.Workspace.expandSidebar }));
     }
-    const door = within(nav).getByRole("link", { name: "Door" });
+    const door = within(nav).getByRole("link", { name: messages.Workspace.door });
     door.focus();
     fireEvent.click(door);
     assert.notEqual(door.getAttribute("aria-disabled"), "true");
@@ -389,15 +389,15 @@ test("choosing the current admin task cancels a pending route without abandoning
     const frame = (pathname: string) => <Providers pathname={pathname} router={router}><AdminShellHarness /></Providers>;
     const view = render(frame("/admin"));
     const isLatestRead = guard.beginRequest();
-    fireEvent.click(screen.getByRole("link", { name: "Door" }));
-    fireEvent.click(screen.getByRole("link", { name: "Roster" }));
+    fireEvent.click(screen.getByRole("link", { name: messages.Workspace.door }));
+    fireEvent.click(screen.getByRole("link", { name: messages.Workspace.roster }));
     assert.deepEqual(destinations, ["/door", "/admin?tab=guests&view=list"]);
     assert.equal(isLatestRead(), true);
     await waitFor(() => assert.equal(document.querySelector(".route-transition-overlay")?.getAttribute("data-state"), "leaving"));
-    fireEvent.click(screen.getByRole("link", { name: "Roster" }));
+    fireEvent.click(screen.getByRole("link", { name: messages.Workspace.roster }));
     await waitFor(() => assert.equal(document.querySelector(".route-transition-overlay") === null, true));
 
-    fireEvent.click(screen.getByRole("link", { name: "Door" }));
+    fireEvent.click(screen.getByRole("link", { name: messages.Workspace.door }));
     window.history.replaceState(null, "", "/door");
     view.rerender(frame("/door"));
     assert.equal(isLatestRead(), false);

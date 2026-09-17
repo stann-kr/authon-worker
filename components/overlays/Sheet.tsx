@@ -9,6 +9,7 @@ import { lockModalBackground } from "./modal-lock";
 import { useIsRouteTransitionActive } from "../RouteTransitionProvider";
 
 interface SheetProps {
+  id?: string;
   open?: boolean;
   title: string;
   children: ReactNode;
@@ -47,7 +48,7 @@ function canRestoreFocus(target: HTMLElement | null): target is HTMLElement {
 const inlinePanels = new Set<HTMLElement>();
 
 // The same panel and form stay mounted when the available workspace changes.
-export default function Sheet({ open = true, title, children, onClose, presentation = "modal",
+export default function Sheet({ id, open = true, title, children, onClose, presentation = "modal",
   wide = false, size = "default", busy = false, dirty = false, protectEdits = false,
   blockDuringRouteTransition = true }: SheetProps) {
   const t = useTranslations("Sheet");
@@ -192,7 +193,7 @@ export default function Sheet({ open = true, title, children, onClose, presentat
   if (!open || typeof document === "undefined") return null;
   return createPortal(
     <div ref={layerRef} className="product-sheet-layer" data-inline={inline} data-transitioning={transitioning} inert={transitioning || undefined} aria-hidden={transitioning || undefined} onClick={(event) => { if (event.target === event.currentTarget) requestClose(); }}>
-      <div ref={panelRef} className="product-sheet" data-wide={wide} data-size={size} role="dialog" aria-modal={!inline}
+      <div id={id} ref={panelRef} className="product-sheet" data-wide={wide} data-size={size} role="dialog" aria-modal={!inline}
         aria-labelledby={titleId} aria-busy={busy} tabIndex={-1}
         onFocusCapture={() => {
           panelRef.current?.querySelectorAll<Control>(draftControls).forEach((field) => {

@@ -40,7 +40,7 @@ export default function OperationsScope({ venueName, date, label, disabled = fal
         <span className="operations-scope-dot" aria-hidden="true" />
         <span id={`${summaryId}-date`} className="operations-scope-date">{venueName ? `${venueName} · ` : ""}{date.slice(5).replace("-", ".")}</span>
         <span id={`${summaryId}-event`} className="operations-scope-name">{label}</span>
-        <Icon name="chevron-down" size={12} />
+        <Icon name="chevron-down" size={16} />
       </button>
       <Sheet open={open} title={t("chooseScope")} onClose={() => setOpen(false)} busy={disabled}>
         {controls}

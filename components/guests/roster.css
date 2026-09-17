@@ -73,7 +73,7 @@
   .product-roster-filters { flex: 1; min-width: 0; gap: 8px; }
   .product-roster-filters button { flex: 1; min-width: 0; padding: 8px 6px; white-space: normal; overflow-wrap: anywhere; }
   .product-roster-filters span { margin-left: 4px; font-size: 11px; opacity: 0.7; }
-  .product-guest-row { padding: 12px 0; }
+  .product-guest-row { padding: 12px; }
   .product-guest-line { min-height: 44px; gap: 12px; }
   .product-guest-index { display: none; }
   .product-guest-name strong { font-size: 15px; }

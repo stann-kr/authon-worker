@@ -3,9 +3,9 @@
     "chooseScope": "Choose venue and event",
     "applyScope": "Done",
     "home": "Home",
-    "roster": "Roster",
+    "roster": "Manage roster",
     "myRoster": "My guests",
-    "door": "Door",
+    "door": "Check-in",
     "events": "Events",
     "links": "Guest links",
     "requests": "Quota requests",
@@ -78,7 +78,7 @@
     "venue": "Venue",
     "selectVenue": "-- Select venue --",
     "admin": "Admin",
-    "door": "Door",
+    "door": "Check-in",
     "guest": "Guest",
     "profile": "Profile",
     "brandHome": "{brand} home",
@@ -488,7 +488,7 @@
     "sections": "Admin sections",
     "guests": "Guests",
     "guestSections": "Guest management sections",
-    "guestList": "Guest list",
+    "guestList": "Manage roster",
     "requests": "Requests",
     "activeTaskAnnouncement": "Current task: {task}",
     "links": "Links",
@@ -1184,5 +1184,12 @@
     "undoDescription": "Remove the check-in for {name}.",
     "owner": "Registration owner",
     "operator": "Operator"
+  },
+  "DateField": {
+    "chooseDate": "Choose date",
+    "previousMonth": "Previous month",
+    "nextMonth": "Next month",
+    "month": "Month",
+    "year": "Year"
   }
 }
