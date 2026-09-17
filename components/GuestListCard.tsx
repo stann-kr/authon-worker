@@ -139,16 +139,6 @@ const GuestListCard: React.FC<GuestListCardProps> = ({
           </span>
         </button>
 
-        {mode === "operations" && <>
-          <div className="product-guest-owner" aria-hidden="true"><span>{djName || "—"}</span>
-            {registeredByName && <small>{registeredByName}</small>}
-          </div>
-          <span className="product-guest-status" aria-hidden="true">
-            {guest.status === "checked" ? <><Icon name="check" size={14} />{guest.checkInTime ? formatTime(guest.checkInTime) : rosterT("checked")}</>
-              : guest.status === "pending" ? rosterT("pending") : t("removed")}
-          </span>
-        </>}
-
         <div className="product-guest-actions">
           {guest.status === "pending" && (
             <>
@@ -247,6 +237,15 @@ const GuestListCard: React.FC<GuestListCardProps> = ({
             </StatusLabel>
           )}
         </div>
+        {mode === "operations" && <>
+          <div className="product-guest-owner" aria-hidden="true"><span>{djName || "—"}</span>
+            {registeredByName && <small>{registeredByName}</small>}
+          </div>
+          <span className="product-guest-status" aria-hidden="true">
+            {guest.status === "checked" ? <><Icon name="check" size={14} />{guest.checkInTime ? formatTime(guest.checkInTime) : rosterT("checked")}</>
+              : guest.status === "pending" ? rosterT("pending") : t("removed")}
+          </span>
+        </>}
       </div>
       {isInlineDeleteOpen && (
         <div

@@ -1412,7 +1412,7 @@ test("check-in stays immediate while undo requires confirmation for the current 
   let checkCalls = 0;
   let undoCalls = 0;
   const card = (status: "pending" | "checked") => <NextIntlClientProvider locale="en" messages={messages}>
-    <GuestListCard guest={{ id: "g1", name: "Guest One", status }} index={0}
+    <GuestListCard guest={{ id: "g1", name: "Guest One", status }} index={0} mode="operations"
       onCheck={() => { checkCalls++; }} onUndo={() => { undoCalls++; }} />
   </NextIntlClientProvider>;
   const view = render(card("pending"));
