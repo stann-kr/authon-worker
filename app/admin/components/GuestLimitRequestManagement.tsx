@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import Alert from "@/components/Alert";
+import DatePicker from "@/components/DatePicker";
+import DisclosureSection from "@/components/DisclosureSection";
 import EmptyState from "@/components/EmptyState";
 import PanelHeader from "@/components/PanelHeader";
 import RoleLabel from "@/components/RoleLabel";
@@ -23,12 +25,16 @@ const EMPTY_REQUESTS: GuestLimitRequestView[] = [];
 
 export default function GuestLimitRequestManagement({
   eventId,
+  selectedDate,
+  onDateChange,
   businessDate,
   scopeSelector,
 }: {
   eventId: string | null;
+  selectedDate: string;
+  onDateChange: (date: string) => void;
   businessDate: string;
-  scopeSelector?: (controls: ReactNode) => ReactNode;
+  scopeSelector?: (controls: ReactNode, disabled?: boolean) => ReactNode;
 }) {
   const t = useTranslations("GuestLimitAdmin");
   const {
@@ -80,7 +86,7 @@ export default function GuestLimitRequestManagement({
       const { data, error } = await fetchGuestLimitRequests(
         venueId,
         eventId,
-        businessDate,
+        selectedDate,
       );
       if (!isLatestRequest() || currentVenueIdRef.current !== requestedVenueId) return;
       if (error) {
@@ -108,7 +114,7 @@ export default function GuestLimitRequestManagement({
         setIsLoading(false);
       }
     }
-  }, [businessDate, eventId, requestGuard, t, venueId]);
+  }, [selectedDate, eventId, requestGuard, t, venueId]);
 
   useEffect(() => {
     loadRequests();
@@ -153,18 +159,18 @@ export default function GuestLimitRequestManagement({
     setBusyId(null);
   };
 
-  const venueControl = isSuperAdmin && venues.length > 0 ? (
-    <VenueSelector
-      venues={venues}
-      selectedVenueId={selectedVenueId}
-      onVenueChange={setSelectedVenueId}
-      className="scope-venue"
-    />
-  ) : null;
+  const isDeciding = busyId !== null;
+  const scopeControls = <>
+    <DatePicker compact value={selectedDate} onChange={onDateChange}
+      businessDate={businessDate} disabled={isDeciding} />
+    {isSuperAdmin && venues.length > 0 && <VenueSelector
+      venues={venues} selectedVenueId={selectedVenueId}
+      onVenueChange={setSelectedVenueId} disabled={isDeciding} className="scope-venue" />}
+  </>;
 
   return (
     <div className="space-y-4">
-      {scopeSelector ? scopeSelector(venueControl) : <div className="record-scope-selector">{venueControl}</div>}
+      {scopeSelector ? scopeSelector(scopeControls, isDeciding) : <div className="operations-scope">{scopeControls}</div>}
       <section className="record-collection" aria-labelledby="guest-limit-requests-title">
         <PanelHeader
           title={t("title")}
@@ -253,11 +259,8 @@ export default function GuestLimitRequestManagement({
           )}
 
           {decided.length > 0 && (
-            <details className="border-t border-border-default pt-4">
-            <summary className="flex min-h-11 cursor-pointer items-center text-sm font-medium text-text-heading">
-              {t("history", { count: decided.length })}
-            </summary>
-            <div className="mt-3 divide-y divide-border-subtle border border-border-default bg-canvas">
+            <DisclosureSection title={t("history", { count: decided.length })}>
+            <div className="divide-y divide-border-subtle border border-border-default bg-canvas">
               {decided.slice(0, 20).map((request) => (
                 <div key={request.id} className="flex items-start justify-between gap-3 p-3 text-xs">
                   <span className="min-w-0 break-words text-text-body">
@@ -271,7 +274,7 @@ export default function GuestLimitRequestManagement({
                 </div>
               ))}
             </div>
-            </details>
+            </DisclosureSection>
           )}
         </div>
       </section>

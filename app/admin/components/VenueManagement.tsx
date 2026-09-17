@@ -103,7 +103,7 @@ export default function VenueManagement({
     },
     [onActiveSectionChange],
   );
-  const { refreshVenues: refreshActiveVenues } = useVenueSelector();
+  const { refreshVenues: refreshActiveVenues, venueLoadError, isLoadingVenues } = useVenueSelector();
   const resolveMutationMessage = useCallback<VenueMutationMessageResolver>(
     (error, fallback) =>
       t(selectDomainMessageKey(error, VENUE_MUTATION_ERROR_KEYS, fallback)),
@@ -125,7 +125,7 @@ export default function VenueManagement({
     isMutating,
     listError,
     listState,
-    loadVenues,
+    refreshAfterMutation: refreshVenues,
     handleToggleActive,
     handleSave,
   } = directory;
@@ -139,6 +139,9 @@ export default function VenueManagement({
     nameInputRef,
     handleCreate,
   } = create;
+  const directoryError = listError || (venueLoadError ? t("loadFailed") : "");
+  const isRefreshing = isLoading || isLoadingVenues;
+  const countsUnavailable = listState === "error";
 
   return (
     <OperationsLayout
@@ -168,17 +171,17 @@ export default function VenueManagement({
               items={[
                 {
                   label: t("totalVenues"),
-                  value: venues.length,
+                  value: countsUnavailable ? "—" : venues.length,
                   color: "default",
                 },
                 {
                   label: t("active"),
-                  value: venues.filter((v) => v.active).length,
+                  value: countsUnavailable ? "—" : venues.filter((v) => v.active).length,
                   color: "default",
                 },
                 {
                   label: t("inactive"),
-                  value: venues.filter((v) => !v.active).length,
+                  value: countsUnavailable ? "—" : venues.filter((v) => !v.active).length,
                   color: "danger",
                 },
               ]}
@@ -467,12 +470,12 @@ export default function VenueManagement({
           <div className="record-collection">
             <PanelHeader
               title={t("venueList")}
-              count={venues.length}
-              onRefresh={loadVenues}
-              isLoading={isLoading}
+              count={countsUnavailable ? undefined : venues.length}
+              onRefresh={() => void refreshVenues()}
+              isLoading={isRefreshing}
             />
             <div className="record-collection-body">
-              {listError && <Alert type="error" message={listError} className="mb-4" />}
+              {directoryError && <Alert type="error" message={directoryError} className="mb-4" />}
               {listState === "loading" ? (
                 <Skeleton rows={4} />
               ) : shouldShowEmptyState(listState) ? (

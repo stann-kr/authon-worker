@@ -231,7 +231,7 @@
   "ExternalGuest": {
     "guestAccess": "Guest access",
     "invalidTitle": "Invalid link",
-    "invalidDescription": "This guest link is unavailable, expired, or no longer active.",
+    "invalidDescription": "This guest link is unavailable, expired, or no longer active. Ask the person who sent it to share a new link.",
     "loadFailedTitle": "Guest list temporarily unavailable",
     "guestOwner": "DJ",
     "event": "Event",

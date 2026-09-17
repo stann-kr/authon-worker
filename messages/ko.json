@@ -231,7 +231,7 @@
   "ExternalGuest": {
     "guestAccess": "게스트 등록",
     "invalidTitle": "유효하지 않은 링크",
-    "invalidDescription": "이 게스트 링크를 사용할 수 없거나, 만료 또는 비활성화되었습니다.",
+    "invalidDescription": "이 게스트 링크를 사용할 수 없거나, 만료 또는 비활성화되었습니다. 링크를 보내준 담당자에게 새 링크를 요청해주세요.",
     "loadFailedTitle": "게스트 명단을 잠시 불러올 수 없습니다",
     "guestOwner": "DJ",
     "event": "이벤트",
