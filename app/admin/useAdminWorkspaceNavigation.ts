@@ -160,7 +160,7 @@ export default function useAdminWorkspaceNavigation({
     if (eventScope) applyEventScope(eventScope);
 
     const nextSearch =
-      nextTask === "analytics"
+      (nextTask === "analytics" || nextTask === "guest-list")
         ? window.location.search
         : eventScope
           ? getCanonicalEventSearch(eventScope)

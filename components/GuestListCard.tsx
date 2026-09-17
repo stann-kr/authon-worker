@@ -37,6 +37,8 @@ interface GuestListCardProps {
   isEntryDisabled?: boolean;
   isDeleteLoading?: boolean;
   isDeleteDisabled?: boolean;
+  deleteDisabledReason?: string;
+  deleteError?: string;
 }
 
 const GuestListCard: React.FC<GuestListCardProps> = ({
@@ -55,6 +57,8 @@ const GuestListCard: React.FC<GuestListCardProps> = ({
   isEntryDisabled = false,
   isDeleteLoading = false,
   isDeleteDisabled = false,
+  deleteDisabledReason,
+  deleteError,
 }) => {
   const t = useTranslations("Common");
   const rosterT = useTranslations("Roster");
@@ -76,7 +80,7 @@ const GuestListCard: React.FC<GuestListCardProps> = ({
       guest.status !== "deleted" &&
       deleteConfirmation === confirmationKey,
   );
-  const isInlineDeleteOpen = isDeleteConfirmOpen && guest.status === "pending";
+  const isInlineDeleteOpen = isDeleteConfirmOpen && mode === "registration" && guest.status === "pending";
 
   useEffect(() => {
     if (undoConfirmation && undoConfirmation !== confirmationKey) setUndoConfirmation(null);
@@ -126,7 +130,6 @@ const GuestListCard: React.FC<GuestListCardProps> = ({
       data-status={guest.status}
       data-selected={isDetailOpen}
       data-mode={mode}
-      data-can-delete={mode === "operations" && Boolean(onDelete)}
     >
       <div className="product-guest-line">
         <button type="button" className="product-guest-identity" onClick={openDetail}
@@ -146,7 +149,7 @@ const GuestListCard: React.FC<GuestListCardProps> = ({
               {onCheck && (
                 <Button
                   onClick={onCheck}
-                  disabled={isEntryDisabled}
+                  disabled={isEntryDisabled || isDeleteLoading}
                   isLoading={isCheckLoading}
                   variant="confirm"
                   size="md"
@@ -170,22 +173,6 @@ const GuestListCard: React.FC<GuestListCardProps> = ({
                   {t("delete")}
                 </Button>
               )}
-
-              {mode === "operations" && onDelete && (
-                <Button
-                  ref={deleteTriggerRef}
-                  onClick={() => setDeleteConfirmation(confirmationKey)}
-                  aria-expanded={isInlineDeleteOpen}
-                  aria-controls={isInlineDeleteOpen ? confirmationId : undefined}
-                  isLoading={isDeleteLoading}
-                  disabled={isDeleteDisabled}
-                  variant="ghost"
-                  className="px-3 sm:px-4 border border-border-default text-text-muted"
-                  aria-label={t("deleteGuest")}
-                >
-                  <Icon name="close" size={16} />
-                </Button>
-              )}
             </>
           )}
 
@@ -195,7 +182,7 @@ const GuestListCard: React.FC<GuestListCardProps> = ({
               {onUndo && (
                 <Button
                   onClick={() => setUndoConfirmation(confirmationKey)}
-                  disabled={isEntryDisabled}
+                  disabled={isEntryDisabled || isDeleteLoading}
                   isLoading={isUndoLoading}
                   variant="outline"
                   size="md"
@@ -215,19 +202,7 @@ const GuestListCard: React.FC<GuestListCardProps> = ({
                   {t("checkedIn")}
                 </StatusLabel>
               )}
-              {mode === "operations" && onDelete && (
-                <Button
-                  ref={deleteTriggerRef}
-                  onClick={() => setDeleteConfirmation(confirmationKey)}
-                  isLoading={isDeleteLoading}
-                  disabled={isDeleteDisabled}
-                  variant="ghost"
-                  className="w-8 h-8 sm:w-10 sm:h-10 p-0 border border-border-default text-text-muted"
-                  aria-label={t("removeGuest")}
-                >
-                  <Icon name="close" size={16} />
-                </Button>
-              )}
+
             </>
           )}
 
@@ -280,7 +255,7 @@ const GuestListCard: React.FC<GuestListCardProps> = ({
         confirmLabel={rosterT("undoConfirm")} cancelLabel={t("cancel")} isLoading={isUndoLoading}
         confirmDisabled={isEntryDisabled}
         onCancel={() => setUndoConfirmation(null)} onConfirm={() => { if (isEntryDisabled) return; setUndoConfirmation(null); onUndo(); }} />}
-      {isDetailOpen && <Sheet title={guest.name} presentation="detail" onClose={closeDetail}>
+      {isDetailOpen && <Sheet title={guest.name} presentation="detail" onClose={closeDetail} busy={isDeleteLoading}>
         <StatusLabel tone={guest.status === "checked" ? "checked" : guest.status === "pending" ? "waiting" : "neutral"}>
           {guest.status === "checked" ? t("checkedIn") : guest.status === "pending" ? t("waitingStatus") : t("removed")}
         </StatusLabel>
@@ -290,14 +265,22 @@ const GuestListCard: React.FC<GuestListCardProps> = ({
           {showRegisteredAt && guest.createdAt && <div><dt>{t("registered")}</dt><dd><time dateTime={guest.createdAt}>{formatTime(guest.createdAt)}</time></dd></div>}
           {guest.checkInTime && <div><dt>{t("checkedIn")}</dt><dd><time dateTime={guest.checkInTime}>{formatTime(guest.checkInTime)}</time></dd></div>}
         </dl>
-        {guest.status === "pending" && onCheck && <Button variant="confirm" onClick={onCheck} disabled={isEntryDisabled} isLoading={isCheckLoading}>{t("checkIn")}</Button>}
-        {guest.status === "checked" && onUndo && <Button variant="outline" onClick={() => setUndoConfirmation(confirmationKey)} disabled={isEntryDisabled} isLoading={isUndoLoading}>{t("undo")}</Button>}
+        {guest.status === "pending" && onCheck && <Button variant="confirm" onClick={onCheck} disabled={isEntryDisabled || isDeleteLoading} isLoading={isCheckLoading}>{t("checkIn")}</Button>}
+        {guest.status === "checked" && onUndo && <Button variant="outline" onClick={() => setUndoConfirmation(confirmationKey)} disabled={isEntryDisabled || isDeleteLoading} isLoading={isUndoLoading}>{t("undo")}</Button>}
+        {mode === "operations" && onDelete && guest.status !== "deleted" && <div className="border-t border-border-default pt-4">
+          <Button ref={deleteTriggerRef} variant="danger" onClick={() => setDeleteConfirmation(confirmationKey)}
+            disabled={isDeleteDisabled} isLoading={isDeleteLoading} aria-haspopup="dialog">
+            {t("deleteGuest")}
+          </Button>
+          {deleteError && <p className="mt-2 text-sm text-status-danger" role="alert">{deleteError}</p>}
+          {isDeleteDisabled && deleteDisabledReason && <p className="mt-2 text-sm text-text-muted" role="status">{deleteDisabledReason}</p>}
+        </div>}
       </Sheet>}
-      {isDeleteConfirmOpen && guest.status === "checked" && (
+      {isDeleteConfirmOpen && !isInlineDeleteOpen && (
         <ConfirmDialog
           open
           title={t("deleteGuestConfirm", { name: guest.name })}
-          description={t("removeGuestConfirm")}
+          description={guest.status === "checked" ? t("removeGuestConfirm") : undefined}
           confirmLabel={t("delete")}
           cancelLabel={t("cancel")}
           onConfirm={handleDelete}

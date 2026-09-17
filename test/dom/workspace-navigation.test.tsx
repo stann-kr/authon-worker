@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
 import { afterEach, test } from "node:test";
-import { useState, type ReactNode } from "react";
+import { useLayoutEffect, useState, type ReactNode } from "react";
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { hydrateRoot } from "react-dom/client";
+import { renderToString } from "react-dom/server";
 import { NextIntlClientProvider } from "next-intl";
 import { PathnameContext } from "next/dist/shared/lib/hooks-client-context.shared-runtime";
 import { RouterContext } from "next/dist/shared/lib/router-context.shared-runtime";
@@ -60,8 +62,8 @@ function Providers({ children, pathname = "/admin", router = null }: { children:
 
 test("workspace destinations respect real role and shared Door access policy", () => {
   const cases: [AccessSubject, string[]][] = [
-    [admin, ["roster", "door", "events", "users"]],
-    [{ ...admin, role: "super_admin" }, ["roster", "door", "events", "users", "venues"]],
+    [admin, ["door", "events", "users"]],
+    [{ ...admin, role: "super_admin" }, ["door", "events", "users", "venues"]],
     [{ ...admin, role: "door_staff" }, ["door"]],
     [{ ...admin, role: "staff" }, []],
     [{ ...admin, role: "dj", doorAccessEnabled: true }, []],
@@ -70,7 +72,7 @@ test("workspace destinations respect real role and shared Door access policy", (
   ];
   for (const [subject, allowed] of cases) {
     const items = getWorkspaceItems(subject);
-    for (const id of ["roster", "door", "events", "users", "venues"]) {
+    for (const id of ["door", "events", "users", "venues"]) {
       assert.equal(items.some((item) => item.id === id), allowed.includes(id), `${subject.role}/${subject.accountKind}/${id}`);
     }
     assert.ok(items.some((item) => item.href === "/guest"));
@@ -82,7 +84,7 @@ test("workspace destinations respect real role and shared Door access policy", (
 test("all existing admin tasks select a real destination, including create and legacy tasks", () => {
   const items = getWorkspaceItems({ ...admin, role: "super_admin" });
   const cases: [AdminTask, string][] = [
-    ["guest-list", "roster"], ["guest-requests", "requests"], ["event-manage", "events"],
+    ["guest-list", "door"], ["guest-requests", "requests"], ["event-manage", "events"],
     ["link-create", "links"], ["link-manage", "links"], ["user-create", "users"],
     ["user-list", "users"], ["password-requests", "password-requests"],
     ["analytics", "analytics"], ["venue-create", "venues"], ["venue-list", "venues"],
@@ -95,7 +97,7 @@ test("all existing admin tasks select a real destination, including create and l
   assert.equal(getWorkspaceActiveId("/profile", undefined, items), "profile");
 });
 
-function MenuHarness({ subject = admin, initial = "roster", disabled = false }: {
+function MenuHarness({ subject = admin, initial = "events", disabled = false }: {
   subject?: AccessSubject; initial?: string; disabled?: boolean;
 }) {
   const [activeId, setActiveId] = useState(initial);
@@ -207,7 +209,7 @@ test("workspace menu and navigation respect the busy lock", () => {
   render(<Providers><MenuHarness disabled /></Providers>);
   assert.equal((screen.getByRole("button", { name: "All menus" }) as HTMLButtonElement).disabled, true);
   fireEvent.click(screen.getByRole("link", { name: messages.Workspace.door }));
-  assert.equal(screen.getByRole("link", { name: messages.Workspace.roster }).getAttribute("aria-current"), "page");
+  assert.equal(screen.getByRole("link", { name: messages.Workspace.events }).getAttribute("aria-current"), "page");
 });
 
 function AdminShellHarness({ loading = false, capture }: {
@@ -380,7 +382,7 @@ for (const desktop of [true, false]) {
 
 test("choosing the current admin task cancels a pending route without abandoning its data request", async () => {
   viewport(true);
-  window.history.replaceState(null, "", "/admin");
+  window.history.replaceState(null, "", "/admin?tab=events&view=manage");
   const destinations: string[] = [];
   const router = routerRecorder(destinations);
   const guard = createLatestRequestGuard();
@@ -390,11 +392,11 @@ test("choosing the current admin task cancels a pending route without abandoning
     const view = render(frame("/admin"));
     const isLatestRead = guard.beginRequest();
     fireEvent.click(screen.getByRole("link", { name: messages.Workspace.door }));
-    fireEvent.click(screen.getByRole("link", { name: messages.Workspace.roster }));
-    assert.deepEqual(destinations, ["/door", "/admin?tab=guests&view=list"]);
+    fireEvent.click(screen.getByRole("link", { name: messages.Workspace.events }));
+    assert.deepEqual(destinations, ["/door", "/admin?tab=events&view=manage"]);
     assert.equal(isLatestRead(), true);
     await waitFor(() => assert.equal(document.querySelector(".route-transition-overlay")?.getAttribute("data-state"), "leaving"));
-    fireEvent.click(screen.getByRole("link", { name: messages.Workspace.roster }));
+    fireEvent.click(screen.getByRole("link", { name: messages.Workspace.events }));
     await waitFor(() => assert.equal(document.querySelector(".route-transition-overlay") === null, true));
 
     fireEvent.click(screen.getByRole("link", { name: messages.Workspace.door }));
@@ -402,4 +404,66 @@ test("choosing the current admin task cancels a pending route without abandoning
     view.rerender(frame("/door"));
     assert.equal(isLatestRead(), false);
   } finally { unsubscribe(); }
+});
+
+
+test("authenticated server output stays on loading until home and the matching navigation hydrate together", async () => {
+  for (const desktop of [true, false]) {
+    viewport(desktop);
+    window.localStorage.setItem("workspace:sidebarCollapsed", "true");
+    const commits: { sidebar: boolean; dock: boolean; collapsed: boolean }[] = [];
+    function ContentProbe() {
+      useLayoutEffect(() => {
+        // Record the frame at the first animation opportunity, after layout effects.
+        const frame = requestAnimationFrame(() => commits.push({
+          sidebar: Boolean(document.querySelector(".workspace-sidebar")),
+          dock: Boolean(document.querySelector(".workspace-dock")),
+          collapsed: document.querySelector(".workspace-shell")?.getAttribute("data-sidebar-collapsed") === "true",
+        }));
+        return () => cancelAnimationFrame(frame);
+      }, []);
+      return <h1>Home ready</h1>;
+    }
+    const frame = <Providers pathname="/"><AuthSessionProvider initialUser={{
+      id: "operator", name: "Operator", email: "operator@example.test", role: "venue_admin",
+      account_kind: "personal", door_access_enabled: false, guest_limit: null,
+    }}><WorkspaceShell><ContentProbe /></WorkspaceShell></AuthSessionProvider></Providers>;
+    const container = document.createElement("div");
+    container.innerHTML = renderToString(frame);
+    document.body.append(container);
+    assert.equal(within(container).getByRole("status").textContent, messages.Common.loading);
+    assert.equal(within(container).queryByRole("heading", { name: "Home ready" }) === null, true);
+    assert.equal(within(container).queryByRole("navigation") === null, true);
+    assert.equal(within(container).getByRole("main").getAttribute("aria-busy"), "true");
+    const errors: unknown[] = [];
+    let root: ReturnType<typeof hydrateRoot> | undefined;
+    try {
+      await act(async () => { root = hydrateRoot(container, frame, { onRecoverableError: error => errors.push(error) }); });
+      await waitFor(() => assert.equal(commits.length, 1));
+      assert.deepEqual(commits, [{ sidebar: desktop, dock: !desktop, collapsed: true }]);
+      assert.deepEqual(errors, []);
+      assert.ok(within(container).getByRole("heading", { name: "Home ready" }));
+      assert.ok(within(container).getByRole("navigation", { name: messages.Workspace.navigation }));
+      assert.equal(within(container).queryByRole("status") === null, true);
+      assert.equal(within(container).getAllByRole("main").length, 1);
+    } finally {
+      await act(async () => root?.unmount());
+      container.remove();
+    }
+  }
+});
+
+test("blocked preference storage cannot keep the authenticated workspace on the loading screen", () => {
+  viewport(true);
+  const original = window.Storage.prototype.getItem;
+  window.Storage.prototype.getItem = () => { throw new Error("Storage unavailable"); };
+  try {
+    render(<Providers pathname="/"><AuthSessionProvider initialUser={{
+      id: "operator", name: "Operator", email: "operator@example.test", role: "door_staff",
+      account_kind: "personal", door_access_enabled: false, guest_limit: null,
+    }}><WorkspaceShell><h1>Home ready</h1></WorkspaceShell></AuthSessionProvider></Providers>);
+    assert.ok(screen.getByRole("heading", { name: "Home ready" }));
+    assert.ok(screen.getByRole("navigation", { name: messages.Workspace.navigation }));
+    assert.equal(screen.queryByRole("status") === null, true);
+  } finally { window.Storage.prototype.getItem = original; }
 });

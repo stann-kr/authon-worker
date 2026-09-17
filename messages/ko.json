@@ -322,13 +322,13 @@
   },
   "Home": {
     "availableWorkspaces": "사용 가능한 작업 공간",
-    "guestCategory": "명단 관리",
+    "guestCategory": "내 명단",
     "guestTitle": "게스트 등록",
     "guestDescription": "게스트를 추가하고 명단과 한도를 확인합니다.",
     "guestAction": "게스트 등록하기",
     "doorCategory": "현장 입장",
-    "doorTitle": "도어 체크인",
-    "doorDescription": "게스트를 찾아 입장을 바로 확인합니다.",
+    "doorTitle": "입장 확인",
+    "doorDescription": "전체 게스트 명단을 확인하고 입장을 처리합니다.",
     "doorAction": "체크인 시작",
     "adminCategory": "명단 관리",
     "adminTitle": "게스트 명단",
@@ -393,6 +393,7 @@
     "requestNotNeeded": "추가 요청 불필요"
   },
   "Door": {
+    "deleteRequiresOnline": "네트워크 연결과 대기 중인 입장 처리의 동기화를 확인한 뒤 삭제해주세요.",
     "partialLoadFailed": "일부 운영 데이터를 불러오지 못했습니다. 새로고침 후 다시 시도해주세요.",
     "loadFailed": "운영 데이터를 불러오지 못했습니다. 네트워크 상태를 확인해주세요.",
     "updateFailed": "게스트 상태를 변경하지 못했습니다. 다시 시도해주세요.",

@@ -1,5 +1,5 @@
 export type AdminTask =
-  | "guest-list"
+  | "guest-list" // Legacy destination: the Admin route forwards this task to /door.
   | "guest-requests"
   | "event-manage"
   | "link-create"

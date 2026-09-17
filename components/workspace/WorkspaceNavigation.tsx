@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useLayoutEffect, useRef, useState, type MouseEvent, type ReactNode } from "react";
+import { useId, useLayoutEffect, useRef, useState, type MouseEvent, type ReactNode } from "react";
 import { useTranslations } from "next-intl";
 import TransitionLink from "@/components/TransitionLink";
 import Icon, { type IconName } from "@/components/Icon";
@@ -22,7 +22,7 @@ export interface WorkspaceNavigationProps {
 }
 
 const navigationIcons: Record<string, IconName> = {
-  home: "home", events: "calendar", roster: "users", guest: "user-add", door: "login",
+  home: "home", events: "calendar", guest: "user-add", door: "login",
   links: "link", requests: "user-add", analytics: "chart-line", users: "user-admin",
   "password-requests": "key", venues: "store", profile: "user",
 };
@@ -41,7 +41,7 @@ export default function WorkspaceNavigation({
   const groups = workspaceGroups.map((id) => ({ id, items: items.filter((item) => item.group === id) }))
     .filter((group) => group.items.length > 0);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const media = window.matchMedia("(min-width: 1000px)");
     const update = () => {
       restoreFocusRef.current = Boolean(navRef.current?.contains(document.activeElement) ||
