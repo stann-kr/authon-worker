@@ -13,7 +13,6 @@ import { useVenueBrand } from "@/components/VenueBrandProvider";
 import { getWorkspaceItems } from "@/components/workspace/navigation";
 import { useTranslations } from "next-intl";
 import { useAuthSession } from "@/components/AuthSessionProvider";
-import useHomeRequests, { type HomeRequest } from "./home/useHomeRequests";
 
 interface MenuItem {
   id: string;
@@ -31,7 +30,6 @@ export default function Home() {
   const workspaceT = useTranslations("Workspace");
   const { user } = useAuthSession();
   const { brand } = useVenueBrand();
-  const { requests, isLoading, refresh } = useHomeRequests(user);
   const router = useRouter();
   const { isRouteTransitionActive, startRouteTransition } =
     useRouteTransition();
@@ -154,18 +152,14 @@ export default function Home() {
             </div>
           </nav>
 
-          {requests.length > 0 ? (
-            <HomeRequestQueue requests={requests} isLoading={isLoading} refresh={refresh} />
-          ) : (
-            <section className="home-account-panel" aria-labelledby="home-account-title">
-              <h2 id="home-account-title">{t("registrationInfo")}</h2>
-              <dl>
-                <div><dt>{t("defaultGuestLimit")}</dt><dd>{user.guest_limit === null ? t("unlimited") : t("guestLimitCount", { count: user.guest_limit })}</dd></div>
-                <div><dt>{t("doorAccess")}</dt><dd>{hasAccess(user, ["door"]) ? t("allowed") : t("notAllowed")}</dd></div>
-              </dl>
-              <TransitionLink href="/profile" className="home-account-link">{workspaceT("profile")}<Icon name="arrow-right" size={18} /></TransitionLink>
-            </section>
-          )}
+          <section className="home-account-panel" aria-labelledby="home-account-title">
+            <h2 id="home-account-title">{t("registrationInfo")}</h2>
+            <dl>
+              <div><dt>{t("defaultGuestLimit")}</dt><dd>{user.guest_limit === null ? t("unlimited") : t("guestLimitCount", { count: user.guest_limit })}</dd></div>
+              <div><dt>{t("doorAccess")}</dt><dd>{hasAccess(user, ["door"]) ? t("allowed") : t("notAllowed")}</dd></div>
+            </dl>
+            <TransitionLink href="/profile" className="home-account-link">{workspaceT("profile")}<Icon name="arrow-right" size={18} /></TransitionLink>
+          </section>
         </div>
 
         {quickLinks.length > 0 && <nav className="home-shortcuts" aria-label={t("quickLinks")}>
@@ -205,34 +199,4 @@ function WorkspaceLink({
       </>}
     </TransitionLink>
   );
-}
-
-function HomeRequestQueue({ requests, isLoading, refresh }: {
-  requests: HomeRequest[];
-  isLoading: boolean;
-  refresh: () => void;
-}) {
-  const t = useTranslations("Home");
-  const workspaceT = useTranslations("Workspace");
-  const hasError = requests.some((request) => request.status === "error");
-  const empty = requests.every((request) => request.status === "ready" && request.count === 0);
-  return <section className="home-request-panel" aria-labelledby="home-requests-title">
-    <header><h2 id="home-requests-title">{t("requestsTitle")}</h2>
-      <button type="button" onClick={refresh} disabled={isLoading} aria-label={t("refreshRequests")} className="home-refresh">
-        <Icon name="refresh" size={18} className={isLoading ? "animate-spin" : ""} />
-      </button>
-    </header>
-    <div className="home-request-list">
-      {requests.map((request) => <TransitionLink key={request.id} href={request.href} className="home-request-row"
-        data-pending={request.status === "ready" && request.count > 0}>
-        <Icon name={request.id === "guests" ? "user-add" : "key"} size={20} />
-        <span>{workspaceT(request.id === "guests" ? "requests" : "passwordRequests")}</span>
-        <strong aria-live="polite">{request.status === "ready" ? t("requestCount", { count: request.count })
-          : t(request.status === "loading" ? "requestsLoading" : "requestsUnavailable")}</strong>
-        <Icon name="chevron-right" size={16} />
-      </TransitionLink>)}
-    </div>
-    {empty && <p className="home-requests-note" role="status"><Icon name="check" size={16} />{t("requestsEmpty")}</p>}
-    {hasError && <p className="home-requests-note" role="status">{t("requestsRetryHint")}</p>}
-  </section>;
 }

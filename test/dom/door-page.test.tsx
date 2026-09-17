@@ -91,7 +91,7 @@ async function openGuest() {
   const row = await screen.findByRole("button", { name: "Roster guest" });
   await act(async () => {});
   fireEvent.click(row);
-  return screen.getByRole("dialog", { name: "Roster guest" });
+  return screen.getByRole("region", { name: "Roster guest" });
 }
 
 test("unified check-in exposes deletion only to admins and only inside details", async () => {
@@ -113,7 +113,7 @@ test("unified details retain finalized locks, draft deletion, and past-date corr
     render(frame());
     const detail = await openGuest();
     await waitFor(() => {
-      assert.equal(within(detail).getByRole("button", { name: messages.Common.checkIn }).hasAttribute("disabled"), entryLocked);
+      assert.equal(screen.getByRole("button", { name: messages.Common.checkIn }).hasAttribute("disabled"), entryLocked);
       assert.equal(within(detail).getByRole("button", { name: messages.Common.deleteGuest }).hasAttribute("disabled"), deletionLocked);
     });
     assert.deepEqual(runtime.__doorPageTest.reads.at(-1), { date: "2026-09-15", venueId: "venue-1", eventId });
@@ -141,11 +141,11 @@ test("a failed deletion keeps the detail available and a confirmed retry removes
     if (!succeeds) {
       await waitFor(() => assert.equal(runtime.__doorPageTest.deleteCalls, 1));
       await waitFor(() => assert.equal(trigger.hasAttribute("disabled"), false));
-      assert.ok(screen.getByRole("dialog", { name: "Roster guest" }));
+      assert.ok(screen.getByRole("region", { name: "Roster guest" }));
       assert.equal(within(detail).getByRole("alert").textContent, messages.Door.updateFailed);
     }
   }
-  await waitFor(() => assert.equal(screen.queryByRole("dialog", { name: "Roster guest" }) === null, true));
+  await waitFor(() => assert.equal(screen.queryByRole("region", { name: "Roster guest" }) === null, true));
   assert.equal(screen.queryByRole("button", { name: "Roster guest" }) === null, true);
   assert.equal(runtime.__doorPageTest.deleteCalls, 2);
   assert.notEqual(document.body.style.overflow, "hidden");

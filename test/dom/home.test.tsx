@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { registerHooks } from "node:module";
 import { after, afterEach, before, test } from "node:test";
-import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { NextIntlClientProvider } from "next-intl";
 import { AppRouterContext } from "next/dist/shared/lib/app-router-context.shared-runtime";
 import { PathnameContext } from "next/dist/shared/lib/hooks-client-context.shared-runtime";
@@ -95,7 +95,7 @@ test("home recovers pending logout only while the missing identity is still curr
   }
 });
 
-test("home prioritizes the role's task and keeps admin shortcuts and count reads scoped", async () => {
+test("home retains role shortcuts without a request panel or pending-count reads", async () => {
   const cases: [User["role"], User["account_kind"], boolean, "door" | "guest"][] = [
     ["super_admin", "personal", false, "door"], ["venue_admin", "personal", false, "door"],
     ["door_staff", "personal", false, "door"], ["staff", "personal", false, "guest"],
@@ -115,43 +115,10 @@ test("home prioritizes the role's task and keeps admin shortcuts and count reads
     assert.equal(links[0].getAttribute("href"), `/${primary}`);
     assert.equal(Boolean(screen.queryByRole("navigation", { name: messages.Home.quickLinks })), role === "super_admin" || role === "venue_admin");
     await act(async () => {});
-    assert.deepEqual(reads, role === "venue_admin" ? ["guests", "passwords"] : role === "super_admin" ? ["passwords"] : []);
-    cleanup();
-  }
-});
-
-test("home count failures stay distinct from zero and refresh recovers each request list", async () => {
-  let finish!: (value: CountResult) => void;
-  runtime.__homeCounts = {
-    guests: () => new Promise((resolve) => { finish = resolve; }),
-    passwords: async () => ({ data: 2, error: null }),
-  };
-  render(frame(baseUser));
-  const queue = screen.getByRole("region", { name: messages.Home.requestsTitle });
-  assert.equal(within(queue).queryByText("0 pending"), null);
-  assert.equal(within(queue).queryByText(messages.Home.requestsEmpty), null);
-  await act(async () => finish({ data: null, error: "UNAVAILABLE" }));
-  assert.ok(within(queue).getByText(messages.Home.requestsUnavailable));
-  assert.ok(within(queue).getByText("2 pending"));
-  runtime.__homeCounts = { guests: zero, passwords: zero };
-  fireEvent.click(within(queue).getByRole("button", { name: messages.Home.refreshRequests }));
-  await waitFor(() => assert.ok(within(queue).getByText(messages.Home.requestsEmpty)));
-  assert.equal(within(queue).queryByText(messages.Home.requestsUnavailable), null);
-});
-
-test("a previous account or venue's late counts cannot overwrite the current home", async () => {
-  for (const change of [{ id: "another-operator" }, { venue_id: "venue-b" }]) {
-    let finish!: (value: CountResult) => void;
-    const previous = new Promise<CountResult>((resolve) => { finish = resolve; });
-    runtime.__homeCounts = { guests: () => previous, passwords: () => previous };
-    const view = render(frame(baseUser));
-    runtime.__homeCounts = { guests: zero, passwords: zero };
-    view.rerender(frame({ ...baseUser, ...change }));
-    const queue = screen.getByRole("region", { name: messages.Home.requestsTitle });
-    await waitFor(() => assert.ok(within(queue).getByText(messages.Home.requestsEmpty)));
-    await act(async () => finish({ data: 7, error: null }));
-    assert.equal(within(queue).queryByText("7 pending"), null);
-    assert.ok(within(queue).getByText(messages.Home.requestsEmpty));
+    assert.deepEqual(reads, []);
+    assert.equal(screen.queryByRole("region", { name: messages.Home.requestsTitle }) === null, true);
+    assert.equal(screen.queryByText(messages.Home.requestsEmpty) === null, true);
+    assert.ok(screen.getByRole("region", { name: messages.Home.registrationInfo }));
     cleanup();
   }
 });

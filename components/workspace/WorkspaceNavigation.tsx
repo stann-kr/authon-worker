@@ -35,6 +35,7 @@ export default function WorkspaceNavigation({
   const navigationId = useId();
   const [desktop, setDesktop] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [menuMotion, setMenuMotion] = useState(false);
   const navRef = useRef<HTMLElement>(null);
   const dockRef = useRef<HTMLDivElement>(null);
   const restoreFocusRef = useRef(false);
@@ -62,7 +63,16 @@ export default function WorkspaceNavigation({
       (current ?? navRef.current?.querySelector<HTMLElement>("a, button"))?.focus({ preventScroll: true });
       restoreFocusRef.current = false;
     }
-    if (!desktop) current?.scrollIntoView?.({ block: "nearest", inline: "nearest" });
+    if (!desktop && current) {
+      const scroller = current.closest<HTMLElement>(".workspace-primary-scroll");
+      if (scroller) {
+        const item = current.getBoundingClientRect();
+        const viewport = scroller.getBoundingClientRect();
+        // Reveal only the horizontal menu; scrollIntoView can also move page content.
+        if (item.left < viewport.left) scroller.scrollLeft += item.left - viewport.left;
+        else if (item.right > viewport.right) scroller.scrollLeft += item.right - viewport.right;
+      }
+    }
   }, [desktop, activeId]);
 
   useLayoutEffect(() => {
@@ -94,6 +104,7 @@ export default function WorkspaceNavigation({
         if (disabled) { event.preventDefault(); return; }
         onSelect(item, event);
         if (event.button === 0 && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey) {
+          setMenuMotion(event.detail > 0);
           setMenuOpen(false);
         }
       }}>
@@ -142,11 +153,14 @@ export default function WorkspaceNavigation({
         <button type="button" className="workspace-nav-link workspace-more" aria-haspopup="dialog"
           aria-label={t("allMenu")} aria-expanded={menuOpen}
           aria-controls={menuOpen ? "workspace-all-menu" : undefined}
-          disabled={disabled} onClick={() => setMenuOpen(true)}>{t("more")}</button>
+          disabled={disabled} onClick={(event) => { setMenuMotion(event.detail > 0); setMenuOpen(true); }}>
+          <span className="workspace-nav-label">{t("more")}</span>
+        </button>
       </nav>
     </div>
-    {menuOpen && <WorkspaceMenu title={t("allMenu")} closeLabel={t("close")} onClose={() => setMenuOpen(false)}>
+    <WorkspaceMenu open={menuOpen} motion={menuMotion} title={t("allMenu")} closeLabel={t("close")}
+      onClose={(motion = false) => { setMenuMotion(motion); setMenuOpen(false); }}>
       <nav aria-label={t("allMenu")}>{home && link(home, false, "menu")}{groupedLinks("menu")}{profile && link(profile, false, "menu")}</nav>
-    </WorkspaceMenu>}
+    </WorkspaceMenu>
   </>;
 }
