@@ -17,12 +17,12 @@
   --app-text: #ffffff;
   --app-text-body: #e5e5e7;
   --app-text-muted: #8e8e93;
-  --app-action-rgb: 250 204 21;
-  --app-action-hover-rgb: 253 224 71;
+  --app-action-rgb: 255 181 71;
+  --app-action-hover-rgb: 255 198 107;
   --app-action: rgb(var(--app-action-rgb));
-  --app-action-text: #18160a;
+  --app-action-text: #241906;
   --app-action-hover: rgb(var(--app-action-hover-rgb));
-  --app-action-active: #eab308;
+  --app-action-active: #e8a236;
   --app-action-confirm: var(--app-surface-raised);
   --app-action-confirm-hover: var(--app-surface-active);
   --app-action-confirm-active: var(--app-surface-hover);
