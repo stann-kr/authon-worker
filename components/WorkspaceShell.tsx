@@ -86,9 +86,11 @@ export default function WorkspaceShell({
   const selectItem = (item: WorkspaceItem, event: MouseEvent<HTMLAnchorElement>) => {
     if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
     if (pathname === "/admin" && item.task && adminNavigation) {
-      event.preventDefault();
-      if (!adminNavigation.disabled && !isRouteTransitionActive) adminNavigation.onTaskChange(item.task);
-    } else if (item.href === pathname) {
+      if (adminNavigation.disabled) { event.preventDefault(); return; }
+      // While a route is pending, let Link also supersede it with this destination.
+      if (!isRouteTransitionActive) event.preventDefault();
+      adminNavigation.onTaskChange(item.task);
+    } else if (item.href === pathname && !isRouteTransitionActive) {
       event.preventDefault();
     }
   };
@@ -119,11 +121,11 @@ export default function WorkspaceShell({
         {user && <WorkspaceNavigation items={items} activeId={activeId} brandName={brand.name}
           accountName={user.name} accountRole={<RoleLabel role={user.account_kind === "shared" ? "shared" : user.role} />}
           collapsed={sidebarCollapsed} onToggleSidebar={toggleSidebar}
-          disabled={isRouteTransitionActive || adminNavigation?.disabled}
+          disabled={adminNavigation?.disabled}
           counts={{ "password-requests": adminNavigation?.pendingPasswordResetCount ?? 0 }}
           actions={actions} onSelect={selectItem} />}
       </div>
-      {user && <Sheet open={accountOpen} title={user.name} onClose={() => setAccountOpen(false)}>
+      {user && <Sheet open={accountOpen} title={user.name} onClose={() => setAccountOpen(false)} blockDuringRouteTransition={false}>
         <p className="text-sm text-text-muted"><RoleLabel role={user.account_kind === "shared" ? "shared" : user.role} /></p>
         <TransitionLink href="/profile" className="app-button rounded-control bg-surface-raised px-4 py-3 text-center text-sm" onClick={() => setAccountOpen(false)}>{t("profile")}</TransitionLink>
         <LogoutControl expanded />

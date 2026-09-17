@@ -4,8 +4,10 @@ import { useState, type ReactNode } from "react";
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { NextIntlClientProvider } from "next-intl";
 import { PathnameContext } from "next/dist/shared/lib/hooks-client-context.shared-runtime";
+import { RouterContext } from "next/dist/shared/lib/router-context.shared-runtime";
+import type { NextRouter } from "next/router";
 import { AuthSessionProvider } from "@/components/AuthSessionProvider";
-import { RouteTransitionProvider } from "@/components/RouteTransitionProvider";
+import { RouteTransitionProvider, useRouteLoadingTask, useRouteTransition } from "@/components/RouteTransitionProvider";
 import WorkspaceShell from "@/components/WorkspaceShell";
 import RouteLoadingShell from "@/components/RouteLoadingShell";
 import WorkspaceNavigation from "@/components/workspace/WorkspaceNavigation";
@@ -14,12 +16,16 @@ import { getWorkspaceActiveId, getWorkspaceItems, getWorkspacePrimaryItems } fro
 import useAdminWorkspaceNavigation from "@/app/admin/useAdminWorkspaceNavigation";
 import type { AccessSubject } from "@/lib/users/policy";
 import type { AdminTask } from "@/lib/admin-navigation";
+import { createLatestRequestGuard } from "@/lib/latest-request";
+import { subscribeToRouteTransitionStart } from "@/lib/route-transition-events";
 import messages from "@/messages/en.json";
 
 const originalMatchMedia = window.matchMedia;
 const admin: AccessSubject = { role: "venue_admin", accountKind: "personal", doorAccessEnabled: false };
 Object.defineProperty(globalThis, "self", { configurable: true, value: window });
 Object.defineProperty(globalThis, "localStorage", { configurable: true, value: window.localStorage });
+window.requestAnimationFrame ??= globalThis.requestAnimationFrame;
+window.cancelAnimationFrame ??= globalThis.cancelAnimationFrame;
 
 afterEach(() => {
   cleanup();
@@ -44,12 +50,12 @@ function viewport(initialDesktop: boolean) {
   return (next: boolean) => act(() => { desktop = next; listeners.forEach((listener) => listener()); });
 }
 
-function Providers({ children, pathname = "/admin" }: { children: ReactNode; pathname?: string }) {
-  return <PathnameContext.Provider value={pathname}>
+function Providers({ children, pathname = "/admin", router = null }: { children: ReactNode; pathname?: string; router?: NextRouter | null }) {
+  return <RouterContext.Provider value={router}><PathnameContext.Provider value={pathname}>
     <NextIntlClientProvider locale="en" messages={messages}>
       <RouteTransitionProvider>{children}</RouteTransitionProvider>
     </NextIntlClientProvider>
-  </PathnameContext.Provider>;
+  </PathnameContext.Provider></RouterContext.Provider>;
 }
 
 test("workspace destinations respect real role and shared Door access policy", () => {
@@ -204,7 +210,12 @@ test("workspace menu and navigation respect the busy lock", () => {
   assert.equal(screen.getByRole("link", { name: "Roster" }).getAttribute("aria-current"), "page");
 });
 
-function AdminShellHarness() {
+function AdminShellHarness({ loading = false, capture }: {
+  loading?: boolean; capture?: (transition: ReturnType<typeof useRouteTransition>) => void;
+}) {
+  useRouteLoadingTask(loading);
+  const transition = useRouteTransition();
+  capture?.(transition);
   const navigation = useAdminWorkspaceNavigation({
     businessDate: "2026-09-16", hasCurrentVenue: true, isSuperAdmin: true,
     isRouteTransitionActive: false, venueId: "venue-a",
@@ -213,7 +224,8 @@ function AdminShellHarness() {
     id: "operator", name: "Operator", email: "operator@example.test", role: "super_admin",
     account_kind: "personal", door_access_enabled: false, guest_limit: null,
   }}>
-    <WorkspaceShell adminNavigation={{ activeTask: navigation.activeTask, onTaskChange: navigation.changeTask }}>
+    <WorkspaceShell actions={<button type="button">Workspace action</button>}
+      adminNavigation={{ activeTask: navigation.activeTask, onTaskChange: navigation.changeTask }}>
       <input aria-label="Workspace draft" defaultValue="Keep draft" />
       <output data-testid="task">{navigation.activeTask}</output>
       <output data-testid="event">{navigation.selectedEventId}</output>
@@ -286,4 +298,108 @@ test("loading and loaded workspaces share one footer and the same role-filtered 
   assert.deepEqual(within(screen.getByRole("navigation", { name: "Main navigation" }))
     .getAllByRole("link").map((link) => link.getAttribute("href")), links);
   assert.equal(screen.queryByRole("link", { name: "Accounts" }), null);
+});
+
+function routerRecorder(destinations: string[]): NextRouter {
+  return {
+    pathname: "/admin", route: "/admin", asPath: "/admin", query: {},
+    push: async (href: string) => { destinations.push(href); return true; },
+    prefetch: async () => {},
+  } as unknown as NextRouter;
+}
+
+for (const desktop of [true, false]) {
+  test(`${desktop ? "desktop" : "mobile"} navigation stays usable during loading and retains focus after the latest route finishes`, async () => {
+    viewport(desktop);
+    window.history.replaceState(null, "", "/admin");
+    const destinations: string[] = [];
+    const router = routerRecorder(destinations);
+    let transition!: ReturnType<typeof useRouteTransition>;
+    const frame = (pathname: string, loading: boolean) => <Providers pathname={pathname} router={router}>
+      <AdminShellHarness loading={loading} capture={(value) => { transition = value; }} />
+    </Providers>;
+    const view = render(frame("/admin", true));
+    const main = within(view.container).getByRole("main");
+    const nav = screen.getByRole("navigation", { name: "Main navigation" });
+    assert.equal(main.hasAttribute("inert"), true);
+    assert.equal(main.getAttribute("aria-busy"), "true");
+    assert.equal(nav.closest("[inert]") === null, true);
+    const pageActions = view.container.querySelectorAll(".workspace-header-actions, .workspace-context-actions");
+    assert.ok(pageActions.length > 0);
+    for (const actions of pageActions) assert.equal(actions.hasAttribute("inert"), true);
+    const restoreFromOldRoute = transition.requestFocusRestore;
+    let finishOldRoute!: () => void;
+    act(() => { finishOldRoute = transition.registerRouteLoadingTask(); });
+
+    fireEvent.click(screen.getByRole("button", { name: messages.Workspace.profile }));
+    const account = screen.getByRole("dialog", { name: "Operator" });
+    assert.equal(account.closest(".product-sheet-layer")?.hasAttribute("inert"), false);
+    fireEvent.keyDown(document, { key: "Escape" });
+    assert.equal(screen.queryByRole("dialog"), null);
+
+    if (desktop) {
+      fireEvent.click(screen.getByRole("button", { name: messages.Workspace.collapseSidebar }));
+      fireEvent.click(screen.getByRole("button", { name: messages.Workspace.expandSidebar }));
+    }
+    const door = within(nav).getByRole("link", { name: "Door" });
+    door.focus();
+    fireEvent.click(door);
+    assert.notEqual(door.getAttribute("aria-disabled"), "true");
+    if (!desktop) fireEvent.click(screen.getByRole("button", { name: "All menus" }));
+    const profile = (desktop ? nav : screen.getByRole("dialog", { name: "All menus" }))
+      .querySelector<HTMLAnchorElement>('a[href="/profile"]')!;
+    profile.focus();
+    fireEvent.click(profile);
+    assert.deepEqual(destinations, ["/door", "/profile"]);
+
+    // Keep using navigation while the content underneath it finishes.
+    if (!desktop) fireEvent.click(screen.getByRole("button", { name: "All menus" }));
+    const focused = document.activeElement;
+    window.history.replaceState(null, "", "/profile");
+    view.rerender(frame("/profile", false));
+    await waitFor(() => assert.equal(document.querySelector(".route-transition-overlay") === null, true));
+    await act(async () => { await new Promise((resolve) => window.requestAnimationFrame(resolve)); });
+    assert.equal(document.activeElement === focused, true);
+    assert.equal(main.hasAttribute("inert"), false);
+    assert.equal(main.hasAttribute("aria-busy"), false);
+    for (const actions of pageActions) assert.equal(actions.hasAttribute("inert"), false);
+
+    act(() => {
+      finishOldRoute();
+      restoreFromOldRoute({ current: main });
+    });
+    await act(async () => { await new Promise((resolve) => window.requestAnimationFrame(resolve)); });
+    assert.equal(document.querySelector(".route-transition-overlay") === null, true);
+    assert.equal(document.activeElement === focused, true);
+    if (!desktop) {
+      fireEvent.keyDown(document, { key: "Escape" });
+      assert.equal(nav.closest("[inert]") === null, true);
+    }
+  });
+}
+
+test("choosing the current admin task cancels a pending route without abandoning its data request", async () => {
+  viewport(true);
+  window.history.replaceState(null, "", "/admin");
+  const destinations: string[] = [];
+  const router = routerRecorder(destinations);
+  const guard = createLatestRequestGuard();
+  const unsubscribe = subscribeToRouteTransitionStart(guard.invalidateRequests);
+  try {
+    const frame = (pathname: string) => <Providers pathname={pathname} router={router}><AdminShellHarness /></Providers>;
+    const view = render(frame("/admin"));
+    const isLatestRead = guard.beginRequest();
+    fireEvent.click(screen.getByRole("link", { name: "Door" }));
+    fireEvent.click(screen.getByRole("link", { name: "Roster" }));
+    assert.deepEqual(destinations, ["/door", "/admin?tab=guests&view=list"]);
+    assert.equal(isLatestRead(), true);
+    await waitFor(() => assert.equal(document.querySelector(".route-transition-overlay")?.getAttribute("data-state"), "leaving"));
+    fireEvent.click(screen.getByRole("link", { name: "Roster" }));
+    await waitFor(() => assert.equal(document.querySelector(".route-transition-overlay") === null, true));
+
+    fireEvent.click(screen.getByRole("link", { name: "Door" }));
+    window.history.replaceState(null, "", "/door");
+    view.rerender(frame("/door"));
+    assert.equal(isLatestRead(), false);
+  } finally { unsubscribe(); }
 });

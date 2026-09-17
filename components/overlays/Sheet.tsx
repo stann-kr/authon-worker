@@ -19,6 +19,7 @@ interface SheetProps {
   busy?: boolean;
   dirty?: boolean;
   protectEdits?: boolean;
+  blockDuringRouteTransition?: boolean;
 }
 
 type Control = HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement;
@@ -47,9 +48,11 @@ const inlinePanels = new Set<HTMLElement>();
 
 // The same panel and form stay mounted when the available workspace changes.
 export default function Sheet({ open = true, title, children, onClose, presentation = "modal",
-  wide = false, size = "default", busy = false, dirty = false, protectEdits = false }: SheetProps) {
+  wide = false, size = "default", busy = false, dirty = false, protectEdits = false,
+  blockDuringRouteTransition = true }: SheetProps) {
   const t = useTranslations("Sheet");
-  const transitioning = useIsRouteTransitionActive();
+  const routeTransitionActive = useIsRouteTransitionActive();
+  const transitioning = blockDuringRouteTransition && routeTransitionActive;
   const layerRef = useRef<HTMLDivElement>(null);
   const titleId = useId();
   const panelRef = useRef<HTMLDivElement>(null);
