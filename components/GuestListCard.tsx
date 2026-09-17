@@ -3,7 +3,6 @@ import Button from "./Button";
 import Icon from "./Icon";
 import StatusLabel from "./StatusLabel";
 import ConfirmDialog from "./ConfirmDialog";
-import Sheet from "./overlays/Sheet";
 import { RosterSelection } from "./guests/RosterView";
 import { useTranslations } from "next-intl";
 
@@ -65,7 +64,11 @@ const GuestListCard: React.FC<GuestListCardProps> = ({
   const selection = useContext(RosterSelection);
   const [localDetail, setLocalDetail] = useState(false);
   const isDetailOpen = selection ? selection.selectedId === guest.id : localDetail;
-  const openDetail = () => selection ? selection.select(guest.id) : setLocalDetail(true);
+  const toggleDetail = () => {
+    if (isDeleteLoading) return;
+    if (selection) selection.select(isDetailOpen ? null : guest.id);
+    else setLocalDetail((open) => !open);
+  };
   const closeDetail = () => selection ? selection.select(null) : setLocalDetail(false);
   const [undoConfirmation, setUndoConfirmation] = useState<string | null>(null);
   const [deleteConfirmation, setDeleteConfirmation] = useState<string | null>(null);
@@ -74,6 +77,8 @@ const GuestListCard: React.FC<GuestListCardProps> = ({
   const rowRef = useRef<HTMLElement>(null);
   const restoreFocusAfterDeleteRef = useRef(false);
   const confirmationId = useId();
+  const detailId = useId();
+  const disclosureRef = useRef<HTMLButtonElement>(null);
   const confirmationKey = `${guest.id}:${guest.status}`;
   const isDeleteConfirmOpen = Boolean(
     onDelete &&
@@ -113,10 +118,8 @@ const GuestListCard: React.FC<GuestListCardProps> = ({
   };
   const handleDelete = () => {
     if (!onDelete || !isDeleteConfirmOpen || isDeleteDisabled || isDeleteLoading) return;
-    if (isInlineDeleteOpen) {
-      restoreFocusAfterDeleteRef.current = true;
-      rowRef.current?.focus({ preventScroll: true });
-    }
+    restoreFocusAfterDeleteRef.current = true;
+    rowRef.current?.focus({ preventScroll: true });
     setDeleteConfirmation(null);
     onDelete();
   };
@@ -132,15 +135,18 @@ const GuestListCard: React.FC<GuestListCardProps> = ({
       data-mode={mode}
     >
       <div className="product-guest-line">
-        <button type="button" className="product-guest-identity" onClick={openDetail}
+        {/* A stretched disclosure and separate raised actions avoid nested buttons. */}
+        <button type="button" ref={disclosureRef} className="product-guest-disclosure" onClick={toggleDetail}
           aria-label={[guest.name, djName, registeredByName !== djName ? registeredByName : null].filter(Boolean).join(" ")}
-          aria-haspopup="dialog" aria-expanded={isDetailOpen}>
+          aria-controls={detailId} aria-expanded={isDetailOpen} aria-disabled={isDeleteLoading} />
+        <div className="product-guest-identity">
+          <Icon name="chevron-down" size={16} className="product-guest-chevron" />
           <span className="product-guest-index" aria-hidden="true">{String(index + 1).padStart(2, "0")}</span>
           <span className="product-guest-name">
             <strong>{guest.name}</strong>
             {(djName || registeredByName) && <small>{djName || registeredByName}</small>}
           </span>
-        </button>
+        </div>
 
         <div className="product-guest-actions">
           {guest.status === "pending" && (
@@ -249,14 +255,17 @@ const GuestListCard: React.FC<GuestListCardProps> = ({
           </div>
         </div>
       )}
-    </article>
-      {onUndo && undoConfirmation === confirmationKey && guest.status === "checked" && <ConfirmDialog open
-        title={rosterT("undoTitle")} description={rosterT("undoDescription", { name: guest.name })}
-        confirmLabel={rosterT("undoConfirm")} cancelLabel={t("cancel")} isLoading={isUndoLoading}
-        confirmDisabled={isEntryDisabled}
-        onCancel={() => setUndoConfirmation(null)} onConfirm={() => { if (isEntryDisabled) return; setUndoConfirmation(null); onUndo(); }} />}
-      {isDetailOpen && <Sheet title={guest.name} presentation="detail" onClose={closeDetail} busy={isDeleteLoading}>
-        <StatusLabel tone={guest.status === "checked" ? "checked" : guest.status === "pending" ? "waiting" : "neutral"}>
+      <div id={detailId} className="product-guest-detail" data-open={isDetailOpen}
+        role="region" aria-label={guest.name} aria-hidden={!isDetailOpen} inert={!isDetailOpen}
+        onKeyDown={(event) => {
+          if (event.key !== "Escape" || isDeleteLoading || event.defaultPrevented) return;
+          event.preventDefault();
+          event.stopPropagation();
+          closeDetail();
+          disclosureRef.current?.focus({ preventScroll: true });
+        }}>
+        <div className="product-guest-detail-clip"><div className="product-guest-detail-content">
+        <StatusLabel appearance="inline" tone={guest.status === "checked" ? "checked" : guest.status === "pending" ? "waiting" : "neutral"}>
           {guest.status === "checked" ? t("checkedIn") : guest.status === "pending" ? t("waitingStatus") : t("removed")}
         </StatusLabel>
         <dl className="product-detail-list" aria-label={rosterT("detail")}>
@@ -265,9 +274,7 @@ const GuestListCard: React.FC<GuestListCardProps> = ({
           {showRegisteredAt && guest.createdAt && <div><dt>{t("registered")}</dt><dd><time dateTime={guest.createdAt}>{formatTime(guest.createdAt)}</time></dd></div>}
           {guest.checkInTime && <div><dt>{t("checkedIn")}</dt><dd><time dateTime={guest.checkInTime}>{formatTime(guest.checkInTime)}</time></dd></div>}
         </dl>
-        {guest.status === "pending" && onCheck && <Button variant="confirm" onClick={onCheck} disabled={isEntryDisabled || isDeleteLoading} isLoading={isCheckLoading}>{t("checkIn")}</Button>}
-        {guest.status === "checked" && onUndo && <Button variant="outline" onClick={() => setUndoConfirmation(confirmationKey)} disabled={isEntryDisabled || isDeleteLoading} isLoading={isUndoLoading}>{t("undo")}</Button>}
-        {mode === "operations" && onDelete && guest.status !== "deleted" && <div className="border-t border-border-default pt-4">
+        {mode === "operations" && onDelete && guest.status !== "deleted" && <div className="product-guest-detail-actions">
           <Button ref={deleteTriggerRef} variant="danger" onClick={() => setDeleteConfirmation(confirmationKey)}
             disabled={isDeleteDisabled} isLoading={isDeleteLoading} aria-haspopup="dialog">
             {t("deleteGuest")}
@@ -275,7 +282,14 @@ const GuestListCard: React.FC<GuestListCardProps> = ({
           {deleteError && <p className="mt-2 text-sm text-status-danger" role="alert">{deleteError}</p>}
           {isDeleteDisabled && deleteDisabledReason && <p className="mt-2 text-sm text-text-muted" role="status">{deleteDisabledReason}</p>}
         </div>}
-      </Sheet>}
+        </div></div>
+      </div>
+    </article>
+      {onUndo && undoConfirmation === confirmationKey && guest.status === "checked" && <ConfirmDialog open
+        title={rosterT("undoTitle")} description={rosterT("undoDescription", { name: guest.name })}
+        confirmLabel={rosterT("undoConfirm")} cancelLabel={t("cancel")} isLoading={isUndoLoading}
+        confirmDisabled={isEntryDisabled}
+        onCancel={() => setUndoConfirmation(null)} onConfirm={() => { if (isEntryDisabled) return; setUndoConfirmation(null); onUndo(); }} />}
       {isDeleteConfirmOpen && !isInlineDeleteOpen && (
         <ConfirmDialog
           open

@@ -972,7 +972,7 @@ test("checked guest deletion requires a fresh named dialog after the guest statu
   view.rerender(card("checked"));
   assert.equal(screen.queryByRole("group"), null);
   assert.equal(screen.queryByRole("alertdialog"), null);
-  assert.ok(screen.getByRole("dialog", { name: "Guest A" }));
+  assert.ok(screen.getByRole("region", { name: "Guest A" }));
   fireEvent.click(screen.getByRole("button", { name: messages.Common.deleteGuest }));
   const dialog = screen.getByRole("alertdialog", { name: /Guest A/ });
   const descriptionId = dialog.getAttribute("aria-describedby");
@@ -1370,13 +1370,13 @@ test("roster columns retain search, row identity and open details through resize
     assert.equal(screen.getByRole("article") === row, true);
     assert.equal(input.value, "Guest");
     fireEvent.click(screen.getByRole("button", { name: "Guest One" }));
-    const detail = screen.getByRole("dialog", { name: "Guest One" });
+    const detail = screen.getByRole("region", { name: "Guest One" });
     width = 500; fireEvent(window, new Event("resize"));
-    assert.equal(screen.getByRole("dialog", { name: "Guest One" }) === detail, true);
-    assert.equal(detail.getAttribute("aria-modal"), "true");
+    assert.equal(screen.getByRole("region", { name: "Guest One" }) === detail, true);
+    assert.equal(detail.hasAttribute("aria-modal"), false);
     assert.equal(screen.getByRole("article") === row, true);
     width = 1200; fireEvent(window, new Event("resize"));
-    assert.equal(detail.getAttribute("aria-modal"), "false");
+    assert.equal(detail.hasAttribute("aria-modal"), false);
     assert.equal(screen.getByRole("button", { name: messages.Roster.twoColumns }).getAttribute("aria-pressed"), "true");
     assert.equal(input.value, "Guest");
   } finally { HTMLElement.prototype.getBoundingClientRect = originalRect; window.localStorage.removeItem("workspace:rosterColumns"); }
@@ -1463,10 +1463,10 @@ test("closed entry scope locks row, detail, and an already-open undo confirmatio
   assert.equal(check.hasAttribute("disabled"), true);
   fireEvent.click(check);
   fireEvent.click(screen.getByRole("button", { name: /^Shared guest/ }));
-  const detail = screen.getByRole("dialog", { name: "Shared guest" });
+  const detail = screen.getByRole("region", { name: "Shared guest" });
   assert.equal(within(detail).getByText("Fixture operator").previousElementSibling?.textContent, messages.Roster.operator);
-  assert.equal(within(detail).getByRole("button", { name: messages.Common.checkIn }).hasAttribute("disabled"), true);
-  fireEvent.click(within(detail).getByRole("button", { name: messages.Sheet.close }));
+  assert.equal(screen.getByRole("button", { name: messages.Common.checkIn }).hasAttribute("disabled"), true);
+  fireEvent.click(screen.getByRole("button", { name: /^Shared guest/ }));
   view.rerender(card("checked", false));
   fireEvent.click(screen.getByRole("button", { name: /Undo check-in for/ }));
   view.rerender(card("checked", true));
@@ -1645,7 +1645,7 @@ test("operations deletion is only in guest details, confirms, and restores focus
     assert.equal(document.activeElement === within(confirmation).getByRole("button", { name: messages.Common.cancel }), true);
     fireEvent.keyDown(document, { key: "Escape" });
     await waitFor(() => assert.equal(screen.queryByRole("alertdialog"), null));
-    assert.ok(screen.getByRole("dialog", { name: "Guest One" }));
+    assert.ok(screen.getByRole("region", { name: "Guest One" }));
     assert.equal(document.activeElement === trigger, true);
     fireEvent.click(trigger);
     view.rerender(frame(true));
@@ -1660,4 +1660,34 @@ test("operations deletion is only in guest details, confirms, and restores focus
     assert.equal(calls, 1);
     cleanup();
   }
+});
+
+
+test("guest rows toggle inline details while action buttons stay independent and Escape restores row focus", () => {
+  let checks = 0;
+  render(<NextIntlClientProvider locale="en" messages={messages}>
+    <GuestListCard guest={{ id: "accordion-guest", name: "Accordion guest", status: "pending" }}
+      index={0} mode="operations" onCheck={() => { checks++; }} onDelete={() => {}} />
+  </NextIntlClientProvider>);
+  const row = screen.getByRole("button", { name: "Accordion guest" });
+  const check = screen.getByRole("button", { name: messages.Common.checkIn });
+  assert.equal(row.getAttribute("aria-expanded"), "false");
+  fireEvent.click(check);
+  assert.equal(checks, 1);
+  assert.equal(row.getAttribute("aria-expanded"), "false");
+  fireEvent.click(row);
+  const detail = screen.getByRole("region", { name: "Accordion guest" });
+  assert.equal(row.getAttribute("aria-controls"), detail.id);
+  assert.equal(screen.queryByRole("dialog"), null);
+  assert.notEqual(document.body.style.overflow, "hidden");
+  fireEvent.click(check);
+  assert.equal(checks, 2);
+  assert.equal(row.getAttribute("aria-expanded"), "true");
+  fireEvent.keyDown(within(detail).getByRole("button", { name: messages.Common.deleteGuest }), { key: "Escape" });
+  assert.equal(row.getAttribute("aria-expanded"), "false");
+  assert.equal(document.activeElement === row, true);
+  assert.equal(screen.queryByRole("region", { name: "Accordion guest" }), null);
+  fireEvent.click(row);
+  fireEvent.click(row);
+  assert.equal(row.getAttribute("aria-expanded"), "false");
 });
