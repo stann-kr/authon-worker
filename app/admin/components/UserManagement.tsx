@@ -231,7 +231,7 @@ export default function UserManagement({
       dashboard={
         <>
         {/* Venue selector for super_admin */}
-        {isSuperAdmin && venues.length > 0 && (
+        {activeTab === "users" && isSuperAdmin && venues.length > 0 && (
           <VenueSelector
             venues={venues}
             selectedVenueId={selectedVenueId}
@@ -268,12 +268,6 @@ export default function UserManagement({
         {activeTab === "create" && <div className="record-form"><InviteUser /></div>}
         {activeTab === "users" && (
           <div className="account-directory">
-            <PanelHeader
-              title={t("userList")}
-              count={filteredUsers.length}
-              onRefresh={loadUsers}
-              isLoading={isCurrentScopeLoading}
-            />
             <div className="account-directory-body">
               {loadError && <Alert type="error" message={loadError} className="mb-4" />}
               {scopedFeedback && (
@@ -283,7 +277,7 @@ export default function UserManagement({
                 {scopedFeedback && <Alert type={scopedFeedback.type} message={scopedFeedback.message} />}
                 <div
                   ref={passwordLinkPanelRef}
-                  className="mb-4 border border-status-waiting/70 bg-status-waiting/10 p-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-border-focus"
+                  className="mb-4 border border-status-waiting/70 bg-status-waiting/10 p-4 outline-none"
                   role="region"
                   aria-labelledby="managed-password-link-title"
                   tabIndex={-1}
@@ -404,6 +398,12 @@ export default function UserManagement({
                     <option value="deleted">{t("deletedAccounts")}</option>
                   </select>
                 </div>
+                <PanelHeader
+                  title={t("userList")}
+                  count={filteredUsers.length}
+                  onRefresh={loadUsers}
+                  isLoading={isCurrentScopeLoading}
+                />
               </div>
 
               {listState === "loading" ? (
@@ -801,7 +801,7 @@ export function UserCard({
           {canEditRole && (
             <fieldset>
               <legend className="app-label">{t("accountType")}</legend>
-              <div className="grid grid-cols-2 gap-1">
+              <div className="grid grid-cols-2 gap-3">
                 {(["personal", "shared"] as const).map((accountKind) => (
                   <button
                     key={accountKind}
@@ -835,7 +835,7 @@ export function UserCard({
               <legend className="app-label">
                 {t("role")}
               </legend>
-              <div className="grid grid-cols-2 gap-1">
+              <div className="grid grid-cols-2 gap-3">
                 {editableRoles.map((role) => (
                   <button
                     key={role}
@@ -898,7 +898,7 @@ export function UserCard({
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-2 gap-3">
             <Button
               type="button"
               onClick={handleSave}

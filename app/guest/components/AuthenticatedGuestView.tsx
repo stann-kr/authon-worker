@@ -562,10 +562,7 @@ export default function AuthenticatedGuestView({ user }: AuthenticatedGuestViewP
         guestLimitRequestController.updateRequestDraft({ requestedExtra: "1", requestReason: "" });
       }}
         busy={isLoading || isBulkSubmitting || guestLimitRequestController.isRequestingExtra} protectEdits dirty={Boolean(guestName.trim())}>
-                  <div className="relative flex items-center justify-between gap-4 border-b border-border-subtle px-4 py-3 sm:px-5">
-                    <h2 id="add-guest-title" className="type-panel-title">
-                      {t("addGuest")}
-                    </h2>
+                  <div className="relative flex items-center justify-end border-b border-border-subtle pb-3">
                     <GuestCapacityIndicator
                       label={t("remaining")}
                       remaining={remaining}

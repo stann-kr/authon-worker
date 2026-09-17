@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import Alert from "@/components/Alert";
 import EmptyState from "@/components/EmptyState";
 import PanelHeader from "@/components/PanelHeader";
@@ -24,9 +24,11 @@ const EMPTY_REQUESTS: GuestLimitRequestView[] = [];
 export default function GuestLimitRequestManagement({
   eventId,
   businessDate,
+  scopeSelector,
 }: {
   eventId: string | null;
   businessDate: string;
+  scopeSelector?: (controls: ReactNode) => ReactNode;
 }) {
   const t = useTranslations("GuestLimitAdmin");
   const {
@@ -151,16 +153,18 @@ export default function GuestLimitRequestManagement({
     setBusyId(null);
   };
 
+  const venueControl = isSuperAdmin && venues.length > 0 ? (
+    <VenueSelector
+      venues={venues}
+      selectedVenueId={selectedVenueId}
+      onVenueChange={setSelectedVenueId}
+      className="scope-venue"
+    />
+  ) : null;
+
   return (
     <div className="space-y-4">
-      {isSuperAdmin && venues.length > 0 && (
-        <VenueSelector
-          venues={venues}
-          selectedVenueId={selectedVenueId}
-          onVenueChange={setSelectedVenueId}
-          className="record-scope-selector"
-        />
-      )}
+      {scopeSelector ? scopeSelector(venueControl) : <div className="record-scope-selector">{venueControl}</div>}
       <section className="record-collection" aria-labelledby="guest-limit-requests-title">
         <PanelHeader
           title={t("title")}
@@ -198,7 +202,7 @@ export default function GuestLimitRequestManagement({
                 <p className="mt-3 min-h-5 break-words text-sm text-text-body">
                   {request.reason || t("noReason")}
                 </p>
-                <div className="mt-4 grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto_auto]">
+                <div className="mt-4 grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto_auto]">
                   <div>
                     <label htmlFor={`approved-extra-${request.id}`} className="sr-only">
                       {t("approvedCount")}

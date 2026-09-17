@@ -285,8 +285,8 @@ export default function LinkManagement({
       <div className="min-w-0">
         {activeTab === "create" && (
           <div className="record-form space-y-6">
-            <div className="app-panel p-4 sm:p-6">
-              <h3 className="type-panel-title mb-6">
+            <div className="app-panel record-form-panel">
+              <h3 className="record-form-title">
                 {t("createAccessLink")}
               </h3>
 
@@ -301,24 +301,24 @@ export default function LinkManagement({
 
               <form
                 onSubmit={handleSubmit}
-                className="space-y-4 sm:space-y-6"
+                className="record-form-fields"
                 aria-busy={isGenerating}
               >
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
+                <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
                   <div>
                     <label htmlFor="link-date" className="app-label">
                       {t("date")}
                     </label>
-                    <div className="relative h-[46px] group">
+                    <div className="app-field-frame relative h-[46px]">
                       {/* Mirroring UI Layer */}
                       <div
-                        className={`absolute inset-0 flex items-center justify-between border bg-canvas px-4 py-3 transition-colors pointer-events-none group-focus-within:border-border-focus ${
+                        className={`app-field absolute inset-0 flex items-center justify-between pointer-events-none ${
                           formValidationError?.field === "date"
                             ? "border-status-danger"
-                            : "border-border-strong"
+                            : "border-border-default"
                         }`}
                       >
-                        <span className="text-text-heading text-sm">
+                        <span className="text-base text-text-heading">
                           {formatDateDisplay(formData.date, locale)}
                         </span>
                         <Icon name="calendar" size={18} className="text-text-muted" />
@@ -439,7 +439,7 @@ export default function LinkManagement({
                   }
                 >
                   <legend className="app-label">{t("accessType")}</legend>
-                  <div className="grid gap-2 sm:grid-cols-2">
+                  <div className="grid gap-3 sm:grid-cols-2">
                     {([
                       {
                         value: "contributor",
@@ -454,9 +454,9 @@ export default function LinkManagement({
                     ] as const).map((option, index) => (
                       <label
                         key={option.value}
-                        className={`min-h-20 cursor-pointer border p-3 transition-colors ${
+                        className={`min-h-20 cursor-pointer rounded-control border p-3 transition-colors ${
                           formData.kind === option.value
-                            ? "border-action-primary bg-surface-active"
+                            ? "border-border-strong bg-surface-active"
                             : "border-border-default bg-canvas hover:border-border-strong"
                         }`}
                       >
@@ -479,7 +479,7 @@ export default function LinkManagement({
                                     : formData.contributorId,
                               });
                             }}
-                            className="mt-0.5 h-4 w-4 accent-[var(--action-primary)]"
+                            className="mt-0.5 h-4 w-4 shrink-0 accent-action-primary"
                           />
                           <span>
                             <span className="block text-sm font-semibold text-text-heading">
@@ -618,7 +618,7 @@ export default function LinkManagement({
             {scopedGeneratedLink && (
               <div
                 ref={generatedLinkPanelRef}
-                className="app-panel p-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-border-focus sm:p-6"
+                className="app-panel p-4 outline-none sm:p-6"
                 role="region"
                 aria-labelledby="generated-link-title"
                 aria-describedby="generated-link-summary"
@@ -902,7 +902,7 @@ export default function LinkManagement({
                           </div>
                         )}
 
-                        <div className="mt-3 flex flex-wrap justify-end gap-2">
+                        <div className="mt-3 flex flex-wrap justify-end gap-3">
                           <Button
                             type="button"
                             onClick={() => handleUseAsTemplate(link)}

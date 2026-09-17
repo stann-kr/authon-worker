@@ -50,7 +50,7 @@ export default function LanguageSwitcher({
       <div
         role="group"
         aria-label={t("language")}
-        className="inline-flex border border-border-strong bg-canvas p-0.5"
+        className="inline-flex gap-1 rounded-panel border border-border-default bg-canvas p-1"
       >
         {(["en", "ko"] as const).map((locale) => (
           <button
@@ -61,7 +61,7 @@ export default function LanguageSwitcher({
             onClick={() => changeLocale(locale)}
             className={`${compact ? "min-h-11 px-2 text-xs" : "min-h-11 px-3 text-xs"} font-medium transition-colors disabled:opacity-60 ${
               currentLocale === locale
-                ? "bg-action-primary text-action-text"
+                ? "bg-surface-active text-text-heading"
                 : "text-text-muted hover:bg-surface-hover hover:text-text-heading"
             }`}
           >

@@ -204,7 +204,7 @@ export default function ConfirmDialog({
           </p>
         )}
         {children && <div className="mt-4">{children}</div>}
-        <div className="mt-6 grid grid-cols-1 gap-2 sm:grid-cols-2">
+        <div className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-2">
           <Button
             ref={cancelRef}
             type="button"

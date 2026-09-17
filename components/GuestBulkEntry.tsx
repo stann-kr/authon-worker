@@ -590,7 +590,7 @@ export default function GuestBulkEntry({
               })}
             </ol>
 
-            <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
+            <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-[minmax(0,1fr)_auto]">
               <Button
                 type="button"
                 onClick={handleSubmit}

@@ -325,7 +325,7 @@ export default function PasswordResetRequestManagement({
       <section
         ref={requestsPanelRef}
         tabIndex={-1}
-        className="record-collection focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-border-focus"
+        className="record-collection outline-none"
         aria-labelledby="password-reset-requests-title"
       >
         <PanelHeader
@@ -349,7 +349,7 @@ export default function PasswordResetRequestManagement({
               role="status"
               aria-live="polite"
               aria-atomic="true"
-              className="border border-status-waiting/70 bg-status-waiting/10 p-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-border-focus"
+              className="border border-status-waiting/70 bg-status-waiting/10 p-4 outline-none"
             >
               <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                 <div className="min-w-0">
@@ -447,7 +447,7 @@ export default function PasswordResetRequestManagement({
                           <Alert type="error" message={actionError.message} />
                         </div>
                       )}
-                      <div className="grid grid-cols-2 gap-2">
+                      <div className="grid grid-cols-2 gap-3">
                         <Button
                           ref={rejectCancelRef}
                           size="sm"
@@ -473,7 +473,7 @@ export default function PasswordResetRequestManagement({
                       </div>
                     </div>
                   ) : (
-                    <div className="mt-4 grid grid-cols-2 gap-2">
+                    <div className="mt-4 grid grid-cols-2 gap-3">
                       <Button
                         type="button"
                         size="sm"
@@ -567,7 +567,7 @@ export default function PasswordResetRequestManagement({
             <div
               ref={actionErrorRef}
               id="password-reset-action-error"
-              className="mb-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-border-focus"
+              className="mb-4 outline-none"
               tabIndex={-1}
             >
               <Alert type="error" message={actionError.message} />

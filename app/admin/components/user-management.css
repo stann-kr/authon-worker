@@ -5,9 +5,10 @@
 .account-summary dt { font-size: 12px; color: var(--app-text-muted); }
 .account-summary dd { font-size: 13px; color: var(--app-text); font-variant-numeric: tabular-nums; }
 .account-directory { min-width: 0; }
-.account-directory-body { padding-block: 16px; }
-.account-filters { display: grid; grid-template-columns: minmax(180px, 1fr) minmax(140px, 180px) minmax(140px, 180px); align-items: end; gap: 10px; margin-bottom: 16px; }
+.account-directory-body { min-width: 0; }
+.account-filters { display: grid; grid-template-columns: minmax(180px, 1fr) minmax(140px, 160px) minmax(140px, 160px) auto; align-items: center; gap: 12px; margin-bottom: 12px; }
 .account-filters > div { min-width: 0; }
+.account-filters .collection-heading { border: 0; padding: 0; }
 .account-table { width: 100%; table-layout: fixed; border-collapse: collapse; text-align: left; }
 .account-table th { height: 36px; padding: 6px 12px; border-bottom: 1px solid var(--app-border); font-size: 12px; color: var(--app-text-muted); font-weight: 400; }
 .account-table thead th { position: sticky; top: var(--app-header-height); z-index: 1; background: var(--app-surface); }
@@ -33,7 +34,7 @@
 .account-audit[open] > summary::after { content: "−"; }
 .account-audit > summary span { font-size: 12px; font-variant-numeric: tabular-nums; }
 .account-detail-top { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 16px; }
-.account-detail-status, .account-detail-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.account-detail-status, .account-detail-actions { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
 .account-detail-columns { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 28px; padding-top: 12px; }
 .account-detail-main { min-width: 0; display: grid; gap: 28px; align-content: start; }
 .account-detail-section { min-width: 0; }
@@ -51,9 +52,12 @@
 .account-more-actions summary { display: grid; place-items: center; width: 44px; min-height: 44px; border: 1px solid var(--app-border); border-radius: 8px; cursor: pointer; font-weight: 600; list-style: none; }
 .account-more-actions summary::-webkit-details-marker { display: none; }
 .account-more-actions summary[aria-disabled="true"] { opacity: 0.5; cursor: not-allowed; }
-.account-more-actions > div { position: absolute; z-index: 2; top: calc(100% + 8px); right: 0; display: grid; gap: 6px; width: 190px; padding: 8px; border: 1px solid var(--app-border); border-radius: 8px; background: var(--app-surface-raised); box-shadow: 0 8px 20px rgb(0 0 0 / 0.2); }
+.account-more-actions > div { position: absolute; z-index: 2; top: calc(100% + 8px); right: 0; display: grid; gap: 10px; width: 190px; padding: 8px; border: 1px solid var(--app-border); border-radius: 8px; background: var(--app-surface-raised); box-shadow: 0 8px 20px rgb(0 0 0 / 0.2); }
 .account-editor { display: grid; gap: 18px; width: min(100%, 680px); }
 .account-editor > div:last-child { padding-top: 16px; border-top: 1px solid var(--app-border-subtle); }
+@media (min-width: 768px) {
+  .product-sheet[data-size="record"]:has(.account-editor) { width: min(100%, 760px); }
+}
 @container records (max-width: 959px) {
   .account-table .account-login-cell { display: none; }
 }
@@ -67,6 +71,10 @@
   .account-detail-columns { grid-template-columns: minmax(0, 1fr); }
   .account-basic-information { border-left: 0; border-top: 1px solid var(--app-border-subtle); padding: 20px 0 0; }
   .account-basic-information .account-properties > div { grid-template-columns: minmax(90px, 0.75fr) minmax(0, 1fr); }
+}
+@media (max-width: 1199px) {
+  .account-filters { grid-template-columns: minmax(180px, 1fr) repeat(2, minmax(140px, 180px)); }
+  .account-filters .collection-heading { grid-column: 1 / -1; }
 }
 @media (max-width: 767px) {
   .account-summary { justify-content: flex-start; padding-block: 4px; }

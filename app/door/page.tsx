@@ -363,7 +363,7 @@ function DoorPageContent() {
                     onClick={() => setPrioritizeWaiting((current) => !current)}
                     className={`pressable min-h-11 whitespace-nowrap border px-3 py-2 text-xs font-medium ${
                       prioritizeWaiting
-                        ? "border-action-primary bg-surface-active text-text-heading"
+                        ? "border-border-strong bg-surface-active text-text-heading"
                         : "border-border-default bg-surface-raised text-text-muted hover:border-border-strong hover:text-text-heading"
                     }`}
                   >

@@ -60,17 +60,17 @@ export default function AnalyticsPeriodBar({
       <div className="grid gap-3 xl:grid-cols-[auto_minmax(16rem,1fr)_auto] xl:items-end">
         <fieldset className="min-w-0">
           <legend className="type-context-title">{t("period.granularity")}</legend>
-          <div className="grid grid-cols-3 border border-border-default bg-canvas">
+          <div className="grid grid-cols-3 gap-2">
             {granularities.map((item) => (
               <button
                 key={item}
                 type="button"
                 aria-pressed={granularity === item}
                 onClick={() => onGranularityChange(item)}
-                className={`pressable min-h-11 border-r border-border-default px-3 py-2 text-sm font-medium last:border-r-0 ${
+                className={`pressable min-h-11 rounded-control border px-4 py-2 text-sm font-medium ${
                   granularity === item
-                    ? "bg-action-primary text-action-text"
-                    : "bg-surface-raised text-text-muted hover:bg-surface-hover hover:text-text-heading"
+                    ? "border-border-strong bg-surface-active text-text-heading"
+                    : "border-border-default bg-surface-raised text-text-muted hover:bg-surface-hover hover:text-text-heading"
                 }`}
               >
                 {t(`period.${item}`)}
@@ -81,7 +81,7 @@ export default function AnalyticsPeriodBar({
 
         <div className="min-w-0">
           <span className="type-context-title">{t("period.selected")}</span>
-          <div className="grid grid-cols-[2.75rem_minmax(0,1fr)_2.75rem] border border-border-default bg-canvas">
+          <div className="grid grid-cols-[2.75rem_minmax(0,1fr)_2.75rem] rounded-control border border-border-default bg-canvas">
             <button
               type="button"
               aria-label={t("period.previous")}
@@ -89,7 +89,7 @@ export default function AnalyticsPeriodBar({
               onClick={() =>
                 view && onAnchorDateChange(view.navigation.previousAnchorDate)
               }
-              className="pressable flex min-h-11 items-center justify-center border-r border-border-default text-text-muted hover:bg-surface-hover hover:text-text-heading disabled:opacity-40"
+              className="pressable flex min-h-11 items-center justify-center rounded-none rounded-l-[9px] border-r border-border-default text-text-muted hover:bg-surface-hover hover:text-text-heading disabled:opacity-40"
             >
               <Icon name="chevron-left" size={18} />
             </button>
@@ -111,7 +111,7 @@ export default function AnalyticsPeriodBar({
                 view?.navigation.nextAnchorDate &&
                 onAnchorDateChange(view.navigation.nextAnchorDate)
               }
-              className="pressable flex min-h-11 items-center justify-center border-l border-border-default text-text-muted hover:bg-surface-hover hover:text-text-heading disabled:opacity-40"
+              className="pressable flex min-h-11 items-center justify-center rounded-none rounded-r-[9px] border-l border-border-default text-text-muted hover:bg-surface-hover hover:text-text-heading disabled:opacity-40"
             >
               <Icon name="chevron-right" size={18} />
             </button>

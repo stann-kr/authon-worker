@@ -199,7 +199,7 @@ function AdminPageContent() {
       adminNavigation={{ activeTask, onTaskChange: changeTask,
         disabled: !isRoleReady, pendingPasswordResetCount }}
       actions={contextTasks.length > 0 && activeTask !== "password-requests" ? contextTasks.map((task) => (
-        <WorkspaceAction key={task.id} icon={task.id.endsWith("create") ? "add" : "view"} tone={task.id.endsWith("create") ? "blue" : "muted"}
+        <WorkspaceAction key={task.id} icon={task.id.endsWith("create") ? "add" : "view"} tone={task.id.endsWith("create") ? "accent" : "muted"}
           aria-pressed={activeTask === task.id} disabled={!isRoleReady || isRouteTransitionActive}
           onClick={() => changeTask(task.id)}>{task.label}</WorkspaceAction>
       )) : undefined}>
@@ -226,14 +226,13 @@ function AdminPageContent() {
           id="admin-workspace"
           aria-labelledby="admin-active-task-title"
           tabIndex={-1}
-          className="min-h-0 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-border-focus"
+          className="min-h-0 outline-none"
         >
         <h2 id="admin-active-task-title" className="sr-only">
           {activeTaskLabel}
         </h2>
         {!isRoleReady && <AdminTaskLoading />}
         {isRoleReady && <>
-        {activeTask === "guest-requests" && <div className="mb-4">{eventScopeSelector(null)}</div>}
         {activeTask === "guest-list" && (
           <GuestList scopeSelector={eventScopeSelector}
             selectedDate={selectedDate}
@@ -244,6 +243,7 @@ function AdminPageContent() {
         )}
         {activeTask === "guest-requests" && (
           <GuestLimitRequestManagement
+            scopeSelector={eventScopeSelector}
             eventId={selectedEventId}
             businessDate={selectedDate}
           />

@@ -58,10 +58,10 @@ export default function DatePicker({
         {t("operationalDate")}
       </label>
       <div className="operational-date-layout">
-        <div className="operational-date-field relative h-[46px] min-w-0 flex-1 group">
+        <div className="app-field-frame operational-date-field relative h-[46px] min-w-0 flex-1">
           {/* Mirroring UI Layer: 사용자가 실제로 보게 되는 텍스트와 달력 아이콘 */}
-          <div className="pointer-events-none absolute inset-0 flex items-center justify-between rounded-control border border-border-strong bg-surface-raised px-4 py-3 group-focus-within:border-border-focus">
-            <span className="min-w-0 truncate pr-3 text-sm font-medium text-text-heading">
+          <div className="app-field pointer-events-none absolute inset-0 flex items-center justify-between">
+            <span className="min-w-0 truncate pr-3 text-base text-text-heading">
               {formatDateDisplay(value, locale)}
             </span>
             <Icon name="calendar" size={18} className="text-text-muted" />
@@ -89,7 +89,7 @@ export default function DatePicker({
         <div
           role="group"
           aria-label={t("changeOperationalDate")}
-          className="operational-date-quick grid h-[46px] grid-cols-3 divide-x divide-border-default border border-border-default"
+          className="operational-date-quick grid h-[46px] grid-cols-3"
         >
           <button
             type="button"

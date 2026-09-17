@@ -27,7 +27,7 @@ export default function OperationsLayout({
         variant === "stacked" ? "operations-layout-stacked" : ""
       }`}
     >
-      <div className="min-w-0">
+      <div className="operations-context-container min-w-0">
         {headingLevel !== null && (
           <Heading id={headingId} className="sr-only">{title}</Heading>
         )}

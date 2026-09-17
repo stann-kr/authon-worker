@@ -19,12 +19,12 @@ module.exports = {
           subtle: "var(--app-border-subtle)",
           default: "var(--app-border)",
           strong: "var(--app-border-strong)",
-          focus: "#3b82f6",
+          focus: "var(--app-focus)",
         },
         action: {
-          primary: "#3b82f6",
-          hover: "#60a5fa",
-          text: "#071a31",
+          primary: "rgb(var(--app-action-rgb) / <alpha-value>)",
+          hover: "rgb(var(--app-action-hover-rgb) / <alpha-value>)",
+          text: "var(--app-action-text)",
         },
         status: {
           checked: "#34d399",

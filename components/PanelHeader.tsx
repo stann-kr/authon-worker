@@ -61,7 +61,7 @@ export default function PanelHeader({
         )}
       </Heading>
       {hasButtons && (
-        <div className="flex flex-wrap items-center justify-end gap-2">
+        <div className="flex flex-wrap items-center justify-end gap-3">
           {sortMode !== undefined && onSortToggle && (
             <button
               type="button"

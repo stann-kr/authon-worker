@@ -134,7 +134,7 @@ export default function ProfilePage() {
                   aria-pressed={activeSection === "profile"}
                   className={`min-h-11 rounded-control border px-4 py-3 text-sm font-medium ${
                     activeSection === "profile"
-                      ? "border-action-primary bg-action-primary text-action-text"
+                      ? "border-border-strong bg-surface-active text-text-heading"
                       : "bg-canvas text-text-muted border-border-default hover:text-text-heading hover:border-border-strong"
                   }`}
                 >
@@ -146,7 +146,7 @@ export default function ProfilePage() {
                   aria-pressed={activeSection === "security"}
                   className={`min-h-11 rounded-control border px-4 py-3 text-sm font-medium ${
                     activeSection === "security"
-                      ? "border-action-primary bg-action-primary text-action-text"
+                      ? "border-border-strong bg-surface-active text-text-heading"
                       : "bg-canvas text-text-muted border-border-default hover:text-text-heading hover:border-border-strong"
                   }`}
                 >

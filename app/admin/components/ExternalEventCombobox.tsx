@@ -147,7 +147,7 @@ const ExternalEventCombobox = forwardRef<
         }}
         onKeyDown={handleKeyDown}
         className={`app-field uppercase ${
-          hasError ? "border-status-danger" : "border-border-strong"
+          hasError ? "border-status-danger" : "border-border-default"
         }`}
         placeholder={t("eventName")}
         required
@@ -158,7 +158,7 @@ const ExternalEventCombobox = forwardRef<
           id={listboxId}
           role="listbox"
           aria-label={t("eventSuggestions")}
-          className="absolute z-30 mt-1 max-h-64 w-full overflow-y-auto border border-border-strong bg-surface-raised shadow-lg"
+          className="absolute z-30 mt-1 max-h-64 w-full space-y-1 overflow-y-auto rounded-control border border-border-default bg-surface-raised p-1 shadow-lg"
         >
           {filteredSuggestions.map((suggestion, index) => (
             <li
@@ -171,9 +171,9 @@ const ExternalEventCombobox = forwardRef<
                 event.preventDefault();
                 chooseSuggestion(suggestion);
               }}
-              className={`flex cursor-pointer items-center justify-between gap-3 px-3 py-2.5 text-sm ${
+              className={`flex min-h-11 cursor-pointer items-center justify-between gap-3 rounded-md px-3 py-2.5 text-sm ${
                 index === activeIndex
-                  ? "bg-action-primary text-action-text"
+                  ? "bg-surface-active text-text-heading"
                   : "text-text-heading hover:bg-surface-hover"
               }`}
             >

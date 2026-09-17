@@ -192,13 +192,13 @@ export default function VenueManagement({
       <div className="min-w-0">
         {activeTab === "create" && (
           <div className="record-form space-y-6">
-            <div className="app-panel p-4 sm:p-5">
-              <h3 className="type-section-title mb-4">
+            <div className="app-panel record-form-panel">
+              <h3 className="record-form-title">
                 {t("createNew")}
               </h3>
 
               <form onSubmit={handleCreate} aria-busy={isSubmitting}>
-                <fieldset disabled={isSubmitting} className="space-y-4">
+                <fieldset disabled={isSubmitting} className="record-form-fields">
                 <div>
                   <label htmlFor="venue-create-name" className="app-label">
                     {t("venueName")}
@@ -229,7 +229,7 @@ export default function VenueManagement({
                   <legend className="app-label">
                     {t("type")}
                   </legend>
-                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-5">
+                  <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-5">
                     {VENUE_TYPES.map((opt) => (
                       <button
                         key={opt.value}
@@ -728,7 +728,7 @@ export function VenueCard({
               {venue.openingTime} - {venue.closingTime}
             </p>
           </div>
-          <div className="col-span-full flex flex-wrap gap-2">
+          <div className="col-span-full flex flex-wrap gap-3">
             <Button
               ref={editButtonRef}
               type="button"
@@ -796,7 +796,7 @@ export function VenueCard({
             <legend className="app-label">
               {t("type")}
             </legend>
-            <div className="grid grid-cols-2 gap-1">
+            <div className="grid grid-cols-2 gap-3">
               {VENUE_TYPES.map((opt) => (
                 <button
                   key={opt.value}
@@ -993,7 +993,7 @@ export function VenueCard({
             </select>
           </div>
 
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-2 gap-3">
             <Button
               type="button"
               onClick={handleSave}

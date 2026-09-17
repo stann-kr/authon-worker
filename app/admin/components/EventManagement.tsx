@@ -222,13 +222,12 @@ export default function EventManagement({
       {feedback && <Alert type={feedback.type} message={feedback.message} />}
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
-                        <h3 className="type-row-title break-words">{event.name}</h3>
-                        <p className="mt-1 text-xs text-text-muted">
+                        <p className="text-sm text-text-muted">
                           {t(`state.${event.state}`)} · {event.businessDate}
                         </p>
                       </div>
                       <span className="shrink-0 font-mono text-xs text-text-muted">
-                        {event.capacity ?? "—"}
+                        {t("capacity")} {event.capacity ?? "—"}
                       </span>
                     </div>
                     {(event.doorOpensAt || event.guestCutoffAt) && (
@@ -248,7 +247,7 @@ export default function EventManagement({
                           : "—"}
                       </p>
                     )}
-                    <div className="mt-4 flex flex-wrap gap-2">
+                    <div className="mt-4 flex flex-wrap gap-3">
                       <button
                         type="button"
                         aria-pressed={isSelected}
@@ -256,7 +255,7 @@ export default function EventManagement({
                         disabled={Boolean(busyId)}
                         className={`min-h-11 border px-3 py-2 text-xs font-semibold ${
                           isSelected
-                            ? "border-action-primary bg-surface-active text-text-heading"
+                            ? "border-border-strong bg-surface-active text-text-heading"
                             : "border-border-default bg-surface-raised text-text-body"
                         }`}
                       >
@@ -321,7 +320,7 @@ export default function EventManagement({
                         <p className="text-sm text-text-muted">
                           {t(`transitionConfirm.${eventTransition.nextState}`)}
                         </p>
-                        <div className="mt-2 flex flex-wrap gap-2">
+                        <div className="mt-2 flex flex-wrap gap-3">
                           <button
                             ref={cancelTransitionRef}
                             type="button"
@@ -398,7 +397,7 @@ export default function EventManagement({
         setCreateOpen(false); setName(""); setCapacity(""); setTargetGuests(""); setTemplateSourceEventId(null);
       }} dirty={Boolean(name || capacity || targetGuests)} busy={Boolean(busyId)}>
         {feedback && <Alert type={feedback.type} message={feedback.message} />}
-        <form onSubmit={submit} className="p-4 sm:p-5">
+        <form onSubmit={submit}>
           <fieldset disabled={Boolean(busyId) || !venueId} className="grid gap-4">
             <div>
               <label htmlFor="event-name" className="app-label">{t("name")}</label>
