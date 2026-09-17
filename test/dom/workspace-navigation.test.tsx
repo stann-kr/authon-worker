@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
 import { afterEach, test } from "node:test";
-import { useState, type ReactNode } from "react";
+import { useLayoutEffect, useState, type ReactNode } from "react";
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { hydrateRoot } from "react-dom/client";
+import { renderToString } from "react-dom/server";
 import { NextIntlClientProvider } from "next-intl";
 import { PathnameContext } from "next/dist/shared/lib/hooks-client-context.shared-runtime";
 import { RouterContext } from "next/dist/shared/lib/router-context.shared-runtime";
@@ -402,4 +404,66 @@ test("choosing the current admin task cancels a pending route without abandoning
     view.rerender(frame("/door"));
     assert.equal(isLatestRead(), false);
   } finally { unsubscribe(); }
+});
+
+
+test("authenticated server output stays on loading until home and the matching navigation hydrate together", async () => {
+  for (const desktop of [true, false]) {
+    viewport(desktop);
+    window.localStorage.setItem("workspace:sidebarCollapsed", "true");
+    const commits: { sidebar: boolean; dock: boolean; collapsed: boolean }[] = [];
+    function ContentProbe() {
+      useLayoutEffect(() => {
+        // Record the frame at the first animation opportunity, after layout effects.
+        const frame = requestAnimationFrame(() => commits.push({
+          sidebar: Boolean(document.querySelector(".workspace-sidebar")),
+          dock: Boolean(document.querySelector(".workspace-dock")),
+          collapsed: document.querySelector(".workspace-shell")?.getAttribute("data-sidebar-collapsed") === "true",
+        }));
+        return () => cancelAnimationFrame(frame);
+      }, []);
+      return <h1>Home ready</h1>;
+    }
+    const frame = <Providers pathname="/"><AuthSessionProvider initialUser={{
+      id: "operator", name: "Operator", email: "operator@example.test", role: "venue_admin",
+      account_kind: "personal", door_access_enabled: false, guest_limit: null,
+    }}><WorkspaceShell><ContentProbe /></WorkspaceShell></AuthSessionProvider></Providers>;
+    const container = document.createElement("div");
+    container.innerHTML = renderToString(frame);
+    document.body.append(container);
+    assert.equal(within(container).getByRole("status").textContent, messages.Common.loading);
+    assert.equal(within(container).queryByRole("heading", { name: "Home ready" }) === null, true);
+    assert.equal(within(container).queryByRole("navigation") === null, true);
+    assert.equal(within(container).getByRole("main").getAttribute("aria-busy"), "true");
+    const errors: unknown[] = [];
+    let root: ReturnType<typeof hydrateRoot> | undefined;
+    try {
+      await act(async () => { root = hydrateRoot(container, frame, { onRecoverableError: error => errors.push(error) }); });
+      await waitFor(() => assert.equal(commits.length, 1));
+      assert.deepEqual(commits, [{ sidebar: desktop, dock: !desktop, collapsed: true }]);
+      assert.deepEqual(errors, []);
+      assert.ok(within(container).getByRole("heading", { name: "Home ready" }));
+      assert.ok(within(container).getByRole("navigation", { name: messages.Workspace.navigation }));
+      assert.equal(within(container).queryByRole("status") === null, true);
+      assert.equal(within(container).getAllByRole("main").length, 1);
+    } finally {
+      await act(async () => root?.unmount());
+      container.remove();
+    }
+  }
+});
+
+test("blocked preference storage cannot keep the authenticated workspace on the loading screen", () => {
+  viewport(true);
+  const original = window.Storage.prototype.getItem;
+  window.Storage.prototype.getItem = () => { throw new Error("Storage unavailable"); };
+  try {
+    render(<Providers pathname="/"><AuthSessionProvider initialUser={{
+      id: "operator", name: "Operator", email: "operator@example.test", role: "door_staff",
+      account_kind: "personal", door_access_enabled: false, guest_limit: null,
+    }}><WorkspaceShell><h1>Home ready</h1></WorkspaceShell></AuthSessionProvider></Providers>);
+    assert.ok(screen.getByRole("heading", { name: "Home ready" }));
+    assert.ok(screen.getByRole("navigation", { name: messages.Workspace.navigation }));
+    assert.equal(screen.queryByRole("status") === null, true);
+  } finally { window.Storage.prototype.getItem = original; }
 });

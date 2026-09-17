@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useLayoutEffect, useRef, useState, type MouseEvent, type ReactNode } from "react";
+import { useLayoutEffect, useRef, useState, type MouseEvent, type ReactNode } from "react";
 import { usePathname } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { useAuthSession } from "@/components/AuthSessionProvider";
@@ -10,6 +10,7 @@ import TransitionLink from "@/components/TransitionLink";
 import LogoutControl from "@/components/LogoutControl";
 import RoleLabel from "@/components/RoleLabel";
 import Footer from "@/components/Footer";
+import Spinner from "@/components/Spinner";
 import Icon from "@/components/Icon";
 import Sheet from "@/components/overlays/Sheet";
 import WorkspaceNavigation from "./workspace/WorkspaceNavigation";
@@ -37,7 +38,23 @@ const widthClasses = {
   narrow: "max-w-[1040px]",
 } as const;
 
-export default function WorkspaceShell({
+export default function WorkspaceShell(props: WorkspaceShellProps) {
+  const { user } = useAuthSession();
+  const t = useTranslations("Common");
+  const [hydrated, setHydrated] = useState(false);
+  useLayoutEffect(() => { setHydrated(true); }, []);
+
+  // The authenticated frame needs viewport and saved navigation preferences.
+  // Keep the server output and first client render on the same loading screen.
+  if (user && !hydrated) {
+    return <main id="main-content" tabIndex={-1} aria-busy="true">
+      <Spinner mode="fullscreen" text={t("loading")} />
+    </main>;
+  }
+  return <ReadyWorkspaceShell {...props} />;
+}
+
+function ReadyWorkspaceShell({
   children,
   width = "default",
   contentClassName = "",
@@ -54,7 +71,7 @@ export default function WorkspaceShell({
   const { isRouteTransitionActive } = useRouteTransition();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
-  useEffect(() => {
+  useLayoutEffect(() => {
     try { setSidebarCollapsed(window.localStorage.getItem("workspace:sidebarCollapsed") === "true"); } catch { /* Optional preference. */ }
   }, []);
   const toggleSidebar = () => {
