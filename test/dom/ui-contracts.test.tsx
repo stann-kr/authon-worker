@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import { registerHooks } from "node:module";
 import { afterEach, test } from "node:test";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { hydrateRoot } from "react-dom/client";
+import { renderToString } from "react-dom/server";
 import { NextIntlClientProvider } from "next-intl";
 import {
   act,
@@ -34,7 +36,7 @@ import {
 } from "@/components/RouteTransitionProvider";
 import useMobileDockInset from "@/app/door/components/useMobileDockInset";
 import { EMPTY_ANALYTICS_DTO_FIXTURE } from "@/lib/analytics/test-fixtures";
-import { useLatestRef } from "@/lib/hooks";
+import { useLatestRef, useLocalStorage } from "@/lib/hooks";
 import messages from "@/messages/en.json";
 
 if (!window.requestAnimationFrame) {
@@ -45,6 +47,37 @@ if (!window.requestAnimationFrame) {
 afterEach(() => {
   cleanup();
   document.getElementById("main-content")?.removeAttribute("inert");
+});
+
+test("saved workspace preferences restore without replacing server-rendered controls", async () => {
+  const key = "test:workspace-hydration";
+  window.localStorage.removeItem(key);
+  function Harness() {
+    const [venue, setVenue] = useLocalStorage(key, "");
+    return <button onClick={() => setVenue((current) => `${current}-next`)}>{venue || "Choose venue"}</button>;
+  }
+  const container = document.createElement("div");
+  container.innerHTML = renderToString(<Harness />);
+  const originalButton = container.querySelector("button");
+  document.body.append(container);
+  window.localStorage.setItem(key, JSON.stringify("saved-venue"));
+  const errors: unknown[] = [];
+  let root: ReturnType<typeof hydrateRoot> | undefined;
+  try {
+    await act(async () => {
+      root = hydrateRoot(container, <Harness />, { onRecoverableError: (error) => errors.push(error) });
+    });
+    assert.deepEqual(errors, []);
+    const restored = within(container).getByRole("button", { name: "saved-venue" });
+    assert.equal(restored, originalButton);
+    fireEvent.click(restored);
+    assert.equal(restored.textContent, "saved-venue-next");
+    assert.equal(JSON.parse(window.localStorage.getItem(key)!), "saved-venue-next");
+  } finally {
+    await act(async () => root?.unmount());
+    container.remove();
+    window.localStorage.removeItem(key);
+  }
 });
 
 test("event selection, scope sheet reopening and parent renders reuse the loaded event list", async () => {

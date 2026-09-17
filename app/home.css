@@ -1,5 +1,5 @@
 .home-page { padding-bottom: 40px; }
-.home-overview { width: 100%; max-width: 1360px; min-width: 0; }
+.home-overview { width: 100%; max-width: 1360px; min-width: 0; margin-inline: auto; }
 .home-heading { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 20px; padding: 8px 0 32px; }
 .home-brand { margin-bottom: 8px; color: var(--app-text-muted); font-size: 12px; font-weight: 500; }
 .home-heading h1 { color: var(--app-text); font-size: 30px; line-height: 1.25; font-weight: 600; letter-spacing: -0.8px; }

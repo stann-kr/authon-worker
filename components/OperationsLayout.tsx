@@ -8,6 +8,7 @@ interface OperationsLayoutProps {
   headingLevel?: 1 | 2 | 3 | null;
   headingId?: string;
   contextClassName?: string;
+  width?: "full" | "form";
 }
 
 export default function OperationsLayout({
@@ -18,12 +19,13 @@ export default function OperationsLayout({
   headingLevel = 1,
   headingId,
   contextClassName = "",
+  width = "full",
 }: OperationsLayoutProps) {
   const Heading =
     headingLevel === 1 ? "h1" : headingLevel === 2 ? "h2" : "h3";
   return (
     <div
-      className={`operations-layout ${
+      className={`operations-layout ${width === "form" ? "operations-layout-form" : ""} ${
         variant === "stacked" ? "operations-layout-stacked" : ""
       }`}
     >

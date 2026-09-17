@@ -50,6 +50,7 @@ export function RouteTransitionProvider({ children }: { children: ReactNode }) {
   const completionTimerRef = useRef<number | null>(null);
   const exitTimerRef = useRef<number | null>(null);
   const safetyTimerRef = useRef<number | null>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
   const overlayRef = useRef<HTMLDivElement>(null);
   const shouldRestoreFocusRef = useRef(false);
   const requestedFocusRef = useRef<{
@@ -290,6 +291,41 @@ export function RouteTransitionProvider({ children }: { children: ReactNode }) {
     }
   }, [phase, scheduleFocusRestore]);
 
+  useLayoutEffect(() => {
+    if (phase === "idle") return;
+    const overlay = overlayRef.current;
+    const content = contentRef.current;
+    if (!overlay || !content) return;
+    let observedHeader: HTMLElement | null = null;
+    const updateBounds = () => {
+      const header = content.querySelector<HTMLElement>(".workspace-header");
+      if (header !== observedHeader) {
+        resizeObserver?.disconnect();
+        if (header) resizeObserver?.observe(header);
+        observedHeader = header;
+      }
+      const bounds = header?.getBoundingClientRect();
+      overlay.style.setProperty("--route-content-left", `${Math.max(0, bounds?.left ?? 0)}px`);
+      overlay.style.setProperty("--route-content-top", `${Math.max(0, bounds?.bottom ?? 0)}px`);
+    };
+    const resizeObserver = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(updateBounds);
+    // The loading shell can be replaced before a saved sidebar preference is restored.
+    const contentObserver = new MutationObserver(updateBounds);
+    contentObserver.observe(content, {
+      childList: true,
+      subtree: true,
+      attributes: true,
+      attributeFilter: ["data-sidebar-collapsed"],
+    });
+    updateBounds();
+    window.addEventListener("resize", updateBounds);
+    return () => {
+      contentObserver.disconnect();
+      resizeObserver?.disconnect();
+      window.removeEventListener("resize", updateBounds);
+    };
+  }, [phase, pathname]);
+
   return (
     <RouteTransitionContext.Provider
       value={{
@@ -300,6 +336,7 @@ export function RouteTransitionProvider({ children }: { children: ReactNode }) {
       }}
     >
       <div
+        ref={contentRef}
         className="contents"
         inert={phase !== "idle" ? true : undefined}
         aria-hidden={phase !== "idle" || undefined}

@@ -225,6 +225,7 @@ export default function UserManagement({
     <>
     <OperationsLayout
       variant="stacked"
+      width={activeTab === "create" ? "form" : "full"}
       contextClassName="account-context"
       title={t("title")}
       headingLevel={null}

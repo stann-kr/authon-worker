@@ -16,7 +16,7 @@
 .record-value { font-size: 12px; font-variant-numeric: tabular-nums; color: var(--app-text-muted); }
 .record-status { border-radius: 99px; background: var(--app-surface-raised); padding: 4px 10px; font-size: 12px; font-weight: 500; text-align: center; }
 .record-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
-.record-form { width: 100%; max-width: 760px; margin-inline: 0; }
+.record-form { width: 100%; max-width: 760px; margin-inline: auto; }
 .record-form-panel { padding: 20px; }
 .record-form-title { margin-bottom: 20px; font-size: 16px; line-height: 24px; font-weight: 500; color: var(--app-text); }
 .record-form-fields { display: grid; gap: 20px; }

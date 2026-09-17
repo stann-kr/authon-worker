@@ -68,7 +68,7 @@ export default function PanelHeader({
               onClick={onSortToggle}
               aria-pressed={sortMode === "alpha"}
               aria-label={sortMode === "alpha" ? t("sortByCreationTime") : t("sortAlphabetically")}
-              className="pressable min-h-11 touch-manipulation whitespace-nowrap rounded-control border border-border-default bg-surface-raised px-3 py-2 text-center text-xs font-medium text-text-muted hover:border-border-strong hover:text-text-heading"
+              className="collection-sort-button pressable min-h-11 touch-manipulation whitespace-nowrap rounded-control border border-border-default bg-surface-raised px-3 py-2 text-center text-xs font-medium text-text-muted hover:border-border-strong hover:text-text-heading"
             >
               {sortMode === "alpha" ? "A-Z" : t("created")}
             </button>
@@ -79,10 +79,12 @@ export default function PanelHeader({
               type="button"
               onClick={onRefresh}
               disabled={isLoading}
-              className="pressable flex min-h-11 touch-manipulation items-center justify-center gap-1.5 rounded-control border border-border-default bg-surface-raised px-3 py-2 text-xs font-medium text-text-muted hover:border-border-strong hover:text-text-heading disabled:opacity-50"
+              aria-label={t("refresh")}
+              title={t("refresh")}
+              className="collection-refresh-button pressable flex min-h-11 touch-manipulation items-center justify-center gap-1.5 rounded-control border border-border-default bg-surface-raised px-3 py-2 text-xs font-medium text-text-muted hover:border-border-strong hover:text-text-heading disabled:opacity-50"
             >
               <Icon name="refresh" size={16} className={isLoading ? "animate-spin" : ""} />
-              {t("refresh")}
+              <span className="collection-refresh-label">{t("refresh")}</span>
             </button>
           )}
         </div>

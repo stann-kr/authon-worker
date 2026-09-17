@@ -205,6 +205,7 @@ export default function LinkManagement({
     <>
       <OperationsLayout
         variant="stacked"
+        width={activeTab === "create" ? "form" : "full"}
         title={t("title")}
         headingLevel={null}
         dashboard={

@@ -143,6 +143,7 @@ export default function VenueManagement({
   return (
     <OperationsLayout
       variant="stacked"
+      width={activeTab === "create" ? "form" : "full"}
       title={t("title")}
       headingLevel={null}
       dashboard={

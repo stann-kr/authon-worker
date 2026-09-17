@@ -61,7 +61,7 @@ textarea {
 
 .route-transition-overlay {
   position: fixed;
-  inset: var(--app-header-height) 0 0;
+  inset: var(--route-content-top, 0px) 0 0 var(--route-content-left, 0px);
   z-index: var(--app-z-route-overlay);
   background: var(--app-canvas);
   opacity: 1;
