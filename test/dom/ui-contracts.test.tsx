@@ -1338,6 +1338,12 @@ test("mobile roster expands search with two-step Escape and keeps owner filterin
   const search = screen.getByRole("searchbox") as HTMLInputElement;
   assert.equal(document.activeElement, search);
   fireEvent.change(search, { target: { value: "Guest" } });
+  const clearSearch = screen.getByRole("button", { name: messages.Common.clearSearch });
+  clearSearch.focus();
+  fireEvent.click(clearSearch);
+  assert.equal(search.value, "");
+  assert.equal(document.activeElement, search);
+  fireEvent.change(search, { target: { value: "Guest" } });
   fireEvent.keyDown(search, { key: "Escape", isComposing: true });
   assert.equal(search.value, "Guest");
   fireEvent.keyDown(search, { key: "Escape" });

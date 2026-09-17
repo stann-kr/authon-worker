@@ -92,7 +92,8 @@
 @media (min-width: 1000px) {
   .product-roster-controls[data-wide="true"] { align-items: center; gap: 16px; padding-block: 16px; }
   .product-roster-controls[data-wide="true"] .app-field { height: var(--workspace-control-height); min-height: var(--workspace-control-height); padding-block: 0; border-radius: 8px; font-size: 13px; }
-  .product-roster-controls[data-wide="true"] .guest-search-input { padding-right: 40px; }
+  .product-roster-controls[data-wide="true"] .guest-search-input { padding-right: calc(var(--workspace-control-height) + 8px); }
+  .product-roster-controls[data-wide="true"] .guest-search-clear { width: var(--workspace-control-height); min-width: var(--workspace-control-height); min-height: var(--workspace-control-height); }
   .product-roster-controls[data-wide="true"] .product-roster-filters { gap: 8px; }
   .product-roster-controls[data-wide="true"] .product-roster-filters button { min-height: var(--workspace-control-height); padding: 8px 10px; border-bottom: 2px solid transparent; border-radius: 0; background: transparent; }
   .product-roster-controls[data-wide="true"] .product-roster-filters button[aria-pressed="true"] { border-bottom-color: var(--app-action); color: var(--app-text); }

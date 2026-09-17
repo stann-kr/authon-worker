@@ -64,6 +64,7 @@ textarea {
   inset: var(--route-content-top, 0px) 0 0 var(--route-content-left, 0px);
   z-index: var(--app-z-route-overlay);
   background: var(--app-canvas);
+  outline: none;
   opacity: 1;
   transition: opacity var(--app-duration-fast) var(--app-ease-out);
 }

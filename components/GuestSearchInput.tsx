@@ -57,8 +57,11 @@ const GuestSearchInput: React.FC<GuestSearchInputProps> = ({
         {value && (
           <button
             type="button"
-            onClick={() => onChange("")}
-            className="pressable absolute inset-y-0 right-0 flex min-h-11 w-11 touch-manipulation items-center justify-center rounded-control text-text-muted hover:bg-surface-hover hover:text-text-heading"
+            onClick={() => {
+              onChange("");
+              document.getElementById(inputId)?.focus();
+            }}
+            className="guest-search-clear pressable absolute inset-y-0 right-0 flex min-h-11 w-11 touch-manipulation items-center justify-center rounded-control text-text-muted hover:bg-surface-hover hover:text-text-heading"
             aria-label={t("clearSearch")}
           >
             <Icon name="close" size={16} />

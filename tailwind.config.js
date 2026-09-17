@@ -8,6 +8,7 @@ module.exports = {
     extend: {
       colors: {
         canvas: "var(--app-canvas)",
+        focus: "var(--app-focus)",
         surface: {
           DEFAULT: "var(--app-surface)",
           raised: "var(--app-surface-raised)",

@@ -606,7 +606,7 @@ export default function PasswordResetRequestManagement({
                         }}
                         required
                         disabled={busyRequestId === pendingAction.request.id}
-                        className="mt-1"
+                        className="mt-1 accent-action-primary"
                       />
                       <span className="text-sm text-text-body">
                         {t(`verification_${method}`)}
@@ -674,7 +674,7 @@ export default function PasswordResetRequestManagement({
                     setActionError(null);
                   }}
                   disabled={busyRequestId === pendingAction.request.id}
-                  className="mt-1"
+                  className="mt-1 accent-action-primary"
                   aria-describedby={
                     actionError?.focusTarget === "verification-attestation"
                       ? "password-reset-action-error"

@@ -350,7 +350,7 @@ export default function InviteUser() {
                 onChange={(event) =>
                   setFormData({ ...formData, door_access_enabled: event.target.checked })
                 }
-                className="mt-0.5 h-4 w-4"
+                className="mt-0.5 h-4 w-4 accent-action-primary"
                 autoComplete="off"
               />
               <span>

@@ -869,7 +869,7 @@ export function UserCard({
                   setEditData({ ...editData, doorAccessEnabled: event.target.checked })
                 }
                 disabled={actionsDisabled}
-                className="mt-0.5 h-4 w-4"
+                className="mt-0.5 h-4 w-4 accent-action-primary"
                 autoComplete="off"
               />
               <span className="text-sm text-text-heading">{t("doorAccess")}</span>

@@ -32,7 +32,7 @@
 
 @media (min-width: 1000px) {
   .workspace-shell .operations-scope { gap: 12px 20px; padding: 12px 16px; border: 1px solid var(--app-border-subtle); border-radius: 12px; background: var(--app-surface-secondary); }
-  .workspace-shell .operations-scope > .operational-date-control { flex: 0 0 304px; }
+  .workspace-shell .operations-scope > .operational-date-control { flex: 0 0 320px; }
   .workspace-shell .operations-scope > .scope-venue { flex: 0 1 184px; }
   .workspace-shell .operations-scope > .venue-selector { flex: 0 1 184px; }
   .workspace-shell .operations-scope > .context-filter-grid { flex: 1 1 200px; }
@@ -52,6 +52,7 @@
   .operations-layout-form .operations-scope > .context-filter-grid { flex-basis: 180px; }
 }
 @media (min-width: 1000px) and (hover: hover) and (pointer: fine) {
+  .workspace-shell .operations-scope > .operational-date-control { flex-basis: 304px; }
   .workspace-shell .operational-date-control[data-compact="true"] .operational-date-quick { grid-template-columns: 36px 44px 36px; }
   .workspace-shell .operational-date-control[data-compact="true"] .operational-date-quick > button { min-width: 36px; }
   .workspace-shell .operations-scope .app-field:hover,
