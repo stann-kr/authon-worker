@@ -91,7 +91,13 @@ function ReadyWorkspaceShell({
     measure();
     const observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(measure);
     observer?.observe(header);
-    return () => observer?.disconnect();
+    window.addEventListener("resize", measure);
+    window.visualViewport?.addEventListener("resize", measure);
+    return () => {
+      observer?.disconnect();
+      window.removeEventListener("resize", measure);
+      window.visualViewport?.removeEventListener("resize", measure);
+    };
   }, []);
   const items = user ? getWorkspaceItems({
     role: user.role,

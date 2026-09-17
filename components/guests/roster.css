@@ -3,7 +3,7 @@
 .product-roster-quota > div { display: flex; align-items: baseline; gap: 5px; min-width: 0; }
 .product-roster-quota dt { color: var(--app-text-muted); font-size: 12px; line-height: 1.5; }
 .product-roster-quota dd { font-size: 16px; line-height: 1.5; font-weight: 500; font-variant-numeric: tabular-nums; }
-.product-roster-controls { position: sticky; top: var(--app-header-height); z-index: 2; display: grid; gap: 12px; padding-block: 12px; border-bottom: 1px solid var(--app-border-subtle); background: var(--app-canvas); }
+.product-roster-controls { position: sticky; top: calc(var(--app-header-height) + var(--workspace-header-edge, 0px)); z-index: 2; display: grid; gap: 12px; padding-block: 12px; border-bottom: 1px solid var(--app-border-subtle); background: var(--app-canvas); }
 .product-roster-controls[data-wide="true"] { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "tools tools" "summary options"; }
 .product-roster-controls[data-wide="true"] .product-roster-tools { grid-area: tools; }
 .product-roster-controls[data-wide="true"] .product-roster-summary { grid-area: summary; }

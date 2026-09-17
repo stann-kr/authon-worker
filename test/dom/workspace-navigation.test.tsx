@@ -91,7 +91,7 @@ test("all existing admin tasks select a real destination, including create and l
   ];
   for (const [task, id] of cases) {
     assert.equal(getWorkspaceActiveId("/admin", task, items), id);
-    assert.ok(getWorkspacePrimaryItems(items, id).some((item) => item.id === id));
+    assert.equal(getWorkspacePrimaryItems(items, id).some((item) => item.id === id), id !== "events");
   }
   assert.equal(getWorkspaceActiveId("/guest", undefined, items), "guest");
   assert.equal(getWorkspaceActiveId("/profile", undefined, items), "profile");
@@ -206,10 +206,10 @@ test("mobile scope choices retain their owner state when the controls move betwe
 
 test("workspace menu and navigation respect the busy lock", () => {
   viewport(false);
-  render(<Providers><MenuHarness disabled /></Providers>);
+  render(<Providers><MenuHarness initial="door" disabled /></Providers>);
   assert.equal((screen.getByRole("button", { name: "All menus" }) as HTMLButtonElement).disabled, true);
-  fireEvent.click(screen.getByRole("link", { name: messages.Workspace.door }));
-  assert.equal(screen.getByRole("link", { name: messages.Workspace.events }).getAttribute("aria-current"), "page");
+  fireEvent.click(screen.getByRole("link", { name: messages.Workspace.myRoster }));
+  assert.equal(screen.getByRole("link", { name: messages.Workspace.door }).getAttribute("aria-current"), "page");
 });
 
 function AdminShellHarness({ loading = false, capture }: {
@@ -466,4 +466,98 @@ test("blocked preference storage cannot keep the authenticated workspace on the 
     assert.ok(screen.getByRole("navigation", { name: messages.Workspace.navigation }));
     assert.equal(screen.queryByRole("status") === null, true);
   } finally { window.Storage.prototype.getItem = original; }
+});
+
+
+test("Events stays out of the mobile dock even while active and remains in the full menu", () => {
+  viewport(false);
+  render(<Providers><MenuHarness initial="events" /></Providers>);
+  const dock = screen.getByRole("navigation", { name: messages.Workspace.navigation });
+  assert.equal(within(dock).queryByRole("link", { name: messages.Workspace.events }) === null, true);
+  fireEvent.click(screen.getByRole("button", { name: messages.Workspace.allMenu }));
+  const events = within(screen.getByRole("dialog")).getByRole("link", { name: messages.Workspace.events });
+  assert.equal(events.getAttribute("aria-current"), "page");
+  fireEvent.click(events);
+  assert.equal(screen.queryByRole("dialog") === null, true);
+  assert.equal(screen.queryByRole("link", { name: messages.Workspace.events }) === null, true);
+});
+
+test("pointer menu dismissal keeps its modal owner until exit and releases it after interrupted reopening", async () => {
+  viewport(false);
+  render(<Providers><MenuHarness initial="door" /></Providers>);
+  const trigger = screen.getByRole("button", { name: messages.Workspace.allMenu });
+  trigger.focus();
+  fireEvent.click(trigger, { detail: 1 });
+  const panel = screen.getByRole("dialog");
+  fireEvent.click(within(panel).getByRole("button", { name: messages.Workspace.close }), { detail: 1 });
+  assert.equal(panel.isConnected, true);
+  assert.equal(document.querySelector(".workspace-shell")?.hasAttribute("inert"), true);
+  fireEvent.click(trigger, { detail: 1 });
+  assert.equal(screen.getByRole("dialog") === panel, true);
+  await act(async () => { await new Promise(resolve => setTimeout(resolve, 240)); });
+  assert.equal(screen.getByRole("dialog") === panel, true);
+  fireEvent.keyDown(document, { key: "Escape" });
+  assert.equal(panel.isConnected, false);
+  assert.equal(document.querySelector(".workspace-shell")?.hasAttribute("inert"), false);
+  assert.equal(document.activeElement === trigger, true);
+  fireEvent.click(trigger, { detail: 1 });
+  fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: messages.Workspace.close }), { detail: 1 });
+  await waitFor(() => assert.equal(document.querySelector(".workspace-menu-panel") === null, true));
+  assert.equal(document.querySelector(".workspace-shell")?.hasAttribute("inert"), false);
+  assert.equal(document.activeElement === trigger, true);
+});
+
+test("menu reduced-motion dismissal releases focus and scroll immediately", () => {
+  viewport(false);
+  const media = window.matchMedia;
+  window.matchMedia = query => query === "(prefers-reduced-motion: reduce)" ? { ...media(query), matches: true } : media(query);
+  render(<Providers><MenuHarness /></Providers>);
+  const trigger = screen.getByRole("button", { name: messages.Workspace.allMenu });
+  trigger.focus(); fireEvent.click(trigger, { detail: 1 });
+  fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: messages.Workspace.close }), { detail: 1 });
+  assert.equal(screen.queryByRole("dialog") === null, true);
+  assert.equal(document.querySelector(".workspace-menu-panel") === null, true);
+  assert.equal(document.querySelector(".workspace-shell")?.hasAttribute("inert"), false);
+  assert.equal(document.activeElement === trigger, true);
+});
+
+test("header measurements follow viewport changes without requiring ResizeObserver", () => {
+  viewport(false);
+  const originalRect = HTMLElement.prototype.getBoundingClientRect;
+  let height = 74;
+  HTMLElement.prototype.getBoundingClientRect = function () {
+    return this.classList.contains("workspace-header")
+      ? { ...originalRect.call(this), height } as DOMRect : originalRect.call(this);
+  };
+  try {
+    render(<Providers><AdminShellHarness /></Providers>);
+    const shell = document.querySelector<HTMLElement>(".workspace-shell")!;
+    assert.equal(shell.style.getPropertyValue("--app-header-height"), "74px");
+    height = 106;
+    act(() => window.dispatchEvent(new Event("resize")));
+    assert.equal(shell.style.getPropertyValue("--app-header-height"), "106px");
+  } finally { HTMLElement.prototype.getBoundingClientRect = originalRect; }
+});
+
+
+test("revealing a mobile destination scrolls only the pill row", () => {
+  viewport(false);
+  const originalRect = HTMLElement.prototype.getBoundingClientRect;
+  const originalScroll = HTMLElement.prototype.scrollIntoView;
+  let pageScrolls = 0;
+  HTMLElement.prototype.scrollIntoView = () => { pageScrolls++; };
+  HTMLElement.prototype.getBoundingClientRect = function () {
+    const rect = originalRect.call(this);
+    if (this.classList.contains("workspace-primary-scroll")) return { ...rect, left: 10, right: 210 } as DOMRect;
+    if (this.getAttribute("aria-current") === "page") return { ...rect, left: 180, right: 260 } as DOMRect;
+    return rect;
+  };
+  try {
+    render(<Providers><MenuHarness initial="guest" /></Providers>);
+    assert.equal(document.querySelector<HTMLElement>(".workspace-primary-scroll")!.scrollLeft, 50);
+    assert.equal(pageScrolls, 0);
+  } finally {
+    HTMLElement.prototype.getBoundingClientRect = originalRect;
+    HTMLElement.prototype.scrollIntoView = originalScroll;
+  }
 });

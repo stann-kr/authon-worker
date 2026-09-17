@@ -57,11 +57,11 @@ export function getWorkspaceActiveId(
 
 export function getWorkspacePrimaryItems(items: WorkspaceItem[], activeId?: string) {
   const preferred = items.some((item) => item.id === "events")
-    ? ["home", "door", "guest", "events"]
+    ? ["home", "door", "guest"]
     : ["home", "guest", "door"];
   const primary = preferred.flatMap((id) => items.filter((item) => item.id === id));
   const active = items.find((item) => item.id === activeId);
-  if (active && !primary.includes(active)) {
+  if (active && active.id !== "events" && !primary.includes(active)) {
     if (primary.length >= 4) primary[primary.length - 1] = active;
     else primary.push(active);
   }
