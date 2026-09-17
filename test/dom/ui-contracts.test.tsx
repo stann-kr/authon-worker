@@ -24,6 +24,7 @@ import ExternalEventCombobox from "@/app/admin/components/ExternalEventCombobox"
 import AsyncListContent from "@/components/AsyncListContent";
 import ConfirmDialog from "@/components/ConfirmDialog";
 import Sheet from "@/components/overlays/Sheet";
+import DateField from "@/components/dates/DateField";
 import RosterView, { type RosterStatus } from "@/components/guests/RosterView";
 import GuestListCard from "@/components/GuestListCard";
 import OperationalSectionNav from "@/components/OperationalSectionNav";
@@ -47,6 +48,72 @@ if (!window.requestAnimationFrame) {
 afterEach(() => {
   cleanup();
   document.getElementById("main-content")?.removeAttribute("inert");
+});
+
+test("date selection handles leap days, preserves month-control focus and cancels browsing without changing the value", async () => {
+  const dayName = (date: string) => new Intl.DateTimeFormat("en", { dateStyle: "full" }).format(new Date(`${date}T12:00:00`));
+  function Harness() {
+    const [value, setValue] = useState("2024-02-28");
+    return <><label htmlFor="visit-date">Visit date</label>
+      <DateField id="visit-date" value={value} onChange={setValue} businessDate="2024-03-01" /></>;
+  }
+  render(<NextIntlClientProvider locale="en" messages={messages}><RouteTransitionProvider><Harness /></RouteTransitionProvider></NextIntlClientProvider>);
+  const field = screen.getByRole("combobox", { name: "Visit date" }) as HTMLInputElement;
+  field.focus();
+  fireEvent.keyDown(field, { key: "Enter" });
+  await waitFor(() => assert.equal(document.activeElement === screen.getByRole("button", { name: dayName("2024-02-28") }), true));
+  fireEvent.keyDown(document.activeElement!, { key: "ArrowRight" });
+  assert.equal(document.activeElement === screen.getByRole("button", { name: dayName("2024-02-29") }), true);
+  fireEvent.click(document.activeElement!);
+  assert.equal(field.value, "2024-02-29");
+  assert.equal(screen.queryByRole("dialog"), null);
+  await waitFor(() => assert.equal(document.activeElement === field, true));
+
+  fireEvent.click(field);
+  await waitFor(() => assert.equal(document.activeElement === screen.getByRole("button", { name: dayName("2024-02-29") }), true));
+  const next = screen.getByRole("button", { name: "Next month" });
+  next.focus();
+  fireEvent.click(next);
+  assert.ok(screen.getByRole("grid", { name: "March 2024" }));
+  assert.equal(document.activeElement === next, true);
+  const year = screen.getByRole("spinbutton", { name: "Year" });
+  act(() => year.focus());
+  fireEvent.change(year, { target: { value: "" } });
+  assert.equal((year as HTMLInputElement).value, "");
+  fireEvent.change(year, { target: { value: "2025" } });
+  assert.equal(document.activeElement === year, true);
+  fireEvent.change(screen.getByRole("combobox", { name: "Month" }), { target: { value: "1" } });
+  assert.ok(screen.getByRole("grid", { name: "February 2025" }));
+  assert.ok(screen.getByRole("button", { name: dayName("2025-02-28") }));
+  fireEvent.keyDown(year, { key: "Escape" });
+  assert.equal(field.value, "2024-02-29");
+  await waitFor(() => assert.equal(document.activeElement === field, true));
+});
+
+test("a calendar opened in a scope sheet restores that sheet and its input before unlocking the workspace", async () => {
+  function Harness() {
+    const [open, setOpen] = useState(true);
+    return <><main id="main-content">Workspace</main>
+      <Sheet open={open} title="Scope" onClose={() => setOpen(false)}>
+        <label htmlFor="scope-date">Operating date</label>
+        <DateField id="scope-date" value="2026-09-12" onChange={() => {}} />
+      </Sheet></>;
+  }
+  render(<NextIntlClientProvider locale="en" messages={messages}><RouteTransitionProvider><Harness /></RouteTransitionProvider></NextIntlClientProvider>);
+  const parent = screen.getByRole("dialog", { name: "Scope" });
+  const field = screen.getByRole("combobox", { name: "Operating date" });
+  field.focus();
+  fireEvent.click(field);
+  assert.equal(parent.hasAttribute("inert"), true);
+  assert.ok(screen.getByRole("dialog", { name: "Choose date" }));
+  fireEvent.keyDown(document, { key: "Escape" });
+  assert.equal(screen.queryByRole("dialog", { name: "Choose date" }), null);
+  assert.equal(parent.hasAttribute("inert"), false);
+  assert.equal(document.getElementById("main-content")!.hasAttribute("inert"), true);
+  await waitFor(() => assert.equal(document.activeElement === field, true));
+  fireEvent.keyDown(field, { key: "Escape" });
+  assert.equal(screen.queryByRole("dialog"), null);
+  assert.equal(document.getElementById("main-content")!.hasAttribute("inert"), false);
 });
 
 test("saved workspace preferences restore without replacing server-rendered controls", async () => {

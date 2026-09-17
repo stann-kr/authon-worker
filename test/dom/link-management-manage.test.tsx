@@ -58,14 +58,16 @@ function createActions(
 function ManageHarness({
   actions,
   selectedDate = "2026-08-20",
+  eventId = null,
 }: {
   actions: LinkManageControllerActions;
   selectedDate?: string;
+  eventId?: string | null;
 }) {
   const manage = useLinkManageController({
     selectedDate,
     venueId: "venue-a",
-    eventId: null,
+    eventId,
     isActive: true,
     locale: "en",
     actions,
@@ -73,6 +75,9 @@ function ManageHarness({
 
   return (
     <>
+      <button type="button" onClick={() => manage.setManageScope("date")}>
+        By date
+      </button>
       <button type="button" onClick={() => manage.setManageScope("recent")}>
         Recent
       </button>
@@ -125,6 +130,8 @@ function ManageHarness({
       </button>
       <output data-testid="state">{manage.listState}</output>
       <output data-testid="links">{manage.sortedLinks.length}</output>
+      <output data-testid="ordered-ids">{manage.sortedLinks.map((link) => link.id).join(",")}</output>
+      <output data-testid="scope">{manage.manageScope}</output>
       <output data-testid="active">
         {String(manage.sortedLinks[0]?.active ?? false)}
       </output>
@@ -155,6 +162,37 @@ async function flushAsyncWork() {
   });
 }
 
+test("management starts with recent links across dates and switches to the explicit date scope", async () => {
+  const reads: unknown[] = [];
+  const actions = createActions({
+    fetchRecent: async (...args) => {
+      reads.push(["recent", ...args]);
+      return { data: [
+        { ...LINK, id: "older", createdAt: "2026-08-19T12:00:00Z" },
+        { ...LINK, id: "newer", createdAt: "2026-08-20T12:00:00Z" },
+      ], error: null };
+    },
+    fetchByDate: async (...args) => {
+      reads.push(["date", ...args]);
+      return { data: [LINK], error: null };
+    },
+  });
+  render(<NextIntlClientProvider locale="en" messages={messages}>
+    <RouteTransitionProvider>
+      <ManageHarness actions={actions} eventId="event-a" />
+    </RouteTransitionProvider>
+  </NextIntlClientProvider>);
+  await flushAsyncWork();
+  assert.equal(screen.getByTestId("scope").textContent, "recent");
+  assert.equal(screen.getByTestId("ordered-ids").textContent, "newer,older");
+  assert.deepEqual(reads, [["recent", "venue-a", 5, null]]);
+
+  fireEvent.click(screen.getByRole("button", { name: "By date" }));
+  await flushAsyncWork();
+  assert.equal(screen.getByTestId("scope").textContent, "date");
+  assert.deepEqual(reads.at(-1), ["date", "venue-a", "2026-08-20", "event-a"]);
+});
+
 test("a stale date-scope response cannot replace the current recent list", async () => {
   const dateRequest = createDeferred<{
     data: ExternalDJLink[];
@@ -171,6 +209,7 @@ test("a stale date-scope response cannot replace the current recent list", async
     }),
   );
 
+  fireEvent.click(screen.getByRole("button", { name: "By date" }));
   fireEvent.click(screen.getByRole("button", { name: "Recent" }));
   await act(async () => {
     recentRequest.resolve({ data: [LINK], error: null });
@@ -188,7 +227,7 @@ test("a stale date-scope response cannot replace the current recent list", async
 test("full and partial failures remain distinct from an empty success", async () => {
   const errorView = renderHarness(
     createActions({
-      fetchByDate: async () => ({ data: null, error: "LOAD_FAILED" }),
+      fetchRecent: async () => ({ data: null, error: "LOAD_FAILED" }),
     }),
   );
   await flushAsyncWork();
@@ -197,7 +236,7 @@ test("full and partial failures remain distinct from an empty success", async ()
   errorView.unmount();
   renderHarness(
     createActions({
-      fetchByDate: async () => ({ data: [LINK], error: "PARTIAL" }),
+      fetchRecent: async () => ({ data: [LINK], error: "PARTIAL" }),
     }),
   );
   await flushAsyncWork();
@@ -275,7 +314,7 @@ test("a late pre-commit refresh cannot overwrite the authoritative lifecycle rel
   let fetchCalls = 0;
   renderHarness(
     createActions({
-      fetchByDate: async () => {
+      fetchRecent: async () => {
         fetchCalls += 1;
         if (fetchCalls === 1)
           return { data: [{ ...LINK, active: false }], error: null };
@@ -327,6 +366,8 @@ test("a stale managed share cannot publish feedback in a new scope", async () =>
   const view = renderHarness(actions);
   await flushAsyncWork();
 
+  fireEvent.click(screen.getByRole("button", { name: "By date" }));
+  await flushAsyncWork();
   fireEvent.click(screen.getByRole("button", { name: "Share" }));
   view.rerender(
     <NextIntlClientProvider locale="en" messages={messages}>

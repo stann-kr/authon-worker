@@ -1,0 +1,35 @@
+.date-field { position: relative; min-width: 0; height: 48px; }
+.date-field-display { position: absolute; inset: 0; display: flex; align-items: center; justify-content: space-between; gap: 12px; height: 100%; pointer-events: none; }
+.date-field-display > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--app-text); }
+.date-field-display > svg { flex-shrink: 0; }
+.date-field-input { position: absolute; inset: 0; z-index: 1; width: 100%; height: 100%; opacity: 0; cursor: pointer; }
+.date-field-input:disabled { cursor: not-allowed; }
+.product-sheet:has(> .product-sheet-body > .date-calendar) { width: min(100%, 420px); }
+.date-calendar { display: grid; gap: 12px; min-width: 0; }
+.date-calendar-navigation { display: grid; grid-template-columns: 44px minmax(0, 1fr) 80px 44px; align-items: center; gap: 8px; }
+.date-calendar-navigation > button { display: grid; place-items: center; min-width: 44px; min-height: 48px; border-radius: 8px; background: var(--app-surface-raised); }
+.date-calendar-month, .date-calendar-year { position: relative; min-width: 0; }
+.date-calendar-month select, .date-calendar-year input { width: 100%; min-height: 48px; padding: 8px 10px; border: 1px solid var(--app-border); border-radius: 8px; background: var(--app-surface-secondary); color: var(--app-text); font-size: 15px; }
+.date-calendar-month select { appearance: none; padding-right: 30px; }
+.date-calendar-month > svg { position: absolute; right: 8px; top: 50%; transform: translateY(-50%); pointer-events: none; }
+.date-calendar-year input { text-align: center; appearance: textfield; }
+.date-calendar-navigation :is(input, select):focus { outline: none; border-color: var(--app-field-focus); box-shadow: none; }
+.date-calendar-year input::-webkit-inner-spin-button, .date-calendar-year input::-webkit-outer-spin-button { appearance: none; }
+.date-calendar-grid { display: grid; gap: 2px; }
+.date-calendar-grid > [role="row"] { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 2px; }
+.date-calendar-weekdays { color: var(--app-text-muted); text-align: center; font-size: 12px; line-height: 28px; }
+.date-calendar-grid [role="gridcell"] { min-width: 0; }
+.date-calendar-grid button { width: 100%; min-width: 44px; min-height: 48px; border-radius: 8px; color: var(--app-text); font-size: 15px; font-variant-numeric: tabular-nums; }
+.date-calendar-grid button[data-outside="true"] { color: var(--app-text-muted); }
+.date-calendar-grid button[aria-current="date"] { box-shadow: inset 0 0 0 1px var(--app-border-strong); }
+.date-calendar-grid [aria-selected="true"] button { background: var(--app-action); color: var(--app-action-text); font-weight: 600; }
+.date-calendar-today { min-height: 48px; padding: 10px 16px; border: 1px solid var(--app-border); border-radius: 10px; background: var(--app-surface-raised); color: var(--app-text); font-size: 14px; }
+@media (hover: hover) and (pointer: fine) {
+  .date-calendar-navigation > button:not(:disabled):hover, .date-calendar-grid [aria-selected="false"] button:not(:disabled):hover, .date-calendar-today:hover { background: var(--app-surface-hover); }
+}
+@media (max-width: 359px) {
+  .product-sheet:has(> .product-sheet-body > .date-calendar) { padding-inline: 4px; }
+  .product-sheet:has(> .product-sheet-body > .date-calendar) > .product-sheet-header { padding-inline: 12px; }
+  .date-calendar-navigation { grid-template-columns: 44px minmax(0, 1fr) 72px 44px; gap: 6px; }
+  .date-calendar-grid, .date-calendar-grid > [role="row"] { gap: 0; }
+}

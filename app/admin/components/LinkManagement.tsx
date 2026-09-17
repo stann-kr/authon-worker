@@ -11,6 +11,7 @@ import Alert from "../../../components/Alert";
 import Icon from "../../../components/Icon";
 import Skeleton from "../../../components/Skeleton";
 import DatePicker from "../../../components/DatePicker";
+import DateField from "@/components/dates/DateField";
 import OperationsLayout from "../../../components/OperationsLayout";
 import OperationalSectionNav from "../../../components/OperationalSectionNav";
 import ConfirmDialog from "../../../components/ConfirmDialog";
@@ -212,7 +213,9 @@ export default function LinkManagement({
         headingLevel={null}
         dashboard={
           <>
-        {scopeSelector && (activeTab === "create" || manageScope === "date") ? scopeSelector(scopeControls, isGenerating) : <div className="operations-scope">{scopeControls}</div>}
+        {(activeTab === "create" || manageScope === "date") && (
+          scopeSelector ? scopeSelector(scopeControls, isGenerating) : <div className="operations-scope">{scopeControls}</div>
+        )}
         {(showSectionNavigation || activeTab === "manage") && (
           <div>
             {showSectionNavigation && (
@@ -231,10 +234,14 @@ export default function LinkManagement({
               <div
                 className={`flex flex-wrap items-end gap-4 ${showSectionNavigation ? "mt-4" : ""}`}
               >
+                {manageScope === "recent" && isSuperAdmin && venues.length > 0 && (
+                  <VenueSelector venues={venues} selectedVenueId={selectedVenueId}
+                    onVenueChange={setSelectedVenueId} className="w-full sm:w-60" />
+                )}
                 <div>
                 <p className="app-label">{t("view")}</p>
                 <div className="flex gap-2">
-                  {(["date", "recent"] as const).map((scope) => (
+                  {(["recent", "date"] as const).map((scope) => (
                     <button
                       key={scope}
                       type="button"
@@ -312,46 +319,11 @@ export default function LinkManagement({
                     <label htmlFor="link-date" className="app-label">
                       {t("date")}
                     </label>
-                    <div className="app-field-frame relative h-[46px]">
-                      {/* Mirroring UI Layer */}
-                      <div
-                        className={`app-field absolute inset-0 flex items-center justify-between pointer-events-none ${
-                          formValidationError?.field === "date"
-                            ? "border-status-danger"
-                            : "border-border-default"
-                        }`}
-                      >
-                        <span className="text-base text-text-heading">
-                          {formatDateDisplay(formData.date, locale)}
-                        </span>
-                        <Icon name="calendar" size={18} className="text-text-muted" />
-                      </div>
-
-                      {/* Hidden Native Input */}
-                      <input
-                        id="link-date"
-                        name="link-date"
-                        ref={linkDateInputRef}
-                        type="date"
-                        autoComplete="off"
-                        value={formData.date}
-                        disabled={isGenerating || Boolean(eventId)}
-                        aria-invalid={
-                          formValidationError?.field === "date" || undefined
-                        }
-                        aria-describedby={
-                          formValidationError?.field === "date"
-                            ? "link-date-error"
-                            : undefined
-                        }
-                        onChange={(e) => {
-                          handleDateChange(e.target.value);
-                        }}
-                        onClick={(e) => (e.target as HTMLInputElement).showPicker?.()}
-                        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10 [color-scheme:dark]"
-                        required
-                      />
-                    </div>
+                    <DateField id="link-date" name="link-date" ref={linkDateInputRef}
+                      value={formData.date} onChange={handleDateChange} businessDate={businessDate}
+                      disabled={isGenerating || Boolean(eventId)} required
+                      invalid={formValidationError?.field === "date"}
+                      describedBy={formValidationError?.field === "date" ? "link-date-error" : undefined} />
                     {formValidationError?.field === "date" && (
                       <p
                         id="link-date-error"

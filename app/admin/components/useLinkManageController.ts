@@ -70,7 +70,7 @@ export function useLinkManageController({
   actions,
 }: Options) {
   const t = useTranslations("LinkAdmin");
-  const [manageScope, setManageScope] = useState<"date" | "recent">("date");
+  const [manageScope, setManageScope] = useState<"date" | "recent">("recent");
   const [recentLimit, setRecentLimit] = useState<5 | 10>(5);
   const [manageFilter, setManageFilter] = useState<ManageFilter>("all");
   const [manageSort, setManageSort] = useState<ManageSort>("newest");
@@ -107,7 +107,8 @@ export function useLinkManageController({
   const requestGuard = useLatestRequestGuard();
   const mutationGuard = useScopedOperationGuard();
   const shareGuard = useScopedOperationGuard();
-  const requestScopeKey = `${venueId}:${manageScope}:${manageScope === "recent" ? recentLimit : selectedDate}:${eventId ?? "general"}`;
+  const scopedEventId = manageScope === "date" ? eventId : null;
+  const requestScopeKey = `${venueId}:${manageScope}:${manageScope === "recent" ? recentLimit : selectedDate}:${scopedEventId ?? "general"}`;
   const currentScopeRef = useRef(requestScopeKey);
   const isActiveRef = useRef(isActive);
   const actionsRef = useRef(actions);
@@ -171,11 +172,11 @@ export function useLinkManageController({
     try {
       const result =
         manageScope === "recent"
-          ? await actionsRef.current.fetchRecent(venueId, recentLimit, eventId)
+          ? await actionsRef.current.fetchRecent(venueId, recentLimit, scopedEventId)
           : await actionsRef.current.fetchByDate(
               venueId,
               selectedDate,
-              eventId,
+              scopedEventId,
             );
       if (
         !isLatestRequest() ||
@@ -212,7 +213,7 @@ export function useLinkManageController({
         setIsFetching(false);
     }
   }, [
-    eventId,
+    scopedEventId,
     manageScope,
     recentLimit,
     requestGuard,
