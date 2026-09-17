@@ -966,13 +966,14 @@ test("checked guest deletion requires a fresh named dialog after the guest statu
     </NextIntlClientProvider>
   );
   const view = render(card("pending"));
+  fireEvent.click(screen.getByRole("button", { name: "Guest A" }));
   fireEvent.click(screen.getByRole("button", { name: messages.Common.deleteGuest }));
-  assert.ok(screen.getByRole("group"));
+  assert.ok(screen.getByRole("alertdialog"));
   view.rerender(card("checked"));
   assert.equal(screen.queryByRole("group"), null);
   assert.equal(screen.queryByRole("alertdialog"), null);
-  assert.equal(document.activeElement, screen.getByRole("article"));
-  fireEvent.click(screen.getByRole("button", { name: messages.Common.removeGuest }));
+  assert.ok(screen.getByRole("dialog", { name: "Guest A" }));
+  fireEvent.click(screen.getByRole("button", { name: messages.Common.deleteGuest }));
   const dialog = screen.getByRole("alertdialog", { name: /Guest A/ });
   const descriptionId = dialog.getAttribute("aria-describedby");
   assert.ok(descriptionId);
@@ -1533,42 +1534,6 @@ test("event details hand off a template to a guarded create sheet and retain fai
   } finally { cleanup(); hooks.deregister(); }
 });
 
-test("admin roster locks finalized scopes and keeps draft deletion and past-date correction available", async () => {
-  const sources: Record<string, string> = {
-    "lib/guest-snapshots/client": 'export const fetchGuestOperationsSnapshot = async () => ({ data: { guests: [{ id: "g1", name: "Roster guest", status: "pending" }], users: [], externalLinks: [] }, error: null });',
-    "lib/guests/client": 'export const fetchGuestsByDate = async () => ({ data: [], error: null });',
-    "lib/api/guests": 'export const updateGuestStatus = async () => ({ data: null, error: "UNEXPECTED_MUTATION" }); export const deleteGuest = updateGuestStatus;',
-    "lib/attendance/client": 'export const fetchDoorAttendanceSummary = async ({ scope }) => ({ data: { ...scope, isFinalized: scope.eventId === "finalized", canFinalize: scope.eventId === "closed" || !scope.eventId, unavailableReason: scope.eventId === "draft" ? "event_inactive" : "past_date" }, error: null });',
-    "components/VenueSelector": 'export const useVenueSelector = () => ({ venueId: "venue-1", venues: [], selectedVenueId: "venue-1", isSuperAdmin: false }); export default function VenueSelector() { return null; }',
-  };
-  const hooks = registerHooks({
-    resolve(specifier, context, nextResolve) {
-      const key = Object.keys(sources).find((key) => specifier.endsWith(key));
-      return key ? { url: `mock:admin-roster-lock:${key}`, shortCircuit: true } : nextResolve(specifier, context);
-    },
-    load(url, context, nextLoad) {
-      return url.startsWith("mock:admin-roster-lock:")
-        ? { format: "module", shortCircuit: true, source: sources[url.replace("mock:admin-roster-lock:", "")] }
-        : nextLoad(url, context);
-    },
-  });
-  try {
-    const { default: GuestList } = await import("@/app/admin/components/GuestList");
-    const frame = (eventId: string | null) => <NextIntlClientProvider locale="en" messages={messages}>
-      <GuestList selectedDate="2026-09-15" businessDate="2026-09-16" eventId={eventId} onDateChange={() => {}} />
-    </NextIntlClientProvider>;
-    const view = render(frame("finalized"));
-    await screen.findByRole("button", { name: "Roster guest" });
-    for (const [scope, locked, deleteLocked] of [["finalized", true, true], ["closed", true, true], ["draft", true, false], [null, false, false]] as const) {
-      view.rerender(frame(scope));
-      await waitFor(() => {
-        assert.equal(screen.getByRole("button", { name: messages.Common.checkIn }).hasAttribute("disabled"), locked);
-        assert.equal(screen.getByRole("button", { name: messages.Common.deleteGuest }).hasAttribute("disabled"), deleteLocked);
-      });
-    }
-  } finally { cleanup(); hooks.deregister(); }
-});
-
 test("a credential result sheet owns Escape while the underlying detail keeps the workspace locked", async () => {
   function Harness() {
     const [result, setResult] = useState(false);
@@ -1659,4 +1624,40 @@ test("saved input and a persistent operator do not produce a false discard promp
   fireEvent.click(screen.getByRole("button", { name: "Load quota" }));
   fireEvent.click(screen.getByRole("button", { name: messages.Sheet.close }));
   assert.equal(screen.queryByRole("dialog"), null);
+});
+
+
+test("operations deletion is only in guest details, confirms, and restores focus on cancellation", async () => {
+  for (const status of ["pending", "checked"] as const) {
+    let calls = 0;
+    const frame = (disabled = false, allowed = true) => <NextIntlClientProvider locale="en" messages={messages}>
+      <GuestListCard guest={{ id: "g1", name: "Guest One", status }} index={0} mode="operations"
+        onDelete={allowed ? () => { calls += 1; } : undefined} isDeleteDisabled={disabled} />
+    </NextIntlClientProvider>;
+    const view = render(frame());
+    assert.equal(screen.queryByRole("button", { name: messages.Common.deleteGuest }), null);
+    fireEvent.click(screen.getByRole("button", { name: "Guest One" }));
+    const trigger = screen.getByRole("button", { name: messages.Common.deleteGuest });
+    trigger.focus();
+    fireEvent.click(trigger);
+    assert.equal(calls, 0);
+    const confirmation = screen.getByRole("alertdialog");
+    assert.equal(document.activeElement === within(confirmation).getByRole("button", { name: messages.Common.cancel }), true);
+    fireEvent.keyDown(document, { key: "Escape" });
+    await waitFor(() => assert.equal(screen.queryByRole("alertdialog"), null));
+    assert.ok(screen.getByRole("dialog", { name: "Guest One" }));
+    assert.equal(document.activeElement === trigger, true);
+    fireEvent.click(trigger);
+    view.rerender(frame(true));
+    fireEvent.click(within(screen.getByRole("alertdialog")).getByRole("button", { name: messages.Common.delete }));
+    assert.equal(calls, 0);
+    view.rerender(frame(false, false));
+    assert.equal(screen.queryByRole("alertdialog"), null);
+    assert.equal(screen.queryByRole("button", { name: messages.Common.deleteGuest }), null);
+    view.rerender(frame());
+    fireEvent.click(screen.getByRole("button", { name: messages.Common.deleteGuest }));
+    fireEvent.click(within(screen.getByRole("alertdialog")).getByRole("button", { name: messages.Common.delete }));
+    assert.equal(calls, 1);
+    cleanup();
+  }
 });

@@ -8,7 +8,6 @@
 .product-roster-controls[data-wide="true"] .product-roster-tools { grid-area: tools; }
 .product-roster-controls[data-wide="true"] .product-roster-summary { grid-area: summary; }
 .product-roster-desktop-options { grid-area: options; display: flex; align-items: center; flex-wrap: wrap; justify-content: end; gap: 12px; }
-.product-roster:has(.product-guest-row[data-can-delete="true"]) { --guest-actions-width: 132px; }
 .product-roster-tools { display: flex; flex-wrap: wrap; align-items: end; gap: 12px; }
 .product-roster-tools[hidden] { display: none; }
 .product-roster-tools > div:first-child { flex: 1 1 240px; min-width: 0; padding: 0; border: 0; background: transparent; }

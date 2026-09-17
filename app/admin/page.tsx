@@ -12,7 +12,8 @@ import {
   type ReactNode,
 } from "react";
 import dynamic from "next/dynamic";
-import GuestList from "./components/GuestList";
+import { useRouter } from "next/navigation";
+import { isBusinessDate } from "@/lib/events/domain";
 import type { LinkManagementSection } from "./components/LinkManagement";
 import type { UserManagementSection } from "./components/UserManagement";
 import type { VenueManagementSection } from "./components/VenueManagement";
@@ -71,6 +72,7 @@ export default function AdminPage() {
 }
 
 function AdminPageContent() {
+  const router = useRouter();
   const t = useTranslations("AdminNav");
   const linkT = useTranslations("LinkAdmin");
   const userT = useTranslations("UserAdmin");
@@ -104,6 +106,20 @@ function AdminPageContent() {
     isSuperAdmin,
     venueId,
   });
+  useEffect(() => {
+    if (!isRoleReady || activeTask !== "guest-list" || !currentVenue) return;
+    const requested = new URLSearchParams(window.location.search);
+    const requestedDate = requested.get("date");
+    const hasRequestedScope = requested.get("venue") === venueId && isBusinessDate(requestedDate);
+    const target = new URLSearchParams({
+      venue: venueId,
+      date: hasRequestedScope ? requestedDate! : selectedDate,
+    });
+    const eventId = hasRequestedScope ? requested.get("eventId") : selectedEventId;
+    if (eventId) target.set("eventId", eventId);
+    router.replace(`/door?${target}`);
+  }, [activeTask, currentVenue, isRoleReady, router, selectedDate, selectedEventId, venueId]);
+
   const [pendingPasswordResetCount, setPendingPasswordResetCount] = useState(0);
   const workspaceRef = useRef<HTMLElement>(null);
   useRouteLoadingTask(!isRoleReady);
@@ -114,7 +130,7 @@ function AdminPageContent() {
   }, [workspaceFocusRequestId]);
 
   useEffect(() => {
-    if (!isRoleReady) return;
+    if (!isRoleReady || activeTask === "guest-list") return;
     let cancelled = false;
     const loadPendingPasswordResetCount = async () => {
       const { data, error } = await fetchPendingPasswordResetRequestCount();
@@ -129,12 +145,11 @@ function AdminPageContent() {
     return () => {
       cancelled = true;
     };
-  }, [isRoleReady]);
+  }, [activeTask, isRoleReady]);
 
   const taskOptions = useMemo<AdminTaskOption[]>(
     () =>
       [
-        { id: "guest-list", group: "guests", label: t("guestList") },
         { id: "guest-requests", group: "guests", label: t("requests") },
         { id: "event-manage", group: "events", label: t("eventManagement") },
         { id: "link-create", group: "links", label: linkT("createLink") },
@@ -231,16 +246,8 @@ function AdminPageContent() {
         <h2 id="admin-active-task-title" className="sr-only">
           {activeTaskLabel}
         </h2>
-        {!isRoleReady && <AdminTaskLoading />}
+        {(!isRoleReady || activeTask === "guest-list") && <AdminTaskLoading />}
         {isRoleReady && <>
-        {activeTask === "guest-list" && (
-          <GuestList scopeSelector={eventScopeSelector}
-            selectedDate={selectedDate}
-            onDateChange={setSelectedDate}
-            businessDate={businessDate}
-            eventId={selectedEventId}
-          />
-        )}
         {activeTask === "guest-requests" && (
           <GuestLimitRequestManagement
             scopeSelector={eventScopeSelector}

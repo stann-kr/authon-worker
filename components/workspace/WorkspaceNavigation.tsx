@@ -22,7 +22,7 @@ export interface WorkspaceNavigationProps {
 }
 
 const navigationIcons: Record<string, IconName> = {
-  home: "home", events: "calendar", roster: "users", guest: "user-add", door: "login",
+  home: "home", events: "calendar", guest: "user-add", door: "login",
   links: "link", requests: "user-add", analytics: "chart-line", users: "user-admin",
   "password-requests": "key", venues: "store", profile: "user",
 };

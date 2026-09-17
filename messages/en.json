@@ -322,13 +322,13 @@
   },
   "Home": {
     "availableWorkspaces": "Available workspaces",
-    "guestCategory": "List management",
+    "guestCategory": "My guest list",
     "guestTitle": "Guest registration",
     "guestDescription": "Add guests and review the list and limit.",
     "guestAction": "Add guests",
     "doorCategory": "Venue entry",
-    "doorTitle": "Door check-in",
-    "doorDescription": "Find guests and confirm entry.",
+    "doorTitle": "Check-in",
+    "doorDescription": "Review the full guest list and check guests in.",
     "doorAction": "Start check-in",
     "adminCategory": "Guest operations",
     "adminTitle": "Guest roster",
@@ -393,6 +393,7 @@
     "requestNotNeeded": "No request needed"
   },
   "Door": {
+    "deleteRequiresOnline": "Connect and sync pending check-ins before deleting a guest.",
     "partialLoadFailed": "Some operational data could not be loaded. Refresh and try again.",
     "loadFailed": "Operational data could not be loaded. Check your network connection.",
     "updateFailed": "The guest status could not be changed. Please try again.",

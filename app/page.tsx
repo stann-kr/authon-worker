@@ -56,16 +56,6 @@ export default function Home() {
       href: "/door",
       requiredAccess: ["door"],
     },
-    {
-      id: "admin",
-      category: t("adminCategory"),
-      title: t("adminTitle"),
-      description: t("adminDescription"),
-      action: t("adminAction"),
-      icon: "users",
-      href: "/admin?tab=guests&view=list",
-      requiredAccess: ["admin"],
-    },
   ], [t]);
 
   useEffect(() => {
@@ -136,8 +126,7 @@ export default function Home() {
     return <RouteLoadingFallback />;
   }
 
-  const primaryId = hasAccess(user, ["admin"]) ? "admin"
-    : user.role === "door_staff" || (user.account_kind === "shared" && hasAccess(user, ["door"])) ? "door" : "guest";
+  const primaryId = hasAccess(user, ["door"]) ? "door" : "guest";
   const primary = accessibleMenus.find((item) => item.id === primaryId) ?? accessibleMenus[0];
   const quickLinks = getWorkspaceItems({
     role: user.role, accountKind: user.account_kind, doorAccessEnabled: user.door_access_enabled,

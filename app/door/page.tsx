@@ -9,8 +9,11 @@ import RosterView, { type RosterStatus } from "@/components/guests/RosterView";
 import { fetchGuestsByDate } from "@/lib/guests/client";
 import { fetchOfflineDoorRoster } from "@/lib/door/client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { useLocalStorage } from "../../lib/hooks";
+import { useAuthSession } from "@/components/AuthSessionProvider";
+import { hasAccess } from "@/lib/auth";
+import { isBusinessDate } from "@/lib/events/domain";
 import AuthGuard from "../../components/AuthGuard";
 import GuestListCard from "../../components/GuestListCard";
 
@@ -92,6 +95,9 @@ export default function DoorPage() {
 }
 
 function DoorPageContent() {
+  const { user } = useAuthSession();
+  const canManageGuests = Boolean(user && hasAccess(user, ["admin"]));
+  const initializedVenue = useRef<string | null>(null);
   const t = useTranslations("Door");
   const commonT = useTranslations("Common");
   const locale = useLocale() as "en" | "ko";
@@ -107,10 +113,13 @@ function DoorPageContent() {
     refreshVenues,
   } = useVenueSelector();
   const businessDate = getBusinessDate(currentVenue ?? {});
-  const [selectedDate, setSelectedDate] = useLocalStorage(
-    "door:selectedDate",
-    getBusinessDate(),
+  const [savedDate, setSavedDate] = useLocalStorage<{ venueId: string; date: string } | string | null>(
+    "door:selectedDate", null,
   );
+  const selectedDate = isBusinessDate(savedDate) ? savedDate
+    : savedDate && typeof savedDate === "object" && savedDate.venueId === venueId && isBusinessDate(savedDate.date)
+      ? savedDate.date : businessDate;
+  const setSelectedDate = useCallback((date: string) => setSavedDate({ venueId, date }), [setSavedDate, venueId]);
   const [tool, setTool] = useState<"code" | "offline" | null>(null);
   const [selectedDJ, setSelectedDJ] = useState<string>("all");
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
@@ -127,6 +136,7 @@ function DoorPageContent() {
   const {
     displayData,
     feedback,
+    deleteFailure,
     guests,
     handleClearResolvedOfflineMutations,
     handleStatusChange,
@@ -151,6 +161,7 @@ function DoorPageContent() {
     selectedEventId,
     translate: t,
     dependencies: DOOR_ROSTER_DEPENDENCIES,
+    canDeleteGuests: canManageGuests,
   });
   const attendanceScope = useMemo(
     () =>
@@ -165,12 +176,22 @@ function DoorPageContent() {
   );
 
   useEffect(() => {
-    if (currentVenue) setSelectedDate(businessDate);
-  }, [businessDate, currentVenue, setSelectedDate]);
+    if (!currentVenue || initializedVenue.current === venueId) return;
+    initializedVenue.current = venueId;
+    const search = new URLSearchParams(window.location.search);
+    const date = search.get("date");
+    const matchesVenue = search.get("venue") === venueId && isBusinessDate(date);
+    if (matchesVenue) setSelectedDate(date!);
+    setSelectedEventId(matchesVenue ? search.get("eventId") : null);
+  }, [currentVenue, setSelectedDate, venueId]);
 
   useEffect(() => {
-    setSelectedEventId(null);
-  }, [selectedDate, venueId]);
+    if (!currentVenue || !isBusinessDate(savedDate)) return;
+    const search = new URLSearchParams(window.location.search);
+    const requestedDate = search.get("date");
+    const hasRequestedDate = search.get("venue") === venueId && isBusinessDate(requestedDate);
+    setSelectedDate(hasRequestedDate ? requestedDate! : savedDate);
+  }, [currentVenue, savedDate, setSelectedDate, venueId]);
 
   useEffect(() => {
     setSelectedDJ("all");
@@ -264,7 +285,7 @@ function DoorPageContent() {
               checkedInGuests={scopeCheckedInGuests}
               hasPendingGuestMutations={hasPendingGuestMutations}
             >
-      {(attendanceActions, attendanceDetails, entryLocked) => <WorkspaceShell
+      {(attendanceActions, attendanceDetails, entryLocked, deletionLocked) => <WorkspaceShell
       contentClassName="gap-4 md:pb-8 lg:gap-6"
       footerLayer="below-mobile-dock"
       actions={<>
@@ -288,7 +309,7 @@ function DoorPageContent() {
             <EventScopeSelector venueId={venueId} businessDate={selectedDate}
               value={selectedEventId} onChange={setSelectedEventId}
               renderScope={(selector, label) => <OperationsScope venueName={currentVenue?.brandName || currentVenue?.name} date={selectedDate} label={label}>
-                <DatePicker compact value={selectedDate} onChange={setSelectedDate} businessDate={businessDate} />
+                <DatePicker compact value={selectedDate} onChange={(date) => { setSelectedDate(date); setSelectedEventId(null); }} businessDate={businessDate} />
                 {isSuperAdmin && <VenueSelector venues={venues} selectedVenueId={selectedVenueId} onVenueChange={setSelectedVenueId} />}
                 {selector}
               </OperationsScope>} />
@@ -407,6 +428,12 @@ function DoorPageContent() {
                       djName={contributor.name}
                       accountKind={contributor.accountKind}
                       registeredByName={guest.registeredByName}
+                      showRegisteredAt
+                      onDelete={canManageGuests ? () => handleStatusChange(guest.id, "deleted", "remove") : undefined}
+                      isDeleteLoading={loadingStates[`${guest.id}_remove`]}
+                      deleteError={deleteFailure?.guestId === guest.id ? deleteFailure.message : undefined}
+                      deleteDisabledReason={isOfflineMode || isOfflineSyncing || offlineQueueCounts.queued > 0 ? t("deleteRequiresOnline") : undefined}
+                      isDeleteDisabled={deletionLocked || isCurrentScopeFetching || isOfflineMode || isOfflineSyncing || hasPendingGuestMutations}
                       onCheck={() =>
                         handleStatusChange(guest.id, "checked", "check")
                       }

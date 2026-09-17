@@ -96,8 +96,8 @@ test("home recovers pending logout only while the missing identity is still curr
 });
 
 test("home prioritizes the role's task and keeps admin shortcuts and count reads scoped", async () => {
-  const cases: [User["role"], User["account_kind"], boolean, "admin" | "door" | "guest"][] = [
-    ["super_admin", "personal", false, "admin"], ["venue_admin", "personal", false, "admin"],
+  const cases: [User["role"], User["account_kind"], boolean, "door" | "guest"][] = [
+    ["super_admin", "personal", false, "door"], ["venue_admin", "personal", false, "door"],
     ["door_staff", "personal", false, "door"], ["staff", "personal", false, "guest"],
     ["dj", "personal", false, "guest"], ["staff", "shared", true, "door"],
   ];
@@ -110,8 +110,10 @@ test("home prioritizes the role's task and keeps admin shortcuts and count reads
     render(frame({ ...baseUser, role, account_kind, door_access_enabled }));
     const tasks = screen.getByRole("navigation", { name: messages.Home.availableWorkspaces });
     const links = within(tasks).getAllByRole("link");
-    assert.equal(links[0].getAttribute("href"), primary === "admin" ? "/admin?tab=guests&view=list" : `/${primary}`);
-    assert.equal(Boolean(screen.queryByRole("navigation", { name: messages.Home.quickLinks })), primary === "admin");
+    assert.equal(links.some((link) => link.getAttribute("href")?.includes("tab=guests")), false);
+    assert.equal(links.filter((link) => link.getAttribute("href") === "/door").length, primary === "door" ? 1 : 0);
+    assert.equal(links[0].getAttribute("href"), `/${primary}`);
+    assert.equal(Boolean(screen.queryByRole("navigation", { name: messages.Home.quickLinks })), role === "super_admin" || role === "venue_admin");
     await act(async () => {});
     assert.deepEqual(reads, role === "venue_admin" ? ["guests", "passwords"] : role === "super_admin" ? ["passwords"] : []);
     cleanup();

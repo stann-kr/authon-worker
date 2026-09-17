@@ -28,9 +28,6 @@ export function getWorkspaceItems(user: AccessSubject): WorkspaceItem[] {
   return [
     { id: "home", label: "home", href: "/" },
     ...(admin ? [adminItem("events", "events", "preparation", "event-manage")] : []),
-    ...(admin
-      ? [adminItem("roster", "roster", "operations", "guest-list")]
-      : []),
     { id: "guest", label: "myRoster", href: "/guest", group: "operations" },
     ...(hasAccess(user, ["door"])
       ? [{ id: "door", label: "door", href: "/door", group: "operations" } as const]
@@ -52,14 +49,15 @@ export function getWorkspaceItems(user: AccessSubject): WorkspaceItem[] {
 export function getWorkspaceActiveId(
   pathname: string, task: AdminTask | undefined, items: WorkspaceItem[],
 ): string | undefined {
+  if (pathname === "/admin" && (!task || task === "guest-list")) return items.find((item) => item.id === "door")?.id;
   return items.find((item) => pathname === "/admin"
     ? item.activeTasks?.includes(task ?? "guest-list")
     : item.href === pathname)?.id;
 }
 
 export function getWorkspacePrimaryItems(items: WorkspaceItem[], activeId?: string) {
-  const preferred = items.some((item) => item.id === "roster")
-    ? ["home", "roster", "door", "events"]
+  const preferred = items.some((item) => item.id === "events")
+    ? ["home", "door", "guest", "events"]
     : ["home", "guest", "door"];
   const primary = preferred.flatMap((id) => items.filter((item) => item.id === id));
   const active = items.find((item) => item.id === activeId);

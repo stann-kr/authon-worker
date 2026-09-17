@@ -60,8 +60,8 @@ function Providers({ children, pathname = "/admin", router = null }: { children:
 
 test("workspace destinations respect real role and shared Door access policy", () => {
   const cases: [AccessSubject, string[]][] = [
-    [admin, ["roster", "door", "events", "users"]],
-    [{ ...admin, role: "super_admin" }, ["roster", "door", "events", "users", "venues"]],
+    [admin, ["door", "events", "users"]],
+    [{ ...admin, role: "super_admin" }, ["door", "events", "users", "venues"]],
     [{ ...admin, role: "door_staff" }, ["door"]],
     [{ ...admin, role: "staff" }, []],
     [{ ...admin, role: "dj", doorAccessEnabled: true }, []],
@@ -70,7 +70,7 @@ test("workspace destinations respect real role and shared Door access policy", (
   ];
   for (const [subject, allowed] of cases) {
     const items = getWorkspaceItems(subject);
-    for (const id of ["roster", "door", "events", "users", "venues"]) {
+    for (const id of ["door", "events", "users", "venues"]) {
       assert.equal(items.some((item) => item.id === id), allowed.includes(id), `${subject.role}/${subject.accountKind}/${id}`);
     }
     assert.ok(items.some((item) => item.href === "/guest"));
@@ -82,7 +82,7 @@ test("workspace destinations respect real role and shared Door access policy", (
 test("all existing admin tasks select a real destination, including create and legacy tasks", () => {
   const items = getWorkspaceItems({ ...admin, role: "super_admin" });
   const cases: [AdminTask, string][] = [
-    ["guest-list", "roster"], ["guest-requests", "requests"], ["event-manage", "events"],
+    ["guest-list", "door"], ["guest-requests", "requests"], ["event-manage", "events"],
     ["link-create", "links"], ["link-manage", "links"], ["user-create", "users"],
     ["user-list", "users"], ["password-requests", "password-requests"],
     ["analytics", "analytics"], ["venue-create", "venues"], ["venue-list", "venues"],
@@ -95,7 +95,7 @@ test("all existing admin tasks select a real destination, including create and l
   assert.equal(getWorkspaceActiveId("/profile", undefined, items), "profile");
 });
 
-function MenuHarness({ subject = admin, initial = "roster", disabled = false }: {
+function MenuHarness({ subject = admin, initial = "events", disabled = false }: {
   subject?: AccessSubject; initial?: string; disabled?: boolean;
 }) {
   const [activeId, setActiveId] = useState(initial);
@@ -207,7 +207,7 @@ test("workspace menu and navigation respect the busy lock", () => {
   render(<Providers><MenuHarness disabled /></Providers>);
   assert.equal((screen.getByRole("button", { name: "All menus" }) as HTMLButtonElement).disabled, true);
   fireEvent.click(screen.getByRole("link", { name: messages.Workspace.door }));
-  assert.equal(screen.getByRole("link", { name: messages.Workspace.roster }).getAttribute("aria-current"), "page");
+  assert.equal(screen.getByRole("link", { name: messages.Workspace.events }).getAttribute("aria-current"), "page");
 });
 
 function AdminShellHarness({ loading = false, capture }: {
@@ -380,7 +380,7 @@ for (const desktop of [true, false]) {
 
 test("choosing the current admin task cancels a pending route without abandoning its data request", async () => {
   viewport(true);
-  window.history.replaceState(null, "", "/admin");
+  window.history.replaceState(null, "", "/admin?tab=events&view=manage");
   const destinations: string[] = [];
   const router = routerRecorder(destinations);
   const guard = createLatestRequestGuard();
@@ -390,11 +390,11 @@ test("choosing the current admin task cancels a pending route without abandoning
     const view = render(frame("/admin"));
     const isLatestRead = guard.beginRequest();
     fireEvent.click(screen.getByRole("link", { name: messages.Workspace.door }));
-    fireEvent.click(screen.getByRole("link", { name: messages.Workspace.roster }));
-    assert.deepEqual(destinations, ["/door", "/admin?tab=guests&view=list"]);
+    fireEvent.click(screen.getByRole("link", { name: messages.Workspace.events }));
+    assert.deepEqual(destinations, ["/door", "/admin?tab=events&view=manage"]);
     assert.equal(isLatestRead(), true);
     await waitFor(() => assert.equal(document.querySelector(".route-transition-overlay")?.getAttribute("data-state"), "leaving"));
-    fireEvent.click(screen.getByRole("link", { name: messages.Workspace.roster }));
+    fireEvent.click(screen.getByRole("link", { name: messages.Workspace.events }));
     await waitFor(() => assert.equal(document.querySelector(".route-transition-overlay") === null, true));
 
     fireEvent.click(screen.getByRole("link", { name: messages.Workspace.door }));

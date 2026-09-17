@@ -33,7 +33,7 @@ interface AttendanceCounterProps {
   currentBusinessDate: string;
   checkedInGuests: number;
   hasPendingGuestMutations: boolean;
-  children: (actions: ReactNode, details: ReactNode, entryLocked: boolean) => ReactNode;
+  children: (actions: ReactNode, details: ReactNode, entryLocked: boolean, deletionLocked: boolean) => ReactNode;
   dependencies?: AttendanceCounterDependencies;
 }
 
@@ -221,7 +221,9 @@ export default function AttendanceCounter({
     </Sheet>
     <p className="sr-only" role="status" aria-live="polite" aria-atomic="true">{announcement}</p>
   </>;
+  const deletionLocked = !scopedSummary || scopedSummary.isFinalized ||
+    Boolean(scope?.eventId && scopedSummary.canFinalize) || scopedSummary.unavailableReason === "scope_closed";
   return children(actions, details, Boolean(scopedSummary?.isFinalized ||
     (scope?.eventId && scopedSummary?.canFinalize) ||
-    scopedSummary?.unavailableReason === "scope_closed" || scopedSummary?.unavailableReason === "event_inactive"));
+    scopedSummary?.unavailableReason === "scope_closed" || scopedSummary?.unavailableReason === "event_inactive"), deletionLocked);
 }

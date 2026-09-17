@@ -168,9 +168,11 @@ function createDependencies(
 function DoorRosterHarness({
   dependencies,
   selectedEventId = null,
+  canDeleteGuests = false,
 }: {
   dependencies: DoorRosterDependencies;
   selectedEventId?: string | null;
+  canDeleteGuests?: boolean;
 }) {
   const roster = useDoorRosterController({
     venueId: "venue-0001",
@@ -178,6 +180,7 @@ function DoorRosterHarness({
     selectedEventId,
     translate: TRANSLATE,
     dependencies,
+    canDeleteGuests,
   });
 
   return (
@@ -218,6 +221,7 @@ function DoorRosterHarness({
       <button type="button" onClick={() => void roster.handleStatusChange("guest-0002", "checked", "check")}>
         Check in second
       </button>
+      <button type="button" onClick={() => void roster.handleStatusChange(GUEST.id, "deleted", "remove")}>Delete guest</button>
       <button type="button" onClick={() => void roster.loadData()}>Refresh roster</button>
       <button type="button" onClick={() => void roster.syncOfflineQueue()}>
         Sync offline queue
@@ -751,4 +755,64 @@ test("offline store tasks wait for completion and continue after a rejection", a
     screen.getByTestId("has-current-scope-data").textContent,
     "true",
   );
+});
+
+
+test("deleting a guest requires management access and never queues an offline deletion", async () => {
+  for (const [allowed, online, pending] of [[false, true, false], [true, false, false], [true, true, true]] as const) {
+    setOnline(online);
+    let deletions = 0;
+    let queued = 0;
+    const dependencies = createDependencies({
+      deleteGuest: async () => { deletions += 1; return { data: { ...GUEST, status: "deleted" }, error: null }; },
+      enqueueOfflineDoorMutation: async () => { queued += 1; throw new Error("Deletion must not queue"); },
+      listOfflineDoorMutations: async () => pending ? [createScopedMutation("event-0001", GUEST.id)] : [],
+    });
+    render(<DoorRosterHarness dependencies={dependencies} canDeleteGuests={allowed} selectedEventId="event-0001" />);
+    await waitFor(() => assert.equal(screen.getByTestId("fetching").textContent, "false"));
+    if (pending) await waitFor(() => assert.equal(screen.getByTestId("offline-queued").textContent, "1"));
+    fireEvent.click(screen.getByRole("button", { name: "Delete guest" }));
+    await act(async () => {});
+    assert.equal(deletions, 0);
+    assert.equal(queued, 0);
+    assert.equal(screen.getByTestId("guest-count").textContent, "1");
+    cleanup();
+  }
+});
+
+test("confirmed deletion removes the visible guest and invalidates its offline snapshot even when refresh fails", async () => {
+  let deleted = false;
+  let invalidated = 0;
+  const dependencies = createDependencies({
+    deleteGuest: async () => { deleted = true; return { data: { ...GUEST, status: "deleted" }, error: null }; },
+    removeOfflineDoorRoster: async () => { invalidated += 1; },
+    fetchGuestOperationsSnapshot: async () => deleted ? { data: null, error: "UNAVAILABLE" } : { data: OPERATIONS_SNAPSHOT, error: null },
+  });
+  render(<DoorRosterHarness dependencies={dependencies} canDeleteGuests selectedEventId="event-0001" />);
+  await waitFor(() => assert.equal(screen.getByTestId("fetching").textContent, "false"));
+  await act(async () => {});
+  fireEvent.click(screen.getByRole("button", { name: "Delete guest" }));
+  await waitFor(() => assert.equal(screen.getByTestId("busy").textContent, "false"));
+  assert.equal(deleted, true);
+  assert.equal(invalidated, 1);
+  assert.equal(screen.getByTestId("guest-count").textContent, "0");
+  assert.equal(screen.getByTestId("offline-queued").textContent, "0");
+});
+
+
+test("a late deletion invalidates only its original offline scope without changing the new roster", async () => {
+  const deletion = createDeferred<Awaited<ReturnType<DoorRosterDependencies["deleteGuest"]>>>();
+  const invalidated: string[] = [];
+  const dependencies = createDependencies({
+    deleteGuest: () => deletion.promise,
+    removeOfflineDoorRoster: async (scope) => { invalidated.push(scope.eventId); },
+  });
+  const view = render(<DoorRosterHarness dependencies={dependencies} canDeleteGuests selectedEventId="event-0001" />);
+  await waitFor(() => assert.equal(screen.getByTestId("fetching").textContent, "false"));
+  fireEvent.click(screen.getByRole("button", { name: "Delete guest" }));
+  view.rerender(<DoorRosterHarness dependencies={dependencies} canDeleteGuests selectedEventId="event-0002" />);
+  await waitFor(() => assert.equal(screen.getByTestId("fetching").textContent, "false"));
+  await act(async () => deletion.resolve({ data: { ...GUEST, status: "deleted" }, error: null }));
+  assert.deepEqual(invalidated, ["event-0001"]);
+  assert.equal(screen.getByTestId("guest-count").textContent, "1");
 });
