@@ -46,6 +46,7 @@
   line-height: 1.4; text-decoration: none; white-space: nowrap;
 }
 .workspace-nav-icon { flex-shrink: 0; }
+.workspace-dock .workspace-nav-link { min-width: 44px; }
 .workspace-dock .workspace-nav-icon { display: none; }
 .workspace-nav-link[aria-current="page"] { background: #e7e7e7; border-color: transparent; color: #111111; font-weight: 600; }
 .workspace-nav-link[aria-disabled="true"] { opacity: 0.5; cursor: wait; }
