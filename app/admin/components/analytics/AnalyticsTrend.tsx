@@ -58,7 +58,7 @@ export default function AnalyticsTrend({ points }: { points: AnalyticsTrendPoint
                 ]}
                 contentStyle={{
                   border: "1px solid var(--app-border)",
-                  borderRadius: 0,
+                  borderRadius: 10,
                   background: "var(--app-surface-raised)",
                   color: "var(--app-text)",
                   fontSize: 12,

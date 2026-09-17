@@ -90,7 +90,7 @@ export default function AnalyticsAttendance({
               <dt className="text-xs font-medium text-text-muted">
                 {metricLabel(id)}
               </dt>
-              <dd className="mt-2 font-mono text-2xl font-semibold tabular-nums text-text-heading">
+              <dd className="mt-2 font-mono text-xl font-medium tabular-nums text-text-heading">
                 {metric.value === null
                   ? "—"
                   : numberFormat.format(metric.value)}
@@ -143,7 +143,7 @@ export default function AnalyticsAttendance({
                     ]}
                     contentStyle={{
                       border: "1px solid var(--app-border)",
-                      borderRadius: 0,
+                      borderRadius: 10,
                       background: "var(--app-surface-raised)",
                       color: "var(--app-text)",
                       fontSize: 12,

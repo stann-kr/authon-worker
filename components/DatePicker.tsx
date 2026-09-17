@@ -18,6 +18,7 @@ interface DatePickerProps {
   businessDate?: string;
   className?: string;
   disabled?: boolean;
+  compact?: boolean;
 }
 
 function offsetDate(baseYmd: string, deltaDays: number): string {
@@ -41,6 +42,7 @@ export default function DatePicker({
   businessDate = getBusinessDate(),
   className = "",
   disabled = false,
+  compact = false,
 }: DatePickerProps) {
   const t = useTranslations("Common");
   const locale = useLocale() as "en" | "ko";
@@ -49,16 +51,17 @@ export default function DatePicker({
 
   return (
     <div
+      data-compact={compact}
       className={`operational-date-control min-w-0 ${disabled ? "opacity-60" : ""} ${className}`}
     >
       <label htmlFor={inputId} className="type-context-title">
         {t("operationalDate")}
       </label>
       <div className="operational-date-layout">
-        <div className="relative h-[46px] min-w-0 flex-1 group">
+        <div className="app-field-frame operational-date-field relative h-[46px] min-w-0 flex-1">
           {/* Mirroring UI Layer: 사용자가 실제로 보게 되는 텍스트와 달력 아이콘 */}
-          <div className="pointer-events-none absolute inset-0 flex items-center justify-between rounded-control border border-border-strong bg-surface-raised px-4 py-3 group-focus-within:border-border-focus">
-            <span className="min-w-0 truncate pr-3 text-sm font-medium text-text-heading">
+          <div className="app-field pointer-events-none absolute inset-0 flex items-center justify-between">
+            <span className="min-w-0 truncate pr-3 text-base text-text-heading">
               {formatDateDisplay(value, locale)}
             </span>
             <Icon name="calendar" size={18} className="text-text-muted" />
@@ -86,7 +89,7 @@ export default function DatePicker({
         <div
           role="group"
           aria-label={t("changeOperationalDate")}
-          className="operational-date-quick grid h-[46px] grid-cols-3 divide-x divide-border-default border border-border-default"
+          className="operational-date-quick grid h-[46px] grid-cols-3"
         >
           <button
             type="button"
@@ -96,7 +99,7 @@ export default function DatePicker({
             className="pressable flex min-h-11 touch-manipulation items-center justify-center gap-1 bg-surface-raised px-3 font-mono text-xs text-text-body hover:bg-surface-hover hover:text-text-heading disabled:cursor-not-allowed"
           >
             <Icon name="chevron-left" size={15} />
-            <span>-1D</span>
+            <span className="date-offset-label">-1D</span>
           </button>
           <button
             type="button"
@@ -106,7 +109,7 @@ export default function DatePicker({
             aria-label={t("setToday")}
             className={`pressable min-h-11 touch-manipulation px-3 font-mono text-xs font-semibold disabled:cursor-not-allowed ${
               isToday
-                ? "bg-action-primary text-action-text"
+                ? "bg-surface-active text-text-heading"
                 : "bg-surface-raised text-text-body hover:bg-surface-hover hover:text-text-heading"
             }`}
           >
@@ -119,7 +122,7 @@ export default function DatePicker({
             aria-label={t("nextDate")}
             className="pressable flex min-h-11 touch-manipulation items-center justify-center gap-1 bg-surface-raised px-3 font-mono text-xs text-text-body hover:bg-surface-hover hover:text-text-heading disabled:cursor-not-allowed"
           >
-            <span>+1D</span>
+            <span className="date-offset-label">+1D</span>
             <Icon name="chevron-right" size={15} />
           </button>
         </div>

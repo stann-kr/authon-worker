@@ -15,18 +15,16 @@ import { useTranslations } from "next-intl";
 import {
   createRouteLoadingTracker,
   getRouteLoadingCompletionDelay,
-  shouldRegisterRouteLoadingTask,
 } from "@/lib/route-loading";
 import { announceRouteTransitionStart } from "@/lib/route-transition-events";
 import Spinner from "./Spinner";
+import { beginBrowserLoading, observeBrowserPerformance } from "@/lib/observability/browser-performance";
 
 type TransitionPhase = "idle" | "visible" | "leaving";
 
 interface RouteTransitionContextValue {
   isRouteTransitionActive: boolean;
-  registerRouteLoadingTask: (options?: {
-    startWhenIdle?: boolean;
-  }) => () => void;
+  registerRouteLoadingTask: () => () => void;
   startRouteTransition: (href?: string) => boolean;
   requestFocusRestore: (
     targetRef: { current: HTMLElement | null },
@@ -47,9 +45,12 @@ export function RouteTransitionProvider({ children }: { children: ReactNode }) {
   const previousPathnameRef = useRef(pathname);
   const phaseRef = useRef<TransitionPhase>("idle");
   const visibleAtRef = useRef(0);
+  const finishPerformanceRef = useRef<ReturnType<typeof beginBrowserLoading> | null>(null);
+  const didTransitionTimeoutRef = useRef(false);
   const completionTimerRef = useRef<number | null>(null);
   const exitTimerRef = useRef<number | null>(null);
   const safetyTimerRef = useRef<number | null>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
   const overlayRef = useRef<HTMLDivElement>(null);
   const shouldRestoreFocusRef = useRef(false);
   const requestedFocusRef = useRef<{
@@ -159,6 +160,8 @@ export function RouteTransitionProvider({ children }: { children: ReactNode }) {
   const finishTransition = useCallback(() => {
     updatePhase("leaving");
     exitTimerRef.current = window.setTimeout(() => {
+      finishPerformanceRef.current?.(didTransitionTimeoutRef.current ? "timeout" : "ready");
+      finishPerformanceRef.current = null;
       updatePhase("idle");
       exitTimerRef.current = null;
     }, EXIT_DURATION_MS);
@@ -169,6 +172,9 @@ export function RouteTransitionProvider({ children }: { children: ReactNode }) {
 
     if (phaseRef.current === "idle" || phaseRef.current === "leaving") {
       clearTimer(exitTimerRef);
+      finishPerformanceRef.current?.("interrupted");
+      finishPerformanceRef.current = beginBrowserLoading();
+      didTransitionTimeoutRef.current = false;
       visibleAtRef.current = performance.now();
       updatePhase("visible");
     }
@@ -209,16 +215,7 @@ export function RouteTransitionProvider({ children }: { children: ReactNode }) {
     scheduleCompletion();
   }, [loadingTracker, scheduleCompletion, showLoading]);
 
-  const registerRouteLoadingTask = useCallback((options?: {
-    startWhenIdle?: boolean;
-  }) => {
-    if (!shouldRegisterRouteLoadingTask(
-      options?.startWhenIdle ?? true,
-      phaseRef.current === "visible",
-    )) {
-      return () => {};
-    }
-
+  const registerRouteLoadingTask = useCallback(() => {
     const releaseTask = loadingTracker.beginTask();
     reconcileLoading();
 
@@ -250,6 +247,7 @@ export function RouteTransitionProvider({ children }: { children: ReactNode }) {
       reconcileLoading();
       safetyTimerRef.current = window.setTimeout(() => {
         safetyTimerRef.current = null;
+        didTransitionTimeoutRef.current = true;
         loadingTracker.commitRoute();
         reconcileLoading();
       }, TRANSITION_TIMEOUT_MS);
@@ -267,8 +265,12 @@ export function RouteTransitionProvider({ children }: { children: ReactNode }) {
     reconcileLoading();
   }, [clearTimer, loadingTracker, pathname, reconcileLoading]);
 
+  useEffect(observeBrowserPerformance, []);
+
   useEffect(
     () => () => {
+      finishPerformanceRef.current?.("interrupted");
+      finishPerformanceRef.current = null;
       clearTimers();
       clearFocusFrame();
     },
@@ -289,6 +291,41 @@ export function RouteTransitionProvider({ children }: { children: ReactNode }) {
     }
   }, [phase, scheduleFocusRestore]);
 
+  useLayoutEffect(() => {
+    if (phase === "idle") return;
+    const overlay = overlayRef.current;
+    const content = contentRef.current;
+    if (!overlay || !content) return;
+    let observedHeader: HTMLElement | null = null;
+    const updateBounds = () => {
+      const header = content.querySelector<HTMLElement>(".workspace-header");
+      if (header !== observedHeader) {
+        resizeObserver?.disconnect();
+        if (header) resizeObserver?.observe(header);
+        observedHeader = header;
+      }
+      const bounds = header?.getBoundingClientRect();
+      overlay.style.setProperty("--route-content-left", `${Math.max(0, bounds?.left ?? 0)}px`);
+      overlay.style.setProperty("--route-content-top", `${Math.max(0, bounds?.bottom ?? 0)}px`);
+    };
+    const resizeObserver = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(updateBounds);
+    // The loading shell can be replaced before a saved sidebar preference is restored.
+    const contentObserver = new MutationObserver(updateBounds);
+    contentObserver.observe(content, {
+      childList: true,
+      subtree: true,
+      attributes: true,
+      attributeFilter: ["data-sidebar-collapsed"],
+    });
+    updateBounds();
+    window.addEventListener("resize", updateBounds);
+    return () => {
+      contentObserver.disconnect();
+      resizeObserver?.disconnect();
+      window.removeEventListener("resize", updateBounds);
+    };
+  }, [phase, pathname]);
+
   return (
     <RouteTransitionContext.Provider
       value={{
@@ -299,6 +336,7 @@ export function RouteTransitionProvider({ children }: { children: ReactNode }) {
       }}
     >
       <div
+        ref={contentRef}
         className="contents"
         inert={phase !== "idle" ? true : undefined}
         aria-hidden={phase !== "idle" || undefined}
@@ -322,6 +360,11 @@ export function RouteTransitionProvider({ children }: { children: ReactNode }) {
   );
 }
 
+/** Portal overlays share the route lock, including when rendered outside the inert page. */
+export function useIsRouteTransitionActive() {
+  return useContext(RouteTransitionContext)?.isRouteTransitionActive ?? false;
+}
+
 export function useRouteTransition() {
   const context = useContext(RouteTransitionContext);
 
@@ -335,27 +378,14 @@ export function useRouteTransition() {
 }
 
 /**
- * 인증, 베뉴 준비, 운영 데이터 조회처럼 화면 준비에 필요한 작업을
- * 현재 route loading cycle에 등록합니다.
+ * 인증과 최초 베뉴 준비처럼 화면 진입에 필수인 작업만 등록합니다.
+ * 목록·상세 조회는 각 영역의 skeleton을 사용하며 route 전환을 기다리게 하지 않습니다.
  */
 export function useRouteLoadingTask(isLoading: boolean) {
-  useLoadingTask(isLoading, true);
-}
-
-/**
- * 목록처럼 화면 내부에서 다시 조회할 수 있는 작업입니다.
- * route loading 중에는 목적지 준비에 합류하고, 화면이 열린 뒤에는
- * 전체 overlay를 새로 띄우지 않아 section 자체의 loading UI를 유지합니다.
- */
-export function useSectionLoadingTask(isLoading: boolean) {
-  useLoadingTask(isLoading, false);
-}
-
-function useLoadingTask(isLoading: boolean, startWhenIdle: boolean) {
   const { registerRouteLoadingTask } = useRouteTransition();
 
   useLayoutEffect(() => {
     if (!isLoading) return;
-    return registerRouteLoadingTask({ startWhenIdle });
-  }, [isLoading, registerRouteLoadingTask, startWhenIdle]);
+    return registerRouteLoadingTask();
+  }, [isLoading, registerRouteLoadingTask]);
 }

@@ -1,11 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { useTranslations } from "next-intl";
 import Icon from "@/components/Icon";
-import { fetchEvents } from "@/lib/api/events";
+import { fetchEvents } from "@/lib/events/client";
 import type { Event } from "@/lib/events/types";
-import { useLatestRequestGuard } from "@/lib/hooks";
+import { useLatestRef, useLatestRequestGuard } from "@/lib/hooks";
 
 interface EventScopeSelectorProps {
   venueId: string | null | undefined;
@@ -15,6 +15,7 @@ interface EventScopeSelectorProps {
   disabled?: boolean;
   reloadKey?: number;
   className?: string;
+  renderScope?: (control: ReactNode, label: string) => ReactNode;
 }
 
 export default function EventScopeSelector({
@@ -25,12 +26,16 @@ export default function EventScopeSelector({
   disabled = false,
   reloadKey = 0,
   className = "",
+  renderScope,
 }: EventScopeSelectorProps) {
   const t = useTranslations("EventScope");
+  const commonT = useTranslations("Common");
   const [events, setEvents] = useState<Event[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [hasError, setHasError] = useState(false);
   const requestGuard = useLatestRequestGuard();
+  const valueRef = useLatestRef(value);
+  const onChangeRef = useLatestRef(onChange);
 
   const loadEvents = useCallback(async () => {
     const isLatest = requestGuard.beginRequest();
@@ -38,28 +43,30 @@ export default function EventScopeSelector({
       setEvents([]);
       setHasError(false);
       setIsLoading(false);
-      onChange(null);
+      onChangeRef.current(null);
       return;
     }
     setIsLoading(true);
     setHasError(false);
-    const response = await fetchEvents({ venueId, businessDate });
-    if (!isLatest()) return;
-    if (response.error || !response.data) {
+    try {
+      const response = await fetchEvents({ venueId, businessDate });
+      if (!isLatest()) return;
+      if (response.error || !response.data) throw new Error("EVENT_LIST_FAILED");
+      const explicitEvents = response.data.filter(
+        (event) => event.compatibilityKey === null,
+      );
+      setEvents(explicitEvents);
+      if (valueRef.current && !explicitEvents.some((event) => event.id === valueRef.current)) {
+        onChangeRef.current(null);
+      }
+    } catch {
+      if (!isLatest()) return;
       setEvents([]);
       setHasError(true);
-      setIsLoading(false);
-      return;
+    } finally {
+      if (isLatest()) setIsLoading(false);
     }
-    const explicitEvents = response.data.filter(
-      (event) => event.compatibilityKey === null,
-    );
-    setEvents(explicitEvents);
-    if (value && !explicitEvents.some((event) => event.id === value)) {
-      onChange(null);
-    }
-    setIsLoading(false);
-  }, [businessDate, onChange, requestGuard, venueId, value]);
+  }, [businessDate, onChangeRef, requestGuard, valueRef, venueId]);
 
   useEffect(() => {
     void loadEvents();
@@ -74,7 +81,7 @@ export default function EventScopeSelector({
     [events, t],
   );
 
-  return (
+  const control = (
     <div className={`min-w-0 ${className}`}>
       <label htmlFor="event-scope-selector" className="type-context-title">
         {t("label")}
@@ -120,4 +127,7 @@ export default function EventScopeSelector({
       )}
     </div>
   );
+  const label = hasError ? t("loadFailed") : events.find((event) => event.id === value)?.name ??
+    (value ? commonT("loading") : t("generalRoster"));
+  return renderScope ? renderScope(control, label) : control;
 }

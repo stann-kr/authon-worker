@@ -7,40 +7,41 @@ module.exports = {
   theme: {
     extend: {
       colors: {
-        canvas: "#0A0B0C",
+        canvas: "var(--app-canvas)",
+        focus: "var(--app-focus)",
         surface: {
-          DEFAULT: "#111315",
-          raised: "#181B1E",
-          hover: "#202428",
-          active: "#292E33",
-          black: "#0A0B0C",
+          DEFAULT: "var(--app-surface)",
+          raised: "var(--app-surface-raised)",
+          hover: "var(--app-surface-hover)",
+          active: "var(--app-surface-active)",
+          black: "var(--app-canvas)",
         },
         border: {
-          subtle: "#2A2E32",
-          default: "#42484E",
-          strong: "#626B73",
-          focus: "#F4F5F5",
+          subtle: "var(--app-border-subtle)",
+          default: "var(--app-border)",
+          strong: "var(--app-border-strong)",
+          focus: "var(--app-focus)",
         },
         action: {
-          primary: "#E7EAEC",
-          hover: "#F4F5F5",
-          text: "#111315",
+          primary: "rgb(var(--app-action-rgb) / <alpha-value>)",
+          hover: "rgb(var(--app-action-hover-rgb) / <alpha-value>)",
+          text: "var(--app-action-text)",
         },
         status: {
-          checked: "#86A98D",
-          waiting: "#C2A56C",
-          danger: "#CC7770",
+          checked: "#34d399",
+          waiting: "#d5b479",
+          danger: "#fb7185",
         },
         text: {
-          muted: "#AAB0B5",
-          dim: "#7D858C",
-          body: "#D4D7D9",
-          heading: "#F4F5F5",
+          muted: "var(--app-text-muted)",
+          dim: "#99999f",
+          body: "var(--app-text-body)",
+          heading: "var(--app-text)",
         }
       },
       borderRadius: {
-        control: "0",
-        panel: "0",
+        control: "10px",
+        panel: "12px",
       },
       boxShadow: {
         panel: "none",

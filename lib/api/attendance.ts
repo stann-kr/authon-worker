@@ -1,5 +1,7 @@
 "use server";
 
+import { measureServerOperation } from "@/lib/observability/server-performance";
+
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { and, eq, isNull, ne, or, sql } from "drizzle-orm";
 import { requireAccess, type SessionUser } from "@/lib/auth/server";
@@ -13,7 +15,6 @@ import {
 import { getBusinessDate } from "@/lib/date";
 import { getCompatibilityEventKey } from "@/lib/events/domain";
 import { loadEventById, findCompatibilityEvent } from "@/lib/events/server";
-import { requireActiveVenueId } from "@/lib/tenant/active-server";
 import { reportServerError } from "@/lib/observability/structured-log";
 import { hashOpaqueIdentifier } from "@/lib/guests/activity-ledger";
 import {
@@ -68,7 +69,6 @@ async function loadAttendanceScope(params: {
     throw new AttendanceActionError("INVALID_ATTENDANCE_SCOPE");
   }
   const venueId = resolveRequestedVenueId(params.actor, params.scope.venueId);
-  await requireActiveVenueId(venueId);
   const [venue] = await getDb()
     .select({
       id: venues.id,
@@ -237,31 +237,33 @@ export async function fetchDoorAttendanceSummary(params: {
   scope: AttendanceScope;
   deviceId?: string | null;
 }): Promise<ApiResponse<DoorAttendanceSummary>> {
-  try {
-    const actor = await requireAccess("door");
-    const { venue, event } = await loadAttendanceScope({ actor, scope: params.scope });
-    const deviceKeyHash = params.deviceId
-      ? await hashOpaqueIdentifier(params.deviceId)
-      : null;
-    return {
-      data: await buildDoorAttendanceSummary({
-        scope: params.scope,
-        actorUserId: actor.id,
-        deviceKeyHash,
-        venue,
-        event,
-      }),
-      error: null,
-    };
-  } catch (error: unknown) {
-    await reportServerError("attendance.summary", error);
-    return {
-      data: null,
-      error: error instanceof AttendanceActionError
-        ? error.code
-        : "ATTENDANCE_SUMMARY_FAILED",
-    };
-  }
+  return measureServerOperation("server.attendance_summary", async (): Promise<ApiResponse<DoorAttendanceSummary>> => {
+    try {
+      const actor = await requireAccess("door");
+      const { venue, event } = await loadAttendanceScope({ actor, scope: params.scope });
+      const deviceKeyHash = params.deviceId
+        ? await hashOpaqueIdentifier(params.deviceId)
+        : null;
+      return {
+        data: await buildDoorAttendanceSummary({
+          scope: params.scope,
+          actorUserId: actor.id,
+          deviceKeyHash,
+          venue,
+          event,
+        }),
+        error: null,
+      };
+    } catch (error: unknown) {
+      await reportServerError("attendance.summary", error);
+      return {
+        data: null,
+        error: error instanceof AttendanceActionError
+          ? error.code
+          : "ATTENDANCE_SUMMARY_FAILED",
+      };
+    }
+  });
 }
 
 export async function syncDoorAttendanceMutations(params: {

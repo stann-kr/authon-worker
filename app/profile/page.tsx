@@ -9,7 +9,6 @@ import PasswordInput from "@/components/PasswordInput";
 import Icon from "@/components/Icon";
 import Button from "@/components/Button";
 import LanguageSwitcher from "@/components/LanguageSwitcher";
-import PageHeader from "@/components/PageHeader";
 import WorkspaceShell from "@/components/WorkspaceShell";
 import { useAuthSession } from "@/components/AuthSessionProvider";
 import { useTranslations } from "next-intl";
@@ -94,55 +93,20 @@ export default function ProfilePage() {
 
   return (
     <WorkspaceShell width="narrow" contentClassName="gap-6">
-      <PageHeader
-        titleId="profile-page-title"
-        title={t("title")}
-      />
+      <h1 id="profile-page-title" className="sr-only">{t("title")}</h1>
 
       <section
         aria-labelledby="profile-page-title"
-        className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,18rem)_minmax(0,1fr)]"
+        className="profile-workspace"
       >
-        <aside
-          className="app-panel self-start p-4 sm:p-5"
-          aria-labelledby="account-info-title"
-        >
-          <h2
-            id="account-info-title"
-            className="text-xs font-medium text-text-muted sm:text-sm"
-          >
-            {t("accountInfo")}
-          </h2>
-
-          <div className="mt-4 flex flex-col items-center text-center">
-            <div className="mb-4 flex h-20 w-20 items-center justify-center rounded-panel border border-border-default bg-surface-raised sm:h-24 sm:w-24">
-              <Icon name="user" size={30} className="text-text-muted" />
-            </div>
-            <p className="mb-1 max-w-full break-words text-base font-semibold text-text-heading sm:text-lg">
-              {user.name}
-            </p>
-            <p className="break-all text-xs text-text-muted">{user.email}</p>
-          </div>
-
-          <dl className="mt-5 space-y-3 border-t border-border-default pt-4">
-            <div className="flex items-center justify-between gap-3">
-              <dt className="text-xs text-text-dim">{t("role")}</dt>
-              <dd className="text-right text-xs text-text-heading">
-                <RoleLabel role={user.role} />
-              </dd>
-            </div>
-            <div className="flex items-center justify-between gap-3">
-              <dt className="text-xs text-text-dim">{t("guestLimit")}</dt>
-              <dd className="font-mono text-xs text-text-heading">
-                {user.guest_limit === null ? t("unlimited") : user.guest_limit}
-              </dd>
-            </div>
-            <div className="flex items-center justify-between gap-3">
-              <dt className="text-xs text-text-dim">{t("status")}</dt>
-              <dd className="text-xs text-text-heading">{t("active")}</dd>
-            </div>
+        <section className="profile-summary" aria-label={t("accountInfo")}>
+          <div className="profile-identity"><span aria-hidden="true">{user.name.charAt(0)}</span><div><strong>{user.name}</strong><small>{user.email}</small></div></div>
+          <dl className="profile-facts">
+            <div><dt>{t("role")}</dt><dd><RoleLabel role={user.account_kind === "shared" ? "shared" : user.role} /></dd></div>
+            <div><dt>{t("guestLimit")}</dt><dd>{user.guest_limit === null ? t("unlimited") : user.guest_limit}</dd></div>
+            <div><dt>{t("status")}</dt><dd>{t("active")}</dd></div>
           </dl>
-        </aside>
+        </section>
 
         <div className="space-y-6">
           {showSuccess && (
@@ -163,14 +127,14 @@ export default function ProfilePage() {
                 </h2>
               </div>
 
-              <div className="grid grid-cols-2 gap-2">
+              <div className="profile-tabs">
                 <button
                   type="button"
                   onClick={() => setActiveSection("profile")}
                   aria-pressed={activeSection === "profile"}
                   className={`min-h-11 rounded-control border px-4 py-3 text-sm font-medium ${
                     activeSection === "profile"
-                      ? "border-action-primary bg-action-primary text-action-text"
+                      ? "border-border-strong bg-surface-active text-text-heading"
                       : "bg-canvas text-text-muted border-border-default hover:text-text-heading hover:border-border-strong"
                   }`}
                 >
@@ -182,7 +146,7 @@ export default function ProfilePage() {
                   aria-pressed={activeSection === "security"}
                   className={`min-h-11 rounded-control border px-4 py-3 text-sm font-medium ${
                     activeSection === "security"
-                      ? "border-action-primary bg-action-primary text-action-text"
+                      ? "border-border-strong bg-surface-active text-text-heading"
                       : "bg-canvas text-text-muted border-border-default hover:text-text-heading hover:border-border-strong"
                   }`}
                 >
@@ -191,8 +155,7 @@ export default function ProfilePage() {
               </div>
             </div>
 
-            {activeSection === "profile" ? (
-              <div>
+            <div hidden={activeSection !== "profile"}>
                 <div className="border-b border-border-default p-4">
                   <h3 className="text-xs font-semibold text-text-heading sm:text-sm">
                     {t("editProfile")}
@@ -244,8 +207,7 @@ export default function ProfilePage() {
                   </Button>
                 </form>
               </div>
-            ) : (
-              <div>
+              <div hidden={activeSection !== "security"}>
                 <div className="border-b border-border-default p-4">
                   <h3 className="text-xs font-semibold text-text-heading sm:text-sm">
                     {t("changePassword")}
@@ -253,7 +215,6 @@ export default function ProfilePage() {
                 </div>
                 <PasswordChangeForm />
               </div>
-            )}
           </div>
         </div>
       </section>

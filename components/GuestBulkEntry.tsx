@@ -90,6 +90,7 @@ export default function GuestBulkEntry({
   const [csvError, setCsvError] = useState<ParsedGuestCsv["error"] | "READ_FAILED" | null>(null);
   const isMountedRef = useRef(true);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const csvFileRef = useRef<HTMLInputElement>(null);
   const shouldRestoreFocusRef = useRef(false);
 
   useEffect(() => {
@@ -260,6 +261,12 @@ export default function GuestBulkEntry({
 
       setRawInput(retainedLines.map(toRetainedBulkGuestLineText).join("\n"));
       setDuplicateOverrides(new Set());
+      if (createdLineNumbers.size > 0 && retainedLines.length === 0) {
+        setCsvDocument(null);
+        setCsvColumnIndex(null);
+        setCsvError(null);
+        if (csvFileRef.current) csvFileRef.current.value = "";
+      }
       shouldRestoreFocusRef.current = true;
 
       if (infrastructureError === "RATE_LIMITED") {
@@ -368,6 +375,7 @@ export default function GuestBulkEntry({
             {t("csv.fileLabel")}
           </label>
           <input
+            ref={csvFileRef}
             id={csvFileId}
             name="guest-csv-file"
             type="file"
@@ -582,7 +590,7 @@ export default function GuestBulkEntry({
               })}
             </ol>
 
-            <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
+            <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-[minmax(0,1fr)_auto]">
               <Button
                 type="button"
                 onClick={handleSubmit}

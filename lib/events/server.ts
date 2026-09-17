@@ -1,7 +1,7 @@
 import "server-only";
 
 import { and, eq } from "drizzle-orm";
-import { getCloudflareContext } from "@opennextjs/cloudflare";
+import { getD1Database } from "@/lib/db/client";
 import { getDb } from "@/lib/db/client";
 import { events } from "@/lib/db/schema";
 import { requireActiveVenueId } from "@/lib/tenant/active-server";
@@ -130,7 +130,7 @@ export async function resolveEventForRosterWrite(params: {
       throw new Error("EVENT_NOT_FOUND");
     }
     event = await resolveGuardedCompatibilityEvent(
-      getCloudflareContext().env.DB,
+      getD1Database(),
       {
         proposedId,
         venueId,

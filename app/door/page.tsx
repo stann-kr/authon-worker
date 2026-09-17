@@ -1,15 +1,24 @@
 "use client";
 
+import WorkspaceAction from "@/components/workspace/WorkspaceAction";
+import OperationsScope from "@/components/operations/OperationsScope";
+
+import Sheet from "@/components/overlays/Sheet";
+import RosterView, { type RosterStatus } from "@/components/guests/RosterView";
+
+import { fetchGuestsByDate } from "@/lib/guests/client";
+import { fetchOfflineDoorRoster } from "@/lib/door/client";
+
 import { useState, useEffect, useMemo } from "react";
 import { useLocalStorage } from "../../lib/hooks";
 import AuthGuard from "../../components/AuthGuard";
 import GuestListCard from "../../components/GuestListCard";
-import GuestSearchInput from "../../components/GuestSearchInput";
+
 import VenueSelector, {
   useVenueSelector,
 } from "../../components/VenueSelector";
 import DatePicker from "../../components/DatePicker";
-import StatGrid from "../../components/StatGrid";
+
 import PanelHeader from "../../components/PanelHeader";
 import WorkspaceShell from "../../components/WorkspaceShell";
 import VenueLoadNotice from "../../components/VenueLoadNotice";
@@ -26,7 +35,6 @@ import useDoorRosterController, {
 import useDoorCodeLookup, {
   type DoorCodeLookupDependencies,
 } from "./useDoorCodeLookup";
-import { useSectionLoadingTask } from "../../components/RouteTransitionProvider";
 import { getBusinessDate } from "../../lib/date";
 import { orderGuestDisplayList } from "../../lib/guests/display-order";
 import {
@@ -34,13 +42,11 @@ import {
   shouldShowEmptyState,
 } from "../../lib/ui/async-list-state";
 import {
-  fetchGuestsByDate,
   updateGuestStatus,
   deleteGuest,
 } from "../../lib/api/guests";
-import { fetchGuestOperationsSnapshot } from "../../lib/api/guest-snapshots";
+import { fetchGuestOperationsSnapshot } from "@/lib/guest-snapshots/client";
 import {
-  fetchOfflineDoorRoster,
   findDoorGuestByCode,
   syncOfflineDoorMutations,
 } from "../../lib/api/offline-door";
@@ -105,8 +111,10 @@ function DoorPageContent() {
     "door:selectedDate",
     getBusinessDate(),
   );
+  const [tool, setTool] = useState<"code" | "offline" | null>(null);
   const [selectedDJ, setSelectedDJ] = useState<string>("all");
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
+  const [rosterStatus, setRosterStatus] = useState<RosterStatus>("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [sortMode, setSortMode] = useLocalStorage<"default" | "alpha">(
     "door:sortMode",
@@ -123,6 +131,7 @@ function DoorPageContent() {
     handleClearResolvedOfflineMutations,
     handleStatusChange,
     hasCurrentScopeData,
+    hasPendingGuestMutations,
     hasResolvedOfflineMutations,
     isCurrentScopeFetching,
     isFetching,
@@ -154,7 +163,6 @@ function DoorPageContent() {
         : null,
     [selectedDate, selectedEventId, venueId],
   );
-  useSectionLoadingTask(isCurrentScopeFetching);
 
   useEffect(() => {
     if (currentVenue) setSelectedDate(businessDate);
@@ -178,7 +186,7 @@ function DoorPageContent() {
     scope: offlineScope,
     guests,
     isOfflineMode,
-    onGuestFound: setSearchQuery,
+    onGuestFound: (name) => { setSearchQuery(name); setSelectedDJ("all"); setRosterStatus("all"); setTool(null); },
     dependencies: DOOR_CODE_LOOKUP_DEPENDENCIES,
   });
 
@@ -223,11 +231,10 @@ function DoorPageContent() {
     locale: locale === "ko" ? "ko-KR" : "en-US",
     prioritizeWaiting,
   });
-  const displayGuests = searchQuery
-    ? sortedGuests.filter((g) =>
-        (g.name || "").toLowerCase().includes(searchQuery.toLowerCase()),
-      )
-    : sortedGuests;
+  const displayGuests = sortedGuests.filter((guest) =>
+    (rosterStatus === "all" || guest.status === rosterStatus) &&
+    [guest.name, guest.registeredByName, getContributor(guest).name].some((value) =>
+      value?.toLocaleLowerCase().includes(searchQuery.trim().toLocaleLowerCase())));
   const listState = deriveAsyncListState({
     hasStarted: isFetching || loadOutcome !== "idle",
     isLoading: isCurrentScopeFetching,
@@ -251,10 +258,20 @@ function DoorPageContent() {
   );
 
   return (
-    <WorkspaceShell
+    <AttendanceCounter
+              scope={attendanceScope}
+              currentBusinessDate={businessDate}
+              checkedInGuests={scopeCheckedInGuests}
+              hasPendingGuestMutations={hasPendingGuestMutations}
+            >
+      {(attendanceActions, attendanceDetails, entryLocked) => <WorkspaceShell
       contentClassName="gap-4 md:pb-8 lg:gap-6"
-      bottomInsetClassName="pb-[var(--door-mobile-dock-height,calc(6rem+env(safe-area-inset-bottom)))] md:pb-0"
       footerLayer="below-mobile-dock"
+      actions={<>
+        {offlineScope && <WorkspaceAction icon="search" onClick={() => setTool("code")}>{t("guestCodeLookup")}</WorkspaceAction>}
+        {attendanceActions}
+        {offlineScope && <WorkspaceAction icon="refresh" tone="muted" onClick={() => setTool("offline")}>{t("offlineOperations")} {offlineQueueCounts.queued > 0 ? offlineQueueCounts.queued : ""}</WorkspaceAction>}
+      </>}
     >
       {venueLoadError && (
         <VenueLoadNotice
@@ -263,37 +280,39 @@ function DoorPageContent() {
         />
       )}
       <OperationsLayout
+        variant="stacked"
         title={commonT("door")}
         dashboard={
           <>
-            <AttendanceCounter
-              scope={attendanceScope}
-              currentBusinessDate={businessDate}
-              checkedInGuests={scopeCheckedInGuests}
-              hasPendingGuestMutations={offlineQueueCounts.queued > 0}
-            />
-            <div className="context-bar">
-                  <DatePicker
-                    value={selectedDate}
-                    onChange={setSelectedDate}
-                    businessDate={businessDate}
-                  />
-                  <div className="context-filter-grid">
-                    {isSuperAdmin && (
-                      <VenueSelector
-                        venues={venues}
-                        selectedVenueId={selectedVenueId}
-                        onVenueChange={setSelectedVenueId}
-                      />
-                    )}
-                    <EventScopeSelector
-                      venueId={venueId}
-                      businessDate={selectedDate}
-                      value={selectedEventId}
-                      onChange={setSelectedEventId}
-                    />
+
+            <EventScopeSelector venueId={venueId} businessDate={selectedDate}
+              value={selectedEventId} onChange={setSelectedEventId}
+              renderScope={(selector, label) => <OperationsScope venueName={currentVenue?.brandName || currentVenue?.name} date={selectedDate} label={label}>
+                <DatePicker compact value={selectedDate} onChange={setSelectedDate} businessDate={businessDate} />
+                {isSuperAdmin && <VenueSelector venues={venues} selectedVenueId={selectedVenueId} onVenueChange={setSelectedVenueId} />}
+                {selector}
+              </OperationsScope>} />
+
+                {feedback && <Alert type="error" message={feedback} />}
+
+                {attendanceDetails}
+                {(isOfflineMode || offlineQueueCounts.queued > 0 || hasResolvedOfflineMutations || offlineNotice) &&
+                  <button type="button" className="text-left text-xs text-status-waiting" onClick={() => setTool("offline")}>
+                    {isOfflineMode ? t("offlineCachedRoster") : t("offlineOperations")} · {t("offlineQueued")} {offlineQueueCounts.queued}
+                    {offlineNotice ? ` · ${t(`offlineNotice.${offlineNotice}`)}` : ""}
+                  </button>}
+
+          </>
+        }
+      >
+            <section
+              className="min-w-0"
+              aria-label={t("guestList")}
+              aria-busy={isCurrentScopeFetching}
+            >
+              <RosterView variant="operations" filtersActive={selectedDJ !== "all" || sortMode !== "default" || !prioritizeWaiting} filters={
                     <div className="min-w-0">
-                      <label htmlFor="door-user-filter" className="type-context-title">
+                      <label htmlFor="door-user-filter" className="sr-only">
                         {t("guestOwner")}
                       </label>
                       <div className="relative">
@@ -324,11 +343,131 @@ function DoorPageContent() {
                         />
                       </div>
                     </div>
-                  </div>
+              } header={<PanelHeader
+                title={t("guestList")}
+                headingLevel={2}
+                headingId="door-guest-list-title"
+                count={displayGuests.length}
+                sortMode={sortMode}
+                onSortToggle={() =>
+                  setSortMode((prev) =>
+                    prev === "default" ? "alpha" : "default",
+                  )
+                }
+                onRefresh={loadData}
+                isLoading={isCurrentScopeFetching}
+                actions={
+                  <button
+                    type="button"
+                    aria-pressed={prioritizeWaiting}
+                    onClick={() => setPrioritizeWaiting((current) => !current)}
+                    className={`pressable min-h-11 whitespace-nowrap border px-3 py-2 text-xs font-medium ${
+                      prioritizeWaiting
+                        ? "border-border-strong bg-surface-active text-text-heading"
+                        : "border-border-default bg-surface-raised text-text-muted hover:border-border-strong hover:text-text-heading"
+                    }`}
+                  >
+                    {t("prioritizeWaiting")}
+                  </button>
+                }
+              />} query={searchQuery} onQueryChange={setSearchQuery}
+            status={rosterStatus} onStatusChange={setRosterStatus}
+            loading={!hasCurrentScopeData} counts={{ all: filteredGuests.length, pending: pendingGuests.length, checked: checkedGuests.length }}>
+
+              {listState === "loading" ? (
+                <Skeleton rows={6} />
+              ) : shouldShowEmptyState(listState) ? (
+                <EmptyState
+                  icon="user"
+                  message={
+                    searchQuery || rosterStatus !== "all"
+                      ? t("noSearchResults")
+                      : t("noGuestsForDate")
+                  }
+                />
+              ) : (
+                <div
+                  className={`product-roster-rows ${
+                    isCurrentScopeFetching ? "pointer-events-none" : ""
+                  }`}
+                >
+                  {displayGuests.map((guest, index) => {
+                    const contributor = getContributor(guest);
+                    return <GuestListCard
+                      key={guest.id}
+                      guest={{
+                        id: guest.id,
+                        name: guest.name,
+                        status: guest.status,
+                        checkInTime: guest.checkInTime || undefined,
+                        createdAt: guest.createdAt || undefined,
+                      }}
+                      index={index}
+                      mode="operations"
+                      djName={contributor.name}
+                      accountKind={contributor.accountKind}
+                      registeredByName={guest.registeredByName}
+                      onCheck={() =>
+                        handleStatusChange(guest.id, "checked", "check")
+                      }
+                      onUndo={() =>
+                        handleStatusChange(guest.id, "pending", "undo")
+                      }
+                      isCheckLoading={loadingStates[`${guest.id}_check`]}
+                      isUndoLoading={loadingStates[`${guest.id}_undo`]}
+                      isEntryDisabled={entryLocked}
+                    />;
+                  })}
                 </div>
-
-                {feedback && <Alert type="error" message={feedback} />}
-
+              )}
+          </RosterView>
+            </section>
+      </OperationsLayout>
+      <Sheet open={tool === "code"} title={t("guestCodeLookup")} onClose={() => setTool(null)} busy={isDoorCodeLoading}>
+              {offlineScope && (
+                <form
+                  onSubmit={handleDoorCodeLookup}
+                  className="border-b border-border-subtle bg-surface px-4 py-3 sm:px-5"
+                >
+                  <label htmlFor="door-guest-code" className="app-label">
+                    {t("guestCode")}
+                  </label>
+                  <div className="flex flex-col gap-2 sm:flex-row">
+                    <input
+                      id="door-guest-code"
+                      name="door-guest-code"
+                      value={doorCode}
+                      onChange={(event) => handleDoorCodeChange(event.target.value)}
+                      autoComplete="off"
+                      autoCapitalize="characters"
+                      spellCheck={false}
+                      placeholder={t("guestCodePlaceholder")}
+                      className="app-field min-h-11 flex-1 font-mono"
+                    />
+                    <button
+                      type="submit"
+                      disabled={!doorCode.trim() || isDoorCodeLoading}
+                      className="pressable min-h-11 border border-action-primary bg-action-primary px-4 py-2 text-sm font-semibold text-action-text disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {isDoorCodeLoading ? t("guestCodeLookingUp") : t("guestCodeLookup")}
+                    </button>
+                  </div>
+                  {doorCodeFeedback && (
+                    <p
+                      className={`mt-2 text-xs ${
+                        doorCodeFeedback === "found"
+                          ? "text-status-checked"
+                          : "text-status-danger"
+                      }`}
+                      role={doorCodeFeedback === "found" ? "status" : "alert"}
+                    >
+                      {t(`guestCodeFeedback.${doorCodeFeedback}`)}
+                    </p>
+                  )}
+                </form>
+              )}
+      </Sheet>
+      <Sheet open={tool === "offline"} title={t("offlineOperations")} onClose={() => setTool(null)} busy={isOfflineSyncing}>
                 {offlineScope && (
                   <div
                     className="app-panel space-y-3 p-4 sm:p-5"
@@ -393,157 +532,8 @@ function DoorPageContent() {
                   </div>
                 )}
 
-          </>
-        }
-      >
-            <section
-              className="main-content-panel"
-              aria-labelledby="door-guest-list-title"
-              aria-busy={isCurrentScopeFetching}
-            >
-              <PanelHeader
-                title={t("guestList")}
-                headingLevel={2}
-                headingId="door-guest-list-title"
-                count={displayGuests.length}
-                sortMode={sortMode}
-                onSortToggle={() =>
-                  setSortMode((prev) =>
-                    prev === "default" ? "alpha" : "default",
-                  )
-                }
-                onRefresh={loadData}
-                isLoading={isCurrentScopeFetching}
-                actions={
-                  <button
-                    type="button"
-                    aria-pressed={prioritizeWaiting}
-                    onClick={() => setPrioritizeWaiting((current) => !current)}
-                    className={`pressable min-h-11 whitespace-nowrap border px-3 py-2 text-xs font-medium ${
-                      prioritizeWaiting
-                        ? "border-action-primary bg-surface-active text-text-heading"
-                        : "border-border-default bg-surface-raised text-text-muted hover:border-border-strong hover:text-text-heading"
-                    }`}
-                  >
-                    {t("prioritizeWaiting")}
-                  </button>
-                }
-              />
-              <GuestSearchInput
-                value={searchQuery}
-                onChange={setSearchQuery}
-              />
-              {offlineScope && (
-                <form
-                  onSubmit={handleDoorCodeLookup}
-                  className="border-b border-border-subtle bg-surface px-4 py-3 sm:px-5"
-                >
-                  <label htmlFor="door-guest-code" className="app-label">
-                    {t("guestCode")}
-                  </label>
-                  <div className="flex flex-col gap-2 sm:flex-row">
-                    <input
-                      id="door-guest-code"
-                      name="door-guest-code"
-                      value={doorCode}
-                      onChange={(event) => handleDoorCodeChange(event.target.value)}
-                      autoComplete="off"
-                      autoCapitalize="characters"
-                      spellCheck={false}
-                      placeholder={t("guestCodePlaceholder")}
-                      className="app-field min-h-11 flex-1 font-mono"
-                    />
-                    <button
-                      type="submit"
-                      disabled={!doorCode.trim() || isDoorCodeLoading}
-                      className="pressable min-h-11 border border-action-primary bg-action-primary px-4 py-2 text-sm font-semibold text-action-text disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      {isDoorCodeLoading ? t("guestCodeLookingUp") : t("guestCodeLookup")}
-                    </button>
-                  </div>
-                  {doorCodeFeedback && (
-                    <p
-                      className={`mt-2 text-xs ${
-                        doorCodeFeedback === "found"
-                          ? "text-status-checked"
-                          : "text-status-danger"
-                      }`}
-                      role={doorCodeFeedback === "found" ? "status" : "alert"}
-                    >
-                      {t(`guestCodeFeedback.${doorCodeFeedback}`)}
-                    </p>
-                  )}
-                </form>
-              )}
-              <StatGrid
-                variant="embedded"
-                isLoading={!hasCurrentScopeData}
-                items={[
-                  {
-                    label: t("waiting"),
-                    value: pendingGuests.length,
-                    color: "waiting",
-                  },
-                  {
-                    label: t("checkedIn"),
-                    value: checkedGuests.length,
-                    color: "checked",
-                  },
-                  {
-                    label: t("total"),
-                    value: pendingGuests.length + checkedGuests.length,
-                    color: "default",
-                  },
-                ]}
-              />
-
-              {listState === "loading" ? (
-                <Skeleton rows={6} />
-              ) : shouldShowEmptyState(listState) ? (
-                <EmptyState
-                  icon="user"
-                  message={
-                    searchQuery
-                      ? t("noSearchResults")
-                      : t("noGuestsForDate")
-                  }
-                />
-              ) : (
-                <div
-                  className={`divide-y divide-border-subtle ${
-                    isCurrentScopeFetching ? "pointer-events-none" : ""
-                  }`}
-                >
-                  {displayGuests.map((guest, index) => {
-                    const contributor = getContributor(guest);
-                    return <GuestListCard
-                      key={guest.id}
-                      guest={{
-                        id: guest.id,
-                        name: guest.name,
-                        status: guest.status,
-                        checkInTime: guest.checkInTime || undefined,
-                        createdAt: guest.createdAt || undefined,
-                      }}
-                      index={index}
-                      mode="operations"
-                      djName={contributor.name}
-                      accountKind={contributor.accountKind}
-                      registeredByName={guest.registeredByName}
-                      onCheck={() =>
-                        handleStatusChange(guest.id, "checked", "check")
-                      }
-                      onUndo={() =>
-                        handleStatusChange(guest.id, "pending", "undo")
-                      }
-                      isCheckLoading={loadingStates[`${guest.id}_check`]}
-                      isUndoLoading={loadingStates[`${guest.id}_undo`]}
-                    />;
-                  })}
-                </div>
-              )}
-            </section>
-      </OperationsLayout>
-    </WorkspaceShell>
+      </Sheet>
+    </WorkspaceShell>}
+    </AttendanceCounter>
   );
 }

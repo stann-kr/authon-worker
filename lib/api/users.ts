@@ -1,5 +1,8 @@
 "use server";
 
+import { getD1Database } from "@/lib/db/client";
+import { measureServerOperation } from "@/lib/observability/server-performance";
+
 import { reportServerError } from "@/lib/observability/structured-log";
 import {
   createDeletedUserPasswordHash,
@@ -57,43 +60,47 @@ function getUserActionError(
 export async function fetchUsersByVenue(
   venueId?: string | null,
 ): Promise<ApiResponse<UserDirectoryEntry[]>> {
-  try {
-    const actor = await requireRole([
-      "super_admin",
-      "venue_admin",
-      "door_staff",
-      "staff",
-      "dj",
-    ]);
-    return {
-      data: await listUserDirectory(
-        { actor: toUserServiceActor(actor), requestedVenueId: venueId },
-        createUserPersistence(),
-      ),
-      error: null,
-    };
-  } catch (error) {
-    await reportServerError("user.directory", error);
-    return { data: null, error: "Unable to load users right now." };
-  }
+  return measureServerOperation("server.user_list", async (): Promise<ApiResponse<UserDirectoryEntry[]>> => {
+    try {
+      const actor = await requireRole([
+        "super_admin",
+        "venue_admin",
+        "door_staff",
+        "staff",
+        "dj",
+      ]);
+      return {
+        data: await listUserDirectory(
+          { actor: toUserServiceActor(actor), requestedVenueId: venueId },
+          createUserPersistence(getD1Database()),
+        ),
+        error: null,
+      };
+    } catch (error) {
+      await reportServerError("user.directory", error);
+      return { data: null, error: "Unable to load users right now." };
+    }
+  });
 }
 
 export async function fetchManagedUsersByVenue(
   venueId?: string | null,
 ): Promise<ApiResponse<User[]>> {
-  try {
-    const actor = await requireRole(["super_admin", "venue_admin"]);
-    return {
-      data: await listManagedUsers(
-        { actor: toUserServiceActor(actor), requestedVenueId: venueId },
-        createUserPersistence(),
-      ),
-      error: null,
-    };
-  } catch (error) {
-    await reportServerError("user.managed_list", error);
-    return { data: null, error: "Unable to load users right now." };
-  }
+  return measureServerOperation("server.managed_user_list", async (): Promise<ApiResponse<User[]>> => {
+    try {
+      const actor = await requireRole(["super_admin", "venue_admin"]);
+      return {
+        data: await listManagedUsers(
+          { actor: toUserServiceActor(actor), requestedVenueId: venueId },
+          createUserPersistence(getD1Database()),
+        ),
+        error: null,
+      };
+    } catch (error) {
+      await reportServerError("user.managed_list", error);
+      return { data: null, error: "Unable to load users right now." };
+    }
+  });
 }
 
 export async function fetchUserAuditEvents(

@@ -1,0 +1,32 @@
+.analytics-period-controls {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 8px;
+}
+.analytics-period-controls .button-row { flex-wrap: nowrap; }
+.analytics-period-controls .button-row > button {
+  width: 44px;
+  min-height: var(--control-height);
+  flex: 0 0 44px;
+  padding: 8px;
+  font-size: 20px;
+}
+.analytics-period-caption { display: flex; flex-wrap: wrap; gap: 4px 16px; color: var(--muted); }
+.analytics-period-summary { margin: 0; font-size: 12px; line-height: 1.7; }
+.analytics-section { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; }
+.analytics-section > .flow-subheading { margin: 8px 0 0; }
+.analytics-section > .flow-metrics { margin: 0; padding-bottom: 16px; border-bottom: 1px solid var(--line); }
+.analytics-section > div.flow-metrics > div { display: grid; grid-template-rows: auto auto 1fr; gap: 5px; align-content: start; }
+.analytics-section > div.flow-metrics strong { font-size: 20px; font-weight: 500; font-variant-numeric: tabular-nums; }
+.analytics-section > dl.flow-metrics dd { font-size: 18px; }
+@container content (min-width: 700px) {
+  .analytics-section { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px 32px; }
+  .analytics-section > * { grid-column: 1 / -1; }
+  .analytics-section > .analytics-trend { grid-column: auto; }
+  .analytics-section > .flow-metrics { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .analytics-section > .flow-filter-stack { display: flex; flex-direction: row; flex-wrap: wrap; align-items: center; gap: 20px; max-width: none; }
+  .analytics-section > .flow-filter-stack .flow-tabs { padding-bottom: 0; }
+  .analytics-period-controls { width: 360px; max-width: 100%; }
+  .analytics-period-controls .field > span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+}

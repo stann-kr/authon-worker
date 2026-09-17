@@ -1,0 +1,96 @@
+.dock-nav {
+  overflow: visible;
+  min-width: 0;
+  width: max-content;
+  max-width: 100%;
+}
+.dock-nav-window {
+  flex: 0 1 auto;
+  min-width: 0;
+  position: relative;
+}
+.dock-nav-scroll {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  scroll-padding-inline: 20px;
+  padding: 4px;
+  margin: -4px;
+}
+.dock-nav-scroll::-webkit-scrollbar {
+  display: none;
+}
+.navigation-pill,
+.dock-nav .dock-more {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 10px 14px;
+  min-height: 44px;
+  min-width: 44px;
+  border: 0;
+  border-radius: 99px;
+  white-space: nowrap;
+  background: var(--pill-bg);
+  color: #b7b7bb;
+  font-size: 14px;
+  font-weight: 500;
+}
+.navigation-pill[aria-current="page"] {
+  background: #e7e7e7;
+  color: #111111;
+  font-weight: 600;
+}
+.dock-nav .dock-more {
+  position: relative;
+  padding-inline: 12px;
+  border: 0;
+}
+.dock-nav .dock-more[aria-expanded="true"] {
+  background: var(--pill-active);
+  color: var(--text);
+}
+.dock-more .nav-count {
+  position: absolute;
+  top: -5px;
+  right: -3px;
+  border: 2px solid var(--bg);
+  background: #3a3a3a;
+}
+.dock-edge {
+  display: none;
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 20px;
+  align-items: center;
+  color: var(--muted);
+  pointer-events: none;
+  font-size: 20px;
+}
+.dock-edge.previous {
+  left: -4px;
+  background: linear-gradient(to right, var(--bg), transparent);
+}
+.dock-edge.next {
+  right: -4px;
+  justify-content: flex-end;
+  background: linear-gradient(to left, var(--bg), transparent);
+}
+.dock-nav-scroll[data-previous="true"] ~ .previous,
+.dock-nav-scroll[data-next="true"] ~ .next {
+  display: flex;
+}
+@container workspace (max-width: 440px) {
+  .dock-tools .action-pill { flex: 0 0 auto; white-space: nowrap; padding-inline: 12px 16px; gap: 8px; }
+  .dock-tools .action-pill > span:last-child { line-height: 1.4; }
+  .navigation-pill { padding-inline: 12px; }
+}
+@media (hover: hover) and (pointer: fine) {
+  .dock-tools .action-pill:hover:not(:disabled),
+  .navigation-pill:not([aria-current="page"]):hover,
+  .dock-more:hover { background: var(--pill-active); }
+}

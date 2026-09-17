@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
+import { registerHooks } from "node:module";
 import { afterEach, test } from "node:test";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { hydrateRoot } from "react-dom/client";
+import { renderToString } from "react-dom/server";
 import { NextIntlClientProvider } from "next-intl";
 import {
   act,
@@ -20,16 +23,20 @@ import ExternalDjCombobox from "@/app/admin/components/ExternalDjCombobox";
 import ExternalEventCombobox from "@/app/admin/components/ExternalEventCombobox";
 import AsyncListContent from "@/components/AsyncListContent";
 import ConfirmDialog from "@/components/ConfirmDialog";
+import Sheet from "@/components/overlays/Sheet";
+import RosterView, { type RosterStatus } from "@/components/guests/RosterView";
 import GuestListCard from "@/components/GuestListCard";
 import OperationalSectionNav from "@/components/OperationalSectionNav";
 import GuestBulkEntry from "@/components/GuestBulkEntry";
+import EventScopeSelector from "@/components/EventScopeSelector";
+import OperationsScope from "@/components/operations/OperationsScope";
 import {
   RouteTransitionProvider,
   useRouteTransition,
 } from "@/components/RouteTransitionProvider";
 import useMobileDockInset from "@/app/door/components/useMobileDockInset";
 import { EMPTY_ANALYTICS_DTO_FIXTURE } from "@/lib/analytics/test-fixtures";
-import { useLatestRef } from "@/lib/hooks";
+import { useLatestRef, useLocalStorage } from "@/lib/hooks";
 import messages from "@/messages/en.json";
 
 if (!window.requestAnimationFrame) {
@@ -40,6 +47,99 @@ if (!window.requestAnimationFrame) {
 afterEach(() => {
   cleanup();
   document.getElementById("main-content")?.removeAttribute("inert");
+});
+
+test("saved workspace preferences restore without replacing server-rendered controls", async () => {
+  const key = "test:workspace-hydration";
+  window.localStorage.removeItem(key);
+  function Harness() {
+    const [venue, setVenue] = useLocalStorage(key, "");
+    return <button onClick={() => setVenue((current) => `${current}-next`)}>{venue || "Choose venue"}</button>;
+  }
+  const container = document.createElement("div");
+  container.innerHTML = renderToString(<Harness />);
+  const originalButton = container.querySelector("button");
+  document.body.append(container);
+  window.localStorage.setItem(key, JSON.stringify("saved-venue"));
+  const errors: unknown[] = [];
+  let root: ReturnType<typeof hydrateRoot> | undefined;
+  try {
+    await act(async () => {
+      root = hydrateRoot(container, <Harness />, { onRecoverableError: (error) => errors.push(error) });
+    });
+    assert.deepEqual(errors, []);
+    const restored = within(container).getByRole("button", { name: "saved-venue" });
+    assert.equal(restored, originalButton);
+    fireEvent.click(restored);
+    assert.equal(restored.textContent, "saved-venue-next");
+    assert.equal(JSON.parse(window.localStorage.getItem(key)!), "saved-venue-next");
+  } finally {
+    await act(async () => root?.unmount());
+    container.remove();
+    window.localStorage.removeItem(key);
+  }
+});
+
+test("event selection, scope sheet reopening and parent renders reuse the loaded event list", async () => {
+  const originalFetch = globalThis.fetch;
+  let calls = 0;
+  globalThis.fetch = async () => {
+    calls += 1;
+    return Response.json({ data: [
+      { id: "event-a", name: "Event A", state: "open", compatibilityKey: null },
+      { id: "event-b", name: "Event B", state: "open", compatibilityKey: null },
+    ], error: null });
+  };
+  function Harness({ revision }: { revision: number }) {
+    const [value, setValue] = useState<string | null>(null);
+    return <NextIntlClientProvider locale="en" messages={messages}>
+      <EventScopeSelector venueId="venue-a" businessDate="2026-09-12" value={value}
+        onChange={(id) => setValue(id)} renderScope={(control, label) =>
+          <OperationsScope date="2026-09-12" label={label}>{control}</OperationsScope>} />
+      <output>{revision}</output>
+    </NextIntlClientProvider>;
+  }
+  try {
+    const view = render(<Harness revision={0} />);
+    fireEvent.click(screen.getByRole("button", { name: messages.Workspace.chooseScope }));
+    const select = screen.getByRole("combobox") as HTMLSelectElement;
+    await waitFor(() => assert.equal(select.disabled, false));
+    fireEvent.change(select, { target: { value: "event-a" } });
+    fireEvent.click(screen.getByRole("button", { name: messages.Workspace.applyScope }));
+    assert.equal(screen.queryByRole("combobox"), null);
+    view.rerender(<Harness revision={1} />);
+    await act(async () => {});
+    const scope = screen.getByRole("button", { name: messages.Workspace.chooseScope });
+    assert.match(scope.textContent ?? "", /Event A/);
+    fireEvent.click(scope);
+    const reopened = screen.getByRole("combobox") as HTMLSelectElement;
+    assert.equal(reopened.value, "event-a");
+    assert.equal(reopened.disabled, false);
+    assert.equal(calls, 1);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("event list network failure releases loading and supports retry", async () => {
+  const originalFetch = globalThis.fetch;
+  let calls = 0;
+  globalThis.fetch = async () => {
+    if (++calls === 1) throw new TypeError("Network failed");
+    return Response.json({ data: [], error: null });
+  };
+  try {
+    render(<NextIntlClientProvider locale="en" messages={messages}>
+      <EventScopeSelector venueId="venue-a" businessDate="2026-09-12" value={null} onChange={() => {}} />
+    </NextIntlClientProvider>);
+    const retry = await screen.findByRole("button", { name: messages.EventScope.retry });
+    assert.equal((screen.getByRole("combobox") as HTMLSelectElement).disabled, false);
+    fireEvent.click(retry);
+    await waitFor(() => assert.equal(screen.queryByRole("button", { name: messages.EventScope.retry }), null));
+    assert.equal(calls, 2);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });
 
 test("latest ref keeps a loader stable while reading the latest translator", () => {
@@ -855,6 +955,32 @@ test("CSV mapping and line preview controls keep native labels and file boundari
   assert.equal(screen.getByLabelText("Names to paste").tagName, "TEXTAREA");
 });
 
+test("a completed CSV submission clears the import draft before the sheet closes", async () => {
+  let closed = false;
+  render(<NextIntlClientProvider locale="en" messages={messages}>
+    <Sheet title="Add guests" protectEdits onClose={() => { closed = true; }}>
+      <GuestBulkEntry existingNames={[]} remaining={10}
+        onSubmitChunk={async (names) => ({ data: { items: names.map((_, index) => ({
+          index, status: "created", guest: {},
+        })) }, error: null })} />
+    </Sheet>
+  </NextIntlClientProvider>);
+  const fileInput = screen.getByLabelText(messages.BulkGuestEntry.csv.fileLabel) as HTMLInputElement;
+  const file = new File(["name\nCSV Guest"], "guests.csv", { type: "text/csv" });
+  Object.defineProperty(file, "text", { value: async () => "name\nCSV Guest" });
+  // JSDOM does not populate the native file input value when its files change.
+  Object.defineProperty(fileInput, "value", { configurable: true, writable: true, value: "C:\\fakepath\\guests.csv" });
+  await act(async () => { fireEvent.change(fileInput, { target: { files: [file] } }); });
+  fireEvent.click(screen.getByRole("button", { name: messages.BulkGuestEntry.csv.apply }));
+  await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Add 1" })); });
+  assert.equal((screen.getByLabelText("Names to paste") as HTMLTextAreaElement).value, "");
+  assert.equal(fileInput.value, "");
+  assert.equal(screen.queryByLabelText(messages.BulkGuestEntry.csv.columnLabel), null);
+  fireEvent.click(screen.getByRole("button", { name: messages.Sheet.close }));
+  assert.equal(closed, true);
+  assert.equal(screen.queryByRole("group", { name: messages.Sheet.unsaved }), null);
+});
+
 test("bulk guest submit uses a synchronous ref latch for same-tick clicks", async () => {
   let resolve!: (value: {
     data: {
@@ -973,6 +1099,10 @@ test("a cancelled route-owned target restore falls back to main after overlay re
     frames.delete(id);
   };
 
+  const originalInfo = console.info;
+  const performanceRecords: { event: string; outcome: string; durationMs: number }[] = [];
+  window.sessionStorage.setItem("authon:performance", "1");
+  console.info = (value: string) => { performanceRecords.push(JSON.parse(value)); };
   try {
     function Target({ label }: { label: string }) {
       const targetRef = useRef<HTMLHeadingElement>(null);
@@ -1062,9 +1192,404 @@ test("a cancelled route-owned target restore falls back to main after overlay re
       document.querySelector(".route-transition-overlay") === null,
       true,
     );
+    const loadingRecord = performanceRecords.find((record) => record.event === "browser.loading");
+    assert.equal(loadingRecord?.outcome, "ready");
+    assert.equal((loadingRecord?.durationMs ?? -1) >= 0, true);
   } finally {
+    console.info = originalInfo;
+    window.sessionStorage.removeItem("authon:performance");
     window.requestAnimationFrame = originalRequestAnimationFrame;
     window.cancelAnimationFrame = originalCancelAnimationFrame;
     setupMain?.setAttribute("id", "main-content");
   }
+});
+
+test("product sheet protects changed input, blocks dismissal while saving and restores focus", async () => {
+  function Harness() {
+    const [open, setOpen] = useState(false);
+    const [busy, setBusy] = useState(false);
+    return <NextIntlClientProvider locale="en" messages={messages}>
+      <div className="workspace-shell"><button onClick={() => setOpen(true)}>Open form</button></div>
+      <Sheet open={open} title="Edit guest" onClose={() => setOpen(false)} protectEdits busy={busy}>
+        <form onSubmit={(event) => { event.preventDefault(); setBusy(true); }}>
+          <label>Name<input name="name" defaultValue="" /></label>
+          <button type="submit">Save draft</button>
+        </form>
+        <button onClick={() => setBusy(false)}>Simulate save failure</button>
+      </Sheet>
+    </NextIntlClientProvider>;
+  }
+  render(<Harness />);
+  const opener = screen.getByRole("button", { name: "Open form" });
+  opener.focus(); fireEvent.click(opener);
+  assert.equal(document.querySelector(".workspace-shell")?.hasAttribute("inert"), true);
+  const input = screen.getByLabelText("Name") as HTMLInputElement;
+  fireEvent.change(input, { target: { value: "Retained guest" } });
+  fireEvent.click(screen.getByRole("button", { name: "Save draft" }));
+  fireEvent.keyDown(document, { key: "Escape" });
+  assert.ok(screen.getByRole("dialog", { name: "Edit guest" }));
+  fireEvent.click(screen.getByRole("button", { name: "Simulate save failure" }));
+  assert.equal(input.value, "Retained guest");
+  fireEvent.keyDown(document, { key: "Escape" });
+  assert.ok(screen.getByRole("group", { name: messages.Sheet.unsaved }));
+  fireEvent.click(screen.getByRole("button", { name: messages.Sheet.continue }));
+  assert.equal(screen.getByLabelText("Name") === input, true);
+  fireEvent.keyDown(document, { key: "Escape" });
+  fireEvent.click(screen.getByRole("button", { name: messages.Sheet.discard }));
+  await waitFor(() => assert.equal(document.activeElement === opener, true));
+  assert.equal(document.querySelector(".workspace-shell")?.hasAttribute("inert"), false);
+});
+
+test("product detail changes between side panel and modal without replacing the form or selection", () => {
+  let width = 1200;
+  const originalRect = HTMLElement.prototype.getBoundingClientRect;
+  HTMLElement.prototype.getBoundingClientRect = function () {
+    return this.id === "main-content" ? { ...originalRect.call(this), width, right: width } as DOMRect : originalRect.call(this);
+  };
+  try {
+    const frame = (size: "default" | "record" = "default") => <NextIntlClientProvider locale="en" messages={messages}>
+      <div className="workspace-shell"><main id="main-content" /></div>
+      <Sheet title="Guest detail" presentation="detail" size={size} onClose={() => {}}>
+        <label>Note<input defaultValue="Selected guest" /></label>
+      </Sheet>
+    </NextIntlClientProvider>;
+    const view = render(frame());
+    const panel = screen.getByRole("dialog", { name: "Guest detail" });
+    assert.equal(panel.getAttribute("aria-modal"), "false");
+    const input = screen.getByLabelText("Note") as HTMLInputElement;
+    input.focus(); input.setSelectionRange(2, 5);
+    width = 600; fireEvent(window, new Event("resize"));
+    assert.equal(panel.getAttribute("aria-modal"), "true");
+    assert.equal(screen.getByLabelText("Note") === input, true);
+    assert.equal(document.activeElement === input, true);
+    assert.equal(input.selectionStart, 2);
+    assert.equal(input.selectionEnd, 5);
+    width = 1200; fireEvent(window, new Event("resize"));
+    assert.equal(panel.getAttribute("aria-modal"), "false");
+    assert.equal(document.activeElement === input, true);
+    view.rerender(frame("record"));
+    assert.equal(panel.getAttribute("aria-modal"), "true");
+    assert.equal(screen.getByLabelText("Note"), input);
+    assert.equal(input.selectionStart, 2);
+    assert.equal(document.querySelector(".workspace-shell")?.hasAttribute("inert"), true);
+  } finally { HTMLElement.prototype.getBoundingClientRect = originalRect; }
+});
+
+test("roster columns retain search, row identity and open details through resize", () => {
+  let width = 1200;
+  const originalRect = HTMLElement.prototype.getBoundingClientRect;
+  HTMLElement.prototype.getBoundingClientRect = function () {
+    return this.classList.contains("product-roster") || this.id === "main-content"
+      ? { ...originalRect.call(this), width, right: width } as DOMRect : originalRect.call(this);
+  };
+  function Harness() {
+    const [query, setQuery] = useState("");
+    const [status, setStatus] = useState<RosterStatus>("all");
+    return <NextIntlClientProvider locale="en" messages={messages}>
+      <div className="workspace-shell"><main id="main-content"><RosterView header={<h2>Guests</h2>}
+        query={query} onQueryChange={setQuery} status={status} onStatusChange={setStatus} counts={{ all: 1, pending: 1, checked: 0 }}>
+        <div className="product-roster-rows"><GuestListCard guest={{ id: "g1", name: "Guest One", status: "pending" }} index={0} /></div>
+      </RosterView></main></div>
+    </NextIntlClientProvider>;
+  }
+  try {
+    window.localStorage.removeItem("workspace:rosterColumns");
+    render(<Harness />);
+    const input = screen.getByRole("searchbox") as HTMLInputElement;
+    fireEvent.change(input, { target: { value: "Guest" } });
+    const row = screen.getByRole("article");
+    fireEvent.click(screen.getByRole("button", { name: messages.Roster.twoColumns }));
+    assert.equal(screen.getByRole("article") === row, true);
+    assert.equal(input.value, "Guest");
+    fireEvent.click(screen.getByRole("button", { name: "Guest One" }));
+    const detail = screen.getByRole("dialog", { name: "Guest One" });
+    width = 500; fireEvent(window, new Event("resize"));
+    assert.equal(screen.getByRole("dialog", { name: "Guest One" }) === detail, true);
+    assert.equal(detail.getAttribute("aria-modal"), "true");
+    assert.equal(screen.getByRole("article") === row, true);
+    width = 1200; fireEvent(window, new Event("resize"));
+    assert.equal(detail.getAttribute("aria-modal"), "false");
+    assert.equal(screen.getByRole("button", { name: messages.Roster.twoColumns }).getAttribute("aria-pressed"), "true");
+    assert.equal(input.value, "Guest");
+  } finally { HTMLElement.prototype.getBoundingClientRect = originalRect; window.localStorage.removeItem("workspace:rosterColumns"); }
+});
+
+test("mobile roster expands search with two-step Escape and keeps owner filtering inside the filter sheet", async () => {
+  function Harness() {
+    const [query, setQuery] = useState("");
+    const [owner, setOwner] = useState("all");
+    return <NextIntlClientProvider locale="en" messages={messages}>
+      <div className="workspace-shell"><RosterView query={query} onQueryChange={setQuery}
+        filtersActive={owner !== "all"}
+        status="all" onStatusChange={() => {}} counts={{ all: 1, pending: 1, checked: 0 }}
+        header={<button type="button">Sort names</button>}
+        filters={<label>Owner<select value={owner} onChange={(event) => setOwner(event.target.value)}>
+          <option value="all">All owners</option><option value="dj">DJ</option>
+        </select></label>}>
+        <p>Guest One</p>
+      </RosterView></div>
+    </NextIntlClientProvider>;
+  }
+  render(<Harness />);
+  assert.equal(screen.queryByRole("searchbox"), null);
+  assert.equal(screen.queryByRole("combobox"), null);
+  const searchToggle = screen.getByRole("button", { name: messages.Common.searchGuestNames });
+  fireEvent.click(searchToggle);
+  const search = screen.getByRole("searchbox") as HTMLInputElement;
+  assert.equal(document.activeElement, search);
+  fireEvent.change(search, { target: { value: "Guest" } });
+  const clearSearch = screen.getByRole("button", { name: messages.Common.clearSearch });
+  clearSearch.focus();
+  fireEvent.click(clearSearch);
+  assert.equal(search.value, "");
+  assert.equal(document.activeElement, search);
+  fireEvent.change(search, { target: { value: "Guest" } });
+  fireEvent.keyDown(search, { key: "Escape", isComposing: true });
+  assert.equal(search.value, "Guest");
+  fireEvent.keyDown(search, { key: "Escape" });
+  assert.equal(search.value, "");
+  assert.equal(screen.getByRole("searchbox"), search);
+  fireEvent.keyDown(search, { key: "Escape" });
+  assert.equal(screen.queryByRole("searchbox"), null);
+  assert.equal(document.activeElement, searchToggle);
+  const filters = screen.getByRole("button", { name: messages.Roster.filters });
+  filters.focus(); fireEvent.click(filters);
+  let dialog = screen.getByRole("dialog", { name: messages.Roster.filters });
+  fireEvent.change(within(dialog).getByRole("combobox"), { target: { value: "dj" } });
+  fireEvent.click(within(dialog).getByRole("button", { name: messages.Sheet.close }));
+  await waitFor(() => assert.equal(document.activeElement === filters, true));
+  assert.equal(screen.getByRole("button", { name: messages.Roster.filtersApplied }) === filters, true);
+  fireEvent.click(filters);
+  dialog = screen.getByRole("dialog", { name: messages.Roster.filters });
+  assert.equal((within(dialog).getByRole("combobox") as HTMLSelectElement).value, "dj");
+  assert.ok(within(dialog).getByRole("button", { name: "Sort names" }));
+  within(dialog).getByRole("combobox").focus();
+  const originalRect = HTMLElement.prototype.getBoundingClientRect;
+  let width = 900;
+  HTMLElement.prototype.getBoundingClientRect = function () {
+    return this.classList.contains("product-roster")
+      ? { ...originalRect.call(this), width, right: width } as DOMRect : originalRect.call(this);
+  };
+  try {
+    fireEvent(window, new Event("resize"));
+    assert.equal(screen.queryByRole("dialog"), null);
+    assert.equal((screen.getByRole("combobox") as HTMLSelectElement).value, "dj");
+    assert.equal(document.activeElement === screen.getByRole("searchbox"), true);
+    width = 500; fireEvent(window, new Event("resize"));
+    assert.equal(screen.queryByRole("dialog"), null);
+    assert.equal(document.activeElement === screen.getByRole("searchbox"), true);
+    assert.ok(screen.getByRole("button", { name: messages.Roster.filtersApplied }));
+  } finally { HTMLElement.prototype.getBoundingClientRect = originalRect; }
+});
+
+test("closed entry scope locks row, detail, and an already-open undo confirmation", () => {
+  let mutations = 0;
+  const card = (status: "pending" | "checked", locked: boolean) =>
+    <NextIntlClientProvider locale="en" messages={messages}>
+      <GuestListCard guest={{ id: "locked-guest", name: "Shared guest", status }} index={0}
+        accountKind="shared" registeredByName="Fixture operator" isEntryDisabled={locked}
+        onCheck={() => { mutations++; }} onUndo={() => { mutations++; }} />
+    </NextIntlClientProvider>;
+  const view = render(card("pending", true));
+  const check = screen.getByRole("button", { name: messages.Common.checkIn });
+  assert.equal(check.hasAttribute("disabled"), true);
+  fireEvent.click(check);
+  fireEvent.click(screen.getByRole("button", { name: /^Shared guest/ }));
+  const detail = screen.getByRole("dialog", { name: "Shared guest" });
+  assert.equal(within(detail).getByText("Fixture operator").previousElementSibling?.textContent, messages.Roster.operator);
+  assert.equal(within(detail).getByRole("button", { name: messages.Common.checkIn }).hasAttribute("disabled"), true);
+  fireEvent.click(within(detail).getByRole("button", { name: messages.Sheet.close }));
+  view.rerender(card("checked", false));
+  fireEvent.click(screen.getByRole("button", { name: /Undo check-in for/ }));
+  view.rerender(card("checked", true));
+  const confirm = within(screen.getByRole("alertdialog")).getByRole("button", { name: messages.Roster.undoConfirm });
+  assert.equal(confirm.hasAttribute("disabled"), true);
+  fireEvent.click(confirm);
+  assert.equal(mutations, 0);
+});
+
+test("check-in stays immediate while undo requires confirmation for the current guest", () => {
+  let checkCalls = 0;
+  let undoCalls = 0;
+  const card = (status: "pending" | "checked") => <NextIntlClientProvider locale="en" messages={messages}>
+    <GuestListCard guest={{ id: "g1", name: "Guest One", status }} index={0}
+      onCheck={() => { checkCalls++; }} onUndo={() => { undoCalls++; }} />
+  </NextIntlClientProvider>;
+  const view = render(card("pending"));
+  fireEvent.click(screen.getByRole("button", { name: messages.Common.checkIn }));
+  assert.equal(checkCalls, 1);
+  assert.equal(screen.queryByRole("alertdialog"), null);
+  view.rerender(card("checked"));
+  fireEvent.click(screen.getByRole("button", { name: /Undo check-in/ }));
+  assert.equal(undoCalls, 0);
+  const dialog = screen.getByRole("alertdialog", { name: messages.Roster.undoTitle });
+  fireEvent.click(within(dialog).getByRole("button", { name: messages.Roster.undoConfirm }));
+  assert.equal(undoCalls, 1);
+});
+
+test("event details hand off a template to a guarded create sheet and retain failed input", async () => {
+  const hooks = registerHooks({
+    resolve(specifier, context, nextResolve) {
+      const suffix = ["lib/events/client", "lib/api/events", "lib/api/closeout", "components/VenueSelector"].find((value) => specifier.endsWith(value));
+      return suffix ? { url: `mock:event-sheet:${suffix}`, shortCircuit: true } : nextResolve(specifier, context);
+    },
+    load(url, context, nextLoad) {
+      if (!url.startsWith("mock:event-sheet:")) return nextLoad(url, context);
+      const sources: Record<string, string> = {
+        "lib/events/client": 'export const fetchEvents = async () => ({ data: [{ id: "event-1", name: "Test night", businessDate: "2026-09-16", state: "draft", compatibilityKey: null, capacity: 100, targetGuests: 30 }], error: null });',
+        "lib/api/events": 'export const createEvent = async () => ({ data: null, error: "SAVE_FAILED" }); export const transitionEventState = createEvent;',
+        "lib/api/closeout": 'export const fetchEventCloseout = async () => ({ data: null, error: "UNAVAILABLE" }); export const confirmEventCloseout = fetchEventCloseout;',
+        "components/VenueSelector": 'export const useVenueSelector = () => ({ venueId: "venue-1", venues: [], selectedVenueId: "venue-1", currentVenue: {}, isSuperAdmin: false }); export default function VenueSelector() { return null; }',
+      };
+      return { format: "module", shortCircuit: true, source: sources[url.replace("mock:event-sheet:", "")] };
+    },
+  });
+  try {
+    const { default: EventManagement } = await import("@/app/admin/components/EventManagement");
+    render(<NextIntlClientProvider locale="en" messages={messages}>
+      <EventManagement selectedDate="2026-09-16" businessDate="2026-09-16" onDateChange={() => {}}
+        selectedEventId={null} onSelectedEventChange={() => {}} onEventsChanged={() => {}} />
+    </NextIntlClientProvider>);
+    fireEvent.click(await screen.findByRole("button", { name: /Test night/ }));
+    assert.ok(screen.getByRole("dialog", { name: "Test night" }));
+    fireEvent.click(screen.getByRole("button", { name: messages.EventAdmin.useTemplate }));
+    const dialog = screen.getByRole("dialog", { name: messages.EventAdmin.createTitle });
+    const name = within(dialog).getByLabelText(messages.EventAdmin.name) as HTMLInputElement;
+    assert.match(name.value, /Test night/);
+    fireEvent.change(name, { target: { value: "New night" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: messages.Sheet.close }));
+    assert.ok(screen.getByRole("group", { name: messages.Sheet.unsaved }));
+    fireEvent.click(screen.getByRole("button", { name: messages.Sheet.continue }));
+    fireEvent.submit(name.closest("form")!);
+    await waitFor(() => assert.ok(within(dialog).getByRole("alert")));
+    assert.equal(name.value, "New night");
+  } finally { cleanup(); hooks.deregister(); }
+});
+
+test("admin roster locks finalized scopes and keeps draft deletion and past-date correction available", async () => {
+  const sources: Record<string, string> = {
+    "lib/guest-snapshots/client": 'export const fetchGuestOperationsSnapshot = async () => ({ data: { guests: [{ id: "g1", name: "Roster guest", status: "pending" }], users: [], externalLinks: [] }, error: null });',
+    "lib/guests/client": 'export const fetchGuestsByDate = async () => ({ data: [], error: null });',
+    "lib/api/guests": 'export const updateGuestStatus = async () => ({ data: null, error: "UNEXPECTED_MUTATION" }); export const deleteGuest = updateGuestStatus;',
+    "lib/attendance/client": 'export const fetchDoorAttendanceSummary = async ({ scope }) => ({ data: { ...scope, isFinalized: scope.eventId === "finalized", canFinalize: scope.eventId === "closed" || !scope.eventId, unavailableReason: scope.eventId === "draft" ? "event_inactive" : "past_date" }, error: null });',
+    "components/VenueSelector": 'export const useVenueSelector = () => ({ venueId: "venue-1", venues: [], selectedVenueId: "venue-1", isSuperAdmin: false }); export default function VenueSelector() { return null; }',
+  };
+  const hooks = registerHooks({
+    resolve(specifier, context, nextResolve) {
+      const key = Object.keys(sources).find((key) => specifier.endsWith(key));
+      return key ? { url: `mock:admin-roster-lock:${key}`, shortCircuit: true } : nextResolve(specifier, context);
+    },
+    load(url, context, nextLoad) {
+      return url.startsWith("mock:admin-roster-lock:")
+        ? { format: "module", shortCircuit: true, source: sources[url.replace("mock:admin-roster-lock:", "")] }
+        : nextLoad(url, context);
+    },
+  });
+  try {
+    const { default: GuestList } = await import("@/app/admin/components/GuestList");
+    const frame = (eventId: string | null) => <NextIntlClientProvider locale="en" messages={messages}>
+      <GuestList selectedDate="2026-09-15" businessDate="2026-09-16" eventId={eventId} onDateChange={() => {}} />
+    </NextIntlClientProvider>;
+    const view = render(frame("finalized"));
+    await screen.findByRole("button", { name: "Roster guest" });
+    for (const [scope, locked, deleteLocked] of [["finalized", true, true], ["closed", true, true], ["draft", true, false], [null, false, false]] as const) {
+      view.rerender(frame(scope));
+      await waitFor(() => {
+        assert.equal(screen.getByRole("button", { name: messages.Common.checkIn }).hasAttribute("disabled"), locked);
+        assert.equal(screen.getByRole("button", { name: messages.Common.deleteGuest }).hasAttribute("disabled"), deleteLocked);
+      });
+    }
+  } finally { cleanup(); hooks.deregister(); }
+});
+
+test("a credential result sheet owns Escape while the underlying detail keeps the workspace locked", async () => {
+  function Harness() {
+    const [result, setResult] = useState(false);
+    const [details, setDetails] = useState(true);
+    return <NextIntlClientProvider locale="en" messages={messages}>
+      <div className="workspace-shell"><button>Workspace</button></div>
+      <Sheet open={details} title="Account details" onClose={() => setDetails(false)}>
+        <button onClick={() => setResult(true)}>Issue credential</button>
+      </Sheet>
+      <Sheet open={result} title="Credential result" onClose={() => setResult(false)}><p>Result</p></Sheet>
+    </NextIntlClientProvider>;
+  }
+  render(<Harness />);
+  fireEvent.click(screen.getByRole("button", { name: "Issue credential" }));
+  fireEvent.keyDown(document, { key: "Escape" });
+  assert.equal(screen.queryByRole("dialog", { name: "Credential result" }), null);
+  assert.ok(screen.getByRole("dialog", { name: "Account details" }));
+  assert.equal(document.querySelector(".workspace-shell")?.hasAttribute("inert"), true);
+  assert.equal(document.body.style.overflow, "hidden");
+  fireEvent.keyDown(document, { key: "Escape" });
+  assert.equal(screen.queryByRole("dialog"), null);
+  await act(async () => {});
+  assert.equal(document.querySelector(".workspace-shell")?.hasAttribute("inert"), false);
+  assert.notEqual(document.body.style.overflow, "hidden");
+});
+
+test("removing a sheet and its confirmation in one commit releases all modal locks", async () => {
+  function Harness() {
+    const [open, setOpen] = useState(true);
+    const [confirm, setConfirm] = useState(false);
+    return <NextIntlClientProvider locale="en" messages={messages}>
+      <div className="workspace-shell"><button>Workspace</button></div>
+      {open && <Sheet title="Record" onClose={() => setOpen(false)}>
+        <button onClick={() => setConfirm(true)}>Delete record</button>
+        <ConfirmDialog open={confirm} title="Delete record?" confirmLabel="Remove" cancelLabel="Cancel"
+          onCancel={() => setConfirm(false)} onConfirm={() => setOpen(false)} />
+      </Sheet>}
+    </NextIntlClientProvider>;
+  }
+  render(<Harness />);
+  fireEvent.click(screen.getByRole("button", { name: "Delete record" }));
+  assert.equal(document.body.style.overflow, "hidden");
+  fireEvent.click(screen.getByRole("button", { name: "Remove" }));
+  await act(async () => {});
+  assert.equal(screen.queryByRole("dialog"), null);
+  assert.equal(screen.queryByRole("alertdialog"), null);
+  assert.notEqual(document.body.style.overflow, "hidden");
+  assert.equal(document.querySelector(".workspace-shell")?.hasAttribute("inert"), false);
+  assert.equal(document.getElementById("main-content")?.hasAttribute("inert"), false);
+});
+
+test("route loading locks a portal sheet without replacing its draft", () => {
+  let start: ((href: string) => boolean) | undefined;
+  function Harness() {
+    start = useRouteTransition().startRouteTransition;
+    return <Sheet title="Draft" onClose={() => {}}><label>Draft name<input defaultValue="" /></label></Sheet>;
+  }
+  render(<NextIntlClientProvider locale="en" messages={messages}><RouteTransitionProvider><Harness /></RouteTransitionProvider></NextIntlClientProvider>);
+  const input = screen.getByLabelText("Draft name") as HTMLInputElement;
+  fireEvent.change(input, { target: { value: "Retained" } });
+  act(() => { start?.("/other"); });
+  const layer = input.closest(".product-sheet-layer");
+  assert.equal(layer?.hasAttribute("inert"), true);
+  assert.equal(layer?.getAttribute("aria-hidden"), "true");
+  assert.equal(input.value, "Retained");
+  assert.equal(input.isConnected, true);
+});
+
+test("saved input and a persistent operator do not produce a false discard prompt", () => {
+  function Harness() {
+    const [open, setOpen] = useState(true);
+    const [quotaReady, setQuotaReady] = useState(false);
+    return <NextIntlClientProvider locale="en" messages={messages}>
+      <Sheet open={open} title="Registration" protectEdits onClose={() => setOpen(false)}>
+        <label>Operator<input defaultValue="" data-preserve-on-close /></label>
+        <form onSubmit={(event) => { event.preventDefault(); event.currentTarget.reset(); }}>
+          <label>Guest draft<input defaultValue="" /></label><button type="submit">Save</button>
+        </form>
+        <button onClick={() => setQuotaReady(true)}>Load quota</button>
+        {quotaReady && <label>Quota request<input defaultValue="1" /></label>}
+      </Sheet>
+    </NextIntlClientProvider>;
+  }
+  render(<Harness />);
+  fireEvent.change(screen.getByLabelText("Operator"), { target: { value: "Operator name" } });
+  fireEvent.change(screen.getByLabelText("Guest draft"), { target: { value: "Guest name" } });
+  fireEvent.click(screen.getByRole("button", { name: "Save" }));
+  fireEvent.click(screen.getByRole("button", { name: "Load quota" }));
+  fireEvent.click(screen.getByRole("button", { name: messages.Sheet.close }));
+  assert.equal(screen.queryByRole("dialog"), null);
 });

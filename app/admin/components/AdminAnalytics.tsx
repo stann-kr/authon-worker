@@ -8,7 +8,6 @@ import DisclosureSection from "@/components/DisclosureSection";
 import EmptyState from "@/components/EmptyState";
 import Skeleton from "@/components/Skeleton";
 import VenueSelector, { useVenueSelector } from "@/components/VenueSelector";
-import { useSectionLoadingTask } from "@/components/RouteTransitionProvider";
 import { fetchAdminAnalytics } from "@/lib/api/analytics";
 import { getBusinessDate } from "@/lib/date";
 import { useLatestRequestGuard } from "@/lib/hooks";
@@ -52,9 +51,6 @@ export default function AdminAnalytics({
   const [loadError, setLoadError] = useState<string | null>(null);
   const requestGuard = useLatestRequestGuard();
   const scope = `${venueId}:${urlState.granularity}:${urlState.anchorDate}`;
-  useSectionLoadingTask(
-    isLoadingVenues || (Boolean(venueId) && (isLoading || !isUrlReady)),
-  );
 
   const applyUrlState = useCallback(
     (nextState: AdminAnalyticsUrlState, mode: "push" | "replace") => {
@@ -155,15 +151,15 @@ export default function AdminAnalytics({
           venues={venues}
           selectedVenueId={selectedVenueId}
           onVenueChange={setSelectedVenueId}
-          className="app-panel p-4 sm:p-5"
+          className="record-scope-selector"
         />
       )}
 
-      <header className="border-b border-border-subtle pb-4">
-        <h3 className="text-xl font-semibold tracking-[-0.02em] text-text-heading">
+      <header>
+        <h3 className="sr-only">
           {t("title")}
         </h3>
-        <p className="mt-2 max-w-[70ch] text-sm leading-relaxed text-text-muted">
+        <p className="max-w-[70ch] text-sm leading-relaxed text-text-muted">
           {t("description")}
         </p>
       </header>

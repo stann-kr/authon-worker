@@ -1,6 +1,10 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import RosterView, { type RosterStatus } from "@/components/guests/RosterView";
+
+import { fetchGuestsByDate } from "@/lib/guests/client";
+
+import { useState, useEffect, useCallback, useRef, type ReactNode } from "react";
 import {
   useLocalStorage,
   useGuestPolling,
@@ -9,8 +13,8 @@ import {
   useScopedOperationGuard,
 } from "../../../lib/hooks";
 import GuestListCard from "../../../components/GuestListCard";
-import GuestSearchInput from "../../../components/GuestSearchInput";
-import StatGrid from "../../../components/StatGrid";
+
+
 import PanelHeader from "../../../components/PanelHeader";
 import EmptyState from "../../../components/EmptyState";
 import Alert from "../../../components/Alert";
@@ -18,21 +22,20 @@ import Icon from "../../../components/Icon";
 import Skeleton from "../../../components/Skeleton";
 import DatePicker from "../../../components/DatePicker";
 import OperationsLayout from "../../../components/OperationsLayout";
-import { useSectionLoadingTask } from "../../../components/RouteTransitionProvider";
 import VenueSelector, {
   useVenueSelector,
 } from "../../../components/VenueSelector";
-import { formatDateDisplay } from "../../../lib/date";
 import {
   deriveAsyncListState,
   shouldShowEmptyState,
 } from "../../../lib/ui/async-list-state";
 import {
-  fetchGuestsByDate,
   updateGuestStatus,
   deleteGuest,
 } from "../../../lib/api/guests";
-import { fetchGuestOperationsSnapshot } from "../../../lib/api/guest-snapshots";
+import { fetchGuestOperationsSnapshot } from "@/lib/guest-snapshots/client";
+import { fetchDoorAttendanceSummary } from "@/lib/attendance/client";
+import type { DoorAttendanceSummary } from "@/lib/attendance/types";
 import type { ExternalLinkDirectoryEntry } from "@/lib/external-links/types";
 import type { Guest } from "@/lib/guests/types";
 import type { UserDirectoryEntry } from "@/lib/users/types";
@@ -45,6 +48,7 @@ const EMPTY_DISPLAY_DATA = {
 };
 
 interface GuestListProps {
+  scopeSelector?: (controls: ReactNode, disabled?: boolean) => ReactNode;
   selectedDate: string;
   onDateChange: (date: string) => void;
   businessDate: string;
@@ -52,6 +56,7 @@ interface GuestListProps {
 }
 
 export default function GuestList({
+  scopeSelector,
   selectedDate,
   onDateChange,
   businessDate,
@@ -69,12 +74,14 @@ export default function GuestList({
   const [externalLinks, setExternalLinks] =
     useState<ExternalLinkDirectoryEntry[]>([]);
   const [guests, setGuests] = useState<Guest[]>([]);
+  const [attendance, setAttendance] = useState<DoorAttendanceSummary | null>(null);
   const [isFetching, setIsFetching] = useState(true);
   const [loadedScopeKey, setLoadedScopeKey] = useState("");
   const [loadOutcome, setLoadOutcome] = useState<
     "idle" | "success" | "partial" | "error"
   >("idle");
   const [feedback, setFeedback] = useState<string | null>(null);
+  const [rosterStatus, setRosterStatus] = useState<RosterStatus>("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [sortMode, setSortMode] = useLocalStorage<"default" | "alpha">(
     "guestlist:sortMode",
@@ -116,8 +123,13 @@ export default function GuestList({
   }, [externalLinks, guests, isFetching, loadedScopeKey, requestScopeKey, users]);
 
   const hasCurrentScopeData = loadedScopeKey === requestScopeKey;
+  const scopedAttendance = attendance?.venueId === venueId &&
+    attendance.businessDate === selectedDate && attendance.eventId === eventId ? attendance : null;
+  // Named Events can be finalized only after closure; general date rosters can be finalized at any time.
+  const scopeClosed = Boolean(scopedAttendance?.isFinalized || (eventId && scopedAttendance?.canFinalize));
+  const entryDisabled = !scopedAttendance || scopeClosed || scopedAttendance.unavailableReason === "event_inactive";
+  const deleteDisabled = !scopedAttendance || scopeClosed;
   const isCurrentScopeFetching = isFetching || !hasCurrentScopeData;
-  useSectionLoadingTask(isCurrentScopeFetching);
   const displayData = !hasCurrentScopeData
     ? EMPTY_DISPLAY_DATA
     : isFetching && displayCacheRef.current.scopeKey === requestScopeKey
@@ -133,6 +145,7 @@ export default function GuestList({
     pollingGuard.invalidateRequests();
     const isLatestRequest = requestGuard.beginRequest();
     if (!venueId) {
+      setAttendance(null);
       setGuests([]);
       setUsers([]);
       setExternalLinks([]);
@@ -144,12 +157,12 @@ export default function GuestList({
     setIsFetching(true);
     setFeedback(null);
     try {
-      const { data, error } = await fetchGuestOperationsSnapshot(
-        selectedDate,
-        venueId,
-        eventId,
-      );
+      const [{ data, error }, summary] = await Promise.all([
+        fetchGuestOperationsSnapshot(selectedDate, venueId, eventId),
+        fetchDoorAttendanceSummary({ scope: { venueId, businessDate: selectedDate, eventId } }),
+      ]);
       if (!isLatestRequest()) return;
+      setAttendance(summary.data);
       if (!data) {
         setGuests([]);
         setUsers([]);
@@ -157,7 +170,7 @@ export default function GuestList({
         setFeedback(doorTRef.current("loadFailed"));
         setLoadOutcome("error");
       } else {
-        if (error) {
+        if (error || !summary.data) {
           setFeedback(doorTRef.current("partialLoadFailed"));
           setLoadOutcome("partial");
         } else {
@@ -171,6 +184,7 @@ export default function GuestList({
     } catch (err) {
       if (!isLatestRequest()) return;
       console.error("Failed to load data:", err);
+      setAttendance(null);
       setGuests([]);
       setUsers([]);
       setExternalLinks([]);
@@ -190,13 +204,17 @@ export default function GuestList({
   const pollGuests = useCallback(async () => {
     if (!venueId || loadedScopeKey !== requestScopeKey) return;
     const isLatestRequest = pollingGuard.beginRequest();
-    const { data } = await fetchGuestsByDate(selectedDate, venueId, eventId);
-    if (isLatestRequest() && loadedScopeKey === requestScopeKey && data) {
-      setGuests(data);
+    const [{ data }, summary] = await Promise.all([
+      fetchGuestsByDate(selectedDate, venueId, eventId),
+      fetchDoorAttendanceSummary({ scope: { venueId, businessDate: selectedDate, eventId } }),
+    ]);
+    if (isLatestRequest() && loadedScopeKey === requestScopeKey) {
+      if (data) setGuests(data);
+      if (summary.data) setAttendance(summary.data);
     }
   }, [eventId, loadedScopeKey, pollingGuard, requestScopeKey, selectedDate, venueId]);
 
-  const pollingCoordinator = useGuestPolling(pollGuests, 15000, !!venueId);
+  const pollingCoordinator = useGuestPolling(pollGuests, 15000, !!venueId && !isFetching);
 
   useEffect(() => {
     mutationGuard.invalidateOperations();
@@ -211,6 +229,7 @@ export default function GuestList({
     newStatus: Guest["status"],
     action: string,
   ) => {
+    if (newStatus === "deleted" ? deleteDisabled : entryDisabled) return;
     const operationScopeKey = requestScopeKey;
     const busyKey = `${id}_${action}`;
     const operation = mutationGuard.beginOperation(
@@ -298,11 +317,10 @@ export default function GuestList({
           const timeB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
           return timeA - timeB;
         });
-  const displayGuests = searchQuery
-    ? sortedGuests.filter((g) =>
-        (g.name || "").toLowerCase().includes(searchQuery.toLowerCase()),
-      )
-    : sortedGuests;
+  const displayGuests = sortedGuests.filter((guest) =>
+    (rosterStatus === "all" || guest.status === rosterStatus) &&
+    [guest.name, guest.registeredByName, getContributor(guest).name].some((value) =>
+      value?.toLocaleLowerCase().includes(searchQuery.trim().toLocaleLowerCase())));
   const listState = deriveAsyncListState({
     hasStarted: isFetching || loadOutcome !== "idle",
     isLoading: isCurrentScopeFetching,
@@ -310,25 +328,6 @@ export default function GuestList({
     hasError: loadOutcome === "error",
     isPartial: loadOutcome === "partial",
   });
-
-  const getSelectedDJInfo = () => {
-    if (selectedDJ === "all")
-      return { name: t("allUsers"), event: t("totalOverview") };
-    if (selectedDJ.startsWith("ext:")) {
-      const link = displayData.externalLinks.find(
-        (l) => l.id === selectedDJ.replace("ext:", ""),
-      );
-      return link
-        ? { name: link.djName, event: t("externalDj") }
-        : { name: "", event: "" };
-    }
-    const u = displayData.users.find((u) => u.id === selectedDJ);
-    return u
-      ? { name: u.name, event: u.role.toUpperCase() }
-      : { name: "", event: "" };
-  };
-
-  const selectedDJInfo = getSelectedDJInfo();
 
   // Only show users/links who registered guests on the selected date
   const activeUserIds = new Set(
@@ -344,6 +343,12 @@ export default function GuestList({
     activeExtLinkIds.has(l.id),
   );
 
+  const scopeControls = <>
+    <DatePicker compact value={selectedDate} onChange={onDateChange} businessDate={businessDate} />
+    {isSuperAdmin && <VenueSelector venues={venues} selectedVenueId={selectedVenueId}
+      onVenueChange={setSelectedVenueId} className="scope-venue" />}
+  </>;
+
   return (
     <OperationsLayout
       variant="stacked"
@@ -351,39 +356,20 @@ export default function GuestList({
       headingLevel={null}
       dashboard={
         <>
-        <div className="context-bar">
-          <DatePicker
-            value={selectedDate}
-            onChange={onDateChange}
-            businessDate={businessDate}
-          />
-        </div>
+        {scopeSelector ? scopeSelector(scopeControls) : <div className="operations-scope">{scopeControls}</div>}
         {feedback && <Alert type="error" message={feedback} />}
-        {isSuperAdmin && (
-          <VenueSelector
-            venues={venues}
-            selectedVenueId={selectedVenueId}
-            onVenueChange={setSelectedVenueId}
-            className="app-panel p-4 sm:p-5"
-          />
-        )}
-        <div className="app-panel p-4 sm:p-5">
-          <div className="mb-4">
-            <label htmlFor="admin-guest-user-filter" className="type-context-title mb-3">
-              {t("userFilter")}
-            </label>
-            <div className="space-y-2">
-              <button
-                type="button"
-                onClick={() => setSelectedDJ("all")}
-                className={`w-full p-3 text-sm font-medium transition-colors ${
-                  selectedDJ === "all"
-                    ? "border border-border-default border-l-2 border-l-action-primary bg-surface-raised text-text-heading"
-                    : "bg-surface-raised text-text-muted hover:text-text-heading border border-border-default"
-                }`}
-              >
-                {t("allUsers")}
-              </button>
+        {scopedAttendance && entryDisabled && <p role="status" className="text-sm text-text-muted">
+          {doorT(scopedAttendance.isFinalized ? "attendance.scopeClosed" : "attendance.eventInactive")}
+        </p>}
+        </>
+      }
+    >
+
+      <div className="flex min-w-0 flex-col lg:min-h-0">
+        <div className="min-w-0">
+          <RosterView variant="operations" filtersActive={selectedDJ !== "all" || sortMode !== "default"} filters={
+        <div className="min-w-0">
+          <label htmlFor="admin-guest-user-filter" className="sr-only">{t("userFilter")}</label>
               <div className="relative">
                 <select
                   id="admin-guest-user-filter"
@@ -391,7 +377,7 @@ export default function GuestList({
                   value={selectedDJ === "all" ? "" : selectedDJ}
                   autoComplete="off"
                   onChange={(e) => setSelectedDJ(e.target.value || "all")}
-                  className="app-field min-h-[52px] appearance-none py-4 pr-10 font-medium"
+                  className="app-field min-h-11 appearance-none pr-10 font-medium"
                 >
                   <option value="">{t("selectUser")}</option>
                   {filteredUsers.map((u) => (
@@ -411,52 +397,8 @@ export default function GuestList({
                 </select>
                 <Icon name="chevron-down" size={18} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-text-muted" />
               </div>
-            </div>
-          </div>
         </div>
-
-        <div className="app-panel p-4 sm:p-5">
-          <div className="mb-4">
-            <h3 className="type-panel-title mb-1 break-words">
-              {selectedDJInfo.name}
-            </h3>
-            <p className="mb-1 break-words text-sm text-text-muted">
-              {selectedDJInfo.event}
-            </p>
-            <p className="text-sm text-text-muted">
-              {formatDateDisplay(selectedDate, locale)}
-            </p>
-          </div>
-          <div className="mb-4 text-center" aria-busy={!hasCurrentScopeData}>
-            <div className="text-text-heading font-mono text-3xl sm:text-4xl tracking-wider">
-              {hasCurrentScopeData
-                ? pendingGuests.length + checkedGuests.length
-                : "-"}
-            </div>
-            <div className="text-xs font-medium text-text-muted">
-              {t("totalGuests")}
-            </div>
-          </div>
-
-          <StatGrid
-            isLoading={!hasCurrentScopeData}
-            items={[
-              {
-                label: t("waiting"),
-                value: pendingGuests.length,
-                color: "waiting",
-              },
-              { label: t("checked"), value: checkedGuests.length, color: "checked" },
-            ]}
-          />
-        </div>
-        </>
-      }
-    >
-
-      <div className="flex min-w-0 flex-col lg:min-h-0">
-        <div className="main-content-panel lg:min-h-0 lg:max-h-full">
-          <PanelHeader
+          } header={<PanelHeader
             title={t("guestList")}
             count={displayGuests.length}
             sortMode={sortMode}
@@ -465,23 +407,23 @@ export default function GuestList({
             }
             onRefresh={loadData}
             isLoading={isCurrentScopeFetching}
-          />
+          />} query={searchQuery} onQueryChange={setSearchQuery}
+            status={rosterStatus} onStatusChange={setRosterStatus}
+            loading={!hasCurrentScopeData} counts={{ all: filteredGuests.length, pending: pendingGuests.length, checked: checkedGuests.length }}>
 
-          <GuestSearchInput
-            value={searchQuery}
-            onChange={setSearchQuery}
-          />
+
+
 
           {listState === "loading" ? (
             <Skeleton rows={6} />
           ) : shouldShowEmptyState(listState) ? (
             <EmptyState
               icon="user"
-              message={searchQuery ? t("noSearchResults") : t("noGuestsForDate")}
+              message={searchQuery || rosterStatus !== "all" ? t("noSearchResults") : t("noGuestsForDate")}
             />
           ) : (
             <div
-              className={`divide-y divide-border-default lg:overflow-y-auto ${isCurrentScopeFetching ? "pointer-events-none" : ""}`}
+              className={`product-roster-rows ${isCurrentScopeFetching ? "pointer-events-none" : ""}`}
             >
               {displayGuests.map((guest, index) => {
                 const contributor = getContributor(guest);
@@ -512,12 +454,15 @@ export default function GuestList({
                     }
                     isCheckLoading={loadingStates[`${guest.id}_check`]}
                     isUndoLoading={loadingStates[`${guest.id}_undo`]}
+                    isEntryDisabled={entryDisabled}
+                    isDeleteDisabled={deleteDisabled}
                     isDeleteLoading={loadingStates[`${guest.id}_remove`]}
                   />
                 );
               })}
             </div>
           )}
+          </RosterView>
         </div>
       </div>
     </OperationsLayout>

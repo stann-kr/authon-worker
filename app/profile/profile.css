@@ -1,0 +1,13 @@
+.profile-workspace { width: 100%; max-width: 960px; margin-inline: auto; display: grid; gap: 20px; }
+.profile-summary { display: grid; gap: 16px; }
+.profile-identity { display: flex; align-items: center; gap: 12px; }
+.profile-identity > span { display: grid; place-items: center; width: 44px; height: 44px; flex-shrink: 0; border-radius: 50%; background: var(--app-surface-raised); }
+.profile-identity strong { display: block; font-size: 16px; font-weight: 500; }
+.profile-identity small { display: block; font-size: 12px; color: var(--app-text-muted); overflow-wrap: anywhere; }
+.profile-facts { display: flex; flex-wrap: wrap; gap: 12px 24px; padding-block: 14px; border-block: 1px solid var(--app-border-subtle); }
+.profile-facts > div { display: flex; align-items: baseline; gap: 8px; }
+.profile-facts dt { font-size: 12px; color: var(--app-text-muted); }
+.profile-facts dd { font-size: 13px; }
+.profile-tabs { display: flex; gap: 12px; }
+.profile-tabs button { flex: 1; border: 1px solid transparent; border-radius: 8px; background: transparent; color: var(--app-text-muted); }
+.profile-tabs button[aria-pressed="true"] { background: var(--app-surface-active); border-color: var(--app-border); color: var(--app-text); }

@@ -1,0 +1,32 @@
+.registration-language {
+  min-height: var(--control-height);
+  max-width: 100%;
+  padding: 10px 14px;
+  border: 1px solid var(--control-line);
+  border-radius: var(--control-radius);
+  background: var(--pill-bg);
+  color: var(--text);
+  font-size: 16px;
+}
+.registration-page > .flow-hint + .flow-metrics {
+  margin-top: 20px;
+}
+.registration-page > .empty-state {
+  padding-block: 24px;
+}
+.registration-page > .primary {
+  width: 100%;
+  min-height: 48px;
+  margin-top: 12px;
+}
+.registration-page > .secondary {
+  margin-top: 12px;
+}
+.registration-roster { display: grid; gap: 16px; }
+.registration-personal { max-width: 560px; }
+@container content (min-width: 760px) {
+  .registration-page.registration-contributor { display: grid; grid-template-columns: minmax(240px, 0.7fr) minmax(0, 1fr); gap: 20px 32px; max-width: 1100px; align-items: start; }
+  .registration-contributor > * { grid-column: 1; }
+  .registration-contributor > .registration-roster { grid-column: 2; grid-row: 2 / span 5; }
+  .registration-contributor > .flow-toolbar { grid-column: 1 / -1; }
+}

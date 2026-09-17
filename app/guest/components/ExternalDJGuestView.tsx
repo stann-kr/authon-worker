@@ -106,10 +106,7 @@ export default function ExternalDJGuestView({ token }: ExternalDJGuestViewProps)
     <div className="fixed inset-x-0 top-0 z-50 border-b border-border-default bg-canvas pt-[env(safe-area-inset-top)]">
       <div className="mx-auto flex h-16 w-full max-w-[1440px] items-center justify-between px-4 sm:px-6 lg:px-10">
         <div className="flex min-w-0 items-center gap-3">
-          <div className="grid h-8 w-8 place-items-center border border-border-strong bg-surface font-mono text-xs font-semibold text-text-heading">{brand.name.charAt(0).toUpperCase()}</div>
-          <span className="truncate text-sm font-semibold text-text-heading">
-            {brand.name}
-          </span>
+          <span className="external-guest-brand">{brand.name}</span>
         </div>
         <div className="flex shrink-0 items-center gap-3">
           <span className="operational-label hidden sm:inline">
@@ -123,7 +120,7 @@ export default function ExternalDJGuestView({ token }: ExternalDJGuestViewProps)
 
   if (isValidating) {
     return (
-      <div ref={externalViewRootRef} className="min-h-[100dvh] bg-canvas flex flex-col">
+      <div ref={externalViewRootRef} className="external-guest-workspace min-h-[100dvh] bg-canvas flex flex-col" data-rsvp={isSelfRsvp}>
         {externalHeader}
         <div className="flex-1 overflow-x-hidden pt-[calc(5rem+env(safe-area-inset-top))] sm:pt-[calc(5.5rem+env(safe-area-inset-top))] flex flex-col">
           <main id="main-content" tabIndex={-1} className="page-container">
@@ -162,7 +159,7 @@ export default function ExternalDJGuestView({ token }: ExternalDJGuestViewProps)
 
   if (showRetryPanel) {
     return (
-      <div ref={externalViewRootRef} className="min-h-[100dvh] bg-canvas flex flex-col">
+      <div ref={externalViewRootRef} className="external-guest-workspace min-h-[100dvh] bg-canvas flex flex-col" data-rsvp={isSelfRsvp}>
         {externalHeader}
         <main id="main-content" tabIndex={-1} className="flex flex-1 items-center justify-center px-4 pt-[calc(5rem+env(safe-area-inset-top))]">
           <div
@@ -210,11 +207,11 @@ export default function ExternalDJGuestView({ token }: ExternalDJGuestViewProps)
     : sortedGuests;
 
   return (
-    <div ref={externalViewRootRef} className="min-h-[100dvh] bg-canvas flex flex-col">
+    <div ref={externalViewRootRef} className="external-guest-workspace min-h-[100dvh] bg-canvas flex flex-col" data-rsvp={isSelfRsvp}>
       {externalHeader}
       <div className="flex-1 overflow-x-hidden pt-[calc(5rem+env(safe-area-inset-top))] sm:pt-[calc(5.5rem+env(safe-area-inset-top))] flex flex-col">
         <main id="main-content" tabIndex={-1} className="page-container">
-          <div className="context-bar mb-4 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4 p-4 sm:p-5">
+          <div className="external-guest-context">
             <div className="flex flex-col">
               <span className="type-context-title mb-0">
                 {t("guestOwner")}
@@ -469,7 +466,7 @@ export default function ExternalDJGuestView({ token }: ExternalDJGuestViewProps)
                 }
               />
             ) : (
-              <div className="divide-y divide-border-subtle overflow-y-auto">
+              <div className="product-roster-rows">
                 {displayGuests.map((guest, index) => (
                   <GuestListCard
                     key={guest.id}

@@ -23,7 +23,7 @@ interface StatGridProps {
   /** 라벨 텍스트 크기 오버라이드 (기본: 'text-xs') */
   labelClassName?: string;
   /** list panel 안에서는 필요한 하단 구획선과 inset을 함께 제공한다. */
-  variant?: "quiet" | "embedded";
+  variant?: "quiet" | "embedded" | "inline";
 }
 
 export default function StatGrid({
@@ -32,6 +32,19 @@ export default function StatGrid({
   labelClassName,
   variant = "quiet",
 }: StatGridProps) {
+  if (variant === "inline") {
+    return (
+      <dl className="record-summary-strip" aria-busy={isLoading}>
+        {items.map((item) => (
+          <div key={item.label}>
+            <dt>{item.label}</dt>
+            <dd>{isLoading ? "—" : item.value}</dd>
+          </div>
+        ))}
+      </dl>
+    );
+  }
+
   const colsClass =
     items.length === 1
       ? "grid-cols-1"
@@ -54,7 +67,7 @@ export default function StatGrid({
         return (
           <div
             key={item.label}
-            className="flex min-w-0 flex-col items-center justify-center bg-surface-raised px-3 py-3 text-center sm:px-4"
+            className="flex min-w-0 flex-col items-center justify-center px-3 py-2 text-center sm:px-4"
           >
             <dt
               className={`${statLabelColorMap[item.color ?? "default"]} order-2 mt-0.5 font-medium leading-tight ${labelClassName ?? "text-xs"}`}
@@ -62,7 +75,7 @@ export default function StatGrid({
               {item.label}
             </dt>
             <dd
-              className={`order-1 font-mono text-lg tabular-nums sm:text-xl ${statColorMap[item.color ?? "default"]}`}
+              className={`order-1 font-mono text-base tabular-nums ${statColorMap[item.color ?? "default"]}`}
             >
               {isLoading ? "-" : item.value}
             </dd>

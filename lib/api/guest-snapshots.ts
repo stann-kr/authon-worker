@@ -1,5 +1,7 @@
 "use server";
 
+import { measureServerOperation } from "@/lib/observability/server-performance";
+
 import { reportServerError } from "@/lib/observability/structured-log";
 
 import { and, asc, desc, eq, isNull, ne, or, sql } from "drizzle-orm";
@@ -9,6 +11,7 @@ import { requireAccess, type SessionUser } from "../auth/server";
 import { requireActiveVenueId } from "../tenant/active-server";
 import { canRequestGuestLimit, isAccountKind, isRole } from "@/lib/users/policy";
 import { resolveSnapshotVenueId } from "@/lib/guest-snapshot-policy";
+import { loadSnapshotGuests } from "@/lib/guest-snapshots/persistence";
 import type { ApiResponse } from "./response";
 import type { Event } from "@/lib/events/types";
 import type { ExternalLinkDirectoryEntry } from "@/lib/external-links/types";
@@ -46,33 +49,13 @@ async function loadGuestsByDate(
   createdByUserId?: string,
   event?: Event | null,
 ): Promise<Guest[]> {
-  const eventScope = event
-    ? eventIncludesLegacyDateRows(event)
-      ? or(
-          eq(guests.eventId, event.id),
-          and(isNull(guests.eventId), eq(guests.date, date)),
-        )
-      : eq(guests.eventId, event.id)
-    : and(isNull(guests.eventId), eq(guests.date, date));
-  const conditions = [
-    eq(guests.venueId, venueId),
-    eventScope,
-    ne(guests.status, "deleted"),
-  ];
-  if (createdByUserId) {
-    conditions.push(eq(guests.createdByUserId, createdByUserId));
-  }
-
-  const rows = await db
-    .select()
-    .from(guests)
-    .where(and(...conditions))
-    .orderBy(desc(guests.createdAt));
-
-  return rows.map((guest) => ({
-    ...guest,
-    status: guest.status as Guest["status"],
-  }));
+  return loadSnapshotGuests(db, {
+    venueId,
+    date,
+    eventId: event?.id ?? null,
+    includeLegacyDateRows: event ? eventIncludesLegacyDateRows(event) : false,
+    createdByUserId,
+  });
 }
 
 async function loadUserDirectory(
@@ -227,56 +210,60 @@ export async function fetchGuestOperationsSnapshot(
   venueId: string,
   eventId?: string | null,
 ): Promise<ApiResponse<GuestOperationsSnapshot>> {
-  try {
-    if (!isValidDate(date)) throw new Error("Invalid date");
-    const actor = await requireAccess("door");
-    const effectiveVenueId = resolveSnapshotVenueId(actor, venueId);
-    await requireActiveVenueId(effectiveVenueId);
-    const db = getDb();
-    const event = eventId
-      ? await loadEventById(db, eventId)
-      : await findCompatibilityEvent(effectiveVenueId, date);
-    if (
-      eventId &&
-      (!event ||
-        event.venueId !== effectiveVenueId ||
-        event.businessDate !== date)
-    ) {
-      throw new Error("EVENT_NOT_FOUND");
+  return measureServerOperation("server.door_snapshot", async (): Promise<ApiResponse<GuestOperationsSnapshot>> => {
+    try {
+      if (!isValidDate(date)) throw new Error("Invalid date");
+      const actor = await requireAccess("door");
+      const effectiveVenueId = resolveSnapshotVenueId(actor, venueId);
+      await requireActiveVenueId(effectiveVenueId);
+      const db = getDb();
+      const event = eventId
+        ? await loadEventById(db, eventId)
+        : await findCompatibilityEvent(effectiveVenueId, date);
+      if (
+        eventId &&
+        (!event ||
+          event.venueId !== effectiveVenueId ||
+          event.businessDate !== date)
+      ) {
+        throw new Error("EVENT_NOT_FOUND");
+      }
+
+      const [guestResult, userResult, linkResult] = await Promise.allSettled([
+        loadGuestsByDate(db, effectiveVenueId, date, undefined, event),
+        loadUserDirectory(db, actor, effectiveVenueId),
+        loadExternalLinksByDate(db, effectiveVenueId, date, event),
+      ]);
+
+      if (guestResult.status === "rejected") await logRejectedSection("guests", guestResult);
+      if (userResult.status === "rejected") await logRejectedSection("users", userResult);
+      if (linkResult.status === "rejected") await logRejectedSection("external links", linkResult);
+      const failedSections: GuestOperationsSnapshot["failedSections"] = [];
+      if (guestResult.status === "rejected") failedSections.push("guests");
+      if (userResult.status === "rejected") failedSections.push("users");
+      if (linkResult.status === "rejected") failedSections.push("externalLinks");
+
+      return {
+        data: {
+          guests: guestResult.status === "fulfilled" ? guestResult.value : [],
+          users: userResult.status === "fulfilled" ? userResult.value : [],
+          externalLinks: linkResult.status === "fulfilled" ? linkResult.value : [],
+          failedSections,
+          offlineRosterStatus: eventId && event?.compatibilityKey === null && event.state === "open"
+            ? "available" : "unavailable",
+        },
+        error: failedSections.length > 0
+          ? "Unable to load some guest operations data right now."
+          : null,
+      };
+    } catch (error: unknown) {
+      await reportServerError("guest_snapshot.operations", error);
+      return {
+        data: null,
+        error: "Unable to load guest operations data right now.",
+      };
     }
-
-    const [guestResult, userResult, linkResult] = await Promise.allSettled([
-      loadGuestsByDate(db, effectiveVenueId, date, undefined, event),
-      loadUserDirectory(db, actor, effectiveVenueId),
-      loadExternalLinksByDate(db, effectiveVenueId, date, event),
-    ]);
-
-    if (guestResult.status === "rejected") await logRejectedSection("guests", guestResult);
-    if (userResult.status === "rejected") await logRejectedSection("users", userResult);
-    if (linkResult.status === "rejected") await logRejectedSection("external links", linkResult);
-    const failedSections: GuestOperationsSnapshot["failedSections"] = [];
-    if (guestResult.status === "rejected") failedSections.push("guests");
-    if (userResult.status === "rejected") failedSections.push("users");
-    if (linkResult.status === "rejected") failedSections.push("externalLinks");
-
-    return {
-      data: {
-        guests: guestResult.status === "fulfilled" ? guestResult.value : [],
-        users: userResult.status === "fulfilled" ? userResult.value : [],
-        externalLinks: linkResult.status === "fulfilled" ? linkResult.value : [],
-        failedSections,
-      },
-      error: failedSections.length > 0
-        ? "Unable to load some guest operations data right now."
-        : null,
-    };
-  } catch (error: unknown) {
-    await reportServerError("guest_snapshot.operations", error);
-    return {
-      data: null,
-      error: "Unable to load guest operations data right now.",
-    };
-  }
+  });
 }
 
 export async function fetchGuestWorkspaceSnapshot(
@@ -284,50 +271,52 @@ export async function fetchGuestWorkspaceSnapshot(
   venueId: string,
   eventId?: string | null,
 ): Promise<ApiResponse<GuestWorkspaceSnapshot>> {
-  try {
-    if (!isValidDate(date)) throw new Error("Invalid date");
-    const actor = await requireAccess("guest");
-    const effectiveVenueId = resolveSnapshotVenueId(actor, venueId);
-    await requireActiveVenueId(effectiveVenueId);
-    const db = getDb();
-    const event = eventId
-      ? await loadEventById(db, eventId)
-      : await findCompatibilityEvent(effectiveVenueId, date);
-    if (
-      eventId &&
-      (!event ||
-        event.venueId !== effectiveVenueId ||
-        event.businessDate !== date)
-    ) {
-      throw new Error("EVENT_NOT_FOUND");
+  return measureServerOperation("server.guest_snapshot", async (): Promise<ApiResponse<GuestWorkspaceSnapshot>> => {
+    try {
+      if (!isValidDate(date)) throw new Error("Invalid date");
+      const actor = await requireAccess("guest");
+      const effectiveVenueId = resolveSnapshotVenueId(actor, venueId);
+      await requireActiveVenueId(effectiveVenueId);
+      const db = getDb();
+      const event = eventId
+        ? await loadEventById(db, eventId)
+        : await findCompatibilityEvent(effectiveVenueId, date);
+      if (
+        eventId &&
+        (!event ||
+          event.venueId !== effectiveVenueId ||
+          event.businessDate !== date)
+      ) {
+        throw new Error("EVENT_NOT_FOUND");
+      }
+
+      const [guestResult, quotaResult] = await Promise.allSettled([
+        loadGuestsByDate(db, effectiveVenueId, date, actor.id, event),
+        loadGuestQuota(db, actor, date, event),
+      ]);
+
+      if (guestResult.status === "rejected") await logRejectedSection("guests", guestResult);
+      if (quotaResult.status === "rejected") await logRejectedSection("guest quota", quotaResult);
+      const failedSections: GuestWorkspaceSnapshot["failedSections"] = [];
+      if (guestResult.status === "rejected") failedSections.push("guests");
+      if (quotaResult.status === "rejected") failedSections.push("quota");
+
+      return {
+        data: {
+          guests: guestResult.status === "fulfilled" ? guestResult.value : [],
+          quota: quotaResult.status === "fulfilled" ? quotaResult.value : null,
+          failedSections,
+        },
+        error: failedSections.length > 0
+          ? "Unable to load some guest workspace data right now."
+          : null,
+      };
+    } catch (error: unknown) {
+      await reportServerError("guest_snapshot.workspace", error);
+      return {
+        data: null,
+        error: "Unable to load guest workspace data right now.",
+      };
     }
-
-    const [guestResult, quotaResult] = await Promise.allSettled([
-      loadGuestsByDate(db, effectiveVenueId, date, actor.id, event),
-      loadGuestQuota(db, actor, date, event),
-    ]);
-
-    if (guestResult.status === "rejected") await logRejectedSection("guests", guestResult);
-    if (quotaResult.status === "rejected") await logRejectedSection("guest quota", quotaResult);
-    const failedSections: GuestWorkspaceSnapshot["failedSections"] = [];
-    if (guestResult.status === "rejected") failedSections.push("guests");
-    if (quotaResult.status === "rejected") failedSections.push("quota");
-
-    return {
-      data: {
-        guests: guestResult.status === "fulfilled" ? guestResult.value : [],
-        quota: quotaResult.status === "fulfilled" ? quotaResult.value : null,
-        failedSections,
-      },
-      error: failedSections.length > 0
-        ? "Unable to load some guest workspace data right now."
-        : null,
-    };
-  } catch (error: unknown) {
-    await reportServerError("guest_snapshot.workspace", error);
-    return {
-      data: null,
-      error: "Unable to load guest workspace data right now.",
-    };
-  }
+  });
 }

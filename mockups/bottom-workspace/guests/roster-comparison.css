@@ -1,0 +1,73 @@
+.roster-comparison {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  flex-shrink: 0;
+  width: 100%;
+  max-width: 1280px;
+  margin: 0 auto 12px;
+}
+.roster-comparison > span {
+  margin-right: 8px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.roster-comparison > button {
+  min-height: 44px;
+  padding: 10px 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--control-radius);
+  background: var(--bg-secondary);
+  color: var(--muted);
+  font-size: 13px;
+}
+.roster-comparison > button[aria-pressed="true"] {
+  color: var(--text);
+  background: var(--pill-active);
+  border-color: var(--control-line);
+}
+.roster.roster--identity .guest-list-columns,
+.roster.roster--identity .guest-owner,
+.roster.roster--identity .guest-operator {
+  display: none;
+}
+.roster.roster--identity .guest-list li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 96px;
+  grid-template-rows: minmax(44px, auto) 16px;
+  grid-template-areas: "person action" "person time";
+  gap: 0 16px;
+  padding-block: 8px;
+}
+.roster--identity .guest-person {
+  grid-area: person;
+}
+.roster--identity .guest-person strong {
+  font-size: 17px;
+  margin-bottom: 4px;
+}
+.roster--identity .guest-person .guest-mobile-meta {
+  display: block;
+  font-size: 13px;
+}
+.roster--identity .check-button {
+  grid-area: action;
+  justify-content: center;
+}
+.roster--identity .guest-check-time {
+  grid-area: time;
+  display: block;
+  text-align: center;
+  color: var(--muted);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  line-height: 16px;
+}
+.roster--identity .guest-check-time:not([datetime]) {
+  visibility: hidden;
+}
+.roster--identity .check-button.is-queued .status-badge {
+  background: #3b82f614;
+  color: #75aaff;
+}

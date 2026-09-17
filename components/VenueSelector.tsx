@@ -12,12 +12,12 @@ import {
   type ReactNode,
 } from "react";
 import { useLocalStorage } from "@/lib/hooks";
-import { fetchVenues } from "@/lib/api/venues";
+import { fetchVenues } from "@/lib/venues/client";
 import type { Venue } from "@/lib/venues/types";
 import Icon from "./Icon";
 import { useAuthSession } from "./AuthSessionProvider";
 import { useTranslations } from "next-intl";
-import { useSectionLoadingTask } from "./RouteTransitionProvider";
+import { useRouteLoadingTask } from "./RouteTransitionProvider";
 
 type VenueDataStatus = "idle" | "loading" | "ready" | "error";
 
@@ -153,7 +153,9 @@ export function useVenueSelector() {
     ensureVenues,
     refreshVenues,
   } = context;
-  useSectionLoadingTask(status === "idle" || status === "loading");
+  useRouteLoadingTask(
+    status === "idle" || (status === "loading" && venues.length === 0),
+  );
 
   useEffect(() => {
     void ensureVenues();
@@ -201,7 +203,7 @@ export default function VenueSelector({
   const selectId = useId();
 
   return (
-    <div className={`min-w-0 ${className}`}>
+    <div className={`venue-selector min-w-0 ${className}`}>
       <label htmlFor={selectId} className="type-context-title">
         {t("venue")}
       </label>

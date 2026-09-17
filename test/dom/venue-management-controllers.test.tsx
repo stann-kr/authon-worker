@@ -291,6 +291,7 @@ async function renderVenueCard({
       />
     </NextIntlClientProvider>,
   );
+  if (!actionsDisabled) fireEvent.click(screen.getByRole("button", { name: new RegExp(venue.name) }));
   return { ...view, VenueCard };
 }
 
@@ -1205,14 +1206,8 @@ test("card toggle preserves busy confirmation and exposes deferred dialog state"
 
 test("disabled directory state removes card actions from keyboard activation", async () => {
   await renderVenueCard({ actionsDisabled: true });
-  const editButton = screen.getByRole("button", {
-    name: messages.VenueAdmin.edit,
-  }) as HTMLButtonElement;
-  const deactivateButton = screen.getByRole("button", {
-    name: messages.VenueAdmin.deactivate,
-  }) as HTMLButtonElement;
-  assert.equal(editButton.disabled, true);
-  assert.equal(deactivateButton.disabled, true);
-  fireEvent.click(editButton);
-  assert.equal(screen.queryByLabelText(messages.VenueAdmin.venueName), null);
+  const openButton = screen.getByRole("button", { name: /Venue A/ }) as HTMLButtonElement;
+  assert.equal(openButton.disabled, true);
+  fireEvent.click(openButton);
+  assert.equal(screen.queryByRole("dialog"), null);
 });

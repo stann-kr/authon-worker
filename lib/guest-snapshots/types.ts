@@ -8,6 +8,8 @@ export interface GuestOperationsSnapshot {
   users: UserDirectoryEntry[];
   externalLinks: ExternalLinkDirectoryEntry[];
   failedSections: Array<"guests" | "users" | "externalLinks">;
+  /** Older server responses omit this during rolling deployments. */
+  offlineRosterStatus?: "available" | "unavailable";
 }
 
 export interface GuestWorkspaceSnapshot {

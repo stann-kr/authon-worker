@@ -1,5 +1,7 @@
 "use server";
 
+import { measureServerOperation } from "@/lib/observability/server-performance";
+
 import {
   and,
   desc,
@@ -71,336 +73,338 @@ function analyticsError(error: unknown): AnalyticsErrorCode {
 export async function fetchAdminAnalytics(
   query: AdminAnalyticsQuery,
 ): Promise<ApiResponse<AdminAnalyticsView>> {
-  try {
-    const actor = await requireAccess("admin");
-    const venueId = requireRequestedVenueId(actor, query?.venueId);
-    if (
-      !isAnalyticsGranularity(query?.granularity) ||
-      typeof query?.anchorDate !== "string" ||
-      query?.compare !== "previous"
-    ) {
-      throw new AnalyticsActionError("INVALID_ANALYTICS_QUERY");
-    }
+  return measureServerOperation("server.analytics", async (): Promise<ApiResponse<AdminAnalyticsView>> => {
+    try {
+      const actor = await requireAccess("admin");
+      const venueId = requireRequestedVenueId(actor, query?.venueId);
+      if (
+        !isAnalyticsGranularity(query?.granularity) ||
+        typeof query?.anchorDate !== "string" ||
+        query?.compare !== "previous"
+      ) {
+        throw new AnalyticsActionError("INVALID_ANALYTICS_QUERY");
+      }
 
-    const db = getDb();
-    const [venue] = await db
-      .select({ id: venues.id, timezone: venues.timezone })
-      .from(venues)
-      .where(and(eq(venues.id, venueId), eq(venues.active, true)))
-      .limit(1);
-    if (!venue) throw new AnalyticsActionError("VENUE_UNAVAILABLE");
+      const db = getDb();
+      const [venue] = await db
+        .select({ id: venues.id, timezone: venues.timezone })
+        .from(venues)
+        .where(and(eq(venues.id, venueId), eq(venues.active, true)))
+        .limit(1);
+      if (!venue) throw new AnalyticsActionError("VENUE_UNAVAILABLE");
 
-    const selection = resolveAnalyticsPeriod({
-      granularity: query.granularity,
-      anchorDate: query.anchorDate,
-      timezone: venue.timezone,
-    });
-    const guestContributorId = sql<string | null>`case
-      when ${guests.externalLinkId} is not null then ${externalDjLinks.contributorId}
-      when ${guests.createdByUserId} is not null then ${users.contributorId}
-      else null
-    end`;
-    const guestSourceKind = sql<string>`case
-      when ${guests.externalLinkId} is not null then 'external_link'
-      when ${guests.createdByUserId} is not null then 'user'
-      else 'unattributed'
-    end`;
-    const guestSourceId = sql<string>`case
-      when ${guests.externalLinkId} is not null then ${guests.externalLinkId}
-      when ${guests.createdByUserId} is not null then ${guests.createdByUserId}
-      else 'unattributed'
-    end`;
-    const guestSourceDisplayName = sql<string | null>`case
-      when ${guests.externalLinkId} is not null then ${externalDjLinks.djName}
-      when ${guests.createdByUserId} is not null then ${users.name}
-      else null
-    end`;
-    const contributorSourceKindGroup = sql<string>`case when ${guestContributorId} is null then ${guestSourceKind} else '' end`;
-    const contributorSourceIdGroup = sql<string>`case when ${guestContributorId} is null then ${guestSourceId} else ${guestContributorId} end`;
+      const selection = resolveAnalyticsPeriod({
+        granularity: query.granularity,
+        anchorDate: query.anchorDate,
+        timezone: venue.timezone,
+      });
+      const guestContributorId = sql<string | null>`case
+        when ${guests.externalLinkId} is not null then ${externalDjLinks.contributorId}
+        when ${guests.createdByUserId} is not null then ${users.contributorId}
+        else null
+      end`;
+      const guestSourceKind = sql<string>`case
+        when ${guests.externalLinkId} is not null then 'external_link'
+        when ${guests.createdByUserId} is not null then 'user'
+        else 'unattributed'
+      end`;
+      const guestSourceId = sql<string>`case
+        when ${guests.externalLinkId} is not null then ${guests.externalLinkId}
+        when ${guests.createdByUserId} is not null then ${guests.createdByUserId}
+        else 'unattributed'
+      end`;
+      const guestSourceDisplayName = sql<string | null>`case
+        when ${guests.externalLinkId} is not null then ${externalDjLinks.djName}
+        when ${guests.createdByUserId} is not null then ${users.name}
+        else null
+      end`;
+      const contributorSourceKindGroup = sql<string>`case when ${guestContributorId} is null then ${guestSourceKind} else '' end`;
+      const contributorSourceIdGroup = sql<string>`case when ${guestContributorId} is null then ${guestSourceId} else ${guestContributorId} end`;
 
-    const attendanceGuestScopeEventId = sql<string | null>`case
-      when ${guests.eventId} is null then null
-      when ${events.compatibilityKey} is not null then null
-      else ${guests.eventId}
-    end`;
+      const attendanceGuestScopeEventId = sql<string | null>`case
+        when ${guests.eventId} is null then null
+        when ${events.compatibilityKey} is not null then null
+        else ${guests.eventId}
+      end`;
 
-    const [
-      eventRows,
-      guestDayRows,
-      attendanceGuestScopeRows,
-      walkInDayRows,
-      attendanceCloseoutRows,
-      contributorRows,
-    ] = await Promise.all([
-      db
-        .select({
-          eventId: events.id,
-          businessDate: events.businessDate,
-          name: events.name,
-          state: events.state,
-          compatibilityKey: events.compatibilityKey,
-          confirmedAt: eventCloseouts.confirmedAt,
-          registeredCount: eventCloseouts.registeredCount,
-          checkedInCount: eventCloseouts.checkedInCount,
-          contributorRegisteredCount: sql<number>`coalesce(sum(${eventCloseoutContributorMetrics.registeredCount}), 0)`.mapWith(Number),
-          contributorCheckedInCount: sql<number>`coalesce(sum(${eventCloseoutContributorMetrics.checkedInCount}), 0)`.mapWith(Number),
-        })
-        .from(events)
-        .leftJoin(
-          eventCloseouts,
-          and(
-            eq(eventCloseouts.eventId, events.id),
-            eq(eventCloseouts.venueId, venueId),
-          ),
-        )
-        .leftJoin(
-          eventCloseoutContributorMetrics,
-          and(
-            eq(
-              eventCloseoutContributorMetrics.eventId,
-              events.id,
-            ),
-            eq(eventCloseoutContributorMetrics.venueId, venueId),
-          ),
-        )
-        .where(
-          and(
-            eq(events.venueId, venueId),
-            or(
-              and(
-                gte(events.businessDate, selection.comparisonPeriod.startDate),
-                lt(
-                  events.businessDate,
-                  selection.comparisonPeriod.endDateExclusive,
-                ),
-              ),
-              and(
-                gte(events.businessDate, selection.period.startDate),
-                lt(events.businessDate, selection.period.dataEndDateExclusive),
-              ),
-            ),
-          ),
-        )
-        .groupBy(events.id, eventCloseouts.eventId)
-        .orderBy(desc(events.businessDate), desc(events.id))
-        .limit(MAX_ANALYTICS_QUERY_ROWS + 1),
-      db
-        .select({
-          businessDate: guests.date,
-          registeredCount: sql<number>`count(*)`.mapWith(Number),
-          checkedInCount: sql<number>`coalesce(sum(case when ${guests.status} = 'checked' then 1 else 0 end), 0)`.mapWith(Number),
-        })
-        .from(guests)
-        .where(
-          and(
-            eq(guests.venueId, venueId),
-            ne(guests.status, "deleted"),
-            or(
-              and(
-                gte(guests.date, selection.comparisonPeriod.startDate),
-                lt(guests.date, selection.comparisonPeriod.endDateExclusive),
-              ),
-              and(
-                gte(guests.date, selection.period.startDate),
-                lt(guests.date, selection.period.dataEndDateExclusive),
-              ),
-            ),
-          ),
-        )
-        .groupBy(guests.date)
-        .orderBy(desc(guests.date))
-        .limit(MAX_ANALYTICS_QUERY_ROWS + 1),
-      db
-        .select({
-          businessDate: guests.date,
-          eventId: attendanceGuestScopeEventId,
-          checkedInCount:
-            sql<number>`coalesce(sum(case when ${guests.status} = 'checked' then 1 else 0 end), 0)`.mapWith(Number),
-        })
-        .from(guests)
-        .leftJoin(
-          events,
-          and(
-            eq(events.id, guests.eventId),
-            eq(events.venueId, guests.venueId),
-            eq(events.businessDate, guests.date),
-          ),
-        )
-        .where(
-          and(
-            eq(guests.venueId, venueId),
-            ne(guests.status, "deleted"),
-            or(
-              and(
-                gte(guests.date, selection.comparisonPeriod.startDate),
-                lt(guests.date, selection.comparisonPeriod.endDateExclusive),
-              ),
-              and(
-                gte(guests.date, selection.period.startDate),
-                lt(guests.date, selection.period.dataEndDateExclusive),
-              ),
-            ),
-          ),
-        )
-        .groupBy(guests.date, attendanceGuestScopeEventId)
-        .orderBy(desc(guests.date), desc(attendanceGuestScopeEventId))
-        .limit(MAX_ANALYTICS_QUERY_ROWS + 1),
-      db
-        .select({
-          businessDate: attendanceActivityLedger.businessDate,
-          eventId: attendanceActivityLedger.eventId,
-          walkInCount:
-            sql<number>`coalesce(sum(${attendanceActivityLedger.delta}), 0)`.mapWith(Number),
-        })
-        .from(attendanceActivityLedger)
-        .where(
-          and(
-            eq(attendanceActivityLedger.venueId, venueId),
-            or(
-              and(
-                gte(
-                  attendanceActivityLedger.businessDate,
-                  selection.comparisonPeriod.startDate,
-                ),
-                lt(
-                  attendanceActivityLedger.businessDate,
-                  selection.comparisonPeriod.endDateExclusive,
-                ),
-              ),
-              and(
-                gte(
-                  attendanceActivityLedger.businessDate,
-                  selection.period.startDate,
-                ),
-                lt(
-                  attendanceActivityLedger.businessDate,
-                  selection.period.dataEndDateExclusive,
-                ),
-              ),
-            ),
-          ),
-        )
-        .groupBy(
-          attendanceActivityLedger.businessDate,
-          attendanceActivityLedger.eventId,
-        )
-        .orderBy(
-          desc(attendanceActivityLedger.businessDate),
-          desc(attendanceActivityLedger.eventId),
-        )
-        .limit(MAX_ANALYTICS_QUERY_ROWS + 1),
-      db
-        .select({
-          businessDate: attendanceCloseouts.businessDate,
-          eventId: attendanceCloseouts.eventId,
-          checkedInGuests: attendanceCloseouts.checkedInGuests,
-          finalWalkIns: attendanceCloseouts.finalWalkIns,
-          targetTotalAttendance: attendanceCloseouts.targetTotalAttendance,
-        })
-        .from(attendanceCloseouts)
-        .where(
-          and(
-            eq(attendanceCloseouts.venueId, venueId),
-            or(
-              and(
-                gte(
-                  attendanceCloseouts.businessDate,
-                  selection.comparisonPeriod.startDate,
-                ),
-                lt(
-                  attendanceCloseouts.businessDate,
-                  selection.comparisonPeriod.endDateExclusive,
-                ),
-              ),
-              and(
-                gte(attendanceCloseouts.businessDate, selection.period.startDate),
-                lt(
-                  attendanceCloseouts.businessDate,
-                  selection.period.dataEndDateExclusive,
-                ),
-              ),
-            ),
-          ),
-        )
-        .orderBy(
-          desc(attendanceCloseouts.businessDate),
-          desc(attendanceCloseouts.eventId),
-        )
-        .limit(MAX_ANALYTICS_QUERY_ROWS + 1),
-      db
-        .select({
-          contributorId: guestContributorId,
-          displayName: sql<string | null>`max(${venueContributors.displayName})`,
-          sourceDisplayName: sql<string | null>`max(${guestSourceDisplayName})`,
-          sourceKind: sql<string>`min(${guestSourceKind})`,
-          sourceId: sql<string>`min(${guestSourceId})`,
-          operatingDays: sql<number>`count(distinct ${guests.date})`.mapWith(Number),
-          registered: sql<number>`count(*)`.mapWith(Number),
-          checkedIn: sql<number>`coalesce(sum(case when ${guests.status} = 'checked' then 1 else 0 end), 0)`.mapWith(Number),
-          guestRows: sql<number>`count(*)`.mapWith(Number),
-        })
-        .from(guests)
-        .leftJoin(
-          users,
-          and(
-            eq(users.id, guests.createdByUserId),
-            eq(users.venueId, venueId),
-          ),
-        )
-        .leftJoin(
-          externalDjLinks,
-          and(
-            eq(externalDjLinks.id, guests.externalLinkId),
-            eq(externalDjLinks.venueId, venueId),
-          ),
-        )
-        .leftJoin(
-          venueContributors,
-          and(
-            eq(venueContributors.id, guestContributorId),
-            eq(venueContributors.venueId, venueId),
-          ),
-        )
-        .where(
-          and(
-            eq(guests.venueId, venueId),
-            ne(guests.status, "deleted"),
-            gte(guests.date, selection.period.startDate),
-            lt(guests.date, selection.period.dataEndDateExclusive),
-          ),
-        )
-        .groupBy(
-          guestContributorId,
-          contributorSourceKindGroup,
-          contributorSourceIdGroup,
-        )
-        .limit(MAX_ANALYTICS_QUERY_ROWS + 1),
-    ]);
-    if (
-      eventRows.length > MAX_ANALYTICS_QUERY_ROWS ||
-      guestDayRows.length > MAX_ANALYTICS_QUERY_ROWS ||
-      attendanceGuestScopeRows.length > MAX_ANALYTICS_QUERY_ROWS ||
-      walkInDayRows.length > MAX_ANALYTICS_QUERY_ROWS ||
-      attendanceCloseoutRows.length > MAX_ANALYTICS_QUERY_ROWS ||
-      contributorRows.length > MAX_ANALYTICS_QUERY_ROWS
-    ) {
-      throw new AnalyticsActionError("INVALID_ANALYTICS_QUERY");
-    }
-
-    return {
-      data: buildAdminAnalyticsView({
-        selection,
+      const [
         eventRows,
         guestDayRows,
         attendanceGuestScopeRows,
         walkInDayRows,
         attendanceCloseoutRows,
         contributorRows,
-      }),
-      error: null,
-    };
-  } catch (error: unknown) {
-    await reportServerError("analytics.admin.load", error);
-    return { data: null, error: analyticsError(error) };
-  }
+      ] = await Promise.all([
+        db
+          .select({
+            eventId: events.id,
+            businessDate: events.businessDate,
+            name: events.name,
+            state: events.state,
+            compatibilityKey: events.compatibilityKey,
+            confirmedAt: eventCloseouts.confirmedAt,
+            registeredCount: eventCloseouts.registeredCount,
+            checkedInCount: eventCloseouts.checkedInCount,
+            contributorRegisteredCount: sql<number>`coalesce(sum(${eventCloseoutContributorMetrics.registeredCount}), 0)`.mapWith(Number),
+            contributorCheckedInCount: sql<number>`coalesce(sum(${eventCloseoutContributorMetrics.checkedInCount}), 0)`.mapWith(Number),
+          })
+          .from(events)
+          .leftJoin(
+            eventCloseouts,
+            and(
+              eq(eventCloseouts.eventId, events.id),
+              eq(eventCloseouts.venueId, venueId),
+            ),
+          )
+          .leftJoin(
+            eventCloseoutContributorMetrics,
+            and(
+              eq(
+                eventCloseoutContributorMetrics.eventId,
+                events.id,
+              ),
+              eq(eventCloseoutContributorMetrics.venueId, venueId),
+            ),
+          )
+          .where(
+            and(
+              eq(events.venueId, venueId),
+              or(
+                and(
+                  gte(events.businessDate, selection.comparisonPeriod.startDate),
+                  lt(
+                    events.businessDate,
+                    selection.comparisonPeriod.endDateExclusive,
+                  ),
+                ),
+                and(
+                  gte(events.businessDate, selection.period.startDate),
+                  lt(events.businessDate, selection.period.dataEndDateExclusive),
+                ),
+              ),
+            ),
+          )
+          .groupBy(events.id, eventCloseouts.eventId)
+          .orderBy(desc(events.businessDate), desc(events.id))
+          .limit(MAX_ANALYTICS_QUERY_ROWS + 1),
+        db
+          .select({
+            businessDate: guests.date,
+            registeredCount: sql<number>`count(*)`.mapWith(Number),
+            checkedInCount: sql<number>`coalesce(sum(case when ${guests.status} = 'checked' then 1 else 0 end), 0)`.mapWith(Number),
+          })
+          .from(guests)
+          .where(
+            and(
+              eq(guests.venueId, venueId),
+              ne(guests.status, "deleted"),
+              or(
+                and(
+                  gte(guests.date, selection.comparisonPeriod.startDate),
+                  lt(guests.date, selection.comparisonPeriod.endDateExclusive),
+                ),
+                and(
+                  gte(guests.date, selection.period.startDate),
+                  lt(guests.date, selection.period.dataEndDateExclusive),
+                ),
+              ),
+            ),
+          )
+          .groupBy(guests.date)
+          .orderBy(desc(guests.date))
+          .limit(MAX_ANALYTICS_QUERY_ROWS + 1),
+        db
+          .select({
+            businessDate: guests.date,
+            eventId: attendanceGuestScopeEventId,
+            checkedInCount:
+              sql<number>`coalesce(sum(case when ${guests.status} = 'checked' then 1 else 0 end), 0)`.mapWith(Number),
+          })
+          .from(guests)
+          .leftJoin(
+            events,
+            and(
+              eq(events.id, guests.eventId),
+              eq(events.venueId, guests.venueId),
+              eq(events.businessDate, guests.date),
+            ),
+          )
+          .where(
+            and(
+              eq(guests.venueId, venueId),
+              ne(guests.status, "deleted"),
+              or(
+                and(
+                  gte(guests.date, selection.comparisonPeriod.startDate),
+                  lt(guests.date, selection.comparisonPeriod.endDateExclusive),
+                ),
+                and(
+                  gte(guests.date, selection.period.startDate),
+                  lt(guests.date, selection.period.dataEndDateExclusive),
+                ),
+              ),
+            ),
+          )
+          .groupBy(guests.date, attendanceGuestScopeEventId)
+          .orderBy(desc(guests.date), desc(attendanceGuestScopeEventId))
+          .limit(MAX_ANALYTICS_QUERY_ROWS + 1),
+        db
+          .select({
+            businessDate: attendanceActivityLedger.businessDate,
+            eventId: attendanceActivityLedger.eventId,
+            walkInCount:
+              sql<number>`coalesce(sum(${attendanceActivityLedger.delta}), 0)`.mapWith(Number),
+          })
+          .from(attendanceActivityLedger)
+          .where(
+            and(
+              eq(attendanceActivityLedger.venueId, venueId),
+              or(
+                and(
+                  gte(
+                    attendanceActivityLedger.businessDate,
+                    selection.comparisonPeriod.startDate,
+                  ),
+                  lt(
+                    attendanceActivityLedger.businessDate,
+                    selection.comparisonPeriod.endDateExclusive,
+                  ),
+                ),
+                and(
+                  gte(
+                    attendanceActivityLedger.businessDate,
+                    selection.period.startDate,
+                  ),
+                  lt(
+                    attendanceActivityLedger.businessDate,
+                    selection.period.dataEndDateExclusive,
+                  ),
+                ),
+              ),
+            ),
+          )
+          .groupBy(
+            attendanceActivityLedger.businessDate,
+            attendanceActivityLedger.eventId,
+          )
+          .orderBy(
+            desc(attendanceActivityLedger.businessDate),
+            desc(attendanceActivityLedger.eventId),
+          )
+          .limit(MAX_ANALYTICS_QUERY_ROWS + 1),
+        db
+          .select({
+            businessDate: attendanceCloseouts.businessDate,
+            eventId: attendanceCloseouts.eventId,
+            checkedInGuests: attendanceCloseouts.checkedInGuests,
+            finalWalkIns: attendanceCloseouts.finalWalkIns,
+            targetTotalAttendance: attendanceCloseouts.targetTotalAttendance,
+          })
+          .from(attendanceCloseouts)
+          .where(
+            and(
+              eq(attendanceCloseouts.venueId, venueId),
+              or(
+                and(
+                  gte(
+                    attendanceCloseouts.businessDate,
+                    selection.comparisonPeriod.startDate,
+                  ),
+                  lt(
+                    attendanceCloseouts.businessDate,
+                    selection.comparisonPeriod.endDateExclusive,
+                  ),
+                ),
+                and(
+                  gte(attendanceCloseouts.businessDate, selection.period.startDate),
+                  lt(
+                    attendanceCloseouts.businessDate,
+                    selection.period.dataEndDateExclusive,
+                  ),
+                ),
+              ),
+            ),
+          )
+          .orderBy(
+            desc(attendanceCloseouts.businessDate),
+            desc(attendanceCloseouts.eventId),
+          )
+          .limit(MAX_ANALYTICS_QUERY_ROWS + 1),
+        db
+          .select({
+            contributorId: guestContributorId,
+            displayName: sql<string | null>`max(${venueContributors.displayName})`,
+            sourceDisplayName: sql<string | null>`max(${guestSourceDisplayName})`,
+            sourceKind: sql<string>`min(${guestSourceKind})`,
+            sourceId: sql<string>`min(${guestSourceId})`,
+            operatingDays: sql<number>`count(distinct ${guests.date})`.mapWith(Number),
+            registered: sql<number>`count(*)`.mapWith(Number),
+            checkedIn: sql<number>`coalesce(sum(case when ${guests.status} = 'checked' then 1 else 0 end), 0)`.mapWith(Number),
+            guestRows: sql<number>`count(*)`.mapWith(Number),
+          })
+          .from(guests)
+          .leftJoin(
+            users,
+            and(
+              eq(users.id, guests.createdByUserId),
+              eq(users.venueId, venueId),
+            ),
+          )
+          .leftJoin(
+            externalDjLinks,
+            and(
+              eq(externalDjLinks.id, guests.externalLinkId),
+              eq(externalDjLinks.venueId, venueId),
+            ),
+          )
+          .leftJoin(
+            venueContributors,
+            and(
+              eq(venueContributors.id, guestContributorId),
+              eq(venueContributors.venueId, venueId),
+            ),
+          )
+          .where(
+            and(
+              eq(guests.venueId, venueId),
+              ne(guests.status, "deleted"),
+              gte(guests.date, selection.period.startDate),
+              lt(guests.date, selection.period.dataEndDateExclusive),
+            ),
+          )
+          .groupBy(
+            guestContributorId,
+            contributorSourceKindGroup,
+            contributorSourceIdGroup,
+          )
+          .limit(MAX_ANALYTICS_QUERY_ROWS + 1),
+      ]);
+      if (
+        eventRows.length > MAX_ANALYTICS_QUERY_ROWS ||
+        guestDayRows.length > MAX_ANALYTICS_QUERY_ROWS ||
+        attendanceGuestScopeRows.length > MAX_ANALYTICS_QUERY_ROWS ||
+        walkInDayRows.length > MAX_ANALYTICS_QUERY_ROWS ||
+        attendanceCloseoutRows.length > MAX_ANALYTICS_QUERY_ROWS ||
+        contributorRows.length > MAX_ANALYTICS_QUERY_ROWS
+      ) {
+        throw new AnalyticsActionError("INVALID_ANALYTICS_QUERY");
+      }
+
+      return {
+        data: buildAdminAnalyticsView({
+          selection,
+          eventRows,
+          guestDayRows,
+          attendanceGuestScopeRows,
+          walkInDayRows,
+          attendanceCloseoutRows,
+          contributorRows,
+        }),
+        error: null,
+      };
+    } catch (error: unknown) {
+      await reportServerError("analytics.admin.load", error);
+      return { data: null, error: analyticsError(error) };
+    }
+  });
 }

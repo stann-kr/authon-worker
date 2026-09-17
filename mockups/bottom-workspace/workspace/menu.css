@@ -1,0 +1,83 @@
+.workspace-menu {
+  display: grid;
+  gap: 24px;
+}
+.workspace-menu h3 {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+  margin: 0 0 8px;
+}
+.workspace-menu-expanded {
+  gap: 20px;
+}
+.menu-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.menu-pills .navigation-pill {
+  flex: 0 1 auto;
+  min-width: 44px;
+  max-width: 100%;
+  padding-inline: 12px;
+  white-space: normal;
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+.menu-pills strong {
+  font-size: 14px;
+  font-weight: inherit;
+}
+.workspace-menu .sheet-menu button {
+  min-height: 48px;
+  padding: 10px 0;
+}
+.workspace-menu .sheet-menu strong {
+  display: block;
+  font-size: 15px;
+  font-weight: 500;
+}
+.workspace-menu button[aria-current="page"] > svg:first-child {
+  color: var(--accent);
+}
+.menu-search {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 var(--control-inset);
+  border: 1px solid var(--control-line);
+  background: var(--bg-secondary);
+  border-radius: var(--control-radius);
+}
+.menu-search input {
+  min-height: var(--control-height);
+  width: 100%;
+  min-width: 0;
+  background: none;
+  border: 0;
+  color: var(--text);
+  font-size: 16px;
+}
+.menu-search:focus-within {
+  border-color: var(--blue);
+}
+.menu-count {
+  border-radius: 99px;
+  min-width: 24px;
+  padding: 3px 6px;
+  text-align: center;
+  font-size: 12px;
+  background: var(--pill-active);
+}
+.menu-empty {
+  display: grid;
+  gap: 12px;
+  color: var(--muted);
+  font-size: 14px;
+}
+@container sheet-content (min-width: 650px) {
+  .workspace-menu-expanded { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px 32px; }
+  .workspace-menu-expanded > :is(.menu-search, .menu-empty) { grid-column: 1 / -1; }
+  .workspace-menu-expanded > .menu-search { width: 100%; max-width: 440px; }
+}

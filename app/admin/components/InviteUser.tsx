@@ -193,17 +193,17 @@ export default function InviteUser() {
 
   return (
     <div className="space-y-6">
-      <div className="app-panel p-4 sm:p-5">
-        <h3 className="type-section-title mb-4">
+      <div className="app-panel record-form-panel">
+        <h3 className="record-form-title">
           {t("createUser")}
         </h3>
 
-        <p className="mb-4 border border-border-strong bg-surface-raised p-3 font-mono text-xs leading-relaxed tracking-[0.12em] text-text-muted" role="note">
+        <p className="mb-5 rounded-control bg-surface-raised p-3 text-xs leading-relaxed text-text-muted" role="note">
           {t("invitationLinkHelp")}
         </p>
 
         <form onSubmit={handleSubmit} aria-busy={isLoading}>
-          <fieldset disabled={isLoading} className="space-y-4">
+          <fieldset disabled={isLoading} className="record-form-fields">
           {isSuperAdmin && venues.length > 0 && (
             <div>
               <label htmlFor="invite-venue" className="app-label">
@@ -274,7 +274,7 @@ export default function InviteUser() {
 
           <fieldset>
             <legend className="app-label">{t("accountType")}</legend>
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-2 gap-3">
               {(["personal", "shared"] as const).map((accountKind) => (
                 <button
                   key={accountKind}
@@ -291,7 +291,7 @@ export default function InviteUser() {
                   }
                   className={`min-h-11 border p-3 text-xs font-medium transition-colors ${
                     formData.account_kind === accountKind
-                      ? "border-action-primary bg-action-primary text-action-text"
+                      ? "border-border-strong bg-surface-active text-text-heading"
                       : "border-border-default bg-canvas text-text-muted hover:border-border-strong hover:text-text-heading"
                   }`}
                 >
@@ -312,7 +312,7 @@ export default function InviteUser() {
               {t("role")}
             </legend>
             <div
-              className={`grid grid-cols-2 gap-2 ${
+              className={`grid grid-cols-2 gap-3 ${
                 isSuperAdmin ? "sm:grid-cols-4" : "sm:grid-cols-3"
               }`}
             >
@@ -326,7 +326,7 @@ export default function InviteUser() {
                   }
                   className={`min-h-11 border p-3 text-xs font-medium transition-colors ${
                     formData.role === opt.value
-                      ? "border-action-primary bg-action-primary text-action-text"
+                      ? "border-border-strong bg-surface-active text-text-heading"
                       : "bg-canvas text-text-muted border-border-default hover:text-text-heading hover:border-border-strong"
                   }`}
                 >
@@ -350,7 +350,7 @@ export default function InviteUser() {
                 onChange={(event) =>
                   setFormData({ ...formData, door_access_enabled: event.target.checked })
                 }
-                className="mt-0.5 h-4 w-4"
+                className="mt-0.5 h-4 w-4 accent-action-primary"
                 autoComplete="off"
               />
               <span>
@@ -416,7 +416,7 @@ export default function InviteUser() {
           {success && createdInvitation && (
             <div
               ref={invitationPanelRef}
-              className="space-y-3 border border-status-waiting/70 bg-status-waiting/10 p-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-border-focus"
+              className="space-y-3 border border-status-waiting/70 bg-status-waiting/10 p-4 outline-none"
               role="region"
               aria-labelledby="created-invitation-title"
               tabIndex={-1}
@@ -446,7 +446,7 @@ export default function InviteUser() {
                   }).format(new Date(createdInvitation.expiresAt)),
                 })}
               </p>
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-2 gap-3">
                 <Button
                   type="button"
                   size="sm"

@@ -19,6 +19,8 @@ interface GuestSearchInputProps {
   onChange: (value: string) => void;
   placeholder?: string;
   className?: string;
+  inputRef?: React.Ref<HTMLInputElement>;
+  onKeyDown?: React.KeyboardEventHandler<HTMLInputElement>;
 }
 
 const GuestSearchInput: React.FC<GuestSearchInputProps> = ({
@@ -26,6 +28,8 @@ const GuestSearchInput: React.FC<GuestSearchInputProps> = ({
   onChange,
   placeholder,
   className = "",
+  inputRef,
+  onKeyDown,
 }) => {
   const t = useTranslations("Common");
   const inputId = useId();
@@ -38,6 +42,7 @@ const GuestSearchInput: React.FC<GuestSearchInputProps> = ({
       <div className="relative flex items-center">
         <Icon name="search" size={16} className="pointer-events-none absolute left-3 text-text-dim" />
         <input
+          ref={inputRef}
           id={inputId}
           name="guest-search"
           type="search"
@@ -45,14 +50,18 @@ const GuestSearchInput: React.FC<GuestSearchInputProps> = ({
           autoComplete="off"
           spellCheck={false}
           onChange={(e) => onChange(e.target.value)}
+          onKeyDown={onKeyDown}
           placeholder={placeholder ?? t("searchGuests")}
-          className="guest-search-input app-field min-h-12 py-2.5 pl-9 pr-12 text-base sm:text-sm"
+          className="guest-search-input app-field py-2.5 pl-9 pr-12 text-base"
         />
         {value && (
           <button
             type="button"
-            onClick={() => onChange("")}
-            className="pressable absolute inset-y-0 right-0 flex min-h-11 w-11 touch-manipulation items-center justify-center rounded-control text-text-muted hover:bg-surface-hover hover:text-text-heading"
+            onClick={() => {
+              onChange("");
+              document.getElementById(inputId)?.focus();
+            }}
+            className="guest-search-clear pressable absolute inset-y-0 right-0 flex min-h-11 w-11 touch-manipulation items-center justify-center rounded-control text-text-muted hover:bg-surface-hover hover:text-text-heading"
             aria-label={t("clearSearch")}
           >
             <Icon name="close" size={16} />

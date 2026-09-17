@@ -1,5 +1,7 @@
 "use server";
 
+import { measureServerOperation } from "@/lib/observability/server-performance";
+
 import { cookies } from "next/headers";
 
 import { reportServerError } from "@/lib/observability/structured-log";
@@ -69,24 +71,26 @@ export async function fetchGuestsByDate(
   venueId?: string,
   eventId?: string | null,
 ): Promise<ApiResponse<Guest[]>> {
-  try {
-    const actor = await requireAccess("door");
-    return {
-      data: await listGuestsByDate(
-        {
-          actor: toGuestServiceActor(actor),
-          date,
-          requestedVenueId: venueId,
-          eventId,
-        },
-        getGuestServiceDependencies(),
-      ),
-      error: null,
-    };
-  } catch (error) {
-    await reportServerError("guest.list_by_date", error);
-    return { data: null, error: "Unable to load guests right now." };
-  }
+  return measureServerOperation("server.guest_list", async (): Promise<ApiResponse<Guest[]>> => {
+    try {
+      const actor = await requireAccess("door");
+      return {
+        data: await listGuestsByDate(
+          {
+            actor: toGuestServiceActor(actor),
+            date,
+            requestedVenueId: venueId,
+            eventId,
+          },
+          getGuestServiceDependencies(),
+        ),
+        error: null,
+      };
+    } catch (error) {
+      await reportServerError("guest.list_by_date", error);
+      return { data: null, error: "Unable to load guests right now." };
+    }
+  });
 }
 
 export async function fetchAllGuests(
@@ -148,16 +152,18 @@ export async function createGuests(params: {
   registeredByName?: string | null;
   items: BulkGuestCreateInput[];
 }): Promise<ApiResponse<BulkGuestCreateResult>> {
-  try {
-    const actor = await requireAccess("guest");
-    return await createGuestBatch(
-      { actor: toGuestServiceActor(actor), ...params },
-      getGuestServiceDependencies(),
-    );
-  } catch (error) {
-    await reportServerError("guest.create", error);
-    return { data: null, error: "Unable to create guests right now." };
-  }
+  return measureServerOperation("server.guest_create", async (): Promise<ApiResponse<BulkGuestCreateResult>> => {
+    try {
+      const actor = await requireAccess("guest");
+      return await createGuestBatch(
+        { actor: toGuestServiceActor(actor), ...params },
+        getGuestServiceDependencies(),
+      );
+    } catch (error) {
+      await reportServerError("guest.create", error);
+      return { data: null, error: "Unable to create guests right now." };
+    }
+  });
 }
 
 export async function updateGuestStatus(
@@ -165,22 +171,24 @@ export async function updateGuestStatus(
   status: "pending" | "checked",
   idempotencyKey: string,
 ): Promise<ApiResponse<Guest>> {
-  try {
-    const actor = await requireAccess("door");
-    return await updateManagedGuestStatus(
-      {
-        actor: toGuestServiceActor(actor),
-        guestId,
-        status,
-        idempotencyKey,
-        sessionKeyHash: await getCurrentSessionKeyHash(),
-      },
-      getGuestServiceDependencies(),
-    );
-  } catch (error) {
-    await reportServerError("guest.status_update", error);
-    return { data: null, error: "Unable to update guest status right now." };
-  }
+  return measureServerOperation("server.guest_checkin", async (): Promise<ApiResponse<Guest>> => {
+    try {
+      const actor = await requireAccess("door");
+      return await updateManagedGuestStatus(
+        {
+          actor: toGuestServiceActor(actor),
+          guestId,
+          status,
+          idempotencyKey,
+          sessionKeyHash: await getCurrentSessionKeyHash(),
+        },
+        getGuestServiceDependencies(),
+      );
+    } catch (error) {
+      await reportServerError("guest.status_update", error);
+      return { data: null, error: "Unable to update guest status right now." };
+    }
+  });
 }
 
 export async function deleteGuest(

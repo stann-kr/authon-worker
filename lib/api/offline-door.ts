@@ -1,5 +1,7 @@
 "use server";
 
+import { measureServerOperation } from "@/lib/observability/server-performance";
+
 import { and, eq, inArray } from "drizzle-orm";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { requireAccess } from "@/lib/auth/server";
@@ -84,50 +86,52 @@ export async function fetchOfflineDoorRoster(params: {
   eventId: string;
   businessDate: string;
 }): Promise<ApiResponse<OfflineDoorGuest[]>> {
-  try {
-    const actor = await requireAccess("door");
-    const venueId = actor.role === "super_admin" ? params.venueId : actor.venueId;
-    if (!venueId || venueId !== params.venueId) {
-      return { data: null, error: "OFFLINE_DOOR_FORBIDDEN" };
-    }
-    await requireActiveVenueId(venueId);
-    const db = getDb();
-    const event = await loadEventById(db, params.eventId);
-    if (
-      !event ||
-      event.venueId !== venueId ||
-      event.businessDate !== params.businessDate ||
-      event.compatibilityKey !== null ||
-      event.state !== "open"
-    ) {
-      return { data: null, error: "OFFLINE_DOOR_EVENT_UNAVAILABLE" };
-    }
-    const rows = await db
-      .select({
-        id: guests.id,
-        name: guests.name,
-        status: guests.status,
-        checkInTime: guests.checkInTime,
-      })
-      .from(guests)
-      .where(
-        and(
-          eq(guests.venueId, venueId),
-          eq(guests.eventId, event.id),
+  return measureServerOperation("server.offline_roster", async (): Promise<ApiResponse<OfflineDoorGuest[]>> => {
+    try {
+      const actor = await requireAccess("door");
+      const venueId = actor.role === "super_admin" ? params.venueId : actor.venueId;
+      if (!venueId || venueId !== params.venueId) {
+        return { data: null, error: "OFFLINE_DOOR_FORBIDDEN" };
+      }
+      await requireActiveVenueId(venueId);
+      const db = getDb();
+      const event = await loadEventById(db, params.eventId);
+      if (
+        !event ||
+        event.venueId !== venueId ||
+        event.businessDate !== params.businessDate ||
+        event.compatibilityKey !== null ||
+        event.state !== "open"
+      ) {
+        return { data: null, error: "OFFLINE_DOOR_EVENT_UNAVAILABLE" };
+      }
+      const rows = await db
+        .select({
+          id: guests.id,
+          name: guests.name,
+          status: guests.status,
+          checkInTime: guests.checkInTime,
+        })
+        .from(guests)
+        .where(
+          and(
+            eq(guests.venueId, venueId),
+            eq(guests.eventId, event.id),
+          ),
+        );
+      return {
+        data: rows.flatMap((row) =>
+          row.status === "pending" || row.status === "checked"
+            ? [{ ...row, status: row.status }]
+            : [],
         ),
-      );
-    return {
-      data: rows.flatMap((row) =>
-        row.status === "pending" || row.status === "checked"
-          ? [{ ...row, status: row.status }]
-          : [],
-      ),
-      error: null,
-    };
-  } catch (error: unknown) {
-    await reportServerError("door.offline_roster", error);
-    return { data: null, error: "OFFLINE_DOOR_ROSTER_FAILED" };
-  }
+        error: null,
+      };
+    } catch (error: unknown) {
+      await reportServerError("door.offline_roster", error);
+      return { data: null, error: "OFFLINE_DOOR_ROSTER_FAILED" };
+    }
+  });
 }
 
 export async function syncOfflineDoorMutations(params: {

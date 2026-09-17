@@ -1,0 +1,14 @@
+.flow-filter-stack.links-filters {
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 8px;
+  align-items: center;
+}
+.links-filters > .flow-inline-fields { grid-column: 1 / -1; }
+.links-filters .flow-tabs { gap: 4px; }
+.links-filters .flow-tabs button { padding-inline: 10px; }
+@container content (min-width: 760px) {
+  .flow-filter-stack.links-filters.flow-filter-bar { grid-template-columns: auto minmax(180px, 240px) minmax(120px, 1fr) minmax(140px, 1fr); }
+}
+@container workspace (max-width: 350px) {
+  .flow-filter-stack.links-filters { grid-template-columns: minmax(0, 1fr); }
+}

@@ -1,18 +1,19 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { logout, hasAccess } from "../lib/auth";
 import RouteLoadingFallback from "@/components/RouteLoadingFallback";
+import RoleLabel from "@/components/RoleLabel";
 import Icon, { type IconName } from "@/components/Icon";
 import TransitionLink from "@/components/TransitionLink";
 import { useRouteTransition } from "@/components/RouteTransitionProvider";
 import WorkspaceShell from "@/components/WorkspaceShell";
-import { fetchMyVenuePendingGuestLimitRequestCount } from "@/lib/api/guest-limits";
-import { fetchPendingPasswordResetRequestCount } from "@/lib/api/password-reset-requests";
-import { useLatestRequestGuard } from "@/lib/hooks";
+import { useVenueBrand } from "@/components/VenueBrandProvider";
+import { getWorkspaceItems } from "@/components/workspace/navigation";
 import { useTranslations } from "next-intl";
 import { useAuthSession } from "@/components/AuthSessionProvider";
+import useHomeRequests, { type HomeRequest } from "./home/useHomeRequests";
 
 interface MenuItem {
   id: string;
@@ -27,13 +28,13 @@ interface MenuItem {
 
 export default function Home() {
   const t = useTranslations("Home");
+  const workspaceT = useTranslations("Workspace");
   const { user } = useAuthSession();
-  const [pendingGuestRequestCount, setPendingGuestRequestCount] = useState(0);
-  const [pendingPasswordResetCount, setPendingPasswordResetCount] = useState(0);
+  const { brand } = useVenueBrand();
+  const { requests, isLoading, refresh } = useHomeRequests(user);
   const router = useRouter();
   const { isRouteTransitionActive, startRouteTransition } =
     useRouteTransition();
-  const requestGuard = useLatestRequestGuard();
   const menuItems: MenuItem[] = useMemo(() => [
     {
       id: "guest",
@@ -61,54 +62,21 @@ export default function Home() {
       title: t("adminTitle"),
       description: t("adminDescription"),
       action: t("adminAction"),
-      icon: "settings",
-      href: "/admin",
+      icon: "users",
+      href: "/admin?tab=guests&view=list",
       requiredAccess: ["admin"],
     },
   ], [t]);
 
   useEffect(() => {
-    const initializeHome = async () => {
-      const isLatestRequest = requestGuard.beginRequest();
-      if (!user) {
-        const logoutResult = await logout();
-        if (!logoutResult.success && isLatestRequest()) {
-          // Pending logout preserves the server credential. Refreshing lets the
-          // server-authenticated user hydrate again instead of leaving Home stuck.
-          router.refresh();
-        }
-        return;
-      }
-
-      try {
-        const [guestRequestResult, passwordResetResult] = await Promise.all([
-          user.role === "venue_admin"
-            ? fetchMyVenuePendingGuestLimitRequestCount()
-            : Promise.resolve(null),
-          user.role === "venue_admin" || user.role === "super_admin"
-            ? fetchPendingPasswordResetRequestCount()
-            : Promise.resolve(null),
-        ]);
-        if (!isLatestRequest()) return;
-        if (guestRequestResult?.error) {
-          console.error("Failed to load pending guest request count:", guestRequestResult.error);
-        } else if (guestRequestResult) {
-          setPendingGuestRequestCount(guestRequestResult.data ?? 0);
-        }
-        if (passwordResetResult?.error) {
-          console.error("Failed to load pending password reset count:", passwordResetResult.error);
-        } else if (passwordResetResult) {
-          setPendingPasswordResetCount(passwordResetResult.data ?? 0);
-        }
-      } catch (error: unknown) {
-        if (isLatestRequest()) {
-          console.error("Failed to load pending guest request count:", error);
-        }
-      }
-    };
-
-    initializeHome();
-  }, [requestGuard, router, user]);
+    if (user) return;
+    let active = true;
+    void logout().then((result) => {
+      // A pending logout still has a server credential; hydrate that identity again.
+      if (!result.success && active) router.refresh();
+    });
+    return () => { active = false; };
+  }, [router, user]);
 
   const accessibleMenus = useMemo(
     () =>
@@ -168,63 +136,56 @@ export default function Home() {
     return <RouteLoadingFallback />;
   }
 
-  const workspaceWidthClass =
-    accessibleMenus.length === 1
-      ? "max-w-[28rem]"
-      : accessibleMenus.length === 2
-        ? "max-w-[58rem]"
-        : "max-w-none";
-  const workspaceGridClass =
-    accessibleMenus.length === 1
-      ? "md:grid-cols-1"
-      : accessibleMenus.length === 2
-        ? "md:grid-cols-2"
-        : "md:grid-cols-3";
+  const primaryId = hasAccess(user, ["admin"]) ? "admin"
+    : user.role === "door_staff" || (user.account_kind === "shared" && hasAccess(user, ["door"])) ? "door" : "guest";
+  const primary = accessibleMenus.find((item) => item.id === primaryId) ?? accessibleMenus[0];
+  const quickLinks = getWorkspaceItems({
+    role: user.role, accountKind: user.account_kind, doorAccessEnabled: user.door_access_enabled,
+  }).filter((item) => ["events", "links", "users", "analytics"].includes(item.id));
+  const quickIcons: Record<string, IconName> = { events: "calendar", links: "link", users: "users", analytics: "chart-line" };
 
   return (
-    <WorkspaceShell contentClassName="gap-4 pb-8 sm:gap-5">
-      <h1 className="sr-only">{t("availableWorkspaces")}</h1>
-
-      {user.role === "venue_admin" && pendingGuestRequestCount > 0 && (
-        <TransitionLink
-          href="/admin?tab=guests&view=requests"
-          className="pressable group flex min-h-14 items-center gap-3 border border-status-waiting/70 bg-status-waiting/10 px-4 py-3 text-status-waiting hover:border-status-waiting sm:px-5"
-        >
-          <Icon name="warning" size={20} />
-          <span className="min-w-0 flex-1 text-sm font-semibold text-text-heading">
-            {t("pendingGuestRequests", { count: pendingGuestRequestCount })}
-          </span>
-          <Icon name="arrow-right" size={18} />
-        </TransitionLink>
-      )}
-
-      {(user.role === "venue_admin" || user.role === "super_admin") &&
-        pendingPasswordResetCount > 0 && (
-          <TransitionLink
-            href="/admin?tab=users&view=password-requests"
-            className="pressable group flex min-h-14 items-center gap-3 border border-status-waiting/70 bg-status-waiting/10 px-4 py-3 text-status-waiting hover:border-status-waiting sm:px-5"
-          >
-            <Icon name="key" size={20} />
-            <span className="min-w-0 flex-1 text-sm font-semibold text-text-heading">
-              {t("pendingPasswordResetRequests", {
-                count: pendingPasswordResetCount,
-              })}
-            </span>
-            <Icon name="arrow-right" size={18} />
+    <WorkspaceShell contentClassName="home-page">
+      <div className="home-overview">
+        <header className="home-heading">
+          <div><p className="home-brand">{brand.name}</p><h1>{t("homeTitle")}</h1></div>
+          <TransitionLink href="/profile" className="home-identity">
+            <div><strong>{user.name}</strong><span><RoleLabel role={user.account_kind === "shared" ? "shared" : user.role} /></span></div>
+            <Icon name="chevron-right" size={18} />
           </TransitionLink>
-        )}
+        </header>
 
-      {accessibleMenus.length > 0 && (
-        <nav aria-label={t("availableWorkspaces")} className="w-full">
-          <div
-            className={`home-workspace-grid mx-auto grid gap-3 sm:gap-4 ${workspaceWidthClass} ${workspaceGridClass}`}
-          >
-            {accessibleMenus.map((item, index) => (
-              <WorkspaceLink key={item.id} item={item} index={index} />
-            ))}
-          </div>
-        </nav>
-      )}
+        <div className="home-workbench">
+          <nav aria-label={t("availableWorkspaces")} className="home-tasks">
+            {primary && <WorkspaceLink item={primary} index={accessibleMenus.indexOf(primary)} primary />}
+            <div className="home-secondary-tasks">
+              {accessibleMenus.filter((item) => item !== primary).map((item) => (
+                <WorkspaceLink key={item.id} item={item} index={accessibleMenus.indexOf(item)} />
+              ))}
+            </div>
+          </nav>
+
+          {requests.length > 0 ? (
+            <HomeRequestQueue requests={requests} isLoading={isLoading} refresh={refresh} />
+          ) : (
+            <section className="home-account-panel" aria-labelledby="home-account-title">
+              <h2 id="home-account-title">{t("registrationInfo")}</h2>
+              <dl>
+                <div><dt>{t("defaultGuestLimit")}</dt><dd>{user.guest_limit === null ? t("unlimited") : t("guestLimitCount", { count: user.guest_limit })}</dd></div>
+                <div><dt>{t("doorAccess")}</dt><dd>{hasAccess(user, ["door"]) ? t("allowed") : t("notAllowed")}</dd></div>
+              </dl>
+              <TransitionLink href="/profile" className="home-account-link">{workspaceT("profile")}<Icon name="arrow-right" size={18} /></TransitionLink>
+            </section>
+          )}
+        </div>
+
+        {quickLinks.length > 0 && <nav className="home-shortcuts" aria-label={t("quickLinks")}>
+          <h2>{t("quickLinks")}</h2>
+          <div>{quickLinks.map((item) => <TransitionLink key={item.id} href={item.href} className="home-shortcut pressable">
+            <Icon name={quickIcons[item.id]} size={20} /><span>{workspaceT(item.label)}</span><Icon name="chevron-right" size={16} />
+          </TransitionLink>)}</div>
+        </nav>}
+      </div>
     </WorkspaceShell>
   );
 }
@@ -232,45 +193,57 @@ export default function Home() {
 function WorkspaceLink({
   item,
   index,
+  primary = false,
 }: {
   item: MenuItem;
   index: number;
+  primary?: boolean;
 }) {
   return (
     <TransitionLink
       href={item.href}
       aria-keyshortcuts={String(index + 1)}
-      className="home-workspace-card pressable group relative flex h-full min-h-[11rem] flex-col overflow-hidden border border-border-default bg-surface p-5 hover:border-border-strong hover:bg-surface-raised focus-visible:border-border-strong focus-visible:bg-surface-raised sm:min-h-[13rem] sm:p-6"
+      className={`${primary ? "home-primary-task" : "home-secondary-task"} pressable`}
     >
-      <div className="flex items-center justify-between gap-4">
-        <p className="text-xs font-medium text-text-muted">
-          {item.category}
-        </p>
-        <kbd className="font-mono text-xs font-semibold tabular-nums text-text-dim transition-colors group-hover:text-text-muted">
-          [{index + 1}]
-        </kbd>
-      </div>
-
-      <div className="mt-5 grid min-w-0 grid-cols-[auto_minmax(0,1fr)] items-center gap-x-3 gap-y-3 sm:mt-6 sm:items-start sm:gap-x-4 sm:gap-y-2">
-        <span className="grid h-10 w-10 shrink-0 place-items-center border border-border-default bg-canvas text-text-muted transition-colors group-hover:border-border-strong group-hover:text-text-heading sm:row-span-2 sm:h-11 sm:w-11">
-          <Icon name={item.icon} size={22} />
-        </span>
-        <h2 className="min-w-0 text-xl font-semibold tracking-[-0.025em] text-text-heading sm:text-2xl">
-          {item.title}
-        </h2>
-        <p className="col-span-2 text-pretty text-sm leading-6 text-text-muted sm:col-span-1">
-          {item.description}
-        </p>
-      </div>
-
-      <div className="mt-5 flex items-center justify-between border-t border-border-subtle pt-4 transition-colors group-hover:border-border-default sm:mt-auto">
-        <span className="text-xs font-semibold text-text-muted transition-colors group-hover:text-text-heading">
-          {item.action}
-        </span>
-        <span className="grid h-8 w-8 shrink-0 place-items-center text-text-dim transition-[color,transform] duration-150 group-hover:translate-x-1 group-hover:text-text-heading">
-          <Icon name="arrow-right" size={19} />
-        </span>
-      </div>
+      {primary ? <>
+        <div className="home-primary-label"><span><Icon name={item.icon} size={22} />{item.category}</span><kbd aria-hidden="true">{index + 1}</kbd></div>
+        <div className="home-primary-copy"><h2>{item.title}</h2><p>{item.description}</p></div>
+        <span className="home-primary-action">{item.action}<Icon name="arrow-right" size={18} /></span>
+      </> : <>
+        <Icon name={item.icon} size={22} />
+        <div className="home-secondary-copy"><h2>{item.title}</h2><p>{item.description}</p></div>
+        <kbd aria-hidden="true">{index + 1}</kbd><Icon name="chevron-right" size={16} />
+      </>}
     </TransitionLink>
   );
+}
+
+function HomeRequestQueue({ requests, isLoading, refresh }: {
+  requests: HomeRequest[];
+  isLoading: boolean;
+  refresh: () => void;
+}) {
+  const t = useTranslations("Home");
+  const workspaceT = useTranslations("Workspace");
+  const hasError = requests.some((request) => request.status === "error");
+  const empty = requests.every((request) => request.status === "ready" && request.count === 0);
+  return <section className="home-request-panel" aria-labelledby="home-requests-title">
+    <header><h2 id="home-requests-title">{t("requestsTitle")}</h2>
+      <button type="button" onClick={refresh} disabled={isLoading} aria-label={t("refreshRequests")} className="home-refresh">
+        <Icon name="refresh" size={18} className={isLoading ? "animate-spin" : ""} />
+      </button>
+    </header>
+    <div className="home-request-list">
+      {requests.map((request) => <TransitionLink key={request.id} href={request.href} className="home-request-row"
+        data-pending={request.status === "ready" && request.count > 0}>
+        <Icon name={request.id === "guests" ? "user-add" : "key"} size={20} />
+        <span>{workspaceT(request.id === "guests" ? "requests" : "passwordRequests")}</span>
+        <strong aria-live="polite">{request.status === "ready" ? t("requestCount", { count: request.count })
+          : t(request.status === "loading" ? "requestsLoading" : "requestsUnavailable")}</strong>
+        <Icon name="chevron-right" size={16} />
+      </TransitionLink>)}
+    </div>
+    {empty && <p className="home-requests-note" role="status"><Icon name="check" size={16} />{t("requestsEmpty")}</p>}
+    {hasError && <p className="home-requests-note" role="status">{t("requestsRetryHint")}</p>}
+  </section>;
 }

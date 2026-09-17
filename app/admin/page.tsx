@@ -1,5 +1,7 @@
 "use client";
 
+import WorkspaceAction from "@/components/workspace/WorkspaceAction";
+
 import {
   useCallback,
   useEffect,
@@ -7,25 +9,17 @@ import {
   useMemo,
   useRef,
   useState,
+  type ReactNode,
 } from "react";
 import dynamic from "next/dynamic";
 import GuestList from "./components/GuestList";
-import LinkManagement, {
-  type LinkManagementSection,
-} from "./components/LinkManagement";
-import UserManagement, {
-  type UserManagementSection,
-} from "./components/UserManagement";
-import VenueManagement, {
-  type VenueManagementSection,
-} from "./components/VenueManagement";
-import GuestLimitRequestManagement from "./components/GuestLimitRequestManagement";
-import PasswordResetRequestManagement from "./components/PasswordResetRequestManagement";
-import EventManagement from "./components/EventManagement";
+import type { LinkManagementSection } from "./components/LinkManagement";
+import type { UserManagementSection } from "./components/UserManagement";
+import type { VenueManagementSection } from "./components/VenueManagement";
+import Skeleton from "@/components/Skeleton";
 import EventScopeSelector from "@/components/EventScopeSelector";
-import AdminTaskSwitcher, {
-  type AdminTaskOption,
-} from "./components/AdminTaskSwitcher";
+import OperationsScope from "@/components/operations/OperationsScope";
+import type { AdminTaskOption } from "./components/AdminTaskSwitcher";
 import AuthGuard from "../../components/AuthGuard";
 import WorkspaceShell from "../../components/WorkspaceShell";
 import VenueLoadNotice from "../../components/VenueLoadNotice";
@@ -37,13 +31,36 @@ import {
   useRouteLoadingTask,
   useRouteTransition,
 } from "../../components/RouteTransitionProvider";
-import { type AdminTaskGroup } from "../../lib/admin-navigation";
 import { fetchPendingPasswordResetRequestCount } from "@/lib/api/password-reset-requests";
 import useAdminWorkspaceNavigation, {
   focusAdminWorkspaceAfterTaskChange,
 } from "./useAdminWorkspaceNavigation";
 
-const AdminAnalytics = dynamic(() => import("./components/AdminAnalytics"));
+function AdminTaskLoading() {
+  return <div className="app-panel"><Skeleton rows={5} /></div>;
+}
+
+const LinkManagement = dynamic(() => import("./components/LinkManagement"), {
+  loading: AdminTaskLoading,
+});
+const UserManagement = dynamic(() => import("./components/UserManagement"), {
+  loading: AdminTaskLoading,
+});
+const VenueManagement = dynamic(() => import("./components/VenueManagement"), {
+  loading: AdminTaskLoading,
+});
+const GuestLimitRequestManagement = dynamic(() => import("./components/GuestLimitRequestManagement"), {
+  loading: AdminTaskLoading,
+});
+const PasswordResetRequestManagement = dynamic(() => import("./components/PasswordResetRequestManagement"), {
+  loading: AdminTaskLoading,
+});
+const EventManagement = dynamic(() => import("./components/EventManagement"), {
+  loading: AdminTaskLoading,
+});
+const AdminAnalytics = dynamic(() => import("./components/AdminAnalytics"), {
+  loading: AdminTaskLoading,
+});
 
 export default function AdminPage() {
   return (
@@ -150,15 +167,6 @@ function AdminPageContent() {
   );
 
 
-  const groupLabels: Record<AdminTaskGroup, string> = {
-    guests: t("guests"),
-    events: t("events"),
-    links: t("links"),
-    users: t("users"),
-    analytics: t("analytics"),
-    venues: t("venues"),
-  };
-
   const handleLinkSectionChange = useCallback(
     (section: LinkManagementSection) =>
       changeTask(section === "create" ? "link-create" : "link-manage"),
@@ -176,9 +184,25 @@ function AdminPageContent() {
   );
   const activeTaskLabel =
     taskOptions.find((option) => option.id === activeTask)?.label ?? t("title");
+  const activeGroup = taskOptions.find((option) => option.id === activeTask)?.group;
+  const contextTasks = ["links", "users", "venues"].includes(activeGroup ?? "")
+    ? taskOptions.filter((option) => option.group === activeGroup && option.id !== "password-requests")
+    : [];
+
+  const eventScopeSelector = (controls: ReactNode, disabled = false) => <EventScopeSelector venueId={venueId} businessDate={selectedDate}
+    value={selectedEventId} onChange={setSelectedEventId} reloadKey={eventRefreshKey} disabled={disabled}
+    renderScope={(selector, label) => <OperationsScope venueName={currentVenue?.brandName || currentVenue?.name}
+      date={selectedDate} label={label} disabled={disabled}>{controls}{selector}</OperationsScope>} />;
 
   return (
-    <WorkspaceShell contentClassName="gap-4 pb-8">
+    <WorkspaceShell contentClassName="gap-4 pb-8" title={activeTaskLabel}
+      adminNavigation={{ activeTask, onTaskChange: changeTask,
+        disabled: !isRoleReady, pendingPasswordResetCount }}
+      actions={contextTasks.length > 0 && activeTask !== "password-requests" ? contextTasks.map((task) => (
+        <WorkspaceAction key={task.id} icon={task.id.endsWith("create") ? "add" : "view"} tone={task.id.endsWith("create") ? "accent" : "muted"}
+          aria-pressed={activeTask === task.id} disabled={!isRoleReady || isRouteTransitionActive}
+          onClick={() => changeTask(task.id)}>{task.label}</WorkspaceAction>
+      )) : undefined}>
       <h1 id="admin-page-title" className="sr-only">
         {t("title")}
       </h1>
@@ -197,47 +221,20 @@ function AdminPageContent() {
         />
       )}
 
-      <div className="grid min-h-0 gap-4 lg:grid-cols-[14rem_minmax(0,1fr)] lg:items-start lg:gap-6">
-        <aside className="lg:sticky lg:top-[calc(var(--app-header-height)+2rem)] lg:self-start">
-          <AdminTaskSwitcher
-            label={t("sections")}
-            groupLabels={groupLabels}
-            options={taskOptions}
-            value={activeTask}
-            onChange={changeTask}
-            disabled={!isRoleReady || isRouteTransitionActive}
-          />
-        </aside>
-
         <section
           ref={workspaceRef}
           id="admin-workspace"
           aria-labelledby="admin-active-task-title"
           tabIndex={-1}
-          className="min-h-0 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-border-focus"
+          className="min-h-0 outline-none"
         >
         <h2 id="admin-active-task-title" className="sr-only">
           {activeTaskLabel}
         </h2>
-        {[
-          "guest-list",
-          "guest-requests",
-          "event-manage",
-          "link-create",
-          "link-manage",
-        ].includes(activeTask) && (
-          <div className="context-bar mb-4">
-            <EventScopeSelector
-              venueId={venueId}
-              businessDate={selectedDate}
-              value={selectedEventId}
-              onChange={setSelectedEventId}
-              reloadKey={eventRefreshKey}
-            />
-          </div>
-        )}
+        {!isRoleReady && <AdminTaskLoading />}
+        {isRoleReady && <>
         {activeTask === "guest-list" && (
-          <GuestList
+          <GuestList scopeSelector={eventScopeSelector}
             selectedDate={selectedDate}
             onDateChange={setSelectedDate}
             businessDate={businessDate}
@@ -246,12 +243,13 @@ function AdminPageContent() {
         )}
         {activeTask === "guest-requests" && (
           <GuestLimitRequestManagement
+            scopeSelector={eventScopeSelector}
             eventId={selectedEventId}
             businessDate={selectedDate}
           />
         )}
         {activeTask === "event-manage" && (
-          <EventManagement
+          <EventManagement scopeSelector={eventScopeSelector}
             selectedDate={selectedDate}
             onDateChange={setSelectedDate}
             businessDate={businessDate}
@@ -261,7 +259,7 @@ function AdminPageContent() {
           />
         )}
         {(activeTask === "link-create" || activeTask === "link-manage") && (
-          <LinkManagement
+          <LinkManagement scopeSelector={eventScopeSelector}
             selectedDate={selectedDate}
             onDateChange={setSelectedDate}
             businessDate={businessDate}
@@ -297,8 +295,8 @@ function AdminPageContent() {
             showSectionNavigation={false}
           />
         )}
+        </>}
         </section>
-      </div>
     </WorkspaceShell>
   );
 }

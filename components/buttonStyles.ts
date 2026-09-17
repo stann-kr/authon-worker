@@ -22,9 +22,9 @@ const variantClasses: Record<ButtonVariant, string> = {
   primary:
     "border border-action-primary bg-action-primary font-semibold text-action-text",
   secondary:
-    "border border-border-strong bg-surface-raised font-medium text-text-heading",
+    "border border-border-subtle bg-surface-raised font-medium text-text-heading",
   outline:
-    "border border-border-strong bg-transparent font-medium text-text-heading",
+    "border border-border-default bg-transparent font-medium text-text-heading",
   danger:
     "border border-status-danger/70 bg-status-danger/10 font-semibold text-status-danger",
   confirm: "border font-semibold",
@@ -33,8 +33,8 @@ const variantClasses: Record<ButtonVariant, string> = {
 };
 
 const sizeClasses: Record<ButtonSize, string> = {
-  sm: "min-h-11 px-3 py-2 text-xs",
-  md: "min-h-11 px-4 py-2.5 text-sm",
+  sm: "min-h-11 px-4 py-2 text-[13px]",
+  md: "min-h-[46px] px-4 py-2.5 text-sm",
   lg: "min-h-11 px-5 py-3 text-sm",
   xl: "min-h-12 px-6 py-3.5 text-base",
 };
@@ -53,5 +53,5 @@ export function getButtonClassName({
 export function getButtonSpinnerColor(
   variant: ButtonVariant,
 ): "black" | "white" {
-  return variant === "primary" || variant === "confirm" ? "black" : "white";
+  return variant === "primary" ? "black" : "white";
 }

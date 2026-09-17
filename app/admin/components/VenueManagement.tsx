@@ -1,8 +1,12 @@
 "use client";
 
+import Sheet from "@/components/overlays/Sheet";
+import RecordList, { useRecordDetail } from "@/components/records/RecordList";
+
+import { fetchVenues } from "@/lib/venues/client";
+
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
-  fetchVenues,
   createVenue,
   updateVenue,
 } from "../../../lib/api/venues";
@@ -139,6 +143,7 @@ export default function VenueManagement({
   return (
     <OperationsLayout
       variant="stacked"
+      width={activeTab === "create" ? "form" : "full"}
       title={t("title")}
       headingLevel={null}
       dashboard={
@@ -156,8 +161,10 @@ export default function VenueManagement({
         )}
 
         {activeTab === "list" && (
-          <div className="app-panel p-3 sm:p-4">
+          <div>
             <StatGrid
+              variant="inline"
+              isLoading={isLoading}
               items={[
                 {
                   label: t("totalVenues"),
@@ -185,14 +192,14 @@ export default function VenueManagement({
       {/* Main content */}
       <div className="min-w-0">
         {activeTab === "create" && (
-          <div className="space-y-6">
-            <div className="app-panel p-4 sm:p-5">
-              <h3 className="type-section-title mb-4">
+          <div className="record-form space-y-6">
+            <div className="app-panel record-form-panel">
+              <h3 className="record-form-title">
                 {t("createNew")}
               </h3>
 
               <form onSubmit={handleCreate} aria-busy={isSubmitting}>
-                <fieldset disabled={isSubmitting} className="space-y-4">
+                <fieldset disabled={isSubmitting} className="record-form-fields">
                 <div>
                   <label htmlFor="venue-create-name" className="app-label">
                     {t("venueName")}
@@ -223,7 +230,7 @@ export default function VenueManagement({
                   <legend className="app-label">
                     {t("type")}
                   </legend>
-                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-5">
+                  <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-5">
                     {VENUE_TYPES.map((opt) => (
                       <button
                         key={opt.value}
@@ -237,7 +244,7 @@ export default function VenueManagement({
                         }
                       className={`min-h-11 border p-3 text-xs font-medium transition-colors ${
                           formData.type === opt.value
-                            ? "border-action-primary bg-action-primary text-action-text"
+                            ? "border-border-strong bg-surface-active text-text-heading"
                             : "bg-canvas text-text-muted border-border-default hover:text-text-heading hover:border-border-strong"
                         }`}
                       >
@@ -457,23 +464,23 @@ export default function VenueManagement({
         )}
 
         {activeTab === "list" && (
-          <div className="app-panel">
+          <div className="record-collection">
             <PanelHeader
               title={t("venueList")}
               count={venues.length}
               onRefresh={loadVenues}
               isLoading={isLoading}
             />
-            <div className="p-4">
+            <div className="record-collection-body">
               {listError && <Alert type="error" message={listError} className="mb-4" />}
               {listState === "loading" ? (
                 <Skeleton rows={4} />
               ) : shouldShowEmptyState(listState) ? (
                 <EmptyState icon="store" message={t("noVenues")} />
               ) : (
-                <div
+                <RecordList
                   aria-busy={isLoading}
-                  className={`grid grid-cols-1 gap-4 md:grid-cols-2 ${
+                  className={`${
                     isLoading ? "pointer-events-none" : ""
                   }`}
                 >
@@ -481,12 +488,13 @@ export default function VenueManagement({
                     <VenueCard
                       key={venue.id}
                       venue={venue}
+                      error={listError}
                       actionsDisabled={isLoading || isMutating}
                       onToggleActive={handleToggleActive}
                       onSave={handleSave}
                     />
                   ))}
-                </div>
+                </RecordList>
               )}
             </div>
           </div>
@@ -532,11 +540,13 @@ function createVenueEditData(venue: Venue): VenueEditData {
 
 export function VenueCard({
   venue,
+  error,
   actionsDisabled,
   onToggleActive,
   onSave,
 }: {
   venue: Venue;
+  error?: string | null;
   actionsDisabled: boolean;
   onToggleActive: (venue: Venue) => Promise<VenueDirectoryMutationResult>;
   onSave: (
@@ -553,6 +563,7 @@ export function VenueCard({
     festival: t("typeFestival"),
     private: t("typePrivate"),
   };
+  const detail = useRecordDetail(venue.id);
   const [isEditing, setIsEditing] = useState(false);
   const [editData, setEditData] = useState(() => createVenueEditData(venue));
   const [editNameError, setEditNameError] = useState("");
@@ -659,40 +670,25 @@ export function VenueCard({
 
   return (
     <>
-      <div className="app-panel p-4 sm:p-5">
-      <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div className="min-w-0">
-          <h3 className="type-row-title break-words">
-            {venue.name}
-          </h3>
-          {venue.address && (
-            <p className="mt-1 break-words text-xs leading-relaxed text-text-dim">
-              {venue.address}
-            </p>
-          )}
+      <article className="record-row">
+        <div className="record-summary">
+          <button type="button" className="record-open" onClick={detail.show} disabled={actionsDisabled} aria-haspopup="dialog" aria-expanded={detail.open}>
+            <span className="record-identity"><strong>{venue.name}</strong><small>{venue.primaryDomain || venue.address || venueTypeLabels[venue.type]}</small></span>
+            <span className="record-value">{venueTypeLabels[venue.type]}</span>
+            <span className="record-status">{venue.active ? t("active") : t("inactive")}</span>
+          </button>
         </div>
-        <div className="flex items-center gap-2">
-          <span
-            className={`text-xs font-medium ${getVenueTypeColor(venue.type)}`}
-          >
-            {venueTypeLabels[venue.type]}
-          </span>
-          {!venue.active && (
-            <span className="border border-status-danger/70 bg-status-danger/10 px-2 py-1 font-mono text-xs uppercase tracking-wider text-status-danger">
-              {t("inactive")}
-            </span>
-          )}
-        </div>
-      </div>
-
+      {detail.open && <Sheet title={venue.name} presentation="detail" size="record" onClose={() => { handleCancelEdit(); detail.close(); }}
+        busy={actionsDisabled || isSaving || isTogglingActive} dirty={isEditing && JSON.stringify(editData) !== JSON.stringify(createVenueEditData(venue))}>
+        {error && <Alert type="error" message={error} />}
       {!isEditing ? (
-        <div>
+        <div className="record-information-grid">
           {venue.description && (
-            <p className="mb-3 break-words text-sm leading-relaxed text-text-muted">
+            <p className="col-span-full break-words text-sm leading-relaxed text-text-muted">
               {venue.description}
             </p>
           )}
-          <div className="mb-3 border border-border-subtle bg-canvas p-3">
+          <div className="border-b border-border-subtle pb-4">
             <p className="app-label">{t("brandDomain")}</p>
             <p className="break-words text-sm font-medium text-text-heading">
               {venue.brandName || venue.name}
@@ -704,7 +700,7 @@ export function VenueCard({
               {t("defaultLanguage")}: {venue.defaultLocale || "en"}
             </p>
           </div>
-          <div className="grid grid-cols-2 gap-2 mb-3">
+          <div className="grid grid-cols-2 gap-4 border-b border-border-subtle pb-4">
             <div>
               <p className="text-xs text-text-dim mb-1">
                 {t("status")}
@@ -726,14 +722,14 @@ export function VenueCard({
               </p>
             </div>
           </div>
-          <div className="mb-3 border border-border-subtle bg-canvas p-3">
+          <div className="col-span-full border-b border-border-subtle pb-4">
             <p className="app-label">{t("localOperations")}</p>
             <p className="font-mono text-sm text-text-heading">{venue.timezone}</p>
             <p className="mt-1 font-mono text-xs text-text-muted">
               {venue.openingTime} - {venue.closingTime}
             </p>
           </div>
-          <div className="grid grid-cols-2 gap-2">
+          <div className="col-span-full flex flex-wrap gap-3">
             <Button
               ref={editButtonRef}
               type="button"
@@ -741,7 +737,6 @@ export function VenueCard({
               disabled={actionsDisabled}
               variant="secondary"
               size="sm"
-              fullWidth
             >
               {t("edit")}
             </Button>
@@ -758,7 +753,6 @@ export function VenueCard({
               }}
               variant={venue.active ? "danger" : "secondary"}
               size="sm"
-              fullWidth
             >
               {venue.active ? t("deactivate") : t("activate")}
             </Button>
@@ -767,7 +761,7 @@ export function VenueCard({
       ) : (
         <fieldset
           disabled={isSaving || actionsDisabled}
-          className="space-y-3"
+          className="record-form space-y-4"
           aria-busy={isSaving || actionsDisabled}
         >
           <div>
@@ -803,7 +797,7 @@ export function VenueCard({
             <legend className="app-label">
               {t("type")}
             </legend>
-            <div className="grid grid-cols-2 gap-1 sm:grid-cols-3 xl:grid-cols-5">
+            <div className="grid grid-cols-2 gap-3">
               {VENUE_TYPES.map((opt) => (
                 <button
                   key={opt.value}
@@ -817,7 +811,7 @@ export function VenueCard({
                   }
                   className={`min-h-11 border p-2 text-xs font-medium transition-colors ${
                     editData.type === opt.value
-                      ? "border-action-primary bg-action-primary text-action-text"
+                      ? "border-border-strong bg-surface-active text-text-heading"
                       : "bg-surface-raised text-text-muted border-border-strong hover:text-text-heading hover:border-border-strong"
                   }`}
                 >
@@ -887,7 +881,7 @@ export function VenueCard({
 
           <fieldset>
             <legend className="app-label">{t("operatingHours")}</legend>
-            <div className="grid gap-3 sm:grid-cols-2">
+            <div className="record-detail-grid">
               <div>
                 <label htmlFor={`venue-opening-time-${venue.id}`} className="app-label">
                   {t("openingTime")}
@@ -926,7 +920,7 @@ export function VenueCard({
             <p className="app-helper">{t("operatingHoursHelp")}</p>
           </fieldset>
 
-          <div className="grid gap-3 sm:grid-cols-2">
+          <div className="record-detail-grid">
             <div>
               <label htmlFor={`venue-brand-name-${venue.id}`} className="app-label">
                 {t("displayName")}
@@ -1000,7 +994,7 @@ export function VenueCard({
             </select>
           </div>
 
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-2 gap-3">
             <Button
               type="button"
               onClick={handleSave}
@@ -1022,7 +1016,8 @@ export function VenueCard({
           </div>
         </fieldset>
       )}
-      </div>
+      </Sheet>}
+      </article>
       <ConfirmDialog
         open={isDeactivateConfirmOpen}
         title={t("deactivateTitle")}

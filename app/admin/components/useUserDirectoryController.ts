@@ -6,7 +6,6 @@ import {
   useLatestRequestGuard,
   useScopedOperationGuard,
 } from "@/lib/hooks";
-import { useSectionLoadingTask } from "@/components/RouteTransitionProvider";
 import { deriveAsyncListState } from "@/lib/ui/async-list-state";
 import { shareUrl, toUrlShareData } from "@/lib/share/url";
 import type { ApiResponse } from "@/lib/api/response";
@@ -204,7 +203,6 @@ export function useUserDirectoryController({
       : EMPTY_AUDIT_EVENTS;
   const isCurrentScopeLoading =
     !isScopeStateCurrent || isLoading || loadedScopeOwner !== renderedScopeOwner;
-  useSectionLoadingTask(isActive && isCurrentScopeLoading);
 
   const setPendingUserAction = useCallback((action: PendingUserAction) => {
     if (!action) {
