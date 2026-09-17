@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { afterEach, test } from "node:test";
+import { useState } from "react";
 import { NextIntlClientProvider } from "next-intl";
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 
@@ -60,15 +61,18 @@ function createDeferred<T>() {
 
 function CreateHarness({
   selectedDate = "2026-08-20",
+  onDateChange = () => {},
   isActive = true,
   actions = DEFAULT_ACTIONS,
 }: {
   selectedDate?: string;
+  onDateChange?: (date: string) => void;
   isActive?: boolean;
   actions?: LinkCreateControllerActions;
 }) {
   const create = useLinkCreateController({
     selectedDate,
+    onDateChange,
     venueId: "venue-a",
     eventId: null,
     isActive,
@@ -82,7 +86,7 @@ function CreateHarness({
         data-testid="date"
         value={create.formData.date}
         onChange={(event) =>
-          create.setFormData({ ...create.formData, date: event.target.value })
+          create.handleDateChange(event.target.value)
         }
       />
       <input
@@ -135,6 +139,34 @@ function renderHarness(props: Parameters<typeof CreateHarness>[0]) {
     </NextIntlClientProvider>,
   );
 }
+
+test("changing either date keeps the creation scope aligned without losing the draft", async () => {
+  const submissions: string[] = [];
+  const actions = createActions(async (draft) => {
+    submissions.push(draft.date);
+    return { data: null, error: null };
+  });
+  function SharedDateHarness() {
+    const [date, setDate] = useState("2026-08-20");
+    return <>
+      <input aria-label="Operating date" value={date} onChange={(event) => setDate(event.target.value)} />
+      <CreateHarness selectedDate={date} onDateChange={setDate} actions={actions} />
+    </>;
+  }
+  render(<NextIntlClientProvider locale="en" messages={messages}><SharedDateHarness /></NextIntlClientProvider>);
+  fireEvent.change(screen.getByTestId("dj"), { target: { value: "DJ TEST" } });
+  fireEvent.change(screen.getByTestId("event"), { target: { value: "TEST EVENT" } });
+  fireEvent.change(screen.getByTestId("date"), { target: { value: "2026-08-21" } });
+  assert.equal((screen.getByLabelText("Operating date") as HTMLInputElement).value, "2026-08-21");
+  fireEvent.change(screen.getByLabelText("Operating date"), { target: { value: "2026-08-22" } });
+  assert.equal((screen.getByTestId("date") as HTMLInputElement).value, "2026-08-22");
+  assert.equal((screen.getByTestId("dj") as HTMLInputElement).value, "DJ TEST");
+  assert.equal((screen.getByTestId("event") as HTMLInputElement).value, "TEST EVENT");
+  await act(async () => {
+    fireEvent.submit(screen.getByRole("button", { name: "Submit" }).closest("form")!);
+  });
+  assert.deepEqual(submissions, ["2026-08-22"]);
+});
 
 test("create validation focuses the invalid DJ field", async () => {
   renderHarness({});

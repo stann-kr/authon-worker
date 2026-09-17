@@ -114,6 +114,7 @@ export default function LinkManagement({
 
   const create = useLinkCreateController({
     selectedDate,
+    onDateChange,
     venueId,
     eventId,
     isActive: activeTab === "create",
@@ -149,6 +150,7 @@ export default function LinkManagement({
     linkKindInputRef,
     generatedLinkPanelRef,
     clearFormFieldError,
+    handleDateChange,
     handleDjChange,
     handleSubmit,
   } = create;
@@ -343,8 +345,7 @@ export default function LinkManagement({
                             : undefined
                         }
                         onChange={(e) => {
-                          clearFormFieldError("date");
-                          setFormData({ ...formData, date: e.target.value });
+                          handleDateChange(e.target.value);
                         }}
                         onClick={(e) => (e.target as HTMLInputElement).showPicker?.()}
                         className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10 [color-scheme:dark]"

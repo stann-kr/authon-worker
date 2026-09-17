@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Alert from "@/components/Alert";
 import Button from "@/components/Button";
 import ConfirmDialog from "@/components/ConfirmDialog";
+import DisclosureSection from "@/components/DisclosureSection";
 import EmptyState from "@/components/EmptyState";
 import PanelHeader from "@/components/PanelHeader";
 import RoleLabel from "@/components/RoleLabel";
@@ -519,11 +520,8 @@ export default function PasswordResetRequestManagement({
           </AsyncListContent>
 
           {decidedRequests.length > 0 && (
-            <details className="border-t border-border-default pt-4">
-              <summary className="flex min-h-11 cursor-pointer items-center text-sm font-medium text-text-heading">
-                {t("history", { count: decidedRequests.length })}
-              </summary>
-              <div className="mt-3 divide-y divide-border-subtle border border-border-default bg-canvas">
+            <DisclosureSection title={t("history", { count: decidedRequests.length })}>
+              <div className="divide-y divide-border-subtle border border-border-default bg-canvas">
                 {decidedRequests.slice(0, 30).map((request) => (
                   <div
                     key={request.id}
@@ -538,7 +536,7 @@ export default function PasswordResetRequestManagement({
                   </div>
                 ))}
               </div>
-            </details>
+            </DisclosureSection>
           )}
         </div>
       </section>

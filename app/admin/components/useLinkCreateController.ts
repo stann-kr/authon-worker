@@ -66,6 +66,7 @@ export interface LinkCreateControllerActions {
 
 interface UseLinkCreateControllerOptions {
   selectedDate: string;
+  onDateChange: (date: string) => void;
   venueId: string;
   eventId: string | null;
   isActive: boolean;
@@ -84,6 +85,7 @@ const EMPTY_FORM_DATA = (date: string): LinkCreateFormData => ({
 
 export function useLinkCreateController({
   selectedDate,
+  onDateChange,
   venueId,
   eventId,
   isActive,
@@ -292,6 +294,11 @@ export function useLinkCreateController({
     [clearFormFieldError],
   );
 
+  const handleDateChange = (date: string) => {
+    clearFormFieldError("date");
+    onDateChange(date);
+  };
+
   const focusFormField = (field: LinkCreateFormField) => {
     const target = {
       date: linkDateInputRef,
@@ -495,6 +502,7 @@ export function useLinkCreateController({
   return {
     formData,
     setFormData,
+    handleDateChange,
     isGenerating,
     nativeShareAvailable,
     currentDjSuggestions,

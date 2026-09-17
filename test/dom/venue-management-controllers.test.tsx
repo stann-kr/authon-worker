@@ -153,6 +153,7 @@ function DirectoryHarness({
         {controller.venues.map((venue) => venue.id).join(",")}
       </output>
       <output data-testid="directory-error">{controller.listError}</output>
+      <button onClick={() => void controller.refreshAfterMutation()}>Refresh venues</button>
     </>
   );
 }
@@ -383,6 +384,24 @@ test("directory keeps partial and full failures distinct from an empty success",
     screen.getByTestId("directory-state").textContent,
     "success-empty",
   );
+});
+
+test("one directory refresh clears a failed list and also refreshes the active venue scope", async () => {
+  let unavailable = true;
+  let activeRefreshes = 0;
+  renderDirectory(createDirectoryDependencies({
+    fetchVenues: async () => unavailable
+      ? { data: null, error: "UNAVAILABLE" }
+      : { data: [VENUE_A, VENUE_B], error: null },
+  }), async () => { activeRefreshes += 1; });
+  await flushAsyncWork();
+  assert.equal(screen.getByTestId("directory-state").textContent, "error");
+  unavailable = false;
+  fireEvent.click(screen.getByRole("button", { name: "Refresh venues" }));
+  await flushAsyncWork();
+  assert.equal(screen.getByTestId("directory-error").textContent, "");
+  assert.equal(screen.getByTestId("directory-venues").textContent, "venue-a,venue-b");
+  assert.equal(activeRefreshes, 1);
 });
 
 test("create validates the name and submits the captured normalized draft", async () => {

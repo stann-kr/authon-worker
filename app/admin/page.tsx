@@ -214,7 +214,7 @@ function AdminPageContent() {
       >
         {t("activeTaskAnnouncement", { task: activeTaskLabel })}
       </p>
-      {venueLoadError && (
+      {venueLoadError && activeTask !== "venue-list" && (
         <VenueLoadNotice
           onRetry={refreshVenues}
           isLoading={isLoadingVenues}
@@ -245,7 +245,9 @@ function AdminPageContent() {
           <GuestLimitRequestManagement
             scopeSelector={eventScopeSelector}
             eventId={selectedEventId}
-            businessDate={selectedDate}
+            selectedDate={selectedDate}
+            onDateChange={setSelectedDate}
+            businessDate={businessDate}
           />
         )}
         {activeTask === "event-manage" && (
