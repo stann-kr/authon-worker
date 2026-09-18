@@ -8,6 +8,7 @@ import RoleLabel from "../../../components/RoleLabel";
 import { useLocale, useTranslations } from "next-intl";
 import { useVenueSelector } from "../../../components/VenueSelector";
 import Button from "../../../components/Button";
+import Sheet from "@/components/overlays/Sheet";
 import { captureImmutableDraft } from "../../../lib/forms/immutable-draft";
 import { shareUrl, toUrlShareData } from "../../../lib/share/url";
 import {
@@ -20,7 +21,7 @@ interface CreatedInvitation {
   url: string;
 }
 
-export default function InviteUser() {
+export default function InviteUser({ onClose }: { onClose?: () => void } = {}) {
   const t = useTranslations("UserAdmin");
   const locale = useLocale();
   const [formData, setFormData] = useState({
@@ -191,12 +192,16 @@ export default function InviteUser() {
     setIsInvitationActionPending(false);
   };
 
-  return (
+  const hasDraft = Boolean(formData.email || formData.name || formData.guest_limit ||
+    formData.role !== "dj" || formData.account_kind !== "personal" || formData.door_access_enabled ||
+    formData.preferred_locale !== "auto");
+
+  const content = (
     <div className="space-y-6">
       <div className="app-panel record-form-panel">
-        <h3 className="record-form-title">
+        {!onClose && <h3 className="record-form-title">
           {t("createUser")}
-        </h3>
+        </h3>}
 
         <p className="mb-5 rounded-control bg-surface-raised p-3 text-xs leading-relaxed text-text-muted" role="note">
           {t("invitationLinkHelp")}
@@ -492,4 +497,9 @@ export default function InviteUser() {
       </div>
     </div>
   );
+  return onClose ? <Sheet id="user-create-panel" presentation="modal" title={t("createUser")}
+    onClose={onClose} busy={isLoading || isInvitationActionPending} dirty={hasDraft}
+    closeWarning={createdInvitation ? t("invitationLinkCreatedHelp") : undefined}>
+    {content}
+  </Sheet> : content;
 }

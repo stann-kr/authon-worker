@@ -24,6 +24,7 @@ import ExternalEventCombobox from "@/app/admin/components/ExternalEventCombobox"
 import AsyncListContent from "@/components/AsyncListContent";
 import ConfirmDialog from "@/components/ConfirmDialog";
 import Sheet from "@/components/overlays/Sheet";
+import ViewportProvider from "@/components/viewport/ViewportProvider";
 import RecordList, { useRecordDetail } from "@/components/records/RecordList";
 import DateField from "@/components/dates/DateField";
 import RosterView, { type RosterStatus } from "@/components/guests/RosterView";
@@ -960,6 +961,9 @@ test("removing a pending guest row returns focus to the main content", () => {
   fireEvent.click(within(screen.getByRole("group")).getByRole("button", { name: "Delete" }));
   assert.equal(screen.queryByRole("article") === null, true);
   assert.equal(document.activeElement === document.getElementById("main-content"), true);
+  assert.equal(document.getElementById("main-content")?.dataset.overlayFocus, "true");
+  (document.activeElement as HTMLElement).blur();
+  assert.equal(document.getElementById("main-content")?.hasAttribute("data-overlay-focus"), false);
 });
 
 test("checked guest deletion requires a fresh named dialog after the guest status changes", () => {
@@ -1378,6 +1382,80 @@ test("product sheet protects changed input, blocks dismissal while saving and re
   assert.equal(document.querySelector(".workspace-shell")?.hasAttribute("inert"), false);
 });
 
+test("modal returns focus to its controlling button when pointer activation never focused that button", async () => {
+  function Harness() {
+    const [open, setOpen] = useState(false);
+    return <NextIntlClientProvider locale="en" messages={messages}>
+      <section tabIndex={-1} aria-label="Page content">Page</section>
+      <button aria-controls="owner-filter-sheet" onClick={() => setOpen(true)}>Filter owners</button>
+      <Sheet id="owner-filter-sheet" presentation="modal" open={open} title="Owners" onClose={() => setOpen(false)}>
+        <label>Owner<select defaultValue="all"><option value="all">All</option><option value="dj">DJ</option></select></label>
+      </Sheet>
+    </NextIntlClientProvider>;
+  }
+  render(<Harness />);
+  screen.getByRole("region", { name: "Page content" }).focus();
+  const trigger = screen.getByRole("button", { name: "Filter owners" });
+  fireEvent.click(trigger); // Safari does not focus a button on pointer activation.
+  const select = screen.getByRole("combobox");
+  select.focus();
+  fireEvent.change(select, { target: { value: "dj" } });
+  fireEvent.click(screen.getByRole("button", { name: messages.Sheet.close }));
+  await waitFor(() => assert.equal(document.activeElement === trigger, true));
+});
+
+test("the first keyboard backdrop gesture blurs without discarding the draft even when resize precedes click", async () => {
+  const originalViewport = Object.getOwnPropertyDescriptor(window, "visualViewport");
+  const visual = Object.assign(new window.EventTarget(), { height: window.innerHeight, offsetTop: 0, scale: 1 });
+  Object.defineProperty(window, "visualViewport", { configurable: true, value: visual });
+  try {
+    render(<NextIntlClientProvider locale="en" messages={messages}><ViewportProvider>
+      <Sheet presentation="modal" title="Keyboard draft" onClose={() => {}} protectEdits>
+        <label>Draft<input defaultValue="" /></label>
+      </Sheet>
+    </ViewportProvider></NextIntlClientProvider>);
+    const input = screen.getByLabelText("Draft") as HTMLInputElement;
+    fireEvent.change(input, { target: { value: "Keep this name" } });
+    act(() => input.focus());
+    act(() => { visual.height -= 330; visual.dispatchEvent(new window.Event("resize")); });
+    const backdrop = document.querySelector(".product-sheet-viewport")!;
+    fireEvent.pointerDown(backdrop);
+    assert.equal(document.activeElement === input, false);
+    // The viewport may finish resizing before Safari delivers the click.
+    act(() => { visual.height = window.innerHeight; visual.dispatchEvent(new window.Event("resize")); });
+    fireEvent.click(backdrop);
+    assert.equal(screen.queryByRole("group", { name: messages.Sheet.unsaved }), null);
+    assert.equal(screen.getByLabelText("Draft") === input, true);
+    assert.equal(input.value, "Keep this name");
+    fireEvent.pointerDown(backdrop); fireEvent.click(backdrop);
+    assert.ok(screen.getByRole("group", { name: messages.Sheet.unsaved }));
+  } finally {
+    cleanup();
+    if (originalViewport) Object.defineProperty(window, "visualViewport", originalViewport);
+    else Reflect.deleteProperty(window, "visualViewport");
+  }
+});
+
+test("a one-time result stays available until the user confirms closing it", () => {
+  function Harness() {
+    const [open, setOpen] = useState(true);
+    return <NextIntlClientProvider locale="en" messages={messages}>
+      <Sheet open={open} presentation="modal" title="Created account" onClose={() => setOpen(false)} closeWarning="Copy the invitation before closing.">
+        <a href="/invitation/example">Invitation result</a>
+      </Sheet>
+    </NextIntlClientProvider>;
+  }
+  render(<Harness />);
+  const result = screen.getByRole("link", { name: "Invitation result" });
+  fireEvent.click(screen.getByRole("button", { name: messages.Sheet.close }));
+  assert.ok(screen.getByRole("group", { name: "Copy the invitation before closing." }));
+  fireEvent.click(screen.getByRole("button", { name: messages.Sheet.continue }));
+  assert.equal(screen.getByRole("link", { name: "Invitation result" }) === result, true);
+  fireEvent.click(screen.getByRole("button", { name: messages.Sheet.close }));
+  fireEvent.click(screen.getByRole("button", { name: messages.Sheet.discard }));
+  assert.equal(screen.queryByRole("dialog"), null);
+});
+
 test("detail moves between desktop accordion and mobile modal without losing its draft or focus", () => {
   let mobile = false;
   let closeCount = 0;
@@ -1739,6 +1817,26 @@ test("removing an inline panel and its confirmation keeps the workspace availabl
   assert.notEqual(document.body.style.overflow, "hidden");
   assert.equal(document.querySelector(".workspace-shell")?.hasAttribute("inert"), false);
   assert.equal(document.getElementById("main-content")?.hasAttribute("inert"), false);
+});
+
+test("a directly opened modal receives focus after its route loading overlay releases", async () => {
+  let release: (() => void) | undefined;
+  function Harness() {
+    const { registerRouteLoadingTask } = useRouteTransition();
+    useEffect(() => {
+      release = registerRouteLoadingTask();
+      return release;
+    }, [registerRouteLoadingTask]);
+    return <Sheet presentation="modal" title="Create account" onClose={() => {}}><input aria-label="Account name" /></Sheet>;
+  }
+  render(<NextIntlClientProvider locale="en" messages={messages}><RouteTransitionProvider><Harness /></RouteTransitionProvider></NextIntlClientProvider>);
+  assert.equal(document.querySelector(".product-sheet-layer")?.hasAttribute("hidden"), true);
+  act(() => { (document.activeElement as HTMLElement)?.blur(); });
+  act(() => release?.());
+  await waitFor(() => {
+    assert.equal(document.querySelector(".product-sheet-layer")?.hasAttribute("hidden"), false);
+    assert.equal(document.activeElement === screen.getByRole("button", { name: messages.Sheet.close }), true);
+  });
 });
 
 test("route loading locks an inline panel without replacing its draft", () => {

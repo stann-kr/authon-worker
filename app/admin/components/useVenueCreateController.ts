@@ -170,6 +170,15 @@ export default function useVenueCreateController({
 
   return {
     formData,
+    hasDraft: Object.entries(createDefaultFormData()).some(([key, value]) => formData[key as keyof VenueCreateFormData] !== value),
+    resetDraft: () => {
+      if (activeOperationOwnerRef.current) return;
+      setFormData(createDefaultFormData());
+      setFormError("");
+      setFormSuccess("");
+      setHasNameValidationError(false);
+      hasNameValidationErrorRef.current = false;
+    },
     setFormData,
     formError,
     formSuccess,

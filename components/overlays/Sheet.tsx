@@ -7,6 +7,7 @@ import Button from "../Button";
 import Icon from "../Icon";
 import { useIsRouteTransitionActive } from "../RouteTransitionProvider";
 import { lockModalBackground } from "./modal-lock";
+import { restoreOverlayFocus } from "./restore-focus";
 import { useKeyboardOpen } from "../viewport/ViewportProvider";
 
 interface SheetProps {
@@ -20,6 +21,7 @@ interface SheetProps {
   size?: "default" | "record";
   busy?: boolean;
   dirty?: boolean;
+  closeWarning?: string;
   protectEdits?: boolean;
   blockDuringRouteTransition?: boolean;
 }
@@ -37,8 +39,9 @@ const controlDefaultValue = (field: Control) => {
 };
 const draftControls = "input:not([data-preserve-on-close]), select:not([data-preserve-on-close]), textarea:not([data-preserve-on-close])";
 
-function canRestoreFocus(target: HTMLElement | null): target is HTMLElement {
-  if (!target?.isConnected || target === document.body || target.closest("[hidden], [inert]") || target.matches(":disabled")) return false;
+function canRestoreFocus(target: HTMLElement | null, allowInert = false): target is HTMLElement {
+  if (!target?.isConnected || target === document.body || target.closest("[hidden]") ||
+    (!allowInert && target.closest("[inert]")) || target.matches(":disabled")) return false;
   for (let element: HTMLElement | null = target; element; element = element.parentElement) {
     const style = getComputedStyle(element);
     if (style.display === "none" || style.visibility === "hidden") return false;
@@ -52,7 +55,7 @@ export function requestSheetClose(id: string, onClosed?: () => void) {
 
 // Mobile navigation/details use bottom sheets. Desktop row details stay inline.
 export default function Sheet({ id, open = true, title, children, onClose, presentation = "detail",
-  wide = false, size = "default", busy = false, dirty = false, protectEdits = false,
+  wide = false, size = "default", busy = false, dirty = false, closeWarning, protectEdits = false,
   blockDuringRouteTransition = true }: SheetProps) {
   const t = useTranslations("Sheet");
   const keyboardOpen = useKeyboardOpen();
@@ -71,6 +74,7 @@ export default function Sheet({ id, open = true, title, children, onClose, prese
   const continueRef = useRef<HTMLButtonElement>(null);
   const editFocus = useRef<HTMLElement | null>(null);
   const afterClose = useRef<(() => void) | undefined>(undefined);
+  const backdropDismissedKeyboard = useRef(false);
   const baseline = useRef(new Map<Element, string>());
   const [discard, setDiscard] = useState(false);
   const latest = useRef({ busy, dirty, discard, onClose });
@@ -93,7 +97,7 @@ export default function Sheet({ id, open = true, title, children, onClose, prese
     if (state.discard) { keepEditing(); return; }
     const hasChangedFields = protectEdits && [...(panelRef.current?.querySelectorAll<Control>(draftControls) ?? [])]
       .some((field) => controlValue(field) !== (baseline.current.get(field) ?? controlDefaultValue(field)));
-    if (state.dirty || hasChangedFields) {
+    if (state.dirty || hasChangedFields || closeWarning) {
       editFocus.current = document.activeElement as HTMLElement;
       setDiscard(true);
     } else completeClose();
@@ -124,7 +128,12 @@ export default function Sheet({ id, open = true, title, children, onClose, prese
   useLayoutEffect(() => {
     if (!open) return;
     const panel = panelRef.current;
-    const opener = document.activeElement as HTMLElement | null;
+    // Safari pointer activation need not focus the button. Its aria-controls
+    // relationship is a more reliable return target than the page's old focus.
+    const trigger = id ? [...document.querySelectorAll<HTMLElement>("[aria-controls]")]
+      .find((element) => element.getAttribute("aria-controls")?.split(/\s+/).includes(id) &&
+        !host?.contains(element) && canRestoreFocus(element, true)) : undefined;
+    const opener = trigger ?? document.activeElement as HTMLElement | null;
     baseline.current.clear();
     panel?.querySelectorAll<Control>(draftControls).forEach((field) => baseline.current.set(field, controlValue(field)));
     closeRef.current?.focus({ preventScroll: true });
@@ -137,10 +146,18 @@ export default function Sheet({ id, open = true, title, children, onClose, prese
         const remainingSheet = [...document.querySelectorAll<HTMLElement>(".product-sheet")].at(-1);
         const target = canRestoreFocus(opener) ? opener
           : remainingSheet?.querySelector<HTMLElement>("button:not(:disabled)") ?? document.getElementById("main-content");
-        target?.focus({ preventScroll: true });
+        restoreOverlayFocus(target);
       });
     };
-  }, [open]);
+  }, [open, id, host]);
+
+  useLayoutEffect(() => {
+    // A route-owned sheet can mount while hidden by the loading overlay.
+    // Focus it when that overlay releases, after the panel becomes available.
+    if (open && !transitioning && !host?.contains(document.activeElement)) {
+      closeRef.current?.focus({ preventScroll: true });
+    }
+  }, [open, transitioning, host]);
 
   useLayoutEffect(() => {
     if (open) return;
@@ -148,7 +165,7 @@ export default function Sheet({ id, open = true, title, children, onClose, prese
   }, [open]);
 
   useLayoutEffect(() => {
-    if (discard) continueRef.current?.focus();
+    if (discard) continueRef.current?.focus({ preventScroll: true });
   }, [discard]);
 
   useLayoutEffect(() => {
@@ -173,12 +190,12 @@ export default function Sheet({ id, open = true, title, children, onClose, prese
         const panel = panelRef.current;
         const input = document.activeElement;
         if (!body || !panel || !(input instanceof HTMLElement) || !body.contains(input)) return;
-        const visible = panel.getBoundingClientRect();
-        const top = panel.querySelector(".product-sheet-header")?.getBoundingClientRect().bottom ?? visible.top;
+        const visible = body.getBoundingClientRect();
+        const top = visible.top;
         const field = input.getBoundingClientRect();
-        if (field.top < top + 12) panel.scrollTop += field.top - top - 12;
+        if (field.top < top + 12) body.scrollTop += field.top - top - 12;
         else if (field.bottom > visible.bottom - 12) {
-          panel.scrollTop += Math.min(field.top - top - 12, field.bottom - visible.bottom + 12);
+          body.scrollTop += Math.min(field.top - top - 12, field.bottom - visible.bottom + 12);
         }
       });
     };
@@ -231,11 +248,28 @@ export default function Sheet({ id, open = true, title, children, onClose, prese
   }, [open, modal, transitioning, host]);
 
   if (!open || !host) return null;
+  const isBackdrop = (target: EventTarget) => target === layerRef.current || target === layerRef.current?.firstElementChild;
   const content = (
     <div ref={layerRef} className="product-sheet-layer" data-modal={modal} data-transitioning={transitioning} inert={transitioning || undefined} hidden={transitioning}
-      onClick={(event) => { if (modal && event.target === event.currentTarget) requestClose(); }}>
-      <div className="product-sheet-viewport"
-        onClick={(event) => { if (modal && event.target === event.currentTarget) requestClose(); }}>
+      onPointerDown={(event) => {
+        backdropDismissedKeyboard.current = modal && keyboardOpen && isBackdrop(event.target);
+        if (!backdropDismissedKeyboard.current) return;
+        // Consume this gesture before native blur changes the viewport. Closing
+        // the keyboard must not also replace the form with a discard panel.
+        event.preventDefault();
+        if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
+      }}
+      onPointerCancel={() => { backdropDismissedKeyboard.current = false; }}
+      onClick={(event) => {
+        if (!modal || !isBackdrop(event.target)) return;
+        if (backdropDismissedKeyboard.current || keyboardOpen) {
+          backdropDismissedKeyboard.current = false;
+          if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
+          return;
+        }
+        requestClose();
+      }}>
+      <div className="product-sheet-viewport">
       <div id={id} ref={panelRef} className="product-sheet" data-wide={wide} data-size={size} role={modal ? "dialog" : "region"} aria-modal={modal || undefined} data-presentation={presentation}
         aria-labelledby={titleId} aria-busy={busy} tabIndex={-1}
         onKeyDown={(event) => {
@@ -261,8 +295,8 @@ export default function Sheet({ id, open = true, title, children, onClose, prese
           <h2 id={titleId}>{title}</h2>
           <Button ref={closeRef} variant="ghost" onClick={requestClose} disabled={busy} aria-label={t("close")} aria-expanded={modal ? undefined : true} aria-controls={`${titleId}-body`}><Icon name={modal ? "close" : "chevron-down"} className={modal ? undefined : "rotate-180"} size={20} /></Button>
         </header>
-        {discard && <div className="product-sheet-discard" role="group" aria-label={t("unsaved")}>
-          <p>{t("unsaved")}</p>
+        {discard && <div className="product-sheet-discard" role="group" aria-label={closeWarning ?? t("unsaved")}>
+          <p>{closeWarning ?? t("unsaved")}</p>
           <Button ref={continueRef} onClick={keepEditing}>{t("continue")}</Button>
           <Button variant="outline" onClick={completeClose} disabled={busy}>{t("discard")}</Button>
         </div>}
