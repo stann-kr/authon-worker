@@ -209,7 +209,7 @@ export default function GuestLimitRequestManagement({
           {loadError && <Alert type="error" message={loadError} />}
           {feedback && <Alert type={feedback.type} message={feedback.message} />}
           {!venueId ? (
-            <p className="border border-border-default bg-canvas p-4 text-sm text-text-muted">
+            <p className="py-4 text-sm text-text-muted">
               {t("selectVenue")}
             </p>
           ) : listState === "loading" ? (
@@ -286,7 +286,7 @@ export default function GuestLimitRequestManagement({
 
           {decided.length > 0 && (
             <DisclosureSection title={t("history", { count: decided.length })}>
-            <div className="divide-y divide-border-subtle border border-border-default bg-canvas">
+            <div className="divide-y divide-border-subtle border-y border-border-subtle">
               {decided.slice(0, 20).map((request) => (
                 <div key={request.id} className="flex items-start justify-between gap-3 p-3 text-xs">
                   <span className="min-w-0 break-words text-text-body">

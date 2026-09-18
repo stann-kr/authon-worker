@@ -539,7 +539,7 @@ function ResetPasswordContent() {
               </div>
 
               {requestChallenge && (
-                <div className="border border-border-strong bg-canvas p-4 text-left">
+                <div className="rounded-panel border border-border-subtle bg-surface-raised p-4 text-left">
                   <p className="text-xs font-semibold text-text-heading">
                     {t("requestChallenge")}
                   </p>

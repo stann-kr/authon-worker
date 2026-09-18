@@ -185,7 +185,7 @@ export default function EventCloseout({ eventId, eventState, timeZone }: EventCl
             </dl>
 
             <div className="record-detail-grid">
-              <p className="border border-border-default p-3 text-sm text-text-body">
+              <p className="rounded-control bg-surface-raised p-3 text-sm text-text-body">
                 <span className="block text-xs text-text-muted">{t("peak15")}</span>
                 <strong className="mt-1 block font-mono text-text-heading">
                   {report.peak15Minutes
@@ -199,7 +199,7 @@ export default function EventCloseout({ eventId, eventState, timeZone }: EventCl
                     : "—"}
                 </strong>
               </p>
-              <p className="border border-border-default p-3 text-sm text-text-body">
+              <p className="rounded-control bg-surface-raised p-3 text-sm text-text-body">
                 <span className="block text-xs text-text-muted">{t("operations")}</span>
                 <strong className="mt-1 block font-mono text-text-heading">
                   {t("operationValue", {
@@ -210,13 +210,13 @@ export default function EventCloseout({ eventId, eventState, timeZone }: EventCl
                   })}
                 </strong>
               </p>
-              <p className="border border-border-default p-3 text-sm text-text-body">
+              <p className="rounded-control bg-surface-raised p-3 text-sm text-text-body">
                 <span className="block text-xs text-text-muted">{t("preparationTime")}</span>
                 <strong className="mt-1 block font-mono text-text-heading">
                   {formatDuration(report.timing.preparationSeconds)}
                 </strong>
               </p>
-              <p className="border border-border-default p-3 text-sm text-text-body">
+              <p className="rounded-control bg-surface-raised p-3 text-sm text-text-body">
                 <span className="block text-xs text-text-muted">{t("confirmationTime")}</span>
                 <strong className="mt-1 block font-mono text-text-heading">
                   {formatDuration(report.timing.confirmationSeconds)}

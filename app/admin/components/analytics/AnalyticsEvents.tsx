@@ -3,6 +3,7 @@
 import type { MouseEvent } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import type { AnalyticsEventRow } from "@/lib/analytics/types";
+import { getButtonClassName } from "@/components/buttonStyles";
 
 export default function AnalyticsEvents({
   rows,
@@ -54,7 +55,7 @@ export default function AnalyticsEvents({
       </div>
       <div className="grid gap-3 p-4 md:hidden">
         {rows.map((row) => (
-          <article key={row.eventId} className="border border-border-default bg-canvas p-3">
+          <article key={row.eventId} className="rounded-control border border-border-subtle bg-surface-raised p-3">
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
                 <h4 className="break-words text-sm font-semibold text-text-heading">{row.name}</h4>
@@ -65,7 +66,7 @@ export default function AnalyticsEvents({
                   </span>
                 </p>
               </div>
-              <a href={eventHref(row)} onClick={(event) => handleEventClick(event, row)} className="pressable flex min-h-11 shrink-0 items-center border border-border-default bg-surface-raised px-3 py-2 text-xs font-medium text-text-muted hover:text-text-heading">
+              <a href={eventHref(row)} onClick={(event) => handleEventClick(event, row)} data-variant="secondary" className={getButtonClassName({ variant: "secondary", size: "sm", className: "shrink-0" })}>
                 {t("events.open")}
               </a>
             </div>
@@ -79,7 +80,7 @@ export default function AnalyticsEvents({
       </div>
       <div className="hidden overflow-x-auto md:block">
         <table className="w-full border-collapse text-left text-sm">
-          <thead className="bg-canvas text-xs text-text-muted">
+          <thead className="bg-surface-raised text-xs text-text-muted">
             <tr>
               <th scope="col" className="px-4 py-3 font-medium">{t("events.date")}</th>
               <th scope="col" className="px-4 py-3 font-medium">{t("events.event")}</th>
@@ -99,7 +100,7 @@ export default function AnalyticsEvents({
                 <td className="px-4 py-3 text-right font-mono tabular-nums">{numberFormat.format(row.checkedIn)}</td>
                 <td className="px-4 py-3 text-right font-mono tabular-nums">{row.entryRatePercent === null ? "—" : `${numberFormat.format(row.entryRatePercent)}%`}</td>
                 <td className={`px-4 py-3 text-xs ${row.status === "drifted" ? "text-status-waiting" : "text-text-muted"}`}>{t(`events.${row.status}`)}</td>
-                <td className="px-4 py-2 text-right"><a href={eventHref(row)} onClick={(event) => handleEventClick(event, row)} className="pressable inline-flex min-h-11 items-center px-2 text-xs font-medium text-text-muted hover:text-text-heading">{t("events.open")}</a></td>
+                <td className="px-4 py-2 text-right"><a href={eventHref(row)} onClick={(event) => handleEventClick(event, row)} data-variant="ghost" className={getButtonClassName({ variant: "ghost", size: "sm" })}>{t("events.open")}</a></td>
               </tr>
             ))}
           </tbody>

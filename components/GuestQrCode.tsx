@@ -58,7 +58,7 @@ export default function GuestQrCode({
           />
           <div className="min-w-0">
             <p className="text-xs leading-relaxed text-text-muted">{codeLabel}</p>
-            <code className="mt-2 block break-all border border-border-default bg-canvas p-2 font-mono text-xs text-text-heading">
+            <code className="mt-2 block break-all rounded-control border border-border-subtle bg-surface p-3 font-mono text-xs text-text-heading">
               {code}
             </code>
           </div>

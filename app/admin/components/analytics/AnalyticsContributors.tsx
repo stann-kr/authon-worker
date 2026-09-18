@@ -98,7 +98,7 @@ export default function AnalyticsContributors({
           </button>
         </div>
         {sortedRows.map((row) => (
-          <article key={row.contributorId ?? `${row.source?.kind}:${row.source?.id}`} className="border border-border-default bg-canvas p-3">
+          <article key={row.contributorId ?? `${row.source?.kind}:${row.source?.id}`} className="rounded-control border border-border-subtle bg-surface-raised p-3">
             <h4 className="text-sm font-semibold text-text-heading">{contributorLabel(row)}</h4>
             <dl className="mt-3 grid grid-cols-2 gap-3 text-xs">
               {(["registered", "checkedIn", "operatingDays"] as const).map((key) => (
@@ -118,7 +118,7 @@ export default function AnalyticsContributors({
 
       <div className="hidden overflow-x-auto md:block">
         <table className="w-full border-collapse text-left text-sm">
-          <thead className="bg-canvas text-xs text-text-muted">
+          <thead className="bg-surface-raised text-xs text-text-muted">
             <tr>
               <th scope="col" className="px-4 py-3 font-medium">{t("contributors.name")}</th>
               {(["registered", "checkedIn", "entryRatePercent", "operatingDays"] as const).map((key) => (

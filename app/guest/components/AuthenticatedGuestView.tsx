@@ -474,7 +474,7 @@ export default function AuthenticatedGuestView({ user }: AuthenticatedGuestViewP
           isLoading={isLoadingVenues}
         />
       )}
-      <Sheet id="guest-entry-panel" open={entryOpen} title={t("addGuest")} onClose={() => {
+      <Sheet id="guest-entry-panel" presentation="modal" open={entryOpen} title={t("addGuest")} onClose={() => {
         setEntryOpen(false); setGuestName("");
         guestLimitRequestController.updateRequestDraft({ requestedExtra: "1", requestReason: "" });
       }}

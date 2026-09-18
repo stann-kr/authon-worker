@@ -123,7 +123,7 @@ const DateField = forwardRef<HTMLInputElement, DateFieldProps>(function DateFiel
           if (["Enter", " ", "ArrowDown"].includes(event.key)) { event.preventDefault(); openCalendar(); }
         }} />
     </div>
-    <Sheet id={dialogId} open={open && !disabled} title={t("chooseDate")} onClose={() => setOpen(false)}>
+    <Sheet id={dialogId} presentation="inline" open={open && !disabled} title={t("chooseDate")} onClose={() => setOpen(false)}>
       <div className="date-calendar" ref={calendarRef}>
         <div className="date-calendar-navigation">
           <button type="button" aria-label={t("previousMonth")} disabled={year === 1 && month === 0}

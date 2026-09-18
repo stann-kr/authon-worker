@@ -109,7 +109,7 @@ export default function AnalyticsAttendance({
         </h4>
 
         {attendance.trend.length === 0 ? (
-          <p className="mt-4 border border-border-subtle bg-canvas px-4 py-6 text-center text-sm text-text-muted">
+          <p className="mt-4 rounded-control bg-surface-raised px-4 py-6 text-center text-sm text-text-muted">
             {t("attendance.empty")}
           </p>
         ) : (
@@ -181,7 +181,7 @@ export default function AnalyticsAttendance({
             </div>
 
             <DisclosureSection title={t("attendance.tableTitle")}>
-              <div className="overflow-x-auto border border-border-subtle">
+              <div className="overflow-x-auto rounded-control border border-border-subtle">
                 <table className="w-full min-w-[36rem] border-collapse text-left text-xs">
                   <caption className="sr-only">
                     {t("attendance.tableTitle")}

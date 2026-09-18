@@ -562,7 +562,7 @@ export default function PasswordResetRequestManagement({
                               ] as const).map((method) => (
                                 <label
                                   key={method}
-                                  className="flex cursor-pointer items-start gap-3 border border-border-default bg-canvas p-3"
+                                  className="flex min-h-11 cursor-pointer items-start gap-3 rounded-control border border-border-default bg-surface-raised p-3"
                                 >
                                   <input
                                     ref={method === "in_person" ? verificationMethodRef : undefined}
@@ -633,7 +633,7 @@ export default function PasswordResetRequestManagement({
                             </p>
                           </div>
 
-                          <label className="flex cursor-pointer items-start gap-3 border border-border-default bg-canvas p-3">
+                          <label className="flex min-h-11 cursor-pointer items-start gap-3 rounded-control border border-border-default bg-surface-raised p-3">
                             <input
                               ref={verificationAttestationRef}
                               type="checkbox"
@@ -668,7 +668,7 @@ export default function PasswordResetRequestManagement({
 
           {decidedRequests.length > 0 && (
             <DisclosureSection title={t("history", { count: decidedRequests.length })}>
-              <div className="divide-y divide-border-subtle border border-border-default bg-canvas">
+              <div className="divide-y divide-border-subtle border-y border-border-subtle">
                 {decidedRequests.slice(0, 30).map((request) => (
                   <div
                     key={request.id}
