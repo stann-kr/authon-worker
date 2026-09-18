@@ -170,13 +170,15 @@ export default function Sheet({ id, open = true, title, children, onClose, prese
       cancelAnimationFrame(frame);
       frame = requestAnimationFrame(() => {
         const body = bodyRef.current;
+        const panel = panelRef.current;
         const input = document.activeElement;
-        if (!body || !(input instanceof HTMLElement) || !body.contains(input)) return;
-        const visible = body.getBoundingClientRect();
+        if (!body || !panel || !(input instanceof HTMLElement) || !body.contains(input)) return;
+        const visible = panel.getBoundingClientRect();
+        const top = panel.querySelector(".product-sheet-header")?.getBoundingClientRect().bottom ?? visible.top;
         const field = input.getBoundingClientRect();
-        if (field.top < visible.top + 12) body.scrollTop += field.top - visible.top - 12;
+        if (field.top < top + 12) panel.scrollTop += field.top - top - 12;
         else if (field.bottom > visible.bottom - 12) {
-          body.scrollTop += Math.min(field.top - visible.top - 12, field.bottom - visible.bottom + 12);
+          panel.scrollTop += Math.min(field.top - top - 12, field.bottom - visible.bottom + 12);
         }
       });
     };
@@ -232,6 +234,8 @@ export default function Sheet({ id, open = true, title, children, onClose, prese
   const content = (
     <div ref={layerRef} className="product-sheet-layer" data-modal={modal} data-transitioning={transitioning} inert={transitioning || undefined} hidden={transitioning}
       onClick={(event) => { if (modal && event.target === event.currentTarget) requestClose(); }}>
+      <div className="product-sheet-viewport"
+        onClick={(event) => { if (modal && event.target === event.currentTarget) requestClose(); }}>
       <div id={id} ref={panelRef} className="product-sheet" data-wide={wide} data-size={size} role={modal ? "dialog" : "region"} aria-modal={modal || undefined} data-presentation={presentation}
         aria-labelledby={titleId} aria-busy={busy} tabIndex={-1}
         onKeyDown={(event) => {
@@ -263,6 +267,7 @@ export default function Sheet({ id, open = true, title, children, onClose, prese
           <Button variant="outline" onClick={completeClose} disabled={busy}>{t("discard")}</Button>
         </div>}
         <div ref={bodyRef} id={`${titleId}-body`} className="product-sheet-body" hidden={discard}>{children}</div>
+      </div>
       </div>
     </div>);
   return <><div ref={anchorRef} style={{ display: "contents" }} />{createPortal(content, host)}</>;
