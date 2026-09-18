@@ -336,13 +336,13 @@ export default function InviteUser() {
             </div>
           </fieldset>
           ) : (
-            <div className="border border-border-default bg-surface-raised p-3 text-sm text-text-body">
+            <div className="rounded-control border border-border-subtle bg-surface-raised p-3 text-sm text-text-body">
               <RoleLabel role="shared" />
             </div>
           )}
 
           {formData.account_kind === "shared" && (
-            <label className="flex items-start gap-3 border border-border-default bg-canvas p-3">
+            <label className="flex min-h-11 items-start gap-3 rounded-control border border-border-default bg-surface-raised p-3">
               <input
                 name="door-access-enabled"
                 type="checkbox"
@@ -416,7 +416,7 @@ export default function InviteUser() {
           {success && createdInvitation && (
             <div
               ref={invitationPanelRef}
-              className="space-y-3 border border-status-waiting/70 bg-status-waiting/10 p-4 outline-none"
+              className="space-y-3 rounded-panel border border-status-waiting/70 bg-status-waiting/10 p-4 outline-none"
               role="region"
               aria-labelledby="created-invitation-title"
               tabIndex={-1}
@@ -424,7 +424,7 @@ export default function InviteUser() {
               <p id="created-invitation-title" className="text-text-heading text-xs font-medium">
                 {t("accountCreated")}
               </p>
-              <p className="break-words text-text-heading font-mono text-xs tracking-wider">
+              <p className="break-words text-text-heading text-sm">
                 {success}
               </p>
               <p className="text-xs leading-relaxed text-text-muted">
@@ -434,7 +434,7 @@ export default function InviteUser() {
                 href={createdInvitation.url}
                 target="_blank"
                 rel="noreferrer"
-                className="block select-all break-all border border-border-strong bg-canvas px-3 py-2 font-mono text-xs text-text-heading underline decoration-border-strong underline-offset-4 hover:text-text-heading"
+                className="app-link-value"
               >
                 {createdInvitation.url}
               </a>

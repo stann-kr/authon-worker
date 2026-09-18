@@ -47,9 +47,10 @@ export function getWorkspaceItems(user: AccessSubject): WorkspaceItem[] {
 }
 
 export function getWorkspaceActiveId(
-  pathname: string, task: AdminTask | undefined, items: WorkspaceItem[],
+  pathname: string, task: AdminTask | null | undefined, items: WorkspaceItem[],
 ): string | undefined {
-  if (pathname === "/admin" && (!task || task === "guest-list")) return items.find((item) => item.id === "door")?.id;
+  if (pathname === "/admin" && !task) return undefined;
+  if (pathname === "/admin" && task === "guest-list") return items.find((item) => item.id === "door")?.id;
   return items.find((item) => pathname === "/admin"
     ? item.activeTasks?.includes(task ?? "guest-list")
     : item.href === pathname)?.id;

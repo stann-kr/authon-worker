@@ -3,6 +3,7 @@ import Button from "./Button";
 import Icon from "./Icon";
 import StatusLabel from "./StatusLabel";
 import ConfirmDialog from "./ConfirmDialog";
+import Sheet from "./overlays/Sheet";
 import { RosterSelection } from "./guests/RosterView";
 import { formatVenueTime } from "@/lib/date";
 import { useTranslations } from "next-intl";
@@ -257,16 +258,10 @@ const GuestListCard: React.FC<GuestListCardProps> = ({
           </div>
         </div>
       )}
-      <div id={detailId} className="product-guest-detail" data-open={isDetailOpen}
-        role="region" aria-label={guest.name} aria-hidden={!isDetailOpen} inert={!isDetailOpen}
-        onKeyDown={(event) => {
-          if (event.key !== "Escape" || isDeleteLoading || event.defaultPrevented) return;
-          event.preventDefault();
-          event.stopPropagation();
-          closeDetail();
-          disclosureRef.current?.focus({ preventScroll: true });
-        }}>
-        <div className="product-guest-detail-clip"><div className="product-guest-detail-content">
+      <Sheet id={detailId} open={isDetailOpen} title={guest.name} onClose={() => {
+        setDeleteConfirmation(null);
+        closeDetail();
+      }} busy={isDeleteLoading}>
         <StatusLabel appearance="inline" tone={guest.status === "checked" ? "checked" : guest.status === "pending" ? "waiting" : "neutral"}>
           {guest.status === "checked" ? t("checkedIn") : guest.status === "pending" ? t("waitingStatus") : t("removed")}
         </StatusLabel>
@@ -284,13 +279,6 @@ const GuestListCard: React.FC<GuestListCardProps> = ({
           {deleteError && <p className="mt-2 text-sm text-status-danger" role="alert">{deleteError}</p>}
           {isDeleteDisabled && deleteDisabledReason && <p className="mt-2 text-sm text-text-muted" role="status">{deleteDisabledReason}</p>}
         </div>}
-        </div></div>
-      </div>
-      {onUndo && undoConfirmation === confirmationKey && guest.status === "checked" && <ConfirmDialog open
-        title={rosterT("undoTitle")} description={rosterT("undoDescription", { name: guest.name })}
-        confirmLabel={rosterT("undoConfirm")} cancelLabel={t("cancel")} isLoading={isUndoLoading}
-        confirmDisabled={isEntryDisabled}
-        onCancel={() => setUndoConfirmation(null)} onConfirm={() => { if (isEntryDisabled) return; setUndoConfirmation(null); onUndo(); }} />}
       {isDeleteConfirmOpen && !isInlineDeleteOpen && (
         <ConfirmDialog
           open
@@ -304,6 +292,12 @@ const GuestListCard: React.FC<GuestListCardProps> = ({
           confirmDisabled={isDeleteDisabled}
         />
       )}
+      </Sheet>
+      {onUndo && undoConfirmation === confirmationKey && guest.status === "checked" && <ConfirmDialog open
+        title={rosterT("undoTitle")} description={rosterT("undoDescription", { name: guest.name })}
+        confirmLabel={rosterT("undoConfirm")} cancelLabel={t("cancel")} isLoading={isUndoLoading}
+        confirmDisabled={isEntryDisabled}
+        onCancel={() => setUndoConfirmation(null)} onConfirm={() => { if (isEntryDisabled) return; setUndoConfirmation(null); onUndo(); }} />}
     </article>
     </>
   );

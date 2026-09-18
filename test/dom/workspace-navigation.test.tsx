@@ -41,9 +41,9 @@ function viewport(initialDesktop: boolean) {
   const listeners = new Set<() => void>();
   window.matchMedia = (query) => ({
     ...originalMatchMedia(query),
-    get matches() { return query === "(min-width: 1000px)" ? desktop : false; },
+    get matches() { return query === "(min-width: 1000px)" ? desktop : query === "(max-width: 999px)" ? !desktop : false; },
     addEventListener(_type: string, callback: EventListenerOrEventListenerObject) {
-      if (query === "(min-width: 1000px)") listeners.add(callback as () => void);
+      if (["(min-width: 1000px)", "(max-width: 999px)"].includes(query)) listeners.add(callback as () => void);
     },
     removeEventListener(_type: string, callback: EventListenerOrEventListenerObject) {
       listeners.delete(callback as () => void);
@@ -93,6 +93,8 @@ test("all existing admin tasks select a real destination, including create and l
     assert.equal(getWorkspaceActiveId("/admin", task, items), id);
     assert.equal(getWorkspacePrimaryItems(items, id).some((item) => item.id === id), id !== "events");
   }
+  assert.equal(getWorkspaceActiveId("/admin", undefined, items), undefined);
+  assert.equal(getWorkspaceActiveId("/admin", null, items), undefined);
   assert.equal(getWorkspaceActiveId("/guest", undefined, items), "guest");
   assert.equal(getWorkspaceActiveId("/profile", undefined, items), "profile");
 });
@@ -113,7 +115,7 @@ function MenuHarness({ subject = admin, initial = "events", disabled = false }: 
   </div></div>;
 }
 
-test("mobile all-menu expands without trapping focus, preserves input and exposes every permitted task", async () => {
+test("mobile all-menu traps focus, preserves input and exposes every permitted task", async () => {
   viewport(false);
   render(<Providers><MenuHarness /></Providers>);
   const action = screen.getByRole("button", { name: "Add guest" });
@@ -122,20 +124,20 @@ test("mobile all-menu expands without trapping focus, preserves input and expose
   const trigger = screen.getByRole("button", { name: "All menus" });
   trigger.focus();
   fireEvent.click(trigger);
-  const dialog = screen.getByRole("region", { name: "All menus" });
+  const dialog = screen.getByRole("dialog", { name: "All menus" });
   const close = within(dialog).getByRole("button", { name: "Close" });
   assert.equal(document.activeElement === close, true);
-  assert.equal(document.querySelector(".workspace-shell")?.hasAttribute("inert"), false);
+  assert.ok(document.querySelector(".workspace-shell")?.closest("[inert]"));
   assert.ok(within(dialog).getByRole("link", { name: "Accounts" }));
   assert.equal(within(dialog).queryByRole("link", { name: "Venues" }), null);
   const profile = within(dialog).getByRole("link", { name: "My account" });
   fireEvent.keyDown(close, { key: "Tab", shiftKey: true });
-  assert.equal(document.activeElement === close, true);
+  assert.equal(document.activeElement === profile, true);
   profile.focus();
   fireEvent.keyDown(profile, { key: "Tab" });
-  assert.equal(document.activeElement === profile, true);
+  assert.equal(document.activeElement === close, true);
   fireEvent.keyDown(close, { key: "Escape" });
-  assert.equal(screen.queryByRole("region", { name: "All menus" }) === null, true);
+  assert.equal(screen.queryByRole("dialog", { name: "All menus" }) === null, true);
   await act(async () => {});
   assert.equal(document.activeElement === trigger, true);
   assert.equal(document.querySelector(".workspace-shell")?.hasAttribute("inert"), false);
@@ -166,7 +168,7 @@ test("changing navigation viewport retains the same body input and recovers focu
   fireEvent.change(input, { target: { value: "Still typing" } });
   fireEvent.click(screen.getByRole("button", { name: "All menus" }));
   resize(true);
-  assert.equal(screen.queryByRole("region", { name: "All menus" }) === null, true);
+  assert.equal(screen.queryByRole("dialog", { name: "All menus" }) === null, true);
   const door = screen.getByRole("link", { name: messages.Workspace.door });
   assert.equal(document.activeElement === door, true);
   assert.equal(screen.getByRole("textbox"), input);
@@ -198,11 +200,11 @@ test("mobile scope choices retain their owner state when the controls move betwe
   fireEvent.click(trigger);
   screen.getByRole("combobox").focus();
   resize(true);
-  assert.equal(screen.queryByRole("region", { name: "All menus" }) === null, true);
+  assert.equal(screen.queryByRole("dialog", { name: "All menus" }) === null, true);
   assert.equal((screen.getByRole("combobox") as HTMLSelectElement).value, "Night event");
   assert.equal(document.activeElement === screen.getByRole("combobox"), true);
   resize(false);
-  assert.ok(screen.getByRole("region", { name: messages.Workspace.chooseScope }));
+  assert.ok(screen.getByRole("dialog", { name: messages.Workspace.chooseScope }));
   assert.equal((screen.getByRole("combobox") as HTMLSelectElement).value, "Night event");
 });
 
@@ -336,10 +338,10 @@ for (const desktop of [true, false]) {
     act(() => { finishOldRoute = transition.registerRouteLoadingTask(); });
 
     fireEvent.click(screen.getByRole("button", { name: messages.Workspace.profile }));
-    const account = screen.getByRole("region", { name: "Operator" });
+    const account = screen.getByRole(desktop ? "region" : "dialog", { name: "Operator" });
     assert.equal(account.closest(".product-sheet-layer")?.hasAttribute("inert"), false);
     fireEvent.keyDown(document.activeElement ?? document, { key: "Escape" });
-    assert.equal(screen.queryByRole("region", { name: "All menus" }) === null, true);
+    assert.equal(screen.queryByRole("dialog", { name: "All menus" }) === null, true);
 
     if (desktop) {
       fireEvent.click(screen.getByRole("button", { name: messages.Workspace.collapseSidebar }));
@@ -350,7 +352,7 @@ for (const desktop of [true, false]) {
     fireEvent.click(door);
     assert.notEqual(door.getAttribute("aria-disabled"), "true");
     if (!desktop) fireEvent.click(screen.getByRole("button", { name: "All menus" }));
-    const profile = (desktop ? nav : screen.getByRole("region", { name: "All menus" }))
+    const profile = (desktop ? nav : screen.getByRole("dialog", { name: "All menus" }))
       .querySelector<HTMLAnchorElement>('a[href="/profile"]')!;
     profile.focus();
     fireEvent.click(profile);
@@ -477,29 +479,29 @@ test("Events stays out of the mobile dock even while active and remains in the f
   const dock = screen.getByRole("navigation", { name: messages.Workspace.navigation });
   assert.equal(within(dock).queryByRole("link", { name: messages.Workspace.events }) === null, true);
   fireEvent.click(screen.getByRole("button", { name: messages.Workspace.allMenu }));
-  const events = within(screen.getByRole("region", { name: "All menus" })).getByRole("link", { name: messages.Workspace.events });
+  const events = within(screen.getByRole("dialog", { name: "All menus" })).getByRole("link", { name: messages.Workspace.events });
   assert.equal(events.getAttribute("aria-current"), "page");
   fireEvent.click(events);
-  assert.equal(screen.queryByRole("region", { name: "All menus" }) === null, true);
+  assert.equal(screen.queryByRole("dialog", { name: "All menus" }) === null, true);
   assert.equal(screen.queryByRole("link", { name: messages.Workspace.events }) === null, true);
 });
 
-test("menu disclosure toggles immediately without locking the workspace", async () => {
+test("mobile menu closes from its own control and restores the dock trigger", async () => {
   viewport(false);
   render(<Providers><MenuHarness initial="door" /></Providers>);
   const trigger = screen.getByRole("button", { name: messages.Workspace.allMenu });
   trigger.focus(); fireEvent.click(trigger);
-  const panel = screen.getByRole("region", { name: "All menus" });
-  assert.equal(panel.hasAttribute("aria-modal"), false);
-  assert.equal(document.querySelector(".workspace-shell")?.hasAttribute("inert"), false);
-  fireEvent.click(trigger);
+  const panel = screen.getByRole("dialog", { name: "All menus" });
+  assert.equal(panel.getAttribute("aria-modal"), "true");
+  assert.ok(document.querySelector(".workspace-shell")?.closest("[inert]"));
+  fireEvent.click(within(panel).getByRole("button", { name: "Close" }));
   assert.equal(panel.isConnected, false);
   await act(async () => {});
   assert.equal(document.activeElement === trigger, true);
   fireEvent.click(trigger);
   fireEvent.keyDown(document.activeElement ?? document, { key: "Escape" });
   await act(async () => {});
-  assert.equal(screen.queryByRole("region", { name: "All menus" }) === null, true);
+  assert.equal(screen.queryByRole("dialog", { name: "All menus" }) === null, true);
   assert.equal(document.activeElement === trigger, true);
 });
 
@@ -510,8 +512,8 @@ test("menu reduced-motion dismissal releases focus and scroll immediately", asyn
   render(<Providers><MenuHarness /></Providers>);
   const trigger = screen.getByRole("button", { name: messages.Workspace.allMenu });
   trigger.focus(); fireEvent.click(trigger, { detail: 1 });
-  fireEvent.click(within(screen.getByRole("region", { name: "All menus" })).getByRole("button", { name: messages.Workspace.close }), { detail: 1 });
-  assert.equal(screen.queryByRole("region", { name: "All menus" }) === null, true);
+  fireEvent.click(within(screen.getByRole("dialog", { name: "All menus" })).getByRole("button", { name: messages.Workspace.close }), { detail: 1 });
+  assert.equal(screen.queryByRole("dialog", { name: "All menus" }) === null, true);
   assert.equal(document.querySelector(".workspace-menu-panel") === null, true);
   assert.equal(document.querySelector(".workspace-shell")?.hasAttribute("inert"), false);
   await act(async () => {});

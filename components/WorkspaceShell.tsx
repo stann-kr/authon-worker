@@ -26,7 +26,7 @@ interface WorkspaceShellProps {
   title?: string;
   actions?: ReactNode;
   adminNavigation?: {
-    activeTask: AdminTask;
+    activeTask: AdminTask | null;
     onTaskChange: (task: AdminTask) => void;
     disabled?: boolean;
     pendingPasswordResetCount?: number;

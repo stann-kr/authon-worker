@@ -16,6 +16,7 @@ import OperationsLayout from "../../../components/OperationsLayout";
 import OperationalSectionNav from "../../../components/OperationalSectionNav";
 import ConfirmDialog from "../../../components/ConfirmDialog";
 import Button from "../../../components/Button";
+import { getButtonClassName } from "../../../components/buttonStyles";
 import { formatDateDisplay } from "../../../lib/date";
 import { shouldShowEmptyState } from "../../../lib/ui/async-list-state";
 import {
@@ -605,13 +606,20 @@ export default function LinkManagement({
                   </p>
                 </div>
 
-                <div className="bg-canvas border border-border-default p-4 mb-4">
-                  <div className="font-mono text-xs tracking-wider text-text-muted mb-1">
+                <div className="mb-4">
+                  <label htmlFor="generated-guest-url" className="app-label">
                     {t("guestUrl")}
-                  </div>
-                  <div className="font-mono text-sm tracking-wider text-text-heading break-all">
-                    {getGuestPageUrl(scopedGeneratedLink.token, scopedGeneratedLink.guestUrl)}
-                  </div>
+                  </label>
+                  <input
+                    id="generated-guest-url"
+                    type="text"
+                    autoComplete="off"
+                    readOnly
+                    value={getGuestPageUrl(scopedGeneratedLink.token, scopedGeneratedLink.guestUrl)}
+                    onFocus={(event) => event.currentTarget.select()}
+                    onClick={(event) => event.currentTarget.select()}
+                    className="app-field min-w-0 text-sm"
+                  />
                 </div>
 
                 <Button
@@ -832,7 +840,7 @@ export default function LinkManagement({
                         {isLinkVisible && (
                           <div
                             id={`link-url-panel-${link.id}`}
-                            className="mt-3 border border-border-default bg-canvas p-3"
+                            className="mt-4"
                           >
                             <label
                               htmlFor={`link-url-${link.id}`}
@@ -856,7 +864,8 @@ export default function LinkManagement({
                                 href={guestPageUrl}
                                 target="_blank"
                                 rel="noreferrer"
-                                className="pressable inline-flex min-h-11 items-center justify-center border border-border-default bg-surface-raised px-4 text-xs font-semibold text-text-heading hover:border-border-strong hover:bg-surface-hover"
+                                data-variant="secondary"
+                                className={getButtonClassName({ variant: "secondary", size: "sm" })}
                               >
                                 {t("open")}
                               </a>
@@ -899,7 +908,7 @@ export default function LinkManagement({
                                     : t("copyLink")}
                           </Button>
                           {status.expired ? (
-                            <span className="inline-flex min-h-11 items-center border border-status-danger/70 px-3 text-xs text-status-danger">
+                            <span className="record-status inline-flex min-h-11 items-center px-3 text-status-danger">
                               {t("expired")}
                             </span>
                           ) : link.active ? (
@@ -947,7 +956,7 @@ export default function LinkManagement({
                             onCancel={() => setPendingDeleteLink(null)}
                             isLoading={loadingStates[`delete_${pendingDeleteLink.id}`]}
                           >
-                            <div className="border border-border-strong bg-surface p-3">
+                            <div className="rounded-control border border-border-subtle bg-surface-raised p-3">
                               <p className="break-words text-sm font-medium text-text-heading">
                                 {pendingDeleteLink.djName} / {pendingDeleteLink.event}
                               </p>
@@ -980,7 +989,7 @@ export default function LinkManagement({
       </OperationsLayout>
 
       {linkActionToast && (
-        <div className="fixed bottom-[calc(10rem+env(safe-area-inset-bottom))] right-4 z-[var(--app-z-toast)] max-w-[calc(100vw-2rem)] border border-border-strong bg-surface-raised px-4 py-3 text-text-heading md:bottom-5 md:right-5" role="status" aria-live="polite" aria-atomic="true">
+        <div className="fixed bottom-[calc(10rem+env(safe-area-inset-bottom))] right-4 z-[var(--app-z-toast)] max-w-[calc(100vw-2rem)] rounded-panel border border-border-subtle bg-surface-raised px-4 py-3 text-text-heading md:bottom-5 md:right-5" role="status" aria-live="polite" aria-atomic="true">
           <p className="text-xs font-medium">
             {linkActionToast}
           </p>

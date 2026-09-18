@@ -280,7 +280,7 @@ export default function UserManagement({
                 {scopedFeedback && <Alert type={scopedFeedback.type} message={scopedFeedback.message} />}
                 <div
                   ref={passwordLinkPanelRef}
-                  className="mb-4 border border-status-waiting/70 bg-status-waiting/10 p-4 outline-none"
+                  className="mb-4 rounded-panel border border-status-waiting/70 bg-status-waiting/10 p-4 outline-none"
                   role="region"
                   aria-labelledby="managed-password-link-title"
                   tabIndex={-1}
@@ -313,7 +313,7 @@ export default function UserManagement({
                         href={scopedPasswordLink.passwordUrl}
                         target="_blank"
                         rel="noreferrer"
-                        className="mt-3 block select-all break-all bg-canvas px-3 py-2 font-mono text-xs text-text-heading underline decoration-border-strong underline-offset-4 hover:text-text-heading"
+                        className="app-link-value mt-3"
                       >
                         {scopedPasswordLink.passwordUrl}
                       </a>
@@ -496,11 +496,11 @@ export default function UserManagement({
                 {listState === "partial" ? (
                   <p className="py-3 text-xs text-text-muted" role="status">{t("activityLoadFailed")}</p>
                 ) : scopedAuditEvents.length === 0 ? (
-                  <p className="border border-border-default bg-canvas p-4 text-xs text-text-muted">
+                  <p className="py-4 text-xs text-text-muted">
                     {t("noActivity")}
                   </p>
                 ) : (
-                  <div className="max-h-80 divide-y divide-border-subtle overflow-y-auto border border-border-default bg-canvas">
+                  <div className="max-h-80 divide-y divide-border-subtle overflow-y-auto border-y border-border-subtle">
                     {scopedAuditEvents.map((event) => (
                       <div key={event.id} className="grid gap-1 p-3 text-xs sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
                         <p className="min-w-0 break-words text-text-body">
@@ -865,7 +865,7 @@ export function UserCard({
           )}
 
           {canEditRole && editData.accountKind === "shared" && (
-            <label className="flex items-start gap-3 border border-border-default bg-surface-raised p-3">
+            <label className="flex min-h-11 items-start gap-3 rounded-control border border-border-default bg-surface-raised p-3">
               <input
                 name={`user-door-access-${user.id}`}
                 type="checkbox"
