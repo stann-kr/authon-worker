@@ -204,7 +204,7 @@ export default function AnalyticsAttendance({
                   </thead>
                   <tbody className="divide-y divide-border-subtle bg-surface">
                     {attendance.trend.map((point) => (
-                      <tr key={point.bucketStartDate}>
+                      <tr key={point.bucketStartDate} className="even:bg-[var(--app-row-stripe)]">
                         <th scope="row" className="px-3 py-2 font-medium text-text-heading">
                           {formatDate(point.bucketStartDate)}
                         </th>

@@ -14,6 +14,7 @@
 .account-table thead th { position: sticky; top: var(--app-header-height); z-index: 1; background: var(--app-surface); }
 .account-table td { padding: 8px 12px; border-bottom: 1px solid var(--app-border-subtle); font-size: 13px; color: var(--app-text-body); overflow-wrap: anywhere; }
 .account-row { min-height: 64px; }
+.account-row:where(:nth-child(even)) { background: var(--app-row-stripe); }
 @media (hover: hover) and (pointer: fine) { .account-row:hover { background: var(--app-surface-hover); } }
 .account-row[data-selected="true"] { background: var(--app-surface-active); }
 .account-open { display: block; width: 100%; min-width: 0; min-height: 48px; padding: 4px 0; border: 0; background: transparent; text-align: left; border-radius: 5px; }
