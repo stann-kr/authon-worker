@@ -2,8 +2,9 @@
 
 import { reportServerError } from "@/lib/observability/structured-log";
 
-import { and, desc, eq, isNull, or, sql } from "drizzle-orm";
+import { and, desc, eq, isNull, ne, or, sql } from "drizzle-orm";
 import {
+  events,
   guestLimitRequests,
   users,
 } from "../db/schema";
@@ -204,22 +205,41 @@ export async function fetchGuestLimitRequests(
             )!,
       );
     }
-    const rows = await db
+    const selectRequests = () => db
       .select({
         request: guestLimitRequests,
         userName: users.name,
         userRole: users.role,
+        event: { name: events.name, compatibilityKey: events.compatibilityKey },
       })
       .from(guestLimitRequests)
       .innerJoin(users, eq(guestLimitRequests.userId, users.id))
-      .where(and(...conditions))
-      .orderBy(desc(guestLimitRequests.createdAt))
-      .limit(100);
+      .leftJoin(events, and(
+        eq(guestLimitRequests.eventId, events.id),
+        eq(guestLimitRequests.venueId, events.venueId),
+      ));
+    // Pending work belongs to the venue inbox. The selected date/event only
+    // narrows history, so inherited admin filters cannot hide new requests.
+    const [pendingRows, historyRows] = await Promise.all([
+      selectRequests()
+        .where(and(
+          eq(guestLimitRequests.venueId, effectiveVenueId),
+          eq(guestLimitRequests.status, "pending"),
+        ))
+        .orderBy(desc(guestLimitRequests.createdAt)),
+      selectRequests()
+        .where(and(...conditions, ne(guestLimitRequests.status, "pending")))
+        .orderBy(desc(guestLimitRequests.createdAt))
+        .limit(20),
+    ]);
 
     return {
-      data: rows.map((row) => {
+      data: [...pendingRows, ...historyRows].map((row) => {
         if (!isRole(row.userRole)) throw new Error("INVALID_ROLE");
-        return { ...toRequest(row.request), userName: row.userName, userRole: row.userRole };
+        return {
+          ...toRequest(row.request), userName: row.userName, userRole: row.userRole,
+          eventName: row.event?.compatibilityKey === null ? row.event.name : null,
+        };
       }),
       error: null,
     };

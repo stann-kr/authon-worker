@@ -1049,6 +1049,56 @@ test("a completed CSV submission clears the import draft before the sheet closes
   assert.equal(screen.queryByRole("group", { name: messages.Sheet.unsaved }), null);
 });
 
+test("bulk preview keeps its submitted names stable until registration and refresh finish", async () => {
+  let publishGuests!: () => void;
+  let resolveSubmit!: (value: { data: { items: { index: number; status: "created"; guest: unknown }[] }; error: null }) => void;
+  let resolveRefresh!: () => void;
+  const submission = new Promise<Parameters<typeof resolveSubmit>[0]>((resolve) => { resolveSubmit = resolve; });
+  const refresh = new Promise<void>((resolve) => { resolveRefresh = resolve; });
+  function Harness() {
+    const [saved, setSaved] = useState(false);
+    publishGuests = () => setSaved(true);
+    return <GuestBulkEntry existingNames={saved ? ["Guest A", "Guest B"] : []} remaining={saved ? 0 : 2}
+      onSubmitChunk={() => submission} onSubmissionComplete={() => refresh} />;
+  }
+  render(<NextIntlClientProvider locale="en" messages={messages}><Harness /></NextIntlClientProvider>);
+  const field = screen.getByLabelText(messages.BulkGuestEntry.fieldLabel) as HTMLTextAreaElement;
+  fireEvent.change(field, { target: { value: "Guest A\nGuest B" } });
+  fireEvent.click(screen.getByRole("button", { name: "Add 2" }));
+  act(() => publishGuests());
+  assert.equal(field.readOnly, true);
+  assert.equal(screen.queryAllByRole("checkbox").length, 0, "the saved batch must not become its own duplicate");
+  assert.ok(screen.getByRole("button", { name: "Add 2" }));
+  await act(async () => resolveSubmit({ data: { items: [0, 1].map(index => ({ index, status: "created", guest: {} })) }, error: null }));
+  assert.equal(field.readOnly, true);
+  assert.equal(screen.queryAllByRole("checkbox").length, 0, "refresh must not revalidate the unfinished draft");
+  await act(async () => resolveRefresh());
+  assert.equal(field.value, "");
+  assert.equal(field.readOnly, false);
+  assert.ok(screen.getByText("2 guests added."));
+});
+
+test("bulk completion still exposes a real concurrent duplicate and retains only unsaved names", async () => {
+  function Harness() {
+    const [names, setNames] = useState<string[]>([]);
+    return <GuestBulkEntry existingNames={names} remaining={10}
+      onSubmitChunk={async () => {
+        setNames(["Guest A", "Guest B"]);
+        return { data: { items: [
+          { index: 0, status: "created", guest: {} },
+          { index: 1, status: "duplicate_requires_confirmation", guest: null },
+        ] }, error: null };
+      }} />;
+  }
+  render(<NextIntlClientProvider locale="en" messages={messages}><Harness /></NextIntlClientProvider>);
+  const field = screen.getByLabelText(messages.BulkGuestEntry.fieldLabel) as HTMLTextAreaElement;
+  fireEvent.change(field, { target: { value: "Guest A\nGuest B" } });
+  await act(async () => fireEvent.click(screen.getByRole("button", { name: "Add 2" })));
+  assert.equal(field.value, "Guest B");
+  assert.ok(screen.getByRole("checkbox", { name: messages.BulkGuestEntry.duplicateExisting }));
+  assert.equal(screen.getByRole("button", { name: "Add 0" }).hasAttribute("disabled"), true);
+});
+
 test("bulk guest submit uses a synchronous ref latch for same-tick clicks", async () => {
   let resolve!: (value: {
     data: {
@@ -1505,7 +1555,7 @@ test("event details hand off a template to a guarded create sheet and retain fai
       if (!url.startsWith("mock:event-sheet:")) return nextLoad(url, context);
       const sources: Record<string, string> = {
         "lib/events/client": 'export const fetchEvents = async () => ({ data: [{ id: "event-1", name: "Test night", businessDate: "2026-09-16", state: "draft", compatibilityKey: null, capacity: 100, targetGuests: 30 }], error: null });',
-        "lib/api/events": 'export const createEvent = async () => ({ data: null, error: "SAVE_FAILED" }); export const transitionEventState = createEvent;',
+        "lib/api/events": 'export const createEvent = async () => { throw new Error("offline"); }; export const transitionEventState = createEvent;',
         "lib/api/closeout": 'export const fetchEventCloseout = async () => ({ data: null, error: "UNAVAILABLE" }); export const confirmEventCloseout = fetchEventCloseout;',
         "components/VenueSelector": 'export const useVenueSelector = () => ({ venueId: "venue-1", venues: [], selectedVenueId: "venue-1", currentVenue: {}, isSuperAdmin: false }); export default function VenueSelector() { return null; }',
       };
@@ -1519,7 +1569,11 @@ test("event details hand off a template to a guarded create sheet and retain fai
         selectedEventId={null} onSelectedEventChange={() => {}} onEventsChanged={() => {}} />
     </NextIntlClientProvider>);
     fireEvent.click(await screen.findByRole("button", { name: /Test night/ }));
-    assert.ok(screen.getByRole("dialog", { name: "Test night" }));
+    const details = screen.getByRole("dialog", { name: "Test night" });
+    const open = within(details).getByRole("button", { name: messages.EventAdmin.transition.open });
+    fireEvent.click(open);
+    await waitFor(() => assert.ok(within(details).getByText(messages.EventAdmin.transitionFailed)));
+    assert.equal(open.hasAttribute("disabled"), false);
     fireEvent.click(screen.getByRole("button", { name: messages.EventAdmin.useTemplate }));
     const dialog = screen.getByRole("dialog", { name: messages.EventAdmin.createTitle });
     const name = within(dialog).getByLabelText(messages.EventAdmin.name) as HTMLInputElement;
@@ -1529,8 +1583,9 @@ test("event details hand off a template to a guarded create sheet and retain fai
     assert.ok(screen.getByRole("group", { name: messages.Sheet.unsaved }));
     fireEvent.click(screen.getByRole("button", { name: messages.Sheet.continue }));
     fireEvent.submit(name.closest("form")!);
-    await waitFor(() => assert.ok(within(dialog).getByRole("alert")));
+    await waitFor(() => assert.ok(within(dialog).getByText(messages.EventAdmin.createFailed)));
     assert.equal(name.value, "New night");
+    assert.equal(within(dialog).getByRole("button", { name: messages.EventAdmin.create }).hasAttribute("disabled"), false);
   } finally { cleanup(); hooks.deregister(); }
 });
 

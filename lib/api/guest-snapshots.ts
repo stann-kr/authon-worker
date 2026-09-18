@@ -4,14 +4,15 @@ import { measureServerOperation } from "@/lib/observability/server-performance";
 
 import { reportServerError } from "@/lib/observability/structured-log";
 
-import { and, asc, desc, eq, isNull, ne, or, sql } from "drizzle-orm";
-import { externalDjLinks, guestLimitRequests, guests, users } from "../db/schema";
+import { and, asc, desc, eq, isNull, ne, or } from "drizzle-orm";
+import { externalDjLinks, users } from "../db/schema";
 import { getDb } from "../db/client";
 import { requireAccess, type SessionUser } from "../auth/server";
 import { requireActiveVenueId } from "../tenant/active-server";
 import { canRequestGuestLimit, isAccountKind, isRole } from "@/lib/users/policy";
 import { resolveSnapshotVenueId } from "@/lib/guest-snapshot-policy";
 import { loadSnapshotGuests } from "@/lib/guest-snapshots/persistence";
+import { loadGuestQuotaState } from "@/lib/guest-limits/quota-persistence";
 import type { ApiResponse } from "./response";
 import type { Event } from "@/lib/events/types";
 import type { ExternalLinkDirectoryEntry } from "@/lib/external-links/types";
@@ -123,84 +124,32 @@ async function loadExternalLinksByDate(
 async function loadGuestQuota(
   db: Db,
   actor: SessionUser,
+  venueId: string,
   date: string,
   event?: Event | null,
 ): Promise<GuestQuota> {
-  const guestScope = event
-    ? eventIncludesLegacyDateRows(event)
-      ? or(
-          eq(guests.eventId, event.id),
-          and(isNull(guests.eventId), eq(guests.date, date)),
-        )
-      : eq(guests.eventId, event.id)
-    : and(isNull(guests.eventId), eq(guests.date, date));
-  const requestScope = event
-    ? eventIncludesLegacyDateRows(event)
-      ? or(
-          eq(guestLimitRequests.eventId, event.id),
-          and(
-            isNull(guestLimitRequests.eventId),
-            eq(guestLimitRequests.date, date),
-          ),
-        )
-      : eq(guestLimitRequests.eventId, event.id)
-    : and(
-        isNull(guestLimitRequests.eventId),
-        eq(guestLimitRequests.date, date),
-      );
-  const [usage, extra, pending] = await Promise.all([
-    db
-      .select({ used: sql<number>`count(*)` })
-      .from(guests)
-      .where(
-        and(
-          eq(guests.createdByUserId, actor.id),
-          guestScope,
-          ne(guests.status, "deleted"),
-        ),
-      ),
-    db
-      .select({
-        approvedExtra: sql<number>`coalesce(sum(${guestLimitRequests.approvedExtra}), 0)`,
-      })
-      .from(guestLimitRequests)
-      .where(
-        and(
-          eq(guestLimitRequests.userId, actor.id),
-          requestScope,
-          eq(guestLimitRequests.status, "approved"),
-        ),
-      ),
-    db
-      .select()
-      .from(guestLimitRequests)
-      .where(
-        and(
-          eq(guestLimitRequests.userId, actor.id),
-          requestScope,
-          eq(guestLimitRequests.status, "pending"),
-        ),
-      )
-      .limit(1),
-  ]);
-
-  const used = Number(usage[0]?.used ?? 0);
-  const approvedExtra = Number(extra[0]?.approvedExtra ?? 0);
-  const effectiveLimit =
-    actor.guestLimit === null ? null : actor.guestLimit + approvedExtra;
+  const quota = await loadGuestQuotaState(db, {
+    venueId,
+    userId: actor.id,
+    date,
+    eventId: event?.id ?? null,
+    includeLegacyRows: event ? eventIncludesLegacyDateRows(event) : true,
+  });
+  const baseLimit = quota.configuredLimit !== undefined
+    ? quota.configuredLimit
+    : actor.guestLimit;
+  const effectiveLimit = baseLimit === null ? null : baseLimit + quota.approvedExtra;
 
   return {
     date,
-    baseLimit: actor.guestLimit,
-    approvedExtra,
+    baseLimit,
+    approvedExtra: quota.approvedExtra,
     effectiveLimit,
-    used,
-    remaining:
-      effectiveLimit === null ? null : Math.max(0, effectiveLimit - used),
-    canRequestExtra:
-      canRequestGuestLimit(actor) && actor.guestLimit !== null,
-    pendingRequest: pending[0]
-      ? { ...pending[0], status: "pending" }
+    used: quota.used,
+    remaining: effectiveLimit === null ? null : Math.max(0, effectiveLimit - quota.used),
+    canRequestExtra: canRequestGuestLimit(actor) && baseLimit !== null,
+    pendingRequest: quota.pendingRequest
+      ? { ...quota.pendingRequest, status: "pending" }
       : null,
   };
 }
@@ -292,7 +241,7 @@ export async function fetchGuestWorkspaceSnapshot(
 
       const [guestResult, quotaResult] = await Promise.allSettled([
         loadGuestsByDate(db, effectiveVenueId, date, actor.id, event),
-        loadGuestQuota(db, actor, date, event),
+        loadGuestQuota(db, actor, effectiveVenueId, date, event),
       ]);
 
       if (guestResult.status === "rejected") await logRejectedSection("guests", guestResult);
