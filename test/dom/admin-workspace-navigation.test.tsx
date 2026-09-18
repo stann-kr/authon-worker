@@ -194,6 +194,24 @@ test("initial legacy task URL is canonicalized and same-task selection is a hist
   }
 });
 
+test("resolving an Admin destination never selects the legacy Door task first", () => {
+  for (const search of ["?tab=links&view=manage", "?tab=users&view=directory", "?tab=analytics", "?tab=events"]) {
+    setLocation(search);
+    const committed: Array<string | null> = [];
+    function Destination() {
+      const navigation = useAdminWorkspaceNavigation({ businessDate: "2026-09-18", hasCurrentVenue: true,
+        isRouteTransitionActive: false, isSuperAdmin: true, venueId: "venue-a" });
+      useLayoutEffect(() => { committed.push(navigation.activeTask); });
+      return <output>{navigation.activeTask}</output>;
+    }
+    const view = render(<Destination />);
+    assert.equal(committed[0], null);
+    assert.equal(committed.includes("guest-list"), false);
+    assert.ok(committed.at(-1));
+    view.unmount();
+  }
+});
+
 test("popstate and analytics handoff apply only a valid current venue event scope", async () => {
   setLocation("?tab=analytics");
   render(<NavigationHarness />);

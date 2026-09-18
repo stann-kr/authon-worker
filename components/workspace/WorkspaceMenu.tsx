@@ -11,11 +11,10 @@ export default function WorkspaceMenu({ open, title, onClose, children }: {
   children: ReactNode;
 }) {
   if (!open) return null;
-  const content = <div className="workspace-menu-panel">
-    <Sheet id="workspace-all-menu" title={title} onClose={onClose} blockDuringRouteTransition={false}>
-      {children}
-    </Sheet>
-  </div>;
+  const content =
+    <Sheet id="workspace-all-menu" presentation="modal" title={title} onClose={onClose} blockDuringRouteTransition={false}>
+      <div className="workspace-menu-panel">{children}</div>
+    </Sheet>;
   const slot = document.getElementById("workspace-menu-slot");
   return slot ? createPortal(content, slot) : content;
 }

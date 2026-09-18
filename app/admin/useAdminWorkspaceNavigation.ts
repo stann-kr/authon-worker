@@ -94,7 +94,8 @@ export default function useAdminWorkspaceNavigation({
   const setSelectedDate = useCallback((date: string) => {
     setSavedDate({ venueId, date });
   }, [setSavedDate, venueId]);
-  const [activeTask, setActiveTask] = useState<AdminTask>("guest-list");
+  // An unresolved destination is not the legacy guest-list redirect.
+  const [activeTask, setActiveTask] = useState<AdminTask | null>(null);
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
   const pendingEventScopeRef = useRef<EventScope | null>(null);
   const [isRoleReady, setIsRoleReady] = useState(false);
@@ -189,7 +190,7 @@ export default function useAdminWorkspaceNavigation({
   );
 
   useEffect(() => {
-    if (!isRoleReady || isAdminTaskAvailable(activeTask, isSuperAdmin)) return;
+    if (!isRoleReady || !activeTask || isAdminTaskAvailable(activeTask, isSuperAdmin)) return;
     changeTask("guest-list", "replace");
   }, [activeTask, changeTask, isRoleReady, isSuperAdmin]);
 

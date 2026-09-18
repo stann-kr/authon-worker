@@ -262,6 +262,18 @@ input[type="date"] {
     @apply mb-1.5 block text-xs font-medium leading-normal text-text-muted;
   }
 
+  .app-link-value {
+    @apply block min-h-11 select-all break-all rounded-control border border-border-default px-3.5 py-3 text-sm leading-relaxed text-text-heading underline decoration-border-strong underline-offset-4;
+    background: var(--app-surface-secondary);
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .app-link-value:hover {
+      border-color: var(--app-border-strong);
+      background: var(--app-surface-hover);
+    }
+  }
+
   .type-context-title {
     @apply mb-1.5 block text-xs font-medium leading-normal text-text-muted;
   }

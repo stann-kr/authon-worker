@@ -378,7 +378,7 @@ export default function EventManagement({
           onRefresh={loadEvents}
           isLoading={isLoading}
         />
-      <Sheet id="event-create-panel" open={createOpen} title={t("createTitle")} onClose={() => {
+      <Sheet id="event-create-panel" presentation="modal" open={createOpen} title={t("createTitle")} onClose={() => {
         setCreateOpen(false); setName(""); setCapacity(""); setTargetGuests(""); setTemplateSourceEventId(null);
       }} dirty={Boolean(name || capacity || targetGuests)} busy={Boolean(busyId)}>
         {feedback && <Alert type={feedback.type} message={feedback.message} />}
@@ -443,7 +443,7 @@ export default function EventManagement({
         <div className="record-collection-body">
           {loadError && <Alert type="error" message={t("loadFailed")} />}
           {!venueId ? (
-            <p className="border border-border-default bg-canvas p-4 text-sm text-text-muted">
+            <p className="py-4 text-sm text-text-muted">
               {t("selectVenue")}
             </p>
           ) : listState === "loading" ? (

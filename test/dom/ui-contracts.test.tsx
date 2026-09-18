@@ -1369,12 +1369,16 @@ test("product sheet protects changed input, blocks dismissal while saving and re
   assert.equal(document.querySelector(".workspace-shell")?.hasAttribute("inert"), false);
 });
 
-test("inline detail preserves form, selection, and unlocked workspace through resizing", () => {
-  let width = 1200;
-  const originalRect = HTMLElement.prototype.getBoundingClientRect;
-  HTMLElement.prototype.getBoundingClientRect = function () {
-    return this.id === "main-content" ? { ...originalRect.call(this), width, right: width } as DOMRect : originalRect.call(this);
-  };
+test("detail moves between desktop accordion and mobile modal without losing its draft or focus", () => {
+  let mobile = false;
+  const originalMedia = window.matchMedia;
+  const listeners = new Set<() => void>();
+  window.matchMedia = (query) => ({ ...originalMedia(query),
+    get matches() { return query === "(max-width: 999px)" && mobile; },
+    addEventListener(_type: string, listener: EventListenerOrEventListenerObject) { listeners.add(listener as () => void); },
+    removeEventListener(_type: string, listener: EventListenerOrEventListenerObject) { listeners.delete(listener as () => void); },
+  });
+  const resize = (next: boolean) => act(() => { mobile = next; [...listeners].forEach((listener) => listener()); });
   try {
     const frame = (size: "default" | "record" = "default") => <NextIntlClientProvider locale="en" messages={messages}>
       <div className="workspace-shell"><main id="main-content" /></div>
@@ -1386,22 +1390,55 @@ test("inline detail preserves form, selection, and unlocked workspace through re
     const panel = screen.getByRole("region", { name: "Guest detail" });
     assert.equal(panel.hasAttribute("aria-modal"), false);
     const input = screen.getByLabelText("Note") as HTMLInputElement;
+    fireEvent.change(input, { target: { value: "Unsubmitted guest note" } });
     input.focus(); input.setSelectionRange(2, 5);
-    width = 600; fireEvent(window, new Event("resize"));
-    assert.equal(panel.hasAttribute("aria-modal"), false);
+    resize(true);
+    assert.equal(screen.getByRole("dialog", { name: "Guest detail" }), panel);
+    assert.equal(panel.getAttribute("aria-modal"), "true");
+    assert.ok(document.querySelector(".workspace-shell")?.closest("[inert]"));
+    assert.equal(document.body.style.overflow, "hidden");
+    assert.equal(document.documentElement.style.overflow, "hidden");
     assert.equal(screen.getByLabelText("Note") === input, true);
     assert.equal(document.activeElement === input, true);
     assert.equal(input.selectionStart, 2);
     assert.equal(input.selectionEnd, 5);
-    width = 1200; fireEvent(window, new Event("resize"));
+    assert.equal(input.value, "Unsubmitted guest note");
+    resize(false);
     assert.equal(panel.hasAttribute("aria-modal"), false);
+    assert.equal(screen.getByRole("region", { name: "Guest detail" }), panel);
+    assert.equal(document.querySelector(".workspace-shell")?.closest("[inert]"), null);
+    assert.notEqual(document.body.style.overflow, "hidden");
+    assert.notEqual(document.documentElement.style.overflow, "hidden");
     assert.equal(document.activeElement === input, true);
     view.rerender(frame("record"));
     assert.equal(panel.hasAttribute("aria-modal"), false);
     assert.equal(screen.getByLabelText("Note"), input);
     assert.equal(input.selectionStart, 2);
     assert.equal(document.querySelector(".workspace-shell")?.hasAttribute("inert"), false);
-  } finally { HTMLElement.prototype.getBoundingClientRect = originalRect; }
+  } finally { cleanup(); window.matchMedia = originalMedia; }
+});
+
+test("mobile guest detail keeps delete confirmation inside its modal and restores the row on close", async () => {
+  const originalMedia = window.matchMedia;
+  window.matchMedia = (query) => ({ ...originalMedia(query), matches: query === "(max-width: 999px)" });
+  try {
+    render(<NextIntlClientProvider locale="en" messages={messages}>
+      <GuestListCard guest={{ id: "mobile-guest", name: "Mobile guest", status: "pending" }} index={0}
+        mode="operations" onDelete={() => {}} />
+    </NextIntlClientProvider>);
+    const row = screen.getByRole("button", { name: "Mobile guest" });
+    row.focus(); fireEvent.click(row);
+    const dialog = screen.getByRole("dialog", { name: "Mobile guest" });
+    assert.equal(dialog.closest("[inert]"), null);
+    assert.ok(row.closest("[inert]"));
+    fireEvent.click(within(dialog).getByRole("button", { name: messages.Common.deleteGuest }));
+    const confirmation = within(dialog).getByRole("group");
+    fireEvent.click(within(confirmation).getByRole("button", { name: messages.Common.cancel }));
+    fireEvent.keyDown(dialog, { key: "Escape" });
+    await act(async () => {});
+    await waitFor(() => assert.equal(document.activeElement === row, true));
+    assert.equal(row.closest("[inert]"), null);
+  } finally { cleanup(); window.matchMedia = originalMedia; }
 });
 
 test("roster columns retain search, row identity and open details through resize", () => {
@@ -1586,7 +1623,7 @@ test("event details hand off a template to a guarded create sheet and retain fai
     await waitFor(() => assert.ok(within(details).getByText(messages.EventAdmin.transitionFailed)));
     assert.equal(open.hasAttribute("disabled"), false);
     fireEvent.click(screen.getByRole("button", { name: messages.EventAdmin.useTemplate }));
-    const dialog = screen.getByRole("region", { name: messages.EventAdmin.createTitle });
+    const dialog = screen.getByRole("dialog", { name: messages.EventAdmin.createTitle });
     const name = within(dialog).getByLabelText(messages.EventAdmin.name) as HTMLInputElement;
     assert.match(name.value, /Test night/);
     fireEvent.change(name, { target: { value: "New night" } });
@@ -1730,7 +1767,7 @@ test("operations deletion is only in guest details, confirms, and restores focus
 });
 
 
-test("guest rows toggle inline details while action buttons stay independent and Escape restores row focus", () => {
+test("guest rows toggle inline details while action buttons stay independent and Escape restores row focus", async () => {
   let checks = 0;
   render(<NextIntlClientProvider locale="en" messages={messages}>
     <GuestListCard guest={{ id: "accordion-guest", name: "Accordion guest", status: "pending" }}
@@ -1742,7 +1779,7 @@ test("guest rows toggle inline details while action buttons stay independent and
   fireEvent.click(check);
   assert.equal(checks, 1);
   assert.equal(row.getAttribute("aria-expanded"), "false");
-  fireEvent.click(row);
+  row.focus(); fireEvent.click(row);
   const detail = screen.getByRole("region", { name: "Accordion guest" });
   assert.equal(row.getAttribute("aria-controls"), detail.id);
   assert.equal(screen.queryByRole("dialog") === null, true);
@@ -1752,7 +1789,7 @@ test("guest rows toggle inline details while action buttons stay independent and
   assert.equal(row.getAttribute("aria-expanded"), "true");
   fireEvent.keyDown(within(detail).getByRole("button", { name: messages.Common.deleteGuest }), { key: "Escape" });
   assert.equal(row.getAttribute("aria-expanded"), "false");
-  assert.equal(document.activeElement === row, true);
+  await waitFor(() => assert.equal(document.activeElement === row, true));
   assert.equal(screen.queryByRole("region", { name: "Accordion guest" }) === null, true);
   fireEvent.click(row);
   fireEvent.click(row);
