@@ -119,7 +119,7 @@
   .product-roster-columns { gap: 2px; padding: 3px; border: 1px solid var(--app-border-subtle); border-radius: 9px; background: var(--app-surface-secondary); }
   .product-roster-columns button { min-width: 36px; min-height: calc(var(--workspace-control-height) - 8px); padding: 4px 8px; border-radius: 6px; font-size: 12px; }
   .product-roster-controls[data-wide="true"] .product-roster-extra button { min-height: var(--workspace-control-height); border-radius: 8px; padding: 8px 10px; font-size: 12px; background: transparent; }
-  .product-roster-controls[data-wide="true"] .product-roster-extra button[aria-pressed="true"] { background: var(--app-surface-raised); }
+  .product-roster-controls[data-wide="true"] .product-roster-extra button[aria-pressed="true"] { background: rgb(var(--app-action-rgb) / 0.1); }
   .product-roster-controls[data-wide="true"] .collection-refresh-button { width: var(--workspace-control-height); min-width: var(--workspace-control-height); padding: 8px; }
   .product-roster-controls[data-wide="true"] .collection-refresh-label { display: none; }
   .product-roster-headings { border-top: 0; }

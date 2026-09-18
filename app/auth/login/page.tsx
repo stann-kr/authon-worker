@@ -196,18 +196,20 @@ export default function LoginPage() {
   };
 
   return (
-    <main id="main-content" tabIndex={-1} className="auth-page flex items-center justify-center bg-canvas">
+    <main id="main-content" tabIndex={-1} className="auth-page auth-login-page">
       <div className="auth-frame">
-        <LanguageSwitcher className="mb-4 flex justify-end" compact />
+        <header className="auth-login-header">
+          <p className="auth-brand">{brand.name}</p>
+          <LanguageSwitcher compact />
+        </header>
         <div className="auth-panel">
           <div className="auth-heading">
-            <p className="auth-brand">{brand.name}</p>
             <h1>{mode === "login" ? t("signInTitle") : t("setupTitle")}</h1>
           </div>
 
           <form
             onSubmit={mode === "login" ? handleSubmit : handleSetup}
-            className="space-y-6"
+            className="auth-login-form"
             aria-busy={isLoading}
           >
             {mode === "setup" && (
@@ -254,7 +256,7 @@ export default function LoginPage() {
             </div>
 
             {mode === "login" ? (
-              <div className="space-y-2">
+              <div>
                 <label
                   htmlFor="password"
                   className="app-label"
@@ -277,14 +279,6 @@ export default function LoginPage() {
                 <p id="password-helper" className="app-helper">
                   {t("passwordHelp")}
                 </p>
-                <div className="flex justify-end">
-                  <Link
-                    href="/auth/reset-password"
-                    className="pressable inline-flex min-h-11 items-center rounded-control px-2 text-sm font-medium text-text-muted underline decoration-border-strong underline-offset-4 hover:text-text-heading"
-                  >
-                    {t("forgotPassword")}
-                  </Link>
-                </div>
               </div>
             ) : (
               <div className="space-y-5">
@@ -330,10 +324,10 @@ export default function LoginPage() {
             )}
 
             {mode === "login" && (
-              <div>
+              <div className="auth-login-options">
                 <label
                   htmlFor="keep-signed-in"
-                  className="pressable flex min-h-11 cursor-pointer items-center gap-3 text-sm font-medium text-text-heading"
+                  className="auth-login-remember"
                 >
                   <input
                     id="keep-signed-in"
@@ -346,6 +340,9 @@ export default function LoginPage() {
                   />
                   <span>{t("keepSignedIn")}</span>
                 </label>
+                <Link href="/auth/reset-password" className="auth-login-link">
+                  {t("forgotPassword")}
+                </Link>
               </div>
             )}
 
@@ -369,7 +366,7 @@ export default function LoginPage() {
                 type="button"
                 onClick={returnToLogin}
                 disabled={isLoading}
-                className="pressable min-h-11 w-full touch-manipulation rounded-control py-2 text-sm font-medium text-text-muted hover:bg-surface-hover hover:text-text-heading disabled:opacity-50"
+                className="auth-login-secondary"
               >
                 {t("backToSignIn")}
               </button>
@@ -378,7 +375,7 @@ export default function LoginPage() {
             {mode === "login" && (
               <Link
                 href="/auth/setup-password"
-                className="inline-flex min-h-11 w-full items-center justify-center text-sm font-medium text-text-body underline decoration-border-strong underline-offset-4 hover:text-text-heading"
+                className="auth-login-secondary"
               >
                 {t("openSetupCodePage")}
               </Link>

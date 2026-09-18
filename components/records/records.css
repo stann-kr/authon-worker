@@ -46,10 +46,16 @@
 
 .collection-heading { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; flex-shrink: 0; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--app-border-subtle); }
 .collection-heading > :first-child { font-size: 14px; font-weight: 500; }
+.collection-toggle-button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
+.collection-heading :is(.collection-toggle-button, .collection-sort-button)[aria-pressed="true"] { border-color: var(--app-action); background: rgb(var(--app-action-rgb) / 0.1); color: var(--app-action); }
 .app-panel > .collection-heading { padding-inline: 16px; }
 @media (min-width: 640px) { .app-panel > .collection-heading { padding-inline: 20px; } }
 .workspace-shell .main-content-panel { border: 0; border-radius: 0; background: transparent; }
 @media (hover: hover) and (pointer: fine) {
+  .collection-heading :is(.collection-toggle-button, .collection-sort-button)[aria-pressed="false"]:hover { border-color: var(--app-border-strong); background: var(--app-surface-hover); color: var(--app-text); }
   .workspace-shell .record-list .record-row:hover { background: var(--app-surface-hover); }
+}
+@media (forced-colors: active) {
+  .collection-heading :is(.collection-toggle-button, .collection-sort-button)[aria-pressed="true"] { border-color: Highlight; outline: 1px solid Highlight; }
 }
 .workspace-shell .record-list .record-row:has([aria-expanded="true"]) { background: var(--app-surface-active); }
