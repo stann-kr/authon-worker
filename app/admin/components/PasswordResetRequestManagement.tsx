@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Alert from "@/components/Alert";
 import Button from "@/components/Button";
 import ConfirmDialog from "@/components/ConfirmDialog";
+import DisclosureSection from "@/components/DisclosureSection";
 import EmptyState from "@/components/EmptyState";
 import PanelHeader from "@/components/PanelHeader";
 import RoleLabel from "@/components/RoleLabel";
@@ -325,7 +326,7 @@ export default function PasswordResetRequestManagement({
       <section
         ref={requestsPanelRef}
         tabIndex={-1}
-        className="app-panel focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-border-focus"
+        className="record-collection outline-none"
         aria-labelledby="password-reset-requests-title"
       >
         <PanelHeader
@@ -335,7 +336,7 @@ export default function PasswordResetRequestManagement({
           onRefresh={loadRequests}
           isLoading={isLoading}
         />
-        <div className="space-y-4 p-4 sm:p-5">
+        <div className="record-collection-body space-y-4">
           <p className="text-sm leading-relaxed text-text-muted">
             {t("description")}
           </p>
@@ -349,7 +350,7 @@ export default function PasswordResetRequestManagement({
               role="status"
               aria-live="polite"
               aria-atomic="true"
-              className="border border-status-waiting/70 bg-status-waiting/10 p-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-border-focus"
+              className="border border-status-waiting/70 bg-status-waiting/10 p-4 outline-none"
             >
               <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                 <div className="min-w-0">
@@ -384,11 +385,11 @@ export default function PasswordResetRequestManagement({
             loading={<Skeleton rows={4} />}
             empty={<EmptyState icon="key" message={t("noPending")} />}
           >
-            <div className="grid gap-3 lg:grid-cols-2">
+            <div className="record-list">
               {pendingRequests.map((request) => (
                 <article
                   key={request.id}
-                  className="border border-border-default bg-canvas p-4"
+                  className="record-review-row"
                   aria-busy={busyRequestId === request.id}
                 >
                   <div className="flex items-start justify-between gap-3">
@@ -400,7 +401,7 @@ export default function PasswordResetRequestManagement({
                         {request.userEmail}
                       </p>
                     </div>
-                    <RoleLabel role={request.userRole} colored />
+                    <RoleLabel role={request.userAccountKind === "shared" ? "shared" : request.userRole} colored />
                   </div>
                   <dl className="mt-4 grid grid-cols-2 gap-3 text-xs">
                     <div>
@@ -447,7 +448,7 @@ export default function PasswordResetRequestManagement({
                           <Alert type="error" message={actionError.message} />
                         </div>
                       )}
-                      <div className="grid grid-cols-2 gap-2">
+                      <div className="grid grid-cols-2 gap-3">
                         <Button
                           ref={rejectCancelRef}
                           size="sm"
@@ -473,7 +474,7 @@ export default function PasswordResetRequestManagement({
                       </div>
                     </div>
                   ) : (
-                    <div className="mt-4 grid grid-cols-2 gap-2">
+                    <div className="mt-4 grid grid-cols-2 gap-3">
                       <Button
                         type="button"
                         size="sm"
@@ -519,11 +520,8 @@ export default function PasswordResetRequestManagement({
           </AsyncListContent>
 
           {decidedRequests.length > 0 && (
-            <details className="border-t border-border-default pt-4">
-              <summary className="flex min-h-11 cursor-pointer items-center text-sm font-medium text-text-heading">
-                {t("history", { count: decidedRequests.length })}
-              </summary>
-              <div className="mt-3 divide-y divide-border-subtle border border-border-default bg-canvas">
+            <DisclosureSection title={t("history", { count: decidedRequests.length })}>
+              <div className="divide-y divide-border-subtle border border-border-default bg-canvas">
                 {decidedRequests.slice(0, 30).map((request) => (
                   <div
                     key={request.id}
@@ -538,7 +536,7 @@ export default function PasswordResetRequestManagement({
                   </div>
                 ))}
               </div>
-            </details>
+            </DisclosureSection>
           )}
         </div>
       </section>
@@ -567,7 +565,7 @@ export default function PasswordResetRequestManagement({
             <div
               ref={actionErrorRef}
               id="password-reset-action-error"
-              className="mb-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-border-focus"
+              className="mb-4 outline-none"
               tabIndex={-1}
             >
               <Alert type="error" message={actionError.message} />
@@ -606,7 +604,7 @@ export default function PasswordResetRequestManagement({
                         }}
                         required
                         disabled={busyRequestId === pendingAction.request.id}
-                        className="mt-1"
+                        className="mt-1 accent-action-primary"
                       />
                       <span className="text-sm text-text-body">
                         {t(`verification_${method}`)}
@@ -674,7 +672,7 @@ export default function PasswordResetRequestManagement({
                     setActionError(null);
                   }}
                   disabled={busyRequestId === pendingAction.request.id}
-                  className="mt-1"
+                  className="mt-1 accent-action-primary"
                   aria-describedby={
                     actionError?.focusTarget === "verification-attestation"
                       ? "password-reset-action-error"

@@ -1,0 +1,29 @@
+/* Frame size changes presentation only; route and form owners remain mounted. */
+.preview-toolbar,
+.preview-meta,
+.preview-frame { max-width: 1280px; }
+.preview-frame.mobile { max-width: 390px; }
+.preview-frame.tablet { max-width: 834px; }
+.preview-frame.desktop { max-width: 1280px; }
+.app-shell { --page-width: 1120px; max-width: 1120px; margin-inline: auto; }
+.app-shell:is([data-view="profile"], [data-view="auth"]) { --page-width: 600px; }
+/* Heading, scope and content share the workspace; individual forms stay readable. */
+.workspace-header,
+.workspace-context,
+.workspace-scroll > div {
+  width: 100%;
+  max-width: var(--page-width);
+  margin-inline: auto;
+}
+.workspace-scroll { container: content / inline-size; }
+.workspace-scroll.has-detail { margin-right: 400px; }
+.dock-region > .toast {
+  position: absolute;
+  bottom: 100%;
+  left: 12px;
+  right: 12px;
+}
+
+@media (max-width: 700px) {
+  .preview-frame:is(.auto, .mobile, .tablet, .desktop) { max-width: 100%; }
+}

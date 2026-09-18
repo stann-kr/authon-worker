@@ -1,0 +1,300 @@
+/* Frame-aligned sheets keep editing controls accessible within the visible viewport. */
+.sheet {
+  position: fixed;
+  inset: auto auto var(--sheet-bottom, 0) var(--sheet-left, 0);
+  margin: 0;
+  width: var(--sheet-width, 100%);
+  max-width: none;
+  max-height: var(--sheet-max-height, calc(100dvh - 24px));
+  overflow: hidden;
+  border: 0;
+  border-radius: 24px 24px 0 0;
+  padding: 0 20px;
+  background: var(--card-bg);
+  color: var(--text);
+  box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.5);
+  animation: sheet-in 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.sheet::backdrop {
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(10px);
+}
+.sheet[open] {
+  display: flex;
+  flex-direction: column;
+}
+.sheet[data-inline="true"] {
+  height: var(--sheet-max-height);
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  box-shadow: none;
+  animation: none;
+}
+.sheet[data-wide="true"] { border-radius: 24px; }
+.sheet-body { container: sheet-content / inline-size; }
+.sheet-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-shrink: 0;
+  padding: 20px 0 16px;
+  border-bottom: 1px solid var(--line);
+}
+.sheet-header > div {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.sheet-header h2 {
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: 0;
+  margin: 0;
+}
+.sheet-header p {
+  font-size: 12px;
+  color: var(--muted);
+  margin: 6px 0 0;
+}
+.sheet-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  min-width: 0;
+  gap: 16px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  min-height: 0;
+  overscroll-behavior: contain;
+  padding: 16px 2px max(16px, env(safe-area-inset-bottom));
+  scroll-padding-block: 16px 90px;
+}
+.sheet-body[hidden] {
+  display: none;
+}
+.sheet-discard {
+  display: grid;
+  gap: 12px;
+  padding: 16px 0 max(16px, env(safe-area-inset-bottom));
+  overflow: auto;
+}
+.sheet-discard p {
+  font-size: 14px;
+  color: var(--muted);
+}
+.sheet-header .icon-button {
+  width: 44px;
+  height: 44px;
+}
+.sheet-header .icon-button::after {
+  inset: 0;
+}
+.sheet-header h2:focus {
+  outline: none;
+}
+.sheet form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  min-width: 0;
+  gap: 16px;
+}
+.field {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  min-width: 0;
+  gap: 6px;
+  font-size: 12px;
+}
+.field > span {
+  color: var(--muted);
+  font-weight: 500;
+  line-height: 1.5;
+}
+.field input,
+.field select,
+.field textarea {
+  min-width: 0;
+  max-width: 100%;
+  width: 100%;
+  min-height: var(--control-height);
+  padding: 10px var(--control-inset);
+  background: var(--bg-secondary);
+  border: 1px solid var(--control-line);
+  border-radius: var(--control-radius);
+  color: var(--text);
+  font: inherit;
+  font-size: 16px;
+  outline: none;
+}
+.field input:focus,
+.field select:focus,
+.field textarea:focus {
+  border-color: var(--blue);
+}
+.field :is(input, select, textarea):focus-visible {
+  box-shadow: 0 0 0 2px #3b82f629;
+}
+.field textarea {
+  min-height: 104px;
+  resize: vertical;
+  line-height: 1.6;
+}
+.field :is(input, textarea)::placeholder {
+  color: var(--muted);
+  opacity: 1;
+}
+.field :is(input, select, textarea):disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+.field :is(input, select, textarea)[aria-invalid="true"] {
+  border-color: #fb7185;
+}
+.form-note {
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.7;
+  margin: 0;
+}
+.form-error {
+  font-size: 13px;
+  color: #fb7185;
+  margin: 0;
+}
+.sheet .primary {
+  width: 100%;
+  min-height: 48px;
+  padding: 12px 14px;
+  font-size: 14px;
+  border-radius: var(--control-radius);
+  margin-top: 0;
+}
+.form-duo {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+.sheet-options {
+  display: grid;
+  gap: 8px;
+}
+.sheet-option {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  min-height: 60px;
+  padding: 12px;
+  text-align: left;
+}
+.sheet-option > div {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.sheet-option strong {
+  display: block;
+  font-size: 15px;
+  font-weight: 500;
+}
+.sheet-option p {
+  font-size: 12px;
+  color: var(--muted);
+  margin: 4px 0 0;
+  line-height: 1.5;
+}
+.sheet-option.active {
+  background: var(--pill-bg);
+  border-color: var(--blue);
+}
+.sheet-detail {
+  display: grid;
+  margin: 0;
+}
+.sheet-detail > div {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--line);
+  font-size: 13px;
+}
+.sheet-detail dt {
+  color: var(--muted);
+  flex-shrink: 0;
+  max-width: 40%;
+}
+.sheet-detail dd {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  margin: 0;
+  text-align: right;
+}
+.confirmation {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  font-size: 13px;
+  line-height: 1.6;
+}
+.confirmation > p { margin: 0; }
+.confirmation > strong { font-size: 14px; font-weight: 600; }
+.sheet-body > .flow-notice { margin: 0; }
+.sheet-menu {
+  display: grid;
+  gap: 0;
+}
+.sheet-menu button {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-height: 60px;
+  text-align: left;
+  padding: 12px 0;
+  background: none;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  font-size: 15px;
+}
+.sheet-menu button > span {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.sheet-menu small {
+  color: var(--muted);
+  font-size: 11px;
+}
+.sheet-menu svg {
+  color: var(--muted);
+}
+@keyframes sheet-in {
+  from {
+    transform: translateY(24px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+@media (max-width: 700px) {
+  .sheet {
+    border-radius: 24px 24px 0 0;
+    padding-bottom: 0;
+  }
+  .field input,
+  .field select,
+  .field textarea {
+    font-size: 16px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .sheet {
+    animation: none;
+  }
+}

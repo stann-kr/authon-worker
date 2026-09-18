@@ -1,0 +1,8 @@
+.auth-page { min-height: 100dvh; padding: max(32px, env(safe-area-inset-top)) 20px max(32px, env(safe-area-inset-bottom)); }
+.auth-frame { width: 100%; max-width: 480px; margin-inline: auto; }
+.auth-panel { padding: 12px 0; background: transparent; border: 0; }
+.auth-heading { margin-bottom: 26px; text-align: left; }
+.auth-brand { margin-bottom: 12px; color: var(--app-text-muted); font-size: 14px; overflow-wrap: anywhere; }
+.auth-heading h1 { font-size: 22px; line-height: 1.4; font-weight: 600; letter-spacing: -0.4px; overflow-wrap: anywhere; }
+.auth-panel form { min-width: 0; }
+.auth-panel .app-field { background: #0c0c0c; }

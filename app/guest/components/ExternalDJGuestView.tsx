@@ -3,7 +3,6 @@
 import { useState } from "react";
 import { useLocalStorage } from "@/lib/hooks";
 import Footer from "@/components/Footer";
-import StatGrid from "@/components/StatGrid";
 import PanelHeader from "@/components/PanelHeader";
 import Spinner from "@/components/Spinner";
 import EmptyState from "@/components/EmptyState";
@@ -103,13 +102,10 @@ export default function ExternalDJGuestView({ token }: ExternalDJGuestViewProps)
   };
 
   const externalHeader = (
-    <div className="fixed inset-x-0 top-0 z-50 border-b border-border-default bg-canvas pt-[env(safe-area-inset-top)]">
-      <div className="mx-auto flex h-16 w-full max-w-[1440px] items-center justify-between px-4 sm:px-6 lg:px-10">
+    <header className="external-guest-header">
+      <div className="external-guest-header-inner">
         <div className="flex min-w-0 items-center gap-3">
-          <div className="grid h-8 w-8 place-items-center border border-border-strong bg-surface font-mono text-xs font-semibold text-text-heading">{brand.name.charAt(0).toUpperCase()}</div>
-          <span className="truncate text-sm font-semibold text-text-heading">
-            {brand.name}
-          </span>
+          <span className="external-guest-brand">{brand.name}</span>
         </div>
         <div className="flex shrink-0 items-center gap-3">
           <span className="operational-label hidden sm:inline">
@@ -118,14 +114,14 @@ export default function ExternalDJGuestView({ token }: ExternalDJGuestViewProps)
           <LanguageSwitcher compact />
         </div>
       </div>
-    </div>
+    </header>
   );
 
   if (isValidating) {
     return (
-      <div ref={externalViewRootRef} className="min-h-[100dvh] bg-canvas flex flex-col">
+      <div ref={externalViewRootRef} className="external-guest-workspace" data-rsvp={isSelfRsvp}>
         {externalHeader}
-        <div className="flex-1 overflow-x-hidden pt-[calc(5rem+env(safe-area-inset-top))] sm:pt-[calc(5.5rem+env(safe-area-inset-top))] flex flex-col">
+        <div className="external-guest-body">
           <main id="main-content" tabIndex={-1} className="page-container">
             <div className="main-content-panel">
               <Spinner mode="inline" text={commonT("loading")} />
@@ -139,32 +135,35 @@ export default function ExternalDJGuestView({ token }: ExternalDJGuestViewProps)
 
   if (hasValidationError) {
     return (
-      <main id="main-content" tabIndex={-1} className="min-h-[100dvh] bg-canvas flex items-center justify-center px-4">
-        <div className="app-panel max-w-sm p-7 text-center">
-          <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center border border-status-danger/70 bg-status-danger/10">
-            <Icon name="warning" size={24} className="text-status-danger" />
+      <div ref={externalViewRootRef} className="external-guest-workspace" data-rsvp={isSelfRsvp}>
+        {externalHeader}
+        <main id="main-content" tabIndex={-1} className="external-guest-state">
+          <div className="app-panel max-w-sm p-7 text-center">
+            <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center border border-status-danger/70 bg-status-danger/10">
+              <Icon name="warning" size={24} className="text-status-danger" />
+            </div>
+            <h1
+              ref={invalidHeadingRef}
+              tabIndex={-1}
+              className="mb-2 text-xl font-semibold text-text-heading outline-none focus-visible:ring-2 focus-visible:ring-focus"
+            >
+              {t("invalidTitle")}
+            </h1>
+            <p className="mb-6 text-sm leading-relaxed text-text-muted">
+              {t("invalidDescription")}
+            </p>
           </div>
-          <h1
-            ref={invalidHeadingRef}
-            tabIndex={-1}
-            className="mb-2 text-xl font-semibold text-text-heading outline-none focus-visible:ring-2 focus-visible:ring-focus"
-          >
-            {t("invalidTitle")}
-          </h1>
-          <p className="mb-6 text-sm leading-relaxed text-text-muted">
-            {t("invalidDescription")}
-          </p>
-          <Footer compact />
-        </div>
-      </main>
+        </main>
+        <Footer />
+      </div>
     );
   }
 
   if (showRetryPanel) {
     return (
-      <div ref={externalViewRootRef} className="min-h-[100dvh] bg-canvas flex flex-col">
+      <div ref={externalViewRootRef} className="external-guest-workspace" data-rsvp={isSelfRsvp}>
         {externalHeader}
-        <main id="main-content" tabIndex={-1} className="flex flex-1 items-center justify-center px-4 pt-[calc(5rem+env(safe-area-inset-top))]">
+        <main id="main-content" tabIndex={-1} className="external-guest-state">
           <div
             className="app-panel max-w-sm p-7 text-center"
             aria-labelledby="external-load-error-title"
@@ -193,6 +192,7 @@ export default function ExternalDJGuestView({ token }: ExternalDJGuestViewProps)
             </Button>
           </div>
         </main>
+        <Footer />
       </div>
     );
   }
@@ -210,44 +210,44 @@ export default function ExternalDJGuestView({ token }: ExternalDJGuestViewProps)
     : sortedGuests;
 
   return (
-    <div ref={externalViewRootRef} className="min-h-[100dvh] bg-canvas flex flex-col">
+    <div ref={externalViewRootRef} className="external-guest-workspace" data-rsvp={isSelfRsvp}>
       {externalHeader}
-      <div className="flex-1 overflow-x-hidden pt-[calc(5rem+env(safe-area-inset-top))] sm:pt-[calc(5.5rem+env(safe-area-inset-top))] flex flex-col">
+      <div className="external-guest-body">
         <main id="main-content" tabIndex={-1} className="page-container">
-          <div className="context-bar mb-4 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4 p-4 sm:p-5">
+          <dl className="external-guest-context">
             <div className="flex flex-col">
-              <span className="type-context-title mb-0">
+              <dt>
                 {t("guestOwner")}
-              </span>
-              <span className="mt-1 break-words text-sm font-semibold text-text-heading">
+              </dt>
+              <dd>
                 {linkInfo?.djName ?? "-"}
-              </span>
+              </dd>
             </div>
             <div className="flex flex-col">
-              <span className="type-context-title mb-0">
+              <dt>
                 {t("event")}
-              </span>
-              <span className="mt-1 break-words text-sm font-semibold text-text-heading">
+              </dt>
+              <dd>
                 {linkInfo?.event ?? "-"}
-              </span>
+              </dd>
             </div>
             <div className="flex flex-col">
-              <span className="type-context-title mb-0">
+              <dt>
                 {t("venue")}
-              </span>
-              <span className="mt-1 break-words text-sm font-semibold text-text-heading">
+              </dt>
+              <dd>
                 {venueInfo?.name ?? "-"}
-              </span>
+              </dd>
             </div>
             <div className="flex flex-col">
-              <span className="type-context-title mb-0">
+              <dt>
                 {t("operationalDate")}
-              </span>
-              <span className="mt-1 font-mono text-sm font-semibold text-text-heading">
+              </dt>
+              <dd className="tabular-nums">
                 {linkInfo ? formatDateDisplay(linkInfo.date || "", locale) : "-"}
-              </span>
+              </dd>
             </div>
-          </div>
+          </dl>
 
           {showReconciliationBanner && (
             <div
@@ -291,7 +291,7 @@ export default function ExternalDJGuestView({ token }: ExternalDJGuestViewProps)
           )}
 
           <section className="main-content-panel">
-            <div className="relative flex items-center justify-between gap-4 border-b border-border-subtle px-4 py-3 sm:px-5">
+            <div className="external-guest-entry-heading">
               <h1
                 ref={contentHeadingRef}
                 tabIndex={-1}
@@ -308,7 +308,7 @@ export default function ExternalDJGuestView({ token }: ExternalDJGuestViewProps)
               )}
             </div>
 
-            <div className="border-b border-border-subtle px-4 py-4 sm:px-5">
+            <div className="external-guest-entry">
               {isSelfRsvp && (
                 <>
                   {!ownerKey && (
@@ -411,24 +411,6 @@ export default function ExternalDJGuestView({ token }: ExternalDJGuestViewProps)
               )}
             </div>
 
-            {!isSelfRsvp && (
-              <StatGrid
-                variant="embedded"
-                items={[
-                  { label: t("registered"), value: guests.length, color: "checked" },
-                  {
-                    label: t("remaining"),
-                    value: remaining,
-                    color: remaining > 0 ? "waiting" : "danger",
-                  },
-                  {
-                    label: t("max"),
-                    value: linkInfo?.maxGuests ?? 0,
-                    color: "default",
-                  },
-                ]}
-              />
-            )}
 
             {isSelfRsvp && ownedGuest && (
               <GuestQrCode
@@ -440,6 +422,7 @@ export default function ExternalDJGuestView({ token }: ExternalDJGuestViewProps)
             )}
 
             <PanelHeader
+              headingLevel={2}
               title={isSelfRsvp ? t("yourRegistration") : t("guestList")}
               count={displayGuests.length}
               sortMode={isSelfRsvp ? undefined : sortMode}
@@ -452,6 +435,7 @@ export default function ExternalDJGuestView({ token }: ExternalDJGuestViewProps)
 
             {!isSelfRsvp && (
               <GuestSearchInput
+                className="external-guest-search"
                 value={searchQuery}
                 onChange={setSearchQuery}
               />
@@ -469,7 +453,7 @@ export default function ExternalDJGuestView({ token }: ExternalDJGuestViewProps)
                 }
               />
             ) : (
-              <div className="divide-y divide-border-subtle overflow-y-auto">
+              <div className="product-roster-rows">
                 {displayGuests.map((guest, index) => (
                   <GuestListCard
                     key={guest.id}

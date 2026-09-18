@@ -9,6 +9,7 @@ import { getDb } from "@/lib/db/client";
 import { venueDomains, venues } from "@/lib/db/schema";
 import {
   baseUrlForHostname,
+  isLocalHostname,
   isPlatformHostname,
   normalizeBaseUrl,
   normalizeHostname,
@@ -72,7 +73,7 @@ export async function resolveTenantByHostname(
   if (scope === "platform") {
     return {
       ...platformContext(hostname, fallbackBaseUrl),
-      baseUrl: baseUrlForHostname(hostname),
+      baseUrl: baseUrlForHostname(hostname, hostnameValue),
       defaultLocale: isLocale(row.defaultLocale) ? row.defaultLocale : DEFAULT_LOCALE,
       resolved: true,
     };
@@ -86,7 +87,7 @@ export async function resolveTenantByHostname(
     hostname,
     scope,
     venueId: row.venueId,
-    baseUrl: baseUrlForHostname(hostname),
+    baseUrl: baseUrlForHostname(hostname, hostnameValue),
     brand: createVenueBrand({
       venueName: row.venueName,
       brandName: row.brandName,
@@ -109,7 +110,7 @@ export const getRequestTenantContext = cache(async (): Promise<TenantContext> =>
 
 export async function getTenantContextForRequest(request: Request): Promise<TenantContext> {
   return resolveTenantByHostname(
-    request.headers.get("host") || new URL(request.url).hostname,
+    request.headers.get("host") || new URL(request.url).host,
     getConfiguredBaseUrl(),
   );
 }
@@ -163,11 +164,15 @@ export async function getVenueDeliveryContext(
     };
   }
 
+  const localRequestHost = row.hostname && isLocalHostname(row.hostname)
+    ? (await headers()).get("host")
+    : null;
+
   return {
     venueId,
     defaultLocale: isLocale(row.defaultLocale) ? row.defaultLocale : DEFAULT_LOCALE,
     baseUrl:
-      (row.hostname ? baseUrlForHostname(row.hostname) : null) ||
+      (row.hostname ? baseUrlForHostname(row.hostname, localRequestHost) : null) ||
       normalizeBaseUrl(effectiveFallbackBaseUrl) ||
       "http://localhost:3000",
     brand: createVenueBrand({

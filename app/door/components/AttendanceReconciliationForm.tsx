@@ -76,7 +76,7 @@ export default function AttendanceReconciliationForm({
         <p
           ref={reconciliationStatusRef}
           tabIndex={-1}
-          className="mt-3 border-l-2 border-status-checked bg-status-checked/10 px-3 py-2 text-xs leading-relaxed text-text-muted focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-border-focus"
+          className="mt-3 border-l-2 border-status-checked bg-status-checked/10 px-3 py-2 text-xs leading-relaxed text-text-muted outline-none"
           role="status"
         >
           {t("adjustment.finalized")}
@@ -85,7 +85,7 @@ export default function AttendanceReconciliationForm({
         <p
           ref={reconciliationStatusRef}
           tabIndex={-1}
-          className="mt-3 border-l-2 border-status-waiting bg-status-waiting/10 px-3 py-2 text-xs leading-relaxed text-text-muted focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-border-focus"
+          className="mt-3 border-l-2 border-status-waiting bg-status-waiting/10 px-3 py-2 text-xs leading-relaxed text-text-muted outline-none"
           role="status"
         >
           {t("adjustment.eventMustBeClosed")}

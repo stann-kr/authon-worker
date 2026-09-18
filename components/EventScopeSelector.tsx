@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { useTranslations } from "next-intl";
 import Icon from "@/components/Icon";
 import { fetchEvents } from "@/lib/events/client";
@@ -15,6 +15,7 @@ interface EventScopeSelectorProps {
   disabled?: boolean;
   reloadKey?: number;
   className?: string;
+  renderScope?: (control: ReactNode, label: string) => ReactNode;
 }
 
 export default function EventScopeSelector({
@@ -25,8 +26,10 @@ export default function EventScopeSelector({
   disabled = false,
   reloadKey = 0,
   className = "",
+  renderScope,
 }: EventScopeSelectorProps) {
   const t = useTranslations("EventScope");
+  const commonT = useTranslations("Common");
   const [events, setEvents] = useState<Event[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [hasError, setHasError] = useState(false);
@@ -78,7 +81,7 @@ export default function EventScopeSelector({
     [events, t],
   );
 
-  return (
+  const control = (
     <div className={`min-w-0 ${className}`}>
       <label htmlFor="event-scope-selector" className="type-context-title">
         {t("label")}
@@ -124,4 +127,7 @@ export default function EventScopeSelector({
       )}
     </div>
   );
+  const label = hasError ? t("loadFailed") : events.find((event) => event.id === value)?.name ??
+    (value ? commonT("loading") : t("generalRoster"));
+  return renderScope ? renderScope(control, label) : control;
 }

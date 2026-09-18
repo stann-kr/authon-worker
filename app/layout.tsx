@@ -2,6 +2,17 @@ import { measureServerOperation } from "@/lib/observability/server-performance";
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
+import "./home.css";
+import "./auth/auth.css";
+import "./profile/profile.css";
+import "./admin/components/user-management.css";
+import "./guest/components/external-guest.css";
+import "@/components/overlays/sheet.css";
+import "@/components/guests/roster.css";
+import "@/components/records/records.css";
+import "@/components/operations/operations.css";
+import "@/components/dates/date-field.css";
+import "@/components/workspace/workspace.css";
 import DesignSystemProvider from "@/components/DesignSystemProvider";
 import VenueBrandProvider from "@/components/VenueBrandProvider";
 import { RouteTransitionProvider } from "@/components/RouteTransitionProvider";
@@ -36,7 +47,7 @@ export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover",
-  themeColor: "#0A0B0C",
+  themeColor: "#000000",
 };
 
 export default async function RootLayout({

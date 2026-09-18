@@ -1,8 +1,9 @@
-import React, { useEffect, useId, useRef, useState } from "react";
+import React, { useContext, useEffect, useId, useRef, useState } from "react";
 import Button from "./Button";
 import Icon from "./Icon";
 import StatusLabel from "./StatusLabel";
 import ConfirmDialog from "./ConfirmDialog";
+import { RosterSelection } from "./guests/RosterView";
 import { useTranslations } from "next-intl";
 
 export interface Guest {
@@ -32,8 +33,11 @@ interface GuestListCardProps {
   onDelete?: () => void;
   isCheckLoading?: boolean;
   isUndoLoading?: boolean;
+  isEntryDisabled?: boolean;
   isDeleteLoading?: boolean;
   isDeleteDisabled?: boolean;
+  deleteDisabledReason?: string;
+  deleteError?: string;
 }
 
 const GuestListCard: React.FC<GuestListCardProps> = ({
@@ -49,32 +53,49 @@ const GuestListCard: React.FC<GuestListCardProps> = ({
   onDelete,
   isCheckLoading = false,
   isUndoLoading = false,
+  isEntryDisabled = false,
   isDeleteLoading = false,
   isDeleteDisabled = false,
+  deleteDisabledReason,
+  deleteError,
 }) => {
   const t = useTranslations("Common");
+  const rosterT = useTranslations("Roster");
+  const selection = useContext(RosterSelection);
+  const [localDetail, setLocalDetail] = useState(false);
+  const isDetailOpen = selection ? selection.selectedId === guest.id : localDetail;
+  const toggleDetail = () => {
+    if (isDeleteLoading) return;
+    if (selection) selection.select(isDetailOpen ? null : guest.id);
+    else setLocalDetail((open) => !open);
+  };
+  const closeDetail = () => selection ? selection.select(null) : setLocalDetail(false);
+  const [undoConfirmation, setUndoConfirmation] = useState<string | null>(null);
   const [deleteConfirmation, setDeleteConfirmation] = useState<string | null>(null);
   const deleteTriggerRef = useRef<HTMLButtonElement>(null);
   const cancelDeleteRef = useRef<HTMLButtonElement>(null);
   const rowRef = useRef<HTMLElement>(null);
   const restoreFocusAfterDeleteRef = useRef(false);
   const confirmationId = useId();
+  const detailId = useId();
+  const disclosureRef = useRef<HTMLButtonElement>(null);
   const confirmationKey = `${guest.id}:${guest.status}`;
   const isDeleteConfirmOpen = Boolean(
     onDelete &&
       guest.status !== "deleted" &&
       deleteConfirmation === confirmationKey,
   );
-  const isInlineDeleteOpen = isDeleteConfirmOpen && guest.status === "pending";
+  const isInlineDeleteOpen = isDeleteConfirmOpen && mode === "registration" && guest.status === "pending";
 
   useEffect(() => {
+    if (undoConfirmation && undoConfirmation !== confirmationKey) setUndoConfirmation(null);
     if (deleteConfirmation && (deleteConfirmation !== confirmationKey || !onDelete)) {
       setDeleteConfirmation(null);
       if (document.activeElement === document.body) {
         rowRef.current?.focus({ preventScroll: true });
       }
     }
-  }, [confirmationKey, deleteConfirmation, onDelete]);
+  }, [confirmationKey, deleteConfirmation, onDelete, undoConfirmation]);
 
   useEffect(() => {
     if (isInlineDeleteOpen) cancelDeleteRef.current?.focus();
@@ -95,18 +116,10 @@ const GuestListCard: React.FC<GuestListCardProps> = ({
       rowRef.current?.focus({ preventScroll: true });
     }
   };
-  const indicatorTone =
-    guest.status === "checked"
-      ? "before:bg-status-checked"
-      : guest.status === "deleted"
-        ? "before:bg-border-strong"
-        : "before:bg-status-waiting";
   const handleDelete = () => {
     if (!onDelete || !isDeleteConfirmOpen || isDeleteDisabled || isDeleteLoading) return;
-    if (isInlineDeleteOpen) {
-      restoreFocusAfterDeleteRef.current = true;
-      rowRef.current?.focus({ preventScroll: true });
-    }
+    restoreFocusAfterDeleteRef.current = true;
+    rowRef.current?.focus({ preventScroll: true });
     setDeleteConfirmation(null);
     onDelete();
   };
@@ -116,77 +129,36 @@ const GuestListCard: React.FC<GuestListCardProps> = ({
     <article
       ref={rowRef}
       tabIndex={-1}
-      className={`guest-list-row relative overflow-hidden bg-surface px-4 py-3 transition-colors before:absolute before:inset-y-0 before:left-0 before:w-0.5 sm:px-5 ${indicatorTone}`}
+      className="product-guest-row"
+      data-status={guest.status}
+      data-selected={isDetailOpen}
+      data-mode={mode}
     >
-      <div className="flex items-center justify-between gap-3">
-        <div className="flex min-w-0 flex-1 items-start gap-3 sm:gap-4">
-          <span className="mt-0.5 w-7 shrink-0 font-mono text-xs tabular-nums text-text-dim">
-            {String(index + 1).padStart(2, "0")}
+      <div className="product-guest-line">
+        {/* A stretched disclosure and separate raised actions avoid nested buttons. */}
+        <button type="button" ref={disclosureRef} className="product-guest-disclosure" onClick={toggleDetail}
+          aria-label={[guest.name, djName, registeredByName !== djName ? registeredByName : null].filter(Boolean).join(" ")}
+          aria-controls={detailId} aria-expanded={isDetailOpen} aria-disabled={isDeleteLoading} />
+        <div className="product-guest-identity">
+          <span className="product-guest-index" aria-hidden="true">{String(index + 1).padStart(2, "0")}</span>
+          <span className="product-guest-name">
+            <strong>{guest.name}</strong>
+            {(djName || registeredByName) && <small>{djName || registeredByName}</small>}
           </span>
-          <div className="min-w-0">
-            <p className="type-row-title break-words">
-              {guest.name}
-            </p>
-            {(djName || registeredByName) && (
-              <div className="mt-0.5 flex flex-wrap items-center gap-2 text-xs text-text-muted">
-                {accountKind === "shared" && (
-                  <span className="border border-border-strong bg-canvas px-1.5 py-0.5 font-mono uppercase tracking-wider text-text-heading">
-                    {t("sharedAccount")}
-                  </span>
-                )}
-                {djName ? (
-                  <span className="min-w-0 break-words">
-                    {t("byName", { name: djName })}
-                  </span>
-                ) : null}
-                {registeredByName && (
-                  <span className="min-w-0 break-words">
-                    {t("registeredByName", { name: registeredByName })}
-                  </span>
-                )}
-              </div>
-            )}
-
-            {((showRegisteredAt && guest.createdAt) || guest.checkInTime) && (
-              <div className="mt-1.5 flex flex-wrap items-center gap-x-5 gap-y-1">
-                {showRegisteredAt && guest.createdAt && (
-                  <span className="flex items-baseline gap-2 text-xs text-text-dim">
-                    <span>{t("registered")}</span>
-                    <time
-                      dateTime={guest.createdAt}
-                      className="font-mono tabular-nums text-text-muted"
-                    >
-                      {formatTime(guest.createdAt)}
-                    </time>
-                  </span>
-                )}
-                {guest.checkInTime && (
-                  <span className="flex items-baseline gap-2 text-xs text-status-checked">
-                    <span>{t("checkedIn")}</span>
-                    <time
-                      dateTime={guest.checkInTime}
-                      className="font-mono tabular-nums"
-                    >
-                      {formatTime(guest.checkInTime)}
-                    </time>
-                  </span>
-                )}
-              </div>
-            )}
-          </div>
         </div>
 
-        <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
+        <div className="product-guest-actions">
           {guest.status === "pending" && (
             <>
               <span className="sr-only">{t("waitingStatus")}</span>
               {onCheck && (
                 <Button
                   onClick={onCheck}
+                  disabled={isEntryDisabled || isDeleteLoading}
                   isLoading={isCheckLoading}
                   variant="confirm"
                   size="md"
-                  className="w-28 px-3 sm:w-36 sm:px-4"
+                  className="min-w-16"
                 >
                   {t("checkIn")}
                 </Button>
@@ -206,22 +178,6 @@ const GuestListCard: React.FC<GuestListCardProps> = ({
                   {t("delete")}
                 </Button>
               )}
-
-              {mode === "operations" && onDelete && (
-                <Button
-                  ref={deleteTriggerRef}
-                  onClick={() => setDeleteConfirmation(confirmationKey)}
-                  aria-expanded={isInlineDeleteOpen}
-                  aria-controls={isInlineDeleteOpen ? confirmationId : undefined}
-                  isLoading={isDeleteLoading}
-                  disabled={isDeleteDisabled}
-                  variant="ghost"
-                  className="px-3 sm:px-4 border border-border-default text-text-muted"
-                  aria-label={t("deleteGuest")}
-                >
-                  <Icon name="close" size={16} />
-                </Button>
-              )}
             </>
           )}
 
@@ -230,12 +186,13 @@ const GuestListCard: React.FC<GuestListCardProps> = ({
               <span className="sr-only">{t("checkedInStatus")}</span>
               {onUndo && (
                 <Button
-                  onClick={onUndo}
+                  onClick={() => setUndoConfirmation(confirmationKey)}
+                  disabled={isEntryDisabled || isDeleteLoading}
                   isLoading={isUndoLoading}
                   variant="outline"
                   size="md"
                   leftIcon={<Icon name="undo" size={16} />}
-                  className="w-28 px-3 sm:w-36 sm:px-4"
+                  className="min-w-16"
                   aria-label={t("undoCheckIn", { name: guest.name })}
                 >
                   {t("undo")}
@@ -250,19 +207,7 @@ const GuestListCard: React.FC<GuestListCardProps> = ({
                   {t("checkedIn")}
                 </StatusLabel>
               )}
-              {mode === "operations" && onDelete && (
-                <Button
-                  ref={deleteTriggerRef}
-                  onClick={() => setDeleteConfirmation(confirmationKey)}
-                  isLoading={isDeleteLoading}
-                  disabled={isDeleteDisabled}
-                  variant="ghost"
-                  className="w-8 h-8 sm:w-10 sm:h-10 p-0 border border-border-default text-text-muted"
-                  aria-label={t("removeGuest")}
-                >
-                  <Icon name="close" size={16} />
-                </Button>
-              )}
+
             </>
           )}
 
@@ -272,6 +217,15 @@ const GuestListCard: React.FC<GuestListCardProps> = ({
             </StatusLabel>
           )}
         </div>
+        {mode === "operations" && <>
+          <div className="product-guest-owner" aria-hidden="true"><span>{djName || "—"}</span>
+            {registeredByName && <small>{registeredByName}</small>}
+          </div>
+          <span className="product-guest-status" aria-hidden="true">
+            {guest.status === "checked" ? <><Icon name="check" size={14} />{guest.checkInTime ? formatTime(guest.checkInTime) : rosterT("checked")}</>
+              : guest.status === "pending" ? rosterT("pending") : t("removed")}
+          </span>
+        </>}
       </div>
       {isInlineDeleteOpen && (
         <div
@@ -300,12 +254,46 @@ const GuestListCard: React.FC<GuestListCardProps> = ({
           </div>
         </div>
       )}
+      <div id={detailId} className="product-guest-detail" data-open={isDetailOpen}
+        role="region" aria-label={guest.name} aria-hidden={!isDetailOpen} inert={!isDetailOpen}
+        onKeyDown={(event) => {
+          if (event.key !== "Escape" || isDeleteLoading || event.defaultPrevented) return;
+          event.preventDefault();
+          event.stopPropagation();
+          closeDetail();
+          disclosureRef.current?.focus({ preventScroll: true });
+        }}>
+        <div className="product-guest-detail-clip"><div className="product-guest-detail-content">
+        <StatusLabel appearance="inline" tone={guest.status === "checked" ? "checked" : guest.status === "pending" ? "waiting" : "neutral"}>
+          {guest.status === "checked" ? t("checkedIn") : guest.status === "pending" ? t("waitingStatus") : t("removed")}
+        </StatusLabel>
+        <dl className="product-detail-list" aria-label={rosterT("detail")}>
+          {djName && <div><dt>{rosterT("owner")}</dt><dd>{djName}</dd></div>}
+          {(accountKind === "shared" || registeredByName) && <div><dt>{rosterT("operator")}</dt><dd>{registeredByName || "—"}</dd></div>}
+          {showRegisteredAt && guest.createdAt && <div><dt>{t("registered")}</dt><dd><time dateTime={guest.createdAt}>{formatTime(guest.createdAt)}</time></dd></div>}
+          {guest.checkInTime && <div><dt>{t("checkedIn")}</dt><dd><time dateTime={guest.checkInTime}>{formatTime(guest.checkInTime)}</time></dd></div>}
+        </dl>
+        {mode === "operations" && onDelete && guest.status !== "deleted" && <div className="product-guest-detail-actions">
+          <Button ref={deleteTriggerRef} variant="danger" onClick={() => setDeleteConfirmation(confirmationKey)}
+            disabled={isDeleteDisabled} isLoading={isDeleteLoading} aria-haspopup="dialog">
+            {t("deleteGuest")}
+          </Button>
+          {deleteError && <p className="mt-2 text-sm text-status-danger" role="alert">{deleteError}</p>}
+          {isDeleteDisabled && deleteDisabledReason && <p className="mt-2 text-sm text-text-muted" role="status">{deleteDisabledReason}</p>}
+        </div>}
+        </div></div>
+      </div>
     </article>
-      {isDeleteConfirmOpen && guest.status === "checked" && (
+      {onUndo && undoConfirmation === confirmationKey && guest.status === "checked" && <ConfirmDialog open
+        title={rosterT("undoTitle")} description={rosterT("undoDescription", { name: guest.name })}
+        confirmLabel={rosterT("undoConfirm")} cancelLabel={t("cancel")} isLoading={isUndoLoading}
+        confirmDisabled={isEntryDisabled}
+        onCancel={() => setUndoConfirmation(null)} onConfirm={() => { if (isEntryDisabled) return; setUndoConfirmation(null); onUndo(); }} />}
+      {isDeleteConfirmOpen && !isInlineDeleteOpen && (
         <ConfirmDialog
           open
           title={t("deleteGuestConfirm", { name: guest.name })}
-          description={t("removeGuestConfirm")}
+          description={guest.status === "checked" ? t("removeGuestConfirm") : undefined}
           confirmLabel={t("delete")}
           cancelLabel={t("cancel")}
           onConfirm={handleDelete}

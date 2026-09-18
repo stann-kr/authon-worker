@@ -2,8 +2,10 @@
 
 import { fetchEvents } from "@/lib/events/client";
 
-import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useLocale, useTranslations } from "next-intl";
+import Sheet from "@/components/overlays/Sheet";
+import Button from "@/components/Button";
 import Alert from "@/components/Alert";
 import DatePicker from "@/components/DatePicker";
 import EmptyState from "@/components/EmptyState";
@@ -21,6 +23,7 @@ import { deriveAsyncListState, shouldShowEmptyState } from "@/lib/ui/async-list-
 import EventCloseout from "./EventCloseout";
 
 interface EventManagementProps {
+  scopeSelector?: (controls: ReactNode, disabled?: boolean) => ReactNode;
   selectedDate: string;
   onDateChange: (date: string) => void;
   businessDate: string;
@@ -32,6 +35,7 @@ interface EventManagementProps {
 const EMPTY_EVENTS: Event[] = [];
 
 export default function EventManagement({
+  scopeSelector,
   selectedDate,
   onDateChange,
   businessDate,
@@ -49,6 +53,8 @@ export default function EventManagement({
     isSuperAdmin,
     currentVenue,
   } = useVenueSelector();
+  const [createOpen, setCreateOpen] = useState(false);
+  const [detailId, setDetailId] = useState<string | null>(selectedEventId);
   const [events, setEvents] = useState<Event[]>([]);
   const [loadedScope, setLoadedScope] = useState("");
   const [isLoading, setIsLoading] = useState(true);
@@ -63,7 +69,7 @@ export default function EventManagement({
   const transitionTriggerRef = useRef<HTMLButtonElement | null>(null);
   const cancelTransitionRef = useRef<HTMLButtonElement>(null);
   const eventCardRefs = useRef(new Map<string, HTMLElement>());
-  const isTransitioningRef = useRef(false);
+  const isMutatingRef = useRef(false);
   const [name, setName] = useState("");
   const [capacity, setCapacity] = useState("");
   const [targetGuests, setTargetGuests] = useState("");
@@ -109,6 +115,8 @@ export default function EventManagement({
     if (pendingTransition) cancelTransitionRef.current?.focus();
   }, [pendingTransition]);
 
+  useEffect(() => { setDetailId(selectedEventId); }, [selectedEventId, scope]);
+
   const scopedEvents = loadedScope === scope ? events : EMPTY_EVENTS;
   const listState = deriveAsyncListState({
     hasStarted: isLoading || loadedScope !== "",
@@ -119,7 +127,8 @@ export default function EventManagement({
 
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!venueId || busyId) return;
+    if (!venueId || busyId || isMutatingRef.current) return;
+    isMutatingRef.current = true;
     const draft = {
       venueId,
       businessDate: selectedDate,
@@ -130,29 +139,36 @@ export default function EventManagement({
     };
     setBusyId("create");
     setFeedback(null);
-    const response = await createEvent(draft);
-    if (response.error || !response.data) {
+    try {
+      const response = await createEvent(draft);
+      if (response.error || !response.data) {
+        setFeedback({ type: "error", message: t("createFailed") });
+      } else {
+        setName("");
+        setCapacity("");
+        setTargetGuests("");
+        setTemplateSourceEventId(null);
+        setCreateOpen(false);
+        onSelectedEventChange(response.data.event.id);
+        setFeedback({
+          type: "success",
+          message: response.data.event.templateSourceEventId
+            ? t("createdFromTemplate")
+            : t("created"),
+        });
+        await loadEvents();
+        onEventsChanged();
+      }
+    } catch {
       setFeedback({ type: "error", message: t("createFailed") });
-    } else {
-      setName("");
-      setCapacity("");
-      setTargetGuests("");
-      setTemplateSourceEventId(null);
-      onSelectedEventChange(response.data.event.id);
-      setFeedback({
-        type: "success",
-        message: response.data.event.templateSourceEventId
-          ? t("createdFromTemplate")
-          : t("created"),
-      });
-      await loadEvents();
-      onEventsChanged();
+    } finally {
+      isMutatingRef.current = false;
+      setBusyId(null);
     }
-    setBusyId(null);
   };
 
   const transition = async (event: Event, nextState: EventState) => {
-    if (busyId || isTransitioningRef.current) return;
+    if (busyId || isMutatingRef.current) return;
     if (nextState === "closed" || nextState === "archived") {
       if (
         pendingTransition?.scope !== scope ||
@@ -161,26 +177,31 @@ export default function EventManagement({
         pendingTransition.nextState !== nextState
       ) return;
     }
-    isTransitioningRef.current = true;
+    isMutatingRef.current = true;
     setPendingTransition(null);
     eventCardRefs.current.get(event.id)?.focus({ preventScroll: true });
     setBusyId(event.id);
     setFeedback(null);
-    const response = await transitionEventState(event.id, nextState);
-    if (response.error || !response.data) {
-      setFeedback({ type: "error", message: t("transitionFailed") });
-    } else {
-      setFeedback({ type: "success", message: t("stateChanged") });
-      await loadEvents();
-      onEventsChanged();
-    }
-    window.requestAnimationFrame(() => {
-      if (document.activeElement === document.body) {
-        eventCardRefs.current.get(event.id)?.focus({ preventScroll: true });
+    try {
+      const response = await transitionEventState(event.id, nextState);
+      if (response.error || !response.data) {
+        setFeedback({ type: "error", message: t("transitionFailed") });
+      } else {
+        setFeedback({ type: "success", message: t("stateChanged") });
+        await loadEvents();
+        onEventsChanged();
       }
-    });
-    isTransitioningRef.current = false;
-    setBusyId(null);
+    } catch {
+      setFeedback({ type: "error", message: t("transitionFailed") });
+    } finally {
+      window.requestAnimationFrame(() => {
+        if (document.activeElement === document.body) {
+          eventCardRefs.current.get(event.id)?.focus({ preventScroll: true });
+        }
+      });
+      isMutatingRef.current = false;
+      setBusyId(null);
+    }
   };
 
   const explicitEvents = useMemo(
@@ -193,32 +214,202 @@ export default function EventManagement({
     transitionTriggerRef.current?.focus({ preventScroll: true });
   };
 
+  const renderDetails = (event: Event) => {
+
+                const isSelected = selectedEventId === event.id;
+                const eventTransition = pendingTransition?.scope === scope &&
+                    pendingTransition.eventId === event.id &&
+                    pendingTransition.fromState === event.state
+                  ? pendingTransition
+                  : null;
+                const nextStates: EventState[] =
+                  event.state === "draft"
+                    ? ["open", "archived"]
+                    : event.state === "open"
+                      ? ["closed"]
+                      : event.state === "closed"
+                        ? ["archived"]
+                        : [];
+    return <div tabIndex={-1} ref={(element) => { if (element) eventCardRefs.current.set(event.id, element); else eventCardRefs.current.delete(event.id); }} className="space-y-4">
+      {feedback && <Alert type={feedback.type} message={feedback.message} />}
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="text-sm text-text-muted">
+                          {t(`state.${event.state}`)} · {event.businessDate}
+                        </p>
+                      </div>
+                      <span className="shrink-0 font-mono text-xs text-text-muted">
+                        {t("capacity")} {event.capacity ?? "—"}
+                      </span>
+                    </div>
+                    {(event.doorOpensAt || event.guestCutoffAt) && (
+                      <p className="mt-3 text-xs text-text-muted">
+                        {event.doorOpensAt
+                          ? formatVenueDateTime(event.doorOpensAt, {
+                              locale,
+                              timeZone: currentVenue?.timezone,
+                            }) ?? "—"
+                          : "—"}
+                        {" → "}
+                        {event.guestCutoffAt
+                          ? formatVenueDateTime(event.guestCutoffAt, {
+                              locale,
+                              timeZone: currentVenue?.timezone,
+                            }) ?? "—"
+                          : "—"}
+                      </p>
+                    )}
+                    <div className="mt-4 flex flex-wrap gap-3">
+                      <button
+                        type="button"
+                        aria-pressed={isSelected}
+                        onClick={() => onSelectedEventChange(isSelected ? null : event.id)}
+                        disabled={Boolean(busyId)}
+                        className={`min-h-11 border px-3 py-2 text-xs font-semibold ${
+                          isSelected
+                            ? "border-border-strong bg-surface-active text-text-heading"
+                            : "border-border-default bg-surface-raised text-text-body"
+                        }`}
+                      >
+                        {isSelected ? t("selected") : t("useForOperations")}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setDetailId(null);
+                          setFeedback(null);
+                          setCreateOpen(true);
+                          setName(`${event.name} ${t("copySuffix")}`.trim());
+                          setCapacity(event.capacity?.toString() ?? "");
+                          setTargetGuests(event.targetGuests?.toString() ?? "");
+                          setTemplateSourceEventId(event.id);
+                        }}
+                        disabled={Boolean(busyId)}
+                        className="min-h-11 border border-border-default bg-surface-raised px-3 py-2 text-xs font-semibold text-text-body"
+                      >
+                        {t("useTemplate")}
+                      </button>
+                      {nextStates.map((state) => (
+                        <button
+                          key={state}
+                          type="button"
+                          onClick={(clickEvent) => {
+                            if (state === "closed" || state === "archived") {
+                              transitionTriggerRef.current = clickEvent.currentTarget;
+                              setPendingTransition({
+                                scope,
+                                eventId: event.id,
+                                fromState: event.state,
+                                nextState: state,
+                              });
+                            } else {
+                              void transition(event, state);
+                            }
+                          }}
+                          aria-expanded={state === "closed" || state === "archived"
+                            ? eventTransition?.nextState === state
+                            : undefined}
+                          disabled={Boolean(busyId)}
+                          className="min-h-11 border border-border-default bg-surface-raised px-3 py-2 text-xs font-semibold text-text-body disabled:opacity-50"
+                        >
+                          {t(`transition.${state}`)}
+                        </button>
+                      ))}
+                    </div>
+                    {eventTransition && (
+                      <div
+                        role="group"
+                        aria-label={t(`transition.${eventTransition.nextState}`)}
+                        className="mt-3 border-t border-border-default pt-3"
+                        onKeyDown={(keyEvent) => {
+                          if (keyEvent.key === "Escape") {
+                            keyEvent.preventDefault();
+                            keyEvent.stopPropagation();
+                            cancelTransition();
+                          }
+                        }}
+                      >
+                        <p className="text-sm text-text-muted">
+                          {t(`transitionConfirm.${eventTransition.nextState}`)}
+                        </p>
+                        <div className="mt-2 flex flex-wrap gap-3">
+                          <button
+                            ref={cancelTransitionRef}
+                            type="button"
+                            onClick={cancelTransition}
+                            disabled={Boolean(busyId)}
+                            className="min-h-11 border border-border-default px-3 py-2 text-xs font-semibold text-text-body"
+                          >
+                            {t("cancel")}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => void transition(event, eventTransition.nextState)}
+                            disabled={Boolean(busyId)}
+                            className="min-h-11 border border-status-danger px-3 py-2 text-xs font-semibold text-status-danger disabled:opacity-50"
+                          >
+                            {t(`transition.${eventTransition.nextState}`)}
+                          </button>
+                        </div>
+                      </div>
+                    )}
+      <EventCloseout eventId={event.id} eventState={event.state} timeZone={currentVenue?.timezone} />
+    </div>;
+  };
+  const detailEvent = explicitEvents.find((event) => event.id === detailId);
+
+  const scopeControls = <>
+    <DatePicker compact value={selectedDate} onChange={onDateChange} businessDate={businessDate} disabled={Boolean(busyId)} />
+    {isSuperAdmin && venues.length > 0 && <VenueSelector venues={venues} selectedVenueId={selectedVenueId}
+      onVenueChange={setSelectedVenueId} disabled={Boolean(busyId)} className="scope-venue" />}
+  </>;
+
   return (
     <div className="space-y-4">
-      {isSuperAdmin && venues.length > 0 && (
-        <VenueSelector
-          venues={venues}
-          selectedVenueId={selectedVenueId}
-          onVenueChange={setSelectedVenueId}
-          disabled={Boolean(busyId)}
-          className="app-panel p-4 sm:p-5"
-        />
-      )}
-
-      <div className="context-bar">
-        <DatePicker
-          value={selectedDate}
-          onChange={onDateChange}
-          businessDate={businessDate}
-          disabled={Boolean(busyId)}
-        />
-      </div>
+      {scopeSelector ? scopeSelector(scopeControls, Boolean(busyId)) : <div className="operations-scope">{scopeControls}</div>}
 
       {feedback && <Alert type={feedback.type} message={feedback.message} />}
 
-      <section className="app-panel" aria-labelledby="event-create-title">
-        <PanelHeader title={t("createTitle")} headingId="event-create-title" />
-        <form onSubmit={submit} className="p-4 sm:p-5">
+      <section className="record-collection" aria-labelledby="event-list-title">
+        <PanelHeader
+          title={t("listTitle")}
+          headingId="event-list-title"
+          actions={<Button onClick={() => { setFeedback(null); setCreateOpen(true); }} disabled={!venueId || Boolean(busyId)}>{t("createTitle")}</Button>}
+          count={explicitEvents.length}
+          onRefresh={loadEvents}
+          isLoading={isLoading}
+        />
+        <div className="record-collection-body">
+          {loadError && <Alert type="error" message={t("loadFailed")} />}
+          {!venueId ? (
+            <p className="border border-border-default bg-canvas p-4 text-sm text-text-muted">
+              {t("selectVenue")}
+            </p>
+          ) : listState === "loading" ? (
+            <Skeleton rows={4} />
+          ) : shouldShowEmptyState(listState) ? (
+            <EmptyState icon="calendar" message={t("empty")} />
+          ) : (
+            <div className="record-list">
+              {explicitEvents.map((event) => <article key={event.id} className="record-row">
+                <div className="record-summary">
+                  <button type="button" className="record-open" onClick={() => { setFeedback(null); setDetailId(event.id); }} disabled={Boolean(busyId)} aria-haspopup="dialog" aria-expanded={detailId === event.id}>
+                    <span className="record-identity"><strong>{event.name}</strong><small>{event.businessDate}{selectedEventId === event.id ? ` · ${t("selected")}` : ""}</small></span>
+                    <span className="record-value">{t("capacity")} {event.capacity ?? "—"}</span>
+                    <span className="record-status">{t(`state.${event.state}`)}</span>
+                  </button>
+                </div>
+              </article>)}
+            </div>
+          )}
+        </div>
+      </section>
+
+      <Sheet open={createOpen} title={t("createTitle")} onClose={() => {
+        setCreateOpen(false); setName(""); setCapacity(""); setTargetGuests(""); setTemplateSourceEventId(null);
+      }} dirty={Boolean(name || capacity || targetGuests)} busy={Boolean(busyId)}>
+        {feedback && <Alert type={feedback.type} message={feedback.message} />}
+        <form onSubmit={submit}>
           <fieldset disabled={Boolean(busyId) || !venueId} className="grid gap-4">
             <div>
               <label htmlFor="event-name" className="app-label">{t("name")}</label>
@@ -275,181 +466,10 @@ export default function EventManagement({
             </button>
           </fieldset>
         </form>
-      </section>
-
-      <section className="app-panel" aria-labelledby="event-list-title">
-        <PanelHeader
-          title={t("listTitle")}
-          headingId="event-list-title"
-          count={explicitEvents.length}
-          onRefresh={loadEvents}
-          isLoading={isLoading}
-        />
-        <div className="p-4 sm:p-5">
-          {loadError && <Alert type="error" message={t("loadFailed")} />}
-          {!venueId ? (
-            <p className="border border-border-default bg-canvas p-4 text-sm text-text-muted">
-              {t("selectVenue")}
-            </p>
-          ) : listState === "loading" ? (
-            <Skeleton rows={4} />
-          ) : shouldShowEmptyState(listState) ? (
-            <EmptyState icon="calendar" message={t("empty")} />
-          ) : (
-            <div className="grid gap-3 lg:grid-cols-2">
-              {explicitEvents.map((event) => {
-                const isSelected = selectedEventId === event.id;
-                const eventTransition = pendingTransition?.scope === scope &&
-                    pendingTransition.eventId === event.id &&
-                    pendingTransition.fromState === event.state
-                  ? pendingTransition
-                  : null;
-                const nextStates: EventState[] =
-                  event.state === "draft"
-                    ? ["open", "archived"]
-                    : event.state === "open"
-                      ? ["closed"]
-                      : event.state === "closed"
-                        ? ["archived"]
-                        : [];
-                return (
-                  <article
-                    key={event.id}
-                    ref={(element) => {
-                      if (element) eventCardRefs.current.set(event.id, element);
-                      else eventCardRefs.current.delete(event.id);
-                    }}
-                    tabIndex={-1}
-                    className="border border-border-default bg-canvas p-4"
-                  >
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <h3 className="type-row-title break-words">{event.name}</h3>
-                        <p className="mt-1 text-xs text-text-muted">
-                          {t(`state.${event.state}`)} · {event.businessDate}
-                        </p>
-                      </div>
-                      <span className="shrink-0 font-mono text-xs text-text-muted">
-                        {event.capacity ?? "—"}
-                      </span>
-                    </div>
-                    {(event.doorOpensAt || event.guestCutoffAt) && (
-                      <p className="mt-3 text-xs text-text-muted">
-                        {event.doorOpensAt
-                          ? formatVenueDateTime(event.doorOpensAt, {
-                              locale,
-                              timeZone: currentVenue?.timezone,
-                            }) ?? "—"
-                          : "—"}
-                        {" → "}
-                        {event.guestCutoffAt
-                          ? formatVenueDateTime(event.guestCutoffAt, {
-                              locale,
-                              timeZone: currentVenue?.timezone,
-                            }) ?? "—"
-                          : "—"}
-                      </p>
-                    )}
-                    <div className="mt-4 flex flex-wrap gap-2">
-                      <button
-                        type="button"
-                        aria-pressed={isSelected}
-                        onClick={() => onSelectedEventChange(isSelected ? null : event.id)}
-                        disabled={Boolean(busyId)}
-                        className={`min-h-11 border px-3 py-2 text-xs font-semibold ${
-                          isSelected
-                            ? "border-action-primary bg-surface-active text-text-heading"
-                            : "border-border-default bg-surface-raised text-text-body"
-                        }`}
-                      >
-                        {isSelected ? t("selected") : t("useForOperations")}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setName(`${event.name} ${t("copySuffix")}`.trim());
-                          setCapacity(event.capacity?.toString() ?? "");
-                          setTargetGuests(event.targetGuests?.toString() ?? "");
-                          setTemplateSourceEventId(event.id);
-                        }}
-                        disabled={Boolean(busyId)}
-                        className="min-h-11 border border-border-default bg-surface-raised px-3 py-2 text-xs font-semibold text-text-body"
-                      >
-                        {t("useTemplate")}
-                      </button>
-                      {nextStates.map((state) => (
-                        <button
-                          key={state}
-                          type="button"
-                          onClick={(clickEvent) => {
-                            if (state === "closed" || state === "archived") {
-                              transitionTriggerRef.current = clickEvent.currentTarget;
-                              setPendingTransition({
-                                scope,
-                                eventId: event.id,
-                                fromState: event.state,
-                                nextState: state,
-                              });
-                            } else {
-                              void transition(event, state);
-                            }
-                          }}
-                          aria-expanded={state === "closed" || state === "archived"
-                            ? eventTransition?.nextState === state
-                            : undefined}
-                          disabled={Boolean(busyId)}
-                          className="min-h-11 border border-border-default bg-surface-raised px-3 py-2 text-xs font-semibold text-text-body disabled:opacity-50"
-                        >
-                          {t(`transition.${state}`)}
-                        </button>
-                      ))}
-                    </div>
-                    {eventTransition && (
-                      <div
-                        role="group"
-                        aria-label={t(`transition.${eventTransition.nextState}`)}
-                        className="mt-3 border-t border-border-default pt-3"
-                        onKeyDown={(keyEvent) => {
-                          if (keyEvent.key === "Escape") {
-                            keyEvent.preventDefault();
-                            keyEvent.stopPropagation();
-                            cancelTransition();
-                          }
-                        }}
-                      >
-                        <p className="text-sm text-text-muted">
-                          {t(`transitionConfirm.${eventTransition.nextState}`)}
-                        </p>
-                        <div className="mt-2 flex flex-wrap gap-2">
-                          <button
-                            ref={cancelTransitionRef}
-                            type="button"
-                            onClick={cancelTransition}
-                            disabled={Boolean(busyId)}
-                            className="min-h-11 border border-border-default px-3 py-2 text-xs font-semibold text-text-body"
-                          >
-                            {t("cancel")}
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => void transition(event, eventTransition.nextState)}
-                            disabled={Boolean(busyId)}
-                            className="min-h-11 border border-status-danger px-3 py-2 text-xs font-semibold text-status-danger disabled:opacity-50"
-                          >
-                            {t(`transition.${eventTransition.nextState}`)}
-                          </button>
-                        </div>
-                      </div>
-                    )}
-                  </article>
-                );
-              })}
-            </div>
-          )}
-        </div>
-      </section>
-
-      {selectedEventId && <EventCloseout eventId={selectedEventId} />}
+      </Sheet>
+      {detailEvent && <Sheet title={detailEvent.name} presentation="detail" size="record" onClose={() => { setDetailId(null); setPendingTransition(null); }} busy={Boolean(busyId)}>
+        {renderDetails(detailEvent)}
+      </Sheet>}
     </div>
   );
 }

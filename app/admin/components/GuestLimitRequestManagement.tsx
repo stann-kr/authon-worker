@@ -1,7 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import Alert from "@/components/Alert";
+import DatePicker from "@/components/DatePicker";
+import DisclosureSection from "@/components/DisclosureSection";
 import EmptyState from "@/components/EmptyState";
 import PanelHeader from "@/components/PanelHeader";
 import RoleLabel from "@/components/RoleLabel";
@@ -12,7 +14,7 @@ import {
   fetchGuestLimitRequests,
 } from "@/lib/api/guest-limits";
 import type { GuestLimitRequestView } from "@/lib/guest-limits/types";
-import { useLatestRequestGuard } from "@/lib/hooks";
+import { useGuestPolling, useLatestRequestGuard } from "@/lib/hooks";
 import { useTranslations } from "next-intl";
 import {
   deriveAsyncListState,
@@ -23,10 +25,16 @@ const EMPTY_REQUESTS: GuestLimitRequestView[] = [];
 
 export default function GuestLimitRequestManagement({
   eventId,
+  selectedDate,
+  onDateChange,
   businessDate,
+  scopeSelector,
 }: {
   eventId: string | null;
+  selectedDate: string;
+  onDateChange: (date: string) => void;
   businessDate: string;
+  scopeSelector?: (controls: ReactNode, disabled?: boolean) => ReactNode;
 }) {
   const t = useTranslations("GuestLimitAdmin");
   const {
@@ -37,80 +45,89 @@ export default function GuestLimitRequestManagement({
     isSuperAdmin,
   } = useVenueSelector();
   const [requests, setRequests] = useState<GuestLimitRequestView[]>([]);
-  const [approvedAmounts, setApprovedAmounts] = useState<Record<string, number>>({});
+  const [approvedAmounts, setApprovedAmounts] = useState<Record<string, string>>({});
   const [busyId, setBusyId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [loadOutcome, setLoadOutcome] = useState<
     "idle" | "success" | "error"
   >("idle");
   const [loadError, setLoadError] = useState("");
-  const [loadedVenueId, setLoadedVenueId] = useState("");
+  const scope = useMemo(() => ({ venueId, eventId, selectedDate }), [venueId, eventId, selectedDate]);
+  const [loadedScope, setLoadedScope] = useState<typeof scope | null>(null);
   const [feedback, setFeedback] = useState<{
     type: "success" | "error";
     message: string;
   } | null>(null);
   const requestGuard = useLatestRequestGuard();
-  const currentVenueIdRef = useRef(venueId);
+  const currentScopeRef = useRef(scope);
+  const activeDecisionRef = useRef<symbol | null>(null);
 
-  useEffect(() => {
-    currentVenueIdRef.current = venueId;
+  useLayoutEffect(() => {
+    currentScopeRef.current = scope;
     setLoadOutcome("idle");
-  }, [venueId]);
+    setFeedback(null);
+  }, [scope]);
+  useEffect(() => () => { activeDecisionRef.current = null; }, []);
 
-  const scopedRequests = loadedVenueId === venueId ? requests : EMPTY_REQUESTS;
-  const isCurrentVenueLoading = isLoading || loadedVenueId !== venueId;
+  const scopedRequests = loadedScope === scope ? requests : EMPTY_REQUESTS;
+  const isCurrentScopeLoading = isLoading || loadedScope !== scope;
 
-  const loadRequests = useCallback(async () => {
-    const requestedVenueId = venueId;
-    if (currentVenueIdRef.current !== requestedVenueId) return;
+  const loadRequests = useCallback(async (options?: { silent?: boolean }) => {
+    if (currentScopeRef.current !== scope) return;
     const isLatestRequest = requestGuard.beginRequest();
     if (!venueId) {
       setRequests([]);
-      setLoadedVenueId("");
+      setLoadedScope(scope);
       setLoadOutcome("success");
       setLoadError("");
       setIsLoading(false);
       return;
     }
-    setIsLoading(true);
+    if (!options?.silent) setIsLoading(true);
     setLoadError("");
     try {
       const { data, error } = await fetchGuestLimitRequests(
         venueId,
         eventId,
-        businessDate,
+        selectedDate,
       );
-      if (!isLatestRequest() || currentVenueIdRef.current !== requestedVenueId) return;
+      if (!isLatestRequest() || currentScopeRef.current !== scope) return;
       if (error) {
         setLoadError(t("loadFailed"));
-        setRequests([]);
-        setApprovedAmounts({});
+        if (!options?.silent) {
+          setRequests([]);
+          setApprovedAmounts({});
+        }
         setLoadOutcome("error");
       } else {
         const nextRequests = data ?? [];
         setRequests(nextRequests);
-        setApprovedAmounts(
-          Object.fromEntries(nextRequests.map((request) => [request.id, request.requestedExtra])),
-        );
+        setApprovedAmounts(current => Object.fromEntries(nextRequests.map((request) => [
+          request.id, current[request.id] ?? String(request.requestedExtra),
+        ])));
         setLoadOutcome("success");
       }
     } catch {
-      if (!isLatestRequest() || currentVenueIdRef.current !== requestedVenueId) return;
+      if (!isLatestRequest() || currentScopeRef.current !== scope) return;
       setLoadError(t("loadFailed"));
-      setRequests([]);
-      setApprovedAmounts({});
+      if (!options?.silent) {
+        setRequests([]);
+        setApprovedAmounts({});
+      }
       setLoadOutcome("error");
     } finally {
-      if (isLatestRequest() && currentVenueIdRef.current === requestedVenueId) {
-        setLoadedVenueId(requestedVenueId);
+      if (isLatestRequest() && currentScopeRef.current === scope) {
+        setLoadedScope(scope);
         setIsLoading(false);
       }
     }
-  }, [businessDate, eventId, requestGuard, t, venueId]);
+  }, [selectedDate, eventId, requestGuard, t, venueId, scope]);
 
   useEffect(() => {
     loadRequests();
   }, [loadRequests]);
+  const pollRequests = useCallback(() => loadRequests({ silent: true }), [loadRequests]);
+  useGuestPolling(pollRequests, 15000, Boolean(venueId) && !isCurrentScopeLoading && busyId === null);
 
   const pending = useMemo(
     () => scopedRequests.filter((request) => request.status === "pending"),
@@ -122,7 +139,7 @@ export default function GuestLimitRequestManagement({
   );
   const listState = deriveAsyncListState({
     hasStarted: isLoading || loadOutcome !== "idle",
-    isLoading: isCurrentVenueLoading,
+    isLoading: isCurrentScopeLoading,
     itemCount: pending.length,
     hasError: loadOutcome === "error",
   });
@@ -131,45 +148,64 @@ export default function GuestLimitRequestManagement({
     request: GuestLimitRequestView,
     decision: "approve" | "reject",
   ) => {
+    if (activeDecisionRef.current || isCurrentScopeLoading || !pending.includes(request)) return;
+    const approvedExtra = Number(approvedAmounts[request.id]);
+    if (decision === "approve" && (!Number.isInteger(approvedExtra) || approvedExtra < 1 || approvedExtra > request.requestedExtra)) return;
+    const operation = Symbol();
+    activeDecisionRef.current = operation;
+    requestGuard.invalidateRequests();
     setBusyId(request.id);
     setFeedback(null);
-    const { error } = await decideGuestLimitRequest({
-      requestId: request.id,
-      decision,
-      approvedExtra:
-        decision === "approve" ? approvedAmounts[request.id] : undefined,
-    });
-    if (error) {
-      setFeedback({ type: "error", message: t("decisionFailed") });
-    } else {
-      setFeedback({
-        type: "success",
-        message: decision === "approve" ? t("approved") : t("rejected"),
+    try {
+      const { error } = await decideGuestLimitRequest({
+        requestId: request.id,
+        decision,
+        approvedExtra: decision === "approve" ? approvedExtra : undefined,
       });
-      await loadRequests();
+      if (activeDecisionRef.current !== operation || currentScopeRef.current !== scope) return;
+      if (error) {
+        setFeedback({ type: "error", message: t("decisionFailed") });
+      } else {
+        setFeedback({
+          type: "success",
+          message: decision === "approve" ? t("approved") : t("rejected"),
+        });
+        await loadRequests();
+      }
+    } catch {
+      if (activeDecisionRef.current === operation && currentScopeRef.current === scope) {
+        setFeedback({ type: "error", message: t("decisionFailed") });
+      }
+    } finally {
+      if (activeDecisionRef.current === operation) {
+        activeDecisionRef.current = null;
+        setBusyId(null);
+      }
     }
-    setBusyId(null);
   };
+
+  const isDeciding = busyId !== null;
+  const scopeControls = <>
+    <DatePicker compact value={selectedDate} onChange={onDateChange}
+      businessDate={businessDate} disabled={isDeciding} />
+    {isSuperAdmin && venues.length > 0 && <VenueSelector
+      venues={venues} selectedVenueId={selectedVenueId}
+      onVenueChange={setSelectedVenueId} disabled={isDeciding} className="scope-venue" />}
+  </>;
 
   return (
     <div className="space-y-4">
-      {isSuperAdmin && venues.length > 0 && (
-        <VenueSelector
-          venues={venues}
-          selectedVenueId={selectedVenueId}
-          onVenueChange={setSelectedVenueId}
-          className="app-panel p-4 sm:p-5"
-        />
-      )}
-      <section className="app-panel" aria-labelledby="guest-limit-requests-title">
+      {scopeSelector ? scopeSelector(scopeControls, isDeciding) : <div className="operations-scope">{scopeControls}</div>}
+      <section className="record-collection" aria-labelledby="guest-limit-requests-title">
         <PanelHeader
           title={t("title")}
           headingId="guest-limit-requests-title"
           count={pending.length}
           onRefresh={loadRequests}
-          isLoading={isCurrentVenueLoading}
+          isLoading={isCurrentScopeLoading || isDeciding}
         />
-        <div className="space-y-4 p-4 sm:p-5">
+        <div className="record-collection-body space-y-4">
+          <p className="app-helper">{t("pendingScopeHint")}</p>
           {loadError && <Alert type="error" message={loadError} />}
           {feedback && <Alert type={feedback.type} message={feedback.message} />}
           {!venueId ? (
@@ -181,14 +217,14 @@ export default function GuestLimitRequestManagement({
           ) : shouldShowEmptyState(listState) ? (
             <EmptyState icon="user" message={t("noPending")} />
           ) : (
-            <div className="grid gap-3 lg:grid-cols-2">
+            <div className="record-list">
               {pending.map((request) => (
-                <article key={request.id} className="border border-border-default bg-canvas p-4">
+                <article key={request.id} className="record-review-row" aria-busy={busyId === request.id}>
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     <h3 className="type-row-title break-words">{request.userName}</h3>
                     <p className="mt-1 text-xs text-text-muted">
-                      <RoleLabel role={request.userRole} /> · {request.date}
+                      <RoleLabel role={request.userRole} /> · {request.date}{request.eventName ? ` · ${request.eventName}` : ""}
                     </p>
                   </div>
                   <span className="shrink-0 font-mono text-lg text-text-heading">
@@ -198,7 +234,7 @@ export default function GuestLimitRequestManagement({
                 <p className="mt-3 min-h-5 break-words text-sm text-text-body">
                   {request.reason || t("noReason")}
                 </p>
-                <div className="mt-4 grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto_auto]">
+                <div className="mt-4 grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto_auto]">
                   <div>
                     <label htmlFor={`approved-extra-${request.id}`} className="sr-only">
                       {t("approvedCount")}
@@ -209,26 +245,26 @@ export default function GuestLimitRequestManagement({
                       type="number"
                       min="1"
                       max={request.requestedExtra}
-                      value={approvedAmounts[request.id] ?? request.requestedExtra}
+                      value={approvedAmounts[request.id] ?? String(request.requestedExtra)}
                       onChange={(event) =>
                         setApprovedAmounts((current) => ({
                           ...current,
-                          [request.id]: Number.parseInt(event.target.value, 10),
+                          [request.id]: event.target.value,
                         }))
                       }
                       className="app-field"
                       autoComplete="off"
-                      disabled={busyId === request.id}
+                      disabled={isDeciding || isCurrentScopeLoading}
                     />
                   </div>
                   <button
                     type="button"
                     onClick={() => handleDecision(request, "approve")}
                     disabled={
-                      busyId === request.id ||
-                      !Number.isInteger(approvedAmounts[request.id]) ||
-                      approvedAmounts[request.id] < 1 ||
-                      approvedAmounts[request.id] > request.requestedExtra
+                      isDeciding || isCurrentScopeLoading ||
+                      !Number.isInteger(Number(approvedAmounts[request.id])) ||
+                      Number(approvedAmounts[request.id]) < 1 ||
+                      Number(approvedAmounts[request.id]) > request.requestedExtra
                     }
                     className="min-h-11 bg-action-primary px-4 py-2 text-xs font-semibold text-action-text disabled:opacity-50"
                   >
@@ -237,7 +273,7 @@ export default function GuestLimitRequestManagement({
                   <button
                     type="button"
                     onClick={() => handleDecision(request, "reject")}
-                    disabled={busyId === request.id}
+                    disabled={isDeciding || isCurrentScopeLoading}
                     className="min-h-11 border border-status-danger/70 bg-status-danger/10 px-4 py-2 text-xs font-semibold text-status-danger disabled:opacity-50"
                   >
                     {t("reject")}
@@ -249,11 +285,8 @@ export default function GuestLimitRequestManagement({
           )}
 
           {decided.length > 0 && (
-            <details className="border-t border-border-default pt-4">
-            <summary className="flex min-h-11 cursor-pointer items-center text-sm font-medium text-text-heading">
-              {t("history", { count: decided.length })}
-            </summary>
-            <div className="mt-3 divide-y divide-border-subtle border border-border-default bg-canvas">
+            <DisclosureSection title={t("history", { count: decided.length })}>
+            <div className="divide-y divide-border-subtle border border-border-default bg-canvas">
               {decided.slice(0, 20).map((request) => (
                 <div key={request.id} className="flex items-start justify-between gap-3 p-3 text-xs">
                   <span className="min-w-0 break-words text-text-body">
@@ -267,7 +300,7 @@ export default function GuestLimitRequestManagement({
                 </div>
               ))}
             </div>
-            </details>
+            </DisclosureSection>
           )}
         </div>
       </section>

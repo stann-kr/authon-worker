@@ -203,7 +203,7 @@ export default function VenueSelector({
   const selectId = useId();
 
   return (
-    <div className={`min-w-0 ${className}`}>
+    <div className={`venue-selector min-w-0 ${className}`}>
       <label htmlFor={selectId} className="type-context-title">
         {t("venue")}
       </label>

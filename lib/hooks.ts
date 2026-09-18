@@ -25,15 +25,18 @@ export function useLatestRef<T>(value: T) {
  * SSR 환경에서도 안전하게 동작합니다.
  */
 export function useLocalStorage<T>(key: string, initialValue: T) {
-  const [storedValue, setStoredValue] = useState<T>(() => {
-    if (typeof window === "undefined") return initialValue;
+  const initialValueRef = useLatestRef(initialValue);
+  const [storedValue, setStoredValue] = useState<T>(() => initialValue);
+
+  // Match the server on the first render, then restore browser preferences.
+  useEffect(() => {
     try {
       const item = window.localStorage.getItem(key);
-      return item ? (JSON.parse(item) as T) : initialValue;
+      setStoredValue(item !== null ? (JSON.parse(item) as T) : initialValueRef.current);
     } catch {
-      return initialValue;
+      setStoredValue(initialValueRef.current);
     }
-  });
+  }, [key, initialValueRef]);
 
   const setValue = useCallback(
     (value: T | ((prev: T) => T)) => {

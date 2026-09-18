@@ -21,7 +21,7 @@ export default function EmptyState({
   action,
 }: EmptyStateProps) {
   return (
-    <div className="px-6 py-12 text-center" role="status">
+    <div className="px-5 py-8 text-center" role="status">
       <div className="mx-auto mb-4 flex h-10 w-10 items-center justify-center text-text-muted">
         <Icon name={icon} size={22} />
       </div>

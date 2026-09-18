@@ -10,6 +10,7 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import Button from "./Button";
+import { lockModalBackground } from "./overlays/modal-lock";
 
 interface ConfirmDialogProps {
   open: boolean;
@@ -108,14 +109,9 @@ export default function ConfirmDialog({
     if (!open) return;
 
     previousFocusRef.current = document.activeElement as HTMLElement | null;
-    const previousOverflow = document.body.style.overflow;
     const mainContent = document.getElementById("main-content");
     const dialogElement = dialogRef.current;
-    const mainContentWasInert = mainContent?.hasAttribute("inert") ?? false;
-    document.body.style.overflow = "hidden";
-    if (mainContent && !mainContentWasInert) {
-      mainContent.setAttribute("inert", "");
-    }
+    const unlock = lockModalBackground(mainContent);
     cancelRef.current?.focus();
 
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -155,10 +151,7 @@ export default function ConfirmDialog({
     document.addEventListener("keydown", handleKeyDown);
     return () => {
       document.removeEventListener("keydown", handleKeyDown);
-      document.body.style.overflow = previousOverflow;
-      if (mainContent && !mainContentWasInert) {
-        mainContent.removeAttribute("inert");
-      }
+      unlock();
       const activeElement = document.activeElement as HTMLElement | null;
       const focusWasLostWithDialog =
         !activeElement ||
@@ -189,7 +182,7 @@ export default function ConfirmDialog({
 
   return createPortal(
     <div
-      className="app-dialog-backdrop fixed inset-0 z-[var(--app-z-dialog)] flex items-center justify-center bg-canvas/80 p-4"
+      className="app-dialog-backdrop fixed inset-0 z-[var(--app-z-dialog)] flex items-center justify-center bg-black/80 p-4"
       data-state={isClosing ? "closing" : "open"}
     >
       <div
@@ -200,7 +193,7 @@ export default function ConfirmDialog({
         aria-labelledby={titleId}
         aria-describedby={description ? descriptionId : undefined}
         tabIndex={-1}
-        className="app-dialog-panel max-h-[calc(100dvh-2rem)] w-full max-w-md overscroll-contain overflow-y-auto border border-border-strong bg-canvas p-5 sm:p-6"
+        className="app-dialog-panel rounded-[20px] max-h-[calc(100dvh-2rem)] w-full max-w-md overscroll-contain overflow-y-auto border border-border-strong bg-canvas p-5 sm:p-6"
       >
         <h2 id={titleId} className="type-panel-title">
           {title}
@@ -211,7 +204,7 @@ export default function ConfirmDialog({
           </p>
         )}
         {children && <div className="mt-4">{children}</div>}
-        <div className="mt-6 grid grid-cols-1 gap-2 sm:grid-cols-2">
+        <div className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-2">
           <Button
             ref={cancelRef}
             type="button"

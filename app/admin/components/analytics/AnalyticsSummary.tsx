@@ -62,7 +62,7 @@ export default function AnalyticsSummary({ summary }: AnalyticsSummaryProps) {
               <dt className="text-xs font-medium text-text-muted">
                 {t(`summary.${id}`)}
               </dt>
-              <dd className="mt-2 font-mono text-2xl font-semibold tabular-nums text-text-heading">
+              <dd className="mt-2 font-mono text-xl font-medium tabular-nums text-text-heading">
                 {hasValue ? `${numberFormat.format(metric.value ?? 0)}${suffix}` : "—"}
               </dd>
               <p className="mt-2 min-h-5 text-xs leading-relaxed text-text-muted">

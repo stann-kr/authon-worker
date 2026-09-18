@@ -1,5 +1,7 @@
 "use client";
 
+import WorkspaceAction from "@/components/workspace/WorkspaceAction";
+
 import {
   useCallback,
   useEffect,
@@ -7,17 +9,18 @@ import {
   useMemo,
   useRef,
   useState,
+  type ReactNode,
 } from "react";
 import dynamic from "next/dynamic";
-import GuestList from "./components/GuestList";
+import { useRouter } from "next/navigation";
+import { isBusinessDate } from "@/lib/events/domain";
 import type { LinkManagementSection } from "./components/LinkManagement";
 import type { UserManagementSection } from "./components/UserManagement";
 import type { VenueManagementSection } from "./components/VenueManagement";
 import Skeleton from "@/components/Skeleton";
 import EventScopeSelector from "@/components/EventScopeSelector";
-import AdminTaskSwitcher, {
-  type AdminTaskOption,
-} from "./components/AdminTaskSwitcher";
+import OperationsScope from "@/components/operations/OperationsScope";
+import type { AdminTaskOption } from "./components/AdminTaskSwitcher";
 import AuthGuard from "../../components/AuthGuard";
 import WorkspaceShell from "../../components/WorkspaceShell";
 import VenueLoadNotice from "../../components/VenueLoadNotice";
@@ -29,7 +32,6 @@ import {
   useRouteLoadingTask,
   useRouteTransition,
 } from "../../components/RouteTransitionProvider";
-import { type AdminTaskGroup } from "../../lib/admin-navigation";
 import { fetchPendingPasswordResetRequestCount } from "@/lib/api/password-reset-requests";
 import useAdminWorkspaceNavigation, {
   focusAdminWorkspaceAfterTaskChange,
@@ -70,6 +72,7 @@ export default function AdminPage() {
 }
 
 function AdminPageContent() {
+  const router = useRouter();
   const t = useTranslations("AdminNav");
   const linkT = useTranslations("LinkAdmin");
   const userT = useTranslations("UserAdmin");
@@ -103,6 +106,20 @@ function AdminPageContent() {
     isSuperAdmin,
     venueId,
   });
+  useEffect(() => {
+    if (!isRoleReady || activeTask !== "guest-list" || !currentVenue) return;
+    const requested = new URLSearchParams(window.location.search);
+    const requestedDate = requested.get("date");
+    const hasRequestedScope = requested.get("venue") === venueId && isBusinessDate(requestedDate);
+    const target = new URLSearchParams({
+      venue: venueId,
+      date: hasRequestedScope ? requestedDate! : selectedDate,
+    });
+    const eventId = hasRequestedScope ? requested.get("eventId") : selectedEventId;
+    if (eventId) target.set("eventId", eventId);
+    router.replace(`/door?${target}`);
+  }, [activeTask, currentVenue, isRoleReady, router, selectedDate, selectedEventId, venueId]);
+
   const [pendingPasswordResetCount, setPendingPasswordResetCount] = useState(0);
   const workspaceRef = useRef<HTMLElement>(null);
   useRouteLoadingTask(!isRoleReady);
@@ -113,7 +130,7 @@ function AdminPageContent() {
   }, [workspaceFocusRequestId]);
 
   useEffect(() => {
-    if (!isRoleReady) return;
+    if (!isRoleReady || activeTask === "guest-list") return;
     let cancelled = false;
     const loadPendingPasswordResetCount = async () => {
       const { data, error } = await fetchPendingPasswordResetRequestCount();
@@ -128,12 +145,11 @@ function AdminPageContent() {
     return () => {
       cancelled = true;
     };
-  }, [isRoleReady]);
+  }, [activeTask, isRoleReady]);
 
   const taskOptions = useMemo<AdminTaskOption[]>(
     () =>
       [
-        { id: "guest-list", group: "guests", label: t("guestList") },
         { id: "guest-requests", group: "guests", label: t("requests") },
         { id: "event-manage", group: "events", label: t("eventManagement") },
         { id: "link-create", group: "links", label: linkT("createLink") },
@@ -166,15 +182,6 @@ function AdminPageContent() {
   );
 
 
-  const groupLabels: Record<AdminTaskGroup, string> = {
-    guests: t("guests"),
-    events: t("events"),
-    links: t("links"),
-    users: t("users"),
-    analytics: t("analytics"),
-    venues: t("venues"),
-  };
-
   const handleLinkSectionChange = useCallback(
     (section: LinkManagementSection) =>
       changeTask(section === "create" ? "link-create" : "link-manage"),
@@ -192,9 +199,25 @@ function AdminPageContent() {
   );
   const activeTaskLabel =
     taskOptions.find((option) => option.id === activeTask)?.label ?? t("title");
+  const activeGroup = taskOptions.find((option) => option.id === activeTask)?.group;
+  const contextTasks = ["links", "users", "venues"].includes(activeGroup ?? "")
+    ? taskOptions.filter((option) => option.group === activeGroup && option.id !== "password-requests")
+    : [];
+
+  const eventScopeSelector = (controls: ReactNode, disabled = false) => <EventScopeSelector venueId={venueId} businessDate={selectedDate}
+    value={selectedEventId} onChange={setSelectedEventId} reloadKey={eventRefreshKey} disabled={disabled}
+    renderScope={(selector, label) => <OperationsScope venueName={currentVenue?.brandName || currentVenue?.name}
+      date={selectedDate} label={label} disabled={disabled}>{controls}{selector}</OperationsScope>} />;
 
   return (
-    <WorkspaceShell contentClassName="gap-4 pb-8">
+    <WorkspaceShell contentClassName="gap-4 pb-8" title={activeTaskLabel}
+      adminNavigation={{ activeTask, onTaskChange: changeTask,
+        disabled: !isRoleReady, pendingPasswordResetCount }}
+      actions={contextTasks.length > 0 && activeTask !== "password-requests" ? contextTasks.map((task) => (
+        <WorkspaceAction key={task.id} icon={task.id.endsWith("create") ? "add" : "view"} tone={task.id.endsWith("create") ? "accent" : "muted"}
+          aria-pressed={activeTask === task.id} disabled={!isRoleReady || isRouteTransitionActive}
+          onClick={() => changeTask(task.id)}>{task.label}</WorkspaceAction>
+      )) : undefined}>
       <h1 id="admin-page-title" className="sr-only">
         {t("title")}
       </h1>
@@ -206,70 +229,36 @@ function AdminPageContent() {
       >
         {t("activeTaskAnnouncement", { task: activeTaskLabel })}
       </p>
-      {venueLoadError && (
+      {venueLoadError && activeTask !== "venue-list" && (
         <VenueLoadNotice
           onRetry={refreshVenues}
           isLoading={isLoadingVenues}
         />
       )}
 
-      <div className="grid min-h-0 gap-4 lg:grid-cols-[14rem_minmax(0,1fr)] lg:items-start lg:gap-6">
-        <aside className="lg:sticky lg:top-[calc(var(--app-header-height)+2rem)] lg:self-start">
-          <AdminTaskSwitcher
-            label={t("sections")}
-            groupLabels={groupLabels}
-            options={taskOptions}
-            value={activeTask}
-            onChange={changeTask}
-            disabled={!isRoleReady || isRouteTransitionActive}
-          />
-        </aside>
-
         <section
           ref={workspaceRef}
           id="admin-workspace"
           aria-labelledby="admin-active-task-title"
           tabIndex={-1}
-          className="min-h-0 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-border-focus"
+          className="min-h-0 outline-none"
         >
         <h2 id="admin-active-task-title" className="sr-only">
           {activeTaskLabel}
         </h2>
-        {!isRoleReady && <AdminTaskLoading />}
+        {(!isRoleReady || activeTask === "guest-list") && <AdminTaskLoading />}
         {isRoleReady && <>
-        {[
-          "guest-list",
-          "guest-requests",
-          "event-manage",
-          "link-create",
-          "link-manage",
-        ].includes(activeTask) && (
-          <div className="context-bar mb-4">
-            <EventScopeSelector
-              venueId={venueId}
-              businessDate={selectedDate}
-              value={selectedEventId}
-              onChange={setSelectedEventId}
-              reloadKey={eventRefreshKey}
-            />
-          </div>
-        )}
-        {activeTask === "guest-list" && (
-          <GuestList
+        {activeTask === "guest-requests" && (
+          <GuestLimitRequestManagement
+            scopeSelector={eventScopeSelector}
+            eventId={selectedEventId}
             selectedDate={selectedDate}
             onDateChange={setSelectedDate}
             businessDate={businessDate}
-            eventId={selectedEventId}
-          />
-        )}
-        {activeTask === "guest-requests" && (
-          <GuestLimitRequestManagement
-            eventId={selectedEventId}
-            businessDate={selectedDate}
           />
         )}
         {activeTask === "event-manage" && (
-          <EventManagement
+          <EventManagement scopeSelector={eventScopeSelector}
             selectedDate={selectedDate}
             onDateChange={setSelectedDate}
             businessDate={businessDate}
@@ -279,7 +268,7 @@ function AdminPageContent() {
           />
         )}
         {(activeTask === "link-create" || activeTask === "link-manage") && (
-          <LinkManagement
+          <LinkManagement scopeSelector={eventScopeSelector}
             selectedDate={selectedDate}
             onDateChange={setSelectedDate}
             businessDate={businessDate}
@@ -317,7 +306,6 @@ function AdminPageContent() {
         )}
         </>}
         </section>
-      </div>
     </WorkspaceShell>
   );
 }

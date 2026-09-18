@@ -132,7 +132,7 @@ export default function AnalyticsContributors({
           </thead>
           <tbody>
             {sortedRows.map((row) => (
-              <tr key={row.contributorId ?? `${row.source?.kind}:${row.source?.id}`} className="border-t border-border-subtle">
+              <tr key={row.contributorId ?? `${row.source?.kind}:${row.source?.id}`} className="border-t border-border-subtle even:bg-[var(--app-row-stripe)]">
                 <th scope="row" className="px-4 py-3 text-sm font-medium text-text-heading">{contributorLabel(row)}</th>
                 <td className="px-4 py-3 text-right font-mono tabular-nums">{numberFormat.format(row.registered)}</td>
                 <td className="px-4 py-3 text-right font-mono tabular-nums">{numberFormat.format(row.checkedIn)}</td>

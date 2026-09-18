@@ -18,6 +18,7 @@ import {
 } from "@/lib/route-loading";
 import { announceRouteTransitionStart } from "@/lib/route-transition-events";
 import Spinner from "./Spinner";
+import { lockInertSurface } from "./overlays/modal-lock";
 import { beginBrowserLoading, observeBrowserPerformance } from "@/lib/observability/browser-performance";
 
 type TransitionPhase = "idle" | "visible" | "leaving";
@@ -50,6 +51,8 @@ export function RouteTransitionProvider({ children }: { children: ReactNode }) {
   const completionTimerRef = useRef<number | null>(null);
   const exitTimerRef = useRef<number | null>(null);
   const safetyTimerRef = useRef<number | null>(null);
+  const routeRequestIdRef = useRef(0);
+  const contentRef = useRef<HTMLDivElement>(null);
   const overlayRef = useRef<HTMLDivElement>(null);
   const shouldRestoreFocusRef = useRef(false);
   const requestedFocusRef = useRef<{
@@ -61,7 +64,7 @@ export function RouteTransitionProvider({ children }: { children: ReactNode }) {
   const focusFrameRequestIdRef = useRef<number | null>(null);
   const focusFrameIsRouteRestoreRef = useRef(false);
   const [phase, setPhase] = useState<TransitionPhase>("idle");
-  const [loadingTracker] = useState(createRouteLoadingTracker);
+  const [loadingTracker] = useState(() => createRouteLoadingTracker(pathname));
 
   const updatePhase = useCallback((nextPhase: TransitionPhase) => {
     phaseRef.current = nextPhase;
@@ -105,8 +108,8 @@ export function RouteTransitionProvider({ children }: { children: ReactNode }) {
         return;
       }
     }
-    const mainContent = document.getElementById("main-content");
-    if (!mainContent) return;
+    const mainContent = contentRef.current?.querySelector<HTMLElement>("#main-content");
+    if (!mainContent || mainContent.closest("[inert]")) return;
     mainContent.dataset.routeFocus = "true";
     mainContent.addEventListener(
       "blur",
@@ -128,6 +131,12 @@ export function RouteTransitionProvider({ children }: { children: ReactNode }) {
       focusFrameRequestIdRef.current = null;
       focusFrameIsRouteRestoreRef.current = false;
       if (phaseRef.current !== "idle") return;
+      const active = document.activeElement;
+      if (isRouteRestore && active instanceof HTMLElement && active !== document.body &&
+        active.isConnected && active !== overlayRef.current && !active.closest("[inert]")) {
+        requestedFocusRef.current = null;
+        return;
+      }
       focusRequestedOrMain(requested);
     });
   }, [clearFocusFrame, focusRequestedOrMain]);
@@ -135,6 +144,7 @@ export function RouteTransitionProvider({ children }: { children: ReactNode }) {
   const requestFocusRestore = useCallback((targetRef: {
     current: HTMLElement | null;
   }) => {
+    if (!loadingTracker.isCurrentRoute(pathname)) return () => {};
     requestedFocusRef.current = {
       id: ++focusRequestIdRef.current,
       targetRef,
@@ -154,7 +164,7 @@ export function RouteTransitionProvider({ children }: { children: ReactNode }) {
         !focusFrameIsRouteRestoreRef.current
       ) clearFocusFrame();
     };
-  }, [clearFocusFrame, scheduleFocusRestore]);
+  }, [clearFocusFrame, loadingTracker, pathname, scheduleFocusRestore]);
 
   const finishTransition = useCallback(() => {
     updatePhase("leaving");
@@ -215,36 +225,33 @@ export function RouteTransitionProvider({ children }: { children: ReactNode }) {
   }, [loadingTracker, scheduleCompletion, showLoading]);
 
   const registerRouteLoadingTask = useCallback(() => {
-    const releaseTask = loadingTracker.beginTask();
+    const releaseTask = loadingTracker.beginTask(pathname);
     reconcileLoading();
 
     return () => {
       releaseTask();
       reconcileLoading();
     };
-  }, [loadingTracker, reconcileLoading]);
+  }, [loadingTracker, pathname, reconcileLoading]);
 
   const startRouteTransition = useCallback(
     (href?: string) => {
-      if (phaseRef.current !== "idle") {
-        return false;
-      }
+      const target = href ? new URL(href, window.location.href) : null;
+      if (target && target.origin !== window.location.origin) return true;
+      const isCurrentPath = target?.pathname === previousPathnameRef.current;
+      if (isCurrentPath && phaseRef.current === "idle") return true;
 
-      if (href) {
-        const target = new URL(href, window.location.href);
-        if (
-          target.origin !== window.location.origin ||
-          target.pathname === window.location.pathname
-        ) {
-          return true;
-        }
-      }
-
-      clearTimers();
-      loadingTracker.startRoute();
-      announceRouteTransitionStart();
+      clearTimer(completionTimerRef);
+      clearTimer(safetyTimerRef);
+      clearFocusFrame();
+      requestedFocusRef.current = null;
+      const requestId = ++routeRequestIdRef.current;
+      loadingTracker.startRoute(target?.pathname ?? pathname);
+      if (isCurrentPath) loadingTracker.commitRoute(target.pathname);
       reconcileLoading();
+      if (isCurrentPath) return true;
       safetyTimerRef.current = window.setTimeout(() => {
+        if (requestId !== routeRequestIdRef.current) return;
         safetyTimerRef.current = null;
         didTransitionTimeoutRef.current = true;
         loadingTracker.commitRoute();
@@ -252,17 +259,26 @@ export function RouteTransitionProvider({ children }: { children: ReactNode }) {
       }, TRANSITION_TIMEOUT_MS);
       return true;
     },
-    [clearTimers, loadingTracker, reconcileLoading],
+    [clearFocusFrame, clearTimer, loadingTracker, pathname, reconcileLoading],
   );
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (previousPathnameRef.current === pathname) return;
     previousPathnameRef.current = pathname;
 
+    // Only invalidate outgoing requests once navigation commits. A pending move
+    // can be cancelled by choosing the current page, whose reads must still finish.
+    announceRouteTransitionStart();
+    if (!loadingTracker.commitRoute(pathname)) return;
     clearTimer(safetyTimerRef);
-    loadingTracker.commitRoute();
     reconcileLoading();
   }, [clearTimer, loadingTracker, pathname, reconcileLoading]);
+
+  useEffect(() => {
+    const handlePopState = () => startRouteTransition(window.location.href);
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, [startRouteTransition]);
 
   useEffect(observeBrowserPerformance, []);
 
@@ -279,7 +295,10 @@ export function RouteTransitionProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (phase === "visible") {
       shouldRestoreFocusRef.current = true;
-      overlayRef.current?.focus();
+      const active = document.activeElement;
+      if (!active || active === document.body || active.closest("[inert]")) {
+        overlayRef.current?.focus({ preventScroll: true });
+      }
       return;
     }
 
@@ -289,6 +308,64 @@ export function RouteTransitionProvider({ children }: { children: ReactNode }) {
       scheduleFocusRestore(requested, true);
     }
   }, [phase, scheduleFocusRestore]);
+
+  useLayoutEffect(() => {
+    if (phase === "idle") return;
+    const overlay = overlayRef.current;
+    const content = contentRef.current;
+    if (!overlay || !content) return;
+    let observedHeader: HTMLElement | null = null;
+    const lockedSurfaces = new Map<HTMLElement, () => void>();
+    const updateBounds = () => {
+      // Page actions belong to the loading content; global navigation does not.
+      const surfaces = new Set(content.querySelectorAll<HTMLElement>(
+        "#main-content, .workspace-header-actions, .workspace-context-actions",
+      ));
+      for (const [surface, unlock] of lockedSurfaces) {
+        if (surfaces.has(surface)) continue;
+        unlock();
+        lockedSurfaces.delete(surface);
+      }
+      for (const surface of surfaces) {
+        if (lockedSurfaces.has(surface)) continue;
+        if (surface.contains(document.activeElement)) overlay.focus({ preventScroll: true });
+        const previousBusy = surface.getAttribute("aria-busy");
+        const unlock = lockInertSurface(surface);
+        surface.setAttribute("aria-busy", "true");
+        lockedSurfaces.set(surface, () => {
+          unlock();
+          if (previousBusy === null) surface.removeAttribute("aria-busy");
+          else surface.setAttribute("aria-busy", previousBusy);
+        });
+      }
+      const header = content.querySelector<HTMLElement>(".workspace-header");
+      if (header !== observedHeader) {
+        resizeObserver?.disconnect();
+        if (header) resizeObserver?.observe(header);
+        observedHeader = header;
+      }
+      const bounds = header?.getBoundingClientRect();
+      overlay.style.setProperty("--route-content-left", `${Math.max(0, bounds?.left ?? 0)}px`);
+      overlay.style.setProperty("--route-content-top", `${Math.max(0, bounds?.bottom ?? 0)}px`);
+    };
+    const resizeObserver = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(updateBounds);
+    // The loading shell can be replaced before a saved sidebar preference is restored.
+    const contentObserver = new MutationObserver(updateBounds);
+    contentObserver.observe(content, {
+      childList: true,
+      subtree: true,
+      attributes: true,
+      attributeFilter: ["data-sidebar-collapsed"],
+    });
+    updateBounds();
+    window.addEventListener("resize", updateBounds);
+    return () => {
+      contentObserver.disconnect();
+      resizeObserver?.disconnect();
+      for (const unlock of lockedSurfaces.values()) unlock();
+      window.removeEventListener("resize", updateBounds);
+    };
+  }, [phase, pathname]);
 
   return (
     <RouteTransitionContext.Provider
@@ -300,9 +377,8 @@ export function RouteTransitionProvider({ children }: { children: ReactNode }) {
       }}
     >
       <div
+        ref={contentRef}
         className="contents"
-        inert={phase !== "idle" ? true : undefined}
-        aria-hidden={phase !== "idle" || undefined}
       >
         {children}
       </div>
@@ -321,6 +397,11 @@ export function RouteTransitionProvider({ children }: { children: ReactNode }) {
       )}
     </RouteTransitionContext.Provider>
   );
+}
+
+/** Portal overlays share the route lock, including when rendered outside the inert page. */
+export function useIsRouteTransitionActive() {
+  return useContext(RouteTransitionContext)?.isRouteTransitionActive ?? false;
 }
 
 export function useRouteTransition() {

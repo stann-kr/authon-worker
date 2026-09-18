@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useLocalStorage } from "../../lib/hooks";
-import { getBusinessDate } from "../../lib/date";
 import { isBusinessDate } from "../../lib/events/domain";
 import {
   getAdminShortcutTask,
@@ -17,6 +16,8 @@ type EventScope = {
   businessDate: string;
   venueId: string;
 };
+
+type SavedOperatingDate = { venueId: string; date: string };
 
 type AdminWorkspaceNavigationOptions = {
   businessDate: string;
@@ -80,10 +81,19 @@ export default function useAdminWorkspaceNavigation({
   isSuperAdmin,
   venueId,
 }: AdminWorkspaceNavigationOptions) {
-  const [selectedDate, setSelectedDate] = useLocalStorage(
+  const [savedDate, setSavedDate] = useLocalStorage<SavedOperatingDate | string | null>(
     "admin:selectedDate",
-    getBusinessDate(),
+    null,
   );
+  const selectedDate = isBusinessDate(savedDate)
+    ? savedDate
+    : savedDate && typeof savedDate === "object" &&
+        savedDate.venueId === venueId && isBusinessDate(savedDate.date)
+      ? savedDate.date
+      : businessDate;
+  const setSelectedDate = useCallback((date: string) => {
+    setSavedDate({ venueId, date });
+  }, [setSavedDate, venueId]);
   const [activeTask, setActiveTask] = useState<AdminTask>("guest-list");
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
   const pendingEventScopeRef = useRef<EventScope | null>(null);
@@ -114,13 +124,13 @@ export default function useAdminWorkspaceNavigation({
 
   useEffect(() => {
     if (!hasCurrentVenue) return;
-    const search = new URLSearchParams(window.location.search);
-    const hasCurrentVenueEventScope =
-      parseAdminTask(search) === "event-manage" &&
-      getAdminEventScope(search, venueId) !== null;
-
-    if (!hasCurrentVenueEventScope) setSelectedDate(businessDate);
-  }, [businessDate, hasCurrentVenue, setSelectedDate, venueId]);
+    // Preserve legacy selections and keep future restores within their venue.
+    if (isBusinessDate(savedDate)) {
+      setSavedDate({ venueId, date: savedDate });
+    } else if (savedDate && typeof savedDate === "object" && savedDate.venueId !== venueId) {
+      setSavedDate(null);
+    }
+  }, [hasCurrentVenue, savedDate, setSavedDate, venueId]);
 
   useEffect(() => {
     const pendingScope = pendingEventScopeRef.current;
@@ -150,7 +160,7 @@ export default function useAdminWorkspaceNavigation({
     if (eventScope) applyEventScope(eventScope);
 
     const nextSearch =
-      nextTask === "analytics"
+      (nextTask === "analytics" || nextTask === "guest-list")
         ? window.location.search
         : eventScope
           ? getCanonicalEventSearch(eventScope)

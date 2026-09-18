@@ -5,27 +5,32 @@
 :root {
   color-scheme: dark;
   font-size: 16px;
-  --app-canvas: #0a0b0c;
-  --app-surface: #111315;
-  --app-surface-raised: #181b1e;
-  --app-surface-hover: #202428;
-  --app-surface-active: #292e33;
-  --app-border-subtle: #2a2e32;
-  --app-border: #42484e;
-  --app-border-strong: #626b73;
-  --app-text: #f4f5f5;
-  --app-text-body: #d4d7d9;
-  --app-text-muted: #aab0b5;
-  --app-action: #e7eaec;
-  --app-action-text: #111315;
-  --app-action-hover: #f4f5f5;
-  --app-action-active: #d4d7d9;
-  --app-action-confirm: #d4d7d9;
-  --app-action-confirm-hover: #e1e4e6;
-  --app-action-confirm-active: #c4c9cc;
-  --app-focus: #f4f5f5;
-  --app-status-waiting: #c2a56c;
-  --app-header-height: calc(4rem + env(safe-area-inset-top));
+  --app-canvas: #000000;
+  --app-surface-secondary: #0c0c0c;
+  --app-surface: #141414;
+  --app-surface-raised: #1c1c1c;
+  --app-surface-hover: #242424;
+  --app-surface-active: #2a2a2a;
+  --app-row-stripe: rgb(255 255 255 / 0.035);
+  --app-border-subtle: rgb(255 255 255 / 0.08);
+  --app-border: rgb(255 255 255 / 0.11);
+  --app-border-strong: rgb(255 255 255 / 0.22);
+  --app-text: #ffffff;
+  --app-text-body: #e5e5e7;
+  --app-text-muted: #8e8e93;
+  --app-action-rgb: 255 181 71;
+  --app-action-hover-rgb: 255 198 107;
+  --app-action: rgb(var(--app-action-rgb));
+  --app-action-text: #241906;
+  --app-action-hover: rgb(var(--app-action-hover-rgb));
+  --app-action-active: #e8a236;
+  --app-action-confirm: var(--app-surface-raised);
+  --app-action-confirm-hover: var(--app-surface-active);
+  --app-action-confirm-active: var(--app-surface-hover);
+  --app-focus: #b5b5ba;
+  --app-field-focus: #8e8e93;
+  --app-status-waiting: #d5b479;
+  --app-header-height: calc(4.5rem + env(safe-area-inset-top));
   --app-z-route-overlay: 40;
   --app-z-chrome: 45;
   --app-z-toast: 50;
@@ -38,7 +43,7 @@
   --app-duration-enter: 200ms;
   --app-duration-fast: 140ms;
   --app-duration-standard: 200ms;
-  --app-tap-highlight: rgb(244 245 245 / 0.14);
+  --app-tap-highlight: transparent;
 }
 
 html,
@@ -52,14 +57,15 @@ button,
 input,
 select,
 textarea {
-  font-family: var(--font-geist-sans), "Apple SD Gothic Neo", "Noto Sans KR", "Malgun Gothic", sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, "Apple SD Gothic Neo", sans-serif;
 }
 
 .route-transition-overlay {
   position: fixed;
-  inset: var(--app-header-height) 0 0;
+  inset: var(--route-content-top, 0px) 0 0 var(--route-content-left, 0px);
   z-index: var(--app-z-route-overlay);
   background: var(--app-canvas);
+  outline: none;
   opacity: 1;
   transition: opacity var(--app-duration-fast) var(--app-ease-out);
 }
@@ -77,7 +83,7 @@ button,
 input,
 select,
 textarea {
-  border-radius: 0;
+  border-radius: 10px;
 }
 
 button {
@@ -91,6 +97,10 @@ button {
 
 button:not(:disabled) {
   cursor: pointer;
+}
+
+:where(a, button, input, select, textarea, summary) {
+  -webkit-tap-highlight-color: var(--app-tap-highlight);
 }
 
 button:active:not(:disabled) {
@@ -161,15 +171,15 @@ input[type="date"] {
   }
 
   .main-content-panel {
-    @apply flex min-h-0 flex-col overflow-hidden border border-border-subtle bg-surface;
+    @apply flex min-h-0 flex-col overflow-hidden rounded-panel border border-border-subtle bg-surface;
   }
 
   .app-panel {
-    @apply border border-border-subtle bg-surface;
+    @apply rounded-panel border border-border-subtle bg-surface;
   }
 
   .context-bar {
-    @apply grid gap-3 border border-border-subtle bg-surface px-4 py-2.5 sm:px-5;
+    @apply grid gap-3;
     grid-template-columns: minmax(0, 1fr);
     align-items: end;
   }
@@ -182,11 +192,16 @@ input[type="date"] {
   .operational-date-layout {
     display: grid;
     grid-template-columns: minmax(0, 1fr);
-    gap: 0.5rem;
+    gap: 0.75rem;
   }
 
   .operational-date-quick {
     width: 100%;
+    gap: 8px;
+  }
+
+  .operational-date-quick > button {
+    border: 1px solid var(--app-border);
   }
 
   .context-filter-grid {
@@ -203,6 +218,10 @@ input[type="date"] {
     gap: 1rem;
   }
 
+  .operations-context {
+    @apply grid gap-3;
+  }
+
   .operations-layout {
     @apply grid min-w-0 grid-cols-1 items-start gap-4;
   }
@@ -213,17 +232,38 @@ input[type="date"] {
   }
 
   .app-field {
-    @apply w-full rounded-control border border-border-strong bg-surface-raised px-4 py-3 text-sm text-text-heading outline-none placeholder:text-text-dim disabled:cursor-not-allowed disabled:opacity-50;
+    @apply w-full rounded-control border border-border-default px-3.5 py-2.5 text-base text-text-heading outline-none placeholder:text-text-muted disabled:cursor-not-allowed disabled:opacity-50;
+    min-height: 46px;
+    background: var(--app-surface-secondary);
     transition: border-color var(--app-duration-release) var(--app-ease-out),
       background-color var(--app-duration-release) var(--app-ease-out);
   }
 
+  .app-field:focus,
+  .app-field-frame:focus-within > .app-field { border-color: var(--app-field-focus); }
+
+  select.app-field:not(.appearance-none) {
+    appearance: none;
+    padding-right: 40px;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='m4 6 4 4 4-4' fill='none' stroke='%238e8e93' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+    background-position: right 14px center;
+    background-repeat: no-repeat;
+    background-size: 16px;
+  }
+
+  @media (forced-colors: active) {
+    select.app-field:not(.appearance-none) { appearance: auto; background-image: none; }
+  }
+
+  .app-field[aria-invalid="true"],
+  .app-field-frame:has(> [aria-invalid="true"]) > .app-field { border-color: #fb7185; }
+
   .app-label {
-    @apply mb-2 block text-sm font-medium leading-tight text-text-muted;
+    @apply mb-1.5 block text-xs font-medium leading-normal text-text-muted;
   }
 
   .type-context-title {
-    @apply mb-2 block text-sm font-semibold leading-tight text-text-muted;
+    @apply mb-1.5 block text-xs font-medium leading-normal text-text-muted;
   }
 
   .type-section-title {
@@ -235,7 +275,7 @@ input[type="date"] {
   }
 
   .type-row-title {
-    @apply text-sm font-semibold leading-tight text-text-heading sm:text-base;
+    @apply text-sm font-semibold leading-tight text-text-heading;
   }
 
   .type-body {
@@ -273,9 +313,9 @@ input[type="date"] {
 
   .app-button[data-variant="confirm"] {
     --app-press-background: var(--app-action-confirm-active);
-    border-color: var(--app-action-confirm);
+    border-color: var(--app-border-strong);
     background-color: var(--app-action-confirm);
-    color: var(--app-action-text);
+    color: var(--app-text);
   }
 
   .app-button[data-variant="danger"] {
@@ -289,7 +329,7 @@ input[type="date"] {
     }
 
     .app-button[data-variant="confirm"]:not(:disabled):hover {
-      border-color: var(--app-action-confirm-hover);
+      border-color: var(--app-border-strong);
       background-color: var(--app-action-confirm-hover);
     }
 
@@ -413,25 +453,21 @@ input[type="date"] {
   }
 }
 
-@media (hover: hover) and (pointer: fine) {
-  .home-workspace-card:hover {
-    transform: translateY(-0.125rem);
-  }
-}
-
-/* Interactive elements use one keyboard-focus treatment across the app. */
+/* Text fields identify focus with their own border, without a second outer ring. */
 :where(
   a[href],
   button,
-  input,
-  select,
-  textarea,
+  input[type="checkbox"],
+  input[type="radio"],
   summary,
-  [contenteditable="true"],
   [tabindex]:not([tabindex="-1"])
 ):focus-visible {
-  outline: 2px solid var(--app-focus) !important;
-  outline-offset: 3px !important;
+  outline: 2px solid var(--app-focus);
+  outline-offset: 2px;
+}
+
+:where(a[href], button, summary):focus:not(:focus-visible) {
+  outline: none;
 }
 
 main[tabindex="-1"]:focus-visible {
@@ -469,10 +505,6 @@ main[tabindex="-1"][data-route-focus="true"]:focus-visible {
   button:active:not(:disabled),
   .pressable:active:not(:disabled) {
     transform: none !important;
-  }
-
-  .home-workspace-card:hover {
-    transform: none;
   }
 
   .app-dialog-panel {

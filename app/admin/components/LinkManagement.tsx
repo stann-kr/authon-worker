@@ -1,16 +1,17 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import Sheet from "@/components/overlays/Sheet";
+import { useState, useCallback, type ReactNode } from "react";
 import VenueSelector, {
   useVenueSelector,
 } from "../../../components/VenueSelector";
-import StatGrid from "../../../components/StatGrid";
 import PanelHeader from "../../../components/PanelHeader";
 import EmptyState from "../../../components/EmptyState";
 import Alert from "../../../components/Alert";
 import Icon from "../../../components/Icon";
 import Skeleton from "../../../components/Skeleton";
 import DatePicker from "../../../components/DatePicker";
+import DateField from "@/components/dates/DateField";
 import OperationsLayout from "../../../components/OperationsLayout";
 import OperationalSectionNav from "../../../components/OperationalSectionNav";
 import ConfirmDialog from "../../../components/ConfirmDialog";
@@ -67,6 +68,7 @@ const LINK_MANAGE_ACTIONS: LinkManageControllerActions = Object.freeze({
 export type LinkManagementSection = "create" | "manage";
 
 interface LinkManagementProps {
+  scopeSelector?: (controls: ReactNode, disabled?: boolean) => ReactNode;
   selectedDate: string;
   onDateChange: (date: string) => void;
   businessDate: string;
@@ -77,6 +79,7 @@ interface LinkManagementProps {
 }
 
 export default function LinkManagement({
+  scopeSelector,
   selectedDate,
   onDateChange,
   businessDate,
@@ -112,6 +115,7 @@ export default function LinkManagement({
 
   const create = useLinkCreateController({
     selectedDate,
+    onDateChange,
     venueId,
     eventId,
     isActive: activeTab === "create",
@@ -147,6 +151,7 @@ export default function LinkManagement({
     linkKindInputRef,
     generatedLinkPanelRef,
     clearFormFieldError,
+    handleDateChange,
     handleDjChange,
     handleSubmit,
   } = create;
@@ -192,33 +197,24 @@ export default function LinkManagement({
     setActiveTab("create");
   };
 
+  const scopeControls = <>
+    {(activeTab === "create" || manageScope === "date") && <DatePicker compact
+      value={selectedDate} onChange={onDateChange} businessDate={businessDate} disabled={isGenerating} />}
+    {isSuperAdmin && venues.length > 0 && <VenueSelector venues={venues} selectedVenueId={selectedVenueId}
+      onVenueChange={setSelectedVenueId} disabled={isGenerating} className="scope-venue" />}
+  </>;
+
   return (
     <>
       <OperationsLayout
         variant="stacked"
+        width={activeTab === "create" ? "form" : "full"}
         title={t("title")}
         headingLevel={null}
         dashboard={
           <>
         {(activeTab === "create" || manageScope === "date") && (
-          <div className="context-bar">
-            <DatePicker
-              value={selectedDate}
-              onChange={onDateChange}
-              businessDate={businessDate}
-              disabled={isGenerating}
-            />
-          </div>
-        )}
-        {/* Venue selector for super_admin */}
-        {isSuperAdmin && venues.length > 0 && (
-          <VenueSelector
-            venues={venues}
-            selectedVenueId={selectedVenueId}
-            onVenueChange={setSelectedVenueId}
-            disabled={isGenerating}
-            className="app-panel p-4 sm:p-5"
-          />
+          scopeSelector ? scopeSelector(scopeControls, isGenerating) : <div className="operations-scope">{scopeControls}</div>
         )}
         {(showSectionNavigation || activeTab === "manage") && (
           <div>
@@ -236,11 +232,16 @@ export default function LinkManagement({
             )}
             {activeTab === "manage" && (
               <div
-                className={`app-panel p-4 sm:p-5 ${showSectionNavigation ? "mt-4" : ""}`}
+                className={`flex flex-wrap items-end gap-4 ${showSectionNavigation ? "mt-4" : ""}`}
               >
+                {manageScope === "recent" && isSuperAdmin && venues.length > 0 && (
+                  <VenueSelector venues={venues} selectedVenueId={selectedVenueId}
+                    onVenueChange={setSelectedVenueId} className="w-full sm:w-60" />
+                )}
+                <div>
                 <p className="app-label">{t("view")}</p>
-                <div className="grid grid-cols-2 gap-2">
-                  {(["date", "recent"] as const).map((scope) => (
+                <div className="flex gap-2">
+                  {(["recent", "date"] as const).map((scope) => (
                     <button
                       key={scope}
                       type="button"
@@ -251,7 +252,7 @@ export default function LinkManagement({
                       }}
                       className={`min-h-11 border px-3 py-2 text-xs font-medium ${
                         manageScope === scope
-                          ? "border-action-primary bg-action-primary text-action-text"
+                          ? "border-border-strong bg-surface-active text-text-heading"
                           : "border-border-default bg-surface-raised text-text-muted"
                       }`}
                     >
@@ -259,10 +260,11 @@ export default function LinkManagement({
                     </button>
                   ))}
                 </div>
+                </div>
                 {manageScope === "recent" && (
-                  <div className="mt-3">
+                  <div>
                     <p className="app-label">{t("items")}</p>
-                    <div className="grid grid-cols-2 gap-2">
+                    <div className="flex gap-2">
                       {([5, 10] as const).map((limit) => (
                         <button
                           key={limit}
@@ -271,7 +273,7 @@ export default function LinkManagement({
                           onClick={() => setRecentLimit(limit)}
                           className={`min-h-11 border px-3 py-2 font-mono text-xs ${
                             recentLimit === limit
-                              ? "border-action-primary bg-action-primary text-action-text"
+                              ? "border-border-strong bg-surface-active text-text-heading"
                               : "border-border-default bg-surface-raised text-text-muted"
                           }`}
                         >
@@ -286,26 +288,15 @@ export default function LinkManagement({
           </div>
         )}
 
-        {activeTab === "manage" && (
-          <div className="app-panel p-3 sm:p-4">
-            <StatGrid
-              items={[
-                { label: t("total"), value: dashboardStats.total, color: "default" },
-                { label: t("active"), value: dashboardStats.active, color: "checked" },
-                { label: t("attention"), value: dashboardStats.attention, color: "danger" },
-              ]}
-            />
-          </div>
-        )}
           </>
         }
       >
 
       <div className="min-w-0">
         {activeTab === "create" && (
-          <div className="space-y-6">
-            <div className="app-panel p-4 sm:p-6">
-              <h3 className="type-panel-title mb-6">
+          <div className="record-form space-y-6">
+            <div className="app-panel record-form-panel">
+              <h3 className="record-form-title">
                 {t("createAccessLink")}
               </h3>
 
@@ -320,55 +311,19 @@ export default function LinkManagement({
 
               <form
                 onSubmit={handleSubmit}
-                className="space-y-4 sm:space-y-6"
+                className="record-form-fields"
                 aria-busy={isGenerating}
               >
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
+                <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
                   <div>
                     <label htmlFor="link-date" className="app-label">
                       {t("date")}
                     </label>
-                    <div className="relative h-[46px] group">
-                      {/* Mirroring UI Layer */}
-                      <div
-                        className={`absolute inset-0 flex items-center justify-between border bg-canvas px-4 py-3 transition-colors pointer-events-none group-focus-within:border-border-focus ${
-                          formValidationError?.field === "date"
-                            ? "border-status-danger"
-                            : "border-border-strong"
-                        }`}
-                      >
-                        <span className="text-text-heading text-sm">
-                          {formatDateDisplay(formData.date, locale)}
-                        </span>
-                        <Icon name="calendar" size={18} className="text-text-muted" />
-                      </div>
-
-                      {/* Hidden Native Input */}
-                      <input
-                        id="link-date"
-                        name="link-date"
-                        ref={linkDateInputRef}
-                        type="date"
-                        autoComplete="off"
-                        value={formData.date}
-                        disabled={isGenerating || Boolean(eventId)}
-                        aria-invalid={
-                          formValidationError?.field === "date" || undefined
-                        }
-                        aria-describedby={
-                          formValidationError?.field === "date"
-                            ? "link-date-error"
-                            : undefined
-                        }
-                        onChange={(e) => {
-                          clearFormFieldError("date");
-                          setFormData({ ...formData, date: e.target.value });
-                        }}
-                        onClick={(e) => (e.target as HTMLInputElement).showPicker?.()}
-                        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10 [color-scheme:dark]"
-                        required
-                      />
-                    </div>
+                    <DateField id="link-date" name="link-date" ref={linkDateInputRef}
+                      value={formData.date} onChange={handleDateChange} businessDate={businessDate}
+                      disabled={isGenerating || Boolean(eventId)} required
+                      invalid={formValidationError?.field === "date"}
+                      describedBy={formValidationError?.field === "date" ? "link-date-error" : undefined} />
                     {formValidationError?.field === "date" && (
                       <p
                         id="link-date-error"
@@ -458,7 +413,7 @@ export default function LinkManagement({
                   }
                 >
                   <legend className="app-label">{t("accessType")}</legend>
-                  <div className="grid gap-2 sm:grid-cols-2">
+                  <div className="grid gap-3 sm:grid-cols-2">
                     {([
                       {
                         value: "contributor",
@@ -473,9 +428,9 @@ export default function LinkManagement({
                     ] as const).map((option, index) => (
                       <label
                         key={option.value}
-                        className={`min-h-20 cursor-pointer border p-3 transition-colors ${
+                        className={`min-h-20 cursor-pointer rounded-control border p-3 transition-colors ${
                           formData.kind === option.value
-                            ? "border-action-primary bg-surface-active"
+                            ? "border-border-strong bg-surface-active"
                             : "border-border-default bg-canvas hover:border-border-strong"
                         }`}
                       >
@@ -498,7 +453,7 @@ export default function LinkManagement({
                                     : formData.contributorId,
                               });
                             }}
-                            className="mt-0.5 h-4 w-4 accent-[var(--action-primary)]"
+                            className="mt-0.5 h-4 w-4 shrink-0 accent-action-primary"
                           />
                           <span>
                             <span className="block text-sm font-semibold text-text-heading">
@@ -601,7 +556,7 @@ export default function LinkManagement({
                         }}
                         className={`min-h-11 border px-3 py-2 text-xs font-medium disabled:cursor-not-allowed disabled:opacity-50 ${
                           formData.localeMode === option.value
-                            ? "border-action-primary bg-action-primary text-action-text"
+                            ? "border-border-strong bg-surface-active text-text-heading"
                             : "border-border-default bg-canvas text-text-muted hover:border-border-strong hover:text-text-heading"
                         }`}
                       >
@@ -637,7 +592,7 @@ export default function LinkManagement({
             {scopedGeneratedLink && (
               <div
                 ref={generatedLinkPanelRef}
-                className="app-panel p-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-border-focus sm:p-6"
+                className="app-panel p-4 outline-none sm:p-6"
                 role="region"
                 aria-labelledby="generated-link-title"
                 aria-describedby="generated-link-summary"
@@ -702,7 +657,7 @@ export default function LinkManagement({
             {scopedManageError && <Alert type="error" message={scopedManageError} />}
             {scopedSuccess && <Alert type="success" message={scopedSuccess} />}
 
-            <div className="app-panel">
+            <div className="record-collection">
               <PanelHeader
                 title={t("linkList")}
                 count={sortedLinks.length}
@@ -710,7 +665,7 @@ export default function LinkManagement({
                 isLoading={isCurrentScopeFetching}
               />
 
-              <div className="border-b border-border-subtle p-4 sm:p-5">
+              <div className="border-b border-border-subtle py-3">
                 <div className="flex flex-wrap items-end justify-between gap-3">
                   <div className="flex flex-wrap gap-2">
                     {[
@@ -725,7 +680,7 @@ export default function LinkManagement({
                         aria-pressed={manageFilter === filter.key}
                         className={`min-h-11 border px-3 py-2 text-xs font-medium transition-colors ${
                           manageFilter === filter.key
-                            ? "border-action-primary bg-action-primary text-action-text"
+                            ? "border-border-strong bg-surface-active text-text-heading"
                             : "border-border-default bg-canvas text-text-muted hover:border-border-strong hover:text-text-heading"
                         }`}
                       >
@@ -776,7 +731,7 @@ export default function LinkManagement({
               ) : listState === "error" ? null : (
                 <div
                   aria-busy={isCurrentScopeFetching}
-                  className={`divide-y divide-border-default lg:overflow-y-auto ${
+                  className={`record-list ${
                     isCurrentScopeFetching ? "pointer-events-none" : ""
                   }`}
                 >
@@ -786,7 +741,7 @@ export default function LinkManagement({
                       message={t("noLinks")}
                     />
                   ) : (
-                    sortedLinks.map((link, index) => {
+                    sortedLinks.map((link) => {
                       const status = deriveLinkStatus(link, now);
                       const guestPageUrl = getGuestPageUrl(link.token, link.guestUrl);
                       const isLinkVisible = visibleLinkId === link.id;
@@ -811,33 +766,21 @@ export default function LinkManagement({
                               : { label: t("active"), tone: "border-status-checked text-status-checked", indicator: "before:bg-status-checked" };
 
                       return (
-                      <article
-                        key={link.id}
-                        className={`relative px-4 py-3.5 before:absolute before:inset-y-0 before:left-0 before:w-0.5 ${primaryStatus.indicator} ${index % 2 === 1 ? "bg-surface-raised" : "bg-surface"}`}
-                      >
-                        <div className="flex flex-wrap items-start justify-between gap-3">
-                          <div className="flex min-w-0 items-start gap-3">
-                            <span className="w-7 shrink-0 font-mono text-xs tabular-nums text-text-dim">
-                              {String(index + 1).padStart(2, "0")}
-                            </span>
-                            <div className="min-w-0">
-                              <h3 className="type-row-title break-words">
-                                {link.djName}
-                              </h3>
-                              <p className="mt-0.5 break-words text-xs text-text-muted">
-                                {link.event || t("untitledEvent")}
-                              </p>
-                              <p className="mt-1 text-xs text-text-dim">
-                                {link.kind === "self_rsvp" ? t("selfRsvpLink") : t("contributorLink")}
-                              </p>
-                            </div>
-                          </div>
-                          <span className={`inline-flex min-h-7 items-center border-l-2 pl-2 text-xs font-semibold ${primaryStatus.tone}`}>
-                            {primaryStatus.label}
-                          </span>
+                      <article key={link.id} className="record-row">
+                        <div className="record-summary">
+                          <button type="button" className="record-open" onClick={() => setVisibleLinkId(link.id)} aria-haspopup="dialog" aria-expanded={isLinkVisible}>
+                            <span className="record-identity"><strong>{link.djName}</strong><small>{link.event || t("untitledEvent")} · {link.date ? formatDateDisplay(link.date, locale) : t("noDate")}</small></span>
+                            <span className="record-value">{link.usedGuests}/{link.maxGuests}</span>
+                            <span className={`record-status ${primaryStatus.tone}`}>{primaryStatus.label}</span>
+                          </button>
+                          <Button variant="secondary" size="sm" onClick={() => shareOrCopyManagedLink(guestPageUrl, link.id)} isLoading={loadingStates[`share_${link.id}`]}>
+                            {completedLinkAction === "shared" ? t("shared") : completedLinkAction === "copied" ? t("copied") : nativeShareAvailable ? t("shareLink") : t("copyLink")}
+                          </Button>
                         </div>
-
-                        <dl className="mt-3 flex flex-wrap gap-x-6 gap-y-2 pl-10 sm:pl-11">
+                        {isLinkVisible && <Sheet title={link.djName} presentation="detail" onClose={() => setVisibleLinkId(null)} busy={Boolean(lifecycleBusyIds[link.id])}>
+                          {scopedManageError && <Alert type="error" message={scopedManageError} />}
+                          <p className="text-sm text-text-muted">{link.event || t("untitledEvent")} · {link.kind === "self_rsvp" ? t("selfRsvpLink") : t("contributorLink")}</p>
+                        <dl className="record-detail-grid">
                           <div>
                             <dt className="text-xs text-text-dim">{t("eventDate")}</dt>
                             <dd className="mt-0.5 font-mono text-xs text-text-muted">
@@ -889,7 +832,7 @@ export default function LinkManagement({
                           </div>
                         </dl>
 
-                        <div className="mt-3 pl-10 sm:pl-11">
+                        <div className="mt-3">
                           <div className="h-1 w-full bg-surface-active">
                             <div
                               className={`h-1 ${usageTone}`}
@@ -901,7 +844,7 @@ export default function LinkManagement({
                         {isLinkVisible && (
                           <div
                             id={`link-url-panel-${link.id}`}
-                            className="mt-3 border border-border-default bg-canvas p-3 sm:ml-11"
+                            className="mt-3 border border-border-default bg-canvas p-3"
                           >
                             <label
                               htmlFor={`link-url-${link.id}`}
@@ -933,7 +876,7 @@ export default function LinkManagement({
                           </div>
                         )}
 
-                        <div className="mt-3 flex flex-wrap justify-end gap-2 sm:pl-11">
+                        <div className="mt-3 flex flex-wrap justify-end gap-3">
                           <Button
                             type="button"
                             onClick={() => handleUseAsTemplate(link)}
@@ -943,26 +886,7 @@ export default function LinkManagement({
                           >
                             {t("useAsTemplate")}
                           </Button>
-                          <Button
-                            type="button"
-                            onClick={() =>
-                              setVisibleLinkId((current) =>
-                                current === link.id ? null : link.id,
-                              )
-                            }
-                            aria-expanded={isLinkVisible}
-                            aria-controls={`link-url-panel-${link.id}`}
-                            variant="secondary"
-                            size="sm"
-                            leftIcon={
-                              <Icon
-                                name={isLinkVisible ? "view-off" : "view"}
-                                size={16}
-                              />
-                            }
-                          >
-                            {isLinkVisible ? t("hide") : t("view")}
-                          </Button>
+
                           <Button
                             type="button"
                             onClick={() =>
@@ -1021,6 +945,7 @@ export default function LinkManagement({
                             {t("delete")}
                           </Button>
                         </div>
+                        </Sheet>}
                       </article>
                     )})
                   )}
@@ -1033,7 +958,7 @@ export default function LinkManagement({
       </OperationsLayout>
 
       {linkActionToast && (
-        <div className="fixed bottom-[calc(1rem+env(safe-area-inset-bottom))] right-4 z-[var(--app-z-toast)] max-w-[calc(100vw-2rem)] border border-border-strong bg-surface-raised px-4 py-3 text-text-heading md:bottom-5 md:right-5" role="status" aria-live="polite" aria-atomic="true">
+        <div className="fixed bottom-[calc(10rem+env(safe-area-inset-bottom))] right-4 z-[var(--app-z-toast)] max-w-[calc(100vw-2rem)] border border-border-strong bg-surface-raised px-4 py-3 text-text-heading md:bottom-5 md:right-5" role="status" aria-live="polite" aria-atomic="true">
           <p className="text-xs font-medium">
             {linkActionToast}
           </p>

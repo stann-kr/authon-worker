@@ -82,7 +82,11 @@ export default function GuestBulkEntry({
   const [duplicateOverrides, setDuplicateOverrides] = useState<Set<number>>(
     () => new Set(),
   );
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submissionContext, setSubmissionContext] = useState<{
+    existingNames: string[];
+    remaining: number | null;
+  } | null>(null);
+  const isSubmitting = submissionContext !== null;
   const isSubmittingRef = useRef(false);
   const [feedback, setFeedback] = useState<FeedbackState | null>(null);
   const [csvDocument, setCsvDocument] = useState<ParsedGuestCsv | null>(null);
@@ -90,6 +94,7 @@ export default function GuestBulkEntry({
   const [csvError, setCsvError] = useState<ParsedGuestCsv["error"] | "READ_FAILED" | null>(null);
   const isMountedRef = useRef(true);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const csvFileRef = useRef<HTMLInputElement>(null);
   const shouldRestoreFocusRef = useRef(false);
 
   useEffect(() => {
@@ -99,9 +104,13 @@ export default function GuestBulkEntry({
     };
   }, []);
 
+  // Parents publish created guests before reconciliation finishes. Keep the
+  // in-flight draft on its original validation scope until the result is applied.
+  const previewNames = submissionContext?.existingNames ?? existingNames;
+  const previewRemaining = submissionContext ? submissionContext.remaining : remaining;
   const preview = useMemo(
-    () => parseBulkGuestInput(rawInput, existingNames),
-    [existingNames, rawInput],
+    () => parseBulkGuestInput(rawInput, previewNames),
+    [previewNames, rawInput],
   );
   const csvPreview = useMemo(
     () =>
@@ -109,10 +118,10 @@ export default function GuestBulkEntry({
         ? previewGuestCsvColumn({
             parsed: csvDocument,
             columnIndex: csvColumnIndex,
-            existingNames,
+            existingNames: previewNames,
           })
         : null,
-    [csvColumnIndex, csvDocument, existingNames],
+    [csvColumnIndex, csvDocument, previewNames],
   );
 
   const validLines = preview.lines.filter(
@@ -130,14 +139,14 @@ export default function GuestBulkEntry({
       duplicateOverrides.has(line.lineNumber),
   );
   const submittableLines =
-    remaining === null
+    previewRemaining === null
       ? confirmedLines
-      : confirmedLines.slice(0, Math.max(0, remaining));
+      : confirmedLines.slice(0, Math.max(0, previewRemaining));
   const heldForCapacity = Math.max(0, confirmedLines.length - submittableLines.length);
 
   const setSubmittingState = (value: boolean) => {
     isSubmittingRef.current = value;
-    setIsSubmitting(value);
+    setSubmissionContext(value ? { existingNames: [...existingNames], remaining } : null);
     onSubmittingChange?.(value);
   };
 
@@ -260,6 +269,12 @@ export default function GuestBulkEntry({
 
       setRawInput(retainedLines.map(toRetainedBulkGuestLineText).join("\n"));
       setDuplicateOverrides(new Set());
+      if (createdLineNumbers.size > 0 && retainedLines.length === 0) {
+        setCsvDocument(null);
+        setCsvColumnIndex(null);
+        setCsvError(null);
+        if (csvFileRef.current) csvFileRef.current.value = "";
+      }
       shouldRestoreFocusRef.current = true;
 
       if (infrastructureError === "RATE_LIMITED") {
@@ -342,7 +357,7 @@ export default function GuestBulkEntry({
         }
       }
       isSubmittingRef.current = false;
-      if (isMountedRef.current) setIsSubmitting(false);
+      if (isMountedRef.current) setSubmissionContext(null);
       onSubmittingChange?.(false);
     }
   };
@@ -368,6 +383,7 @@ export default function GuestBulkEntry({
             {t("csv.fileLabel")}
           </label>
           <input
+            ref={csvFileRef}
             id={csvFileId}
             name="guest-csv-file"
             type="file"
@@ -582,7 +598,7 @@ export default function GuestBulkEntry({
               })}
             </ol>
 
-            <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
+            <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-[minmax(0,1fr)_auto]">
               <Button
                 type="button"
                 onClick={handleSubmit}

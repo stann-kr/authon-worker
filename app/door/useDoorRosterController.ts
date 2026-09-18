@@ -110,6 +110,7 @@ export interface DoorRosterDependencies {
 }
 
 interface UseDoorRosterControllerOptions {
+  canDeleteGuests?: boolean;
   venueId: string;
   selectedDate: string;
   selectedEventId: string | null;
@@ -118,6 +119,7 @@ interface UseDoorRosterControllerOptions {
 }
 
 export default function useDoorRosterController({
+  canDeleteGuests = false,
   venueId,
   selectedDate,
   selectedEventId,
@@ -138,6 +140,7 @@ export default function useDoorRosterController({
     "idle" | "success" | "partial" | "error"
   >("idle");
   const [feedback, setFeedback] = useState<string | null>(null);
+  const [deleteFailure, setDeleteFailure] = useState<{ scopeKey: string; guestId: string; message: string } | null>(null);
   const [isOfflineMode, setIsOfflineMode] = useState(false);
   const [offlineMutations, setOfflineMutations] = useState<
     OfflineDoorMutation[]
@@ -816,6 +819,19 @@ export default function useDoorRosterController({
     newStatus: Guest["status"],
     action: string,
   ) => {
+    const reportFailure = (message: string) => {
+      setFeedback(message);
+      if (newStatus === "deleted") setDeleteFailure({ scopeKey: requestScopeKey, guestId: id, message });
+    };
+    if (newStatus === "deleted") {
+      if (!canDeleteGuests) return;
+      if (isOfflineMode || (typeof navigator !== "undefined" && !navigator.onLine) ||
+          isOfflineSyncing || offlineMutations.some((mutation) => mutation.state === "queued")) {
+        reportFailure(translate("deleteRequiresOnline"));
+        return;
+      }
+    }
+    if (newStatus === "deleted") setDeleteFailure(null);
     const operationScopeKey = requestScopeKey;
     const busyKey = `${id}_${action}`;
     const operation = mutationGuard.beginOperation(
@@ -852,16 +868,23 @@ export default function useDoorRosterController({
               dependencies.randomUUID(),
             );
 
+      let cacheInvalidationFailed = false;
+      if (newStatus === "deleted" && !error && data && offlineScope) {
+        // A confirmed deletion invalidates its original scope even after navigation.
+        try {
+          await runOfflineStoreTask(() => true, () => dependencies.removeOfflineDoorRoster(offlineScope));
+        } catch { cacheInvalidationFailed = true; }
+      }
       if (!operation.isCurrent(currentScopeKeyRef.current)) return;
       if (!error && data) {
-        setGuests((prev) =>
-          prev.map((guest) => (guest.id === id ? data : guest)),
-        );
-        setFeedback(null);
+        setGuests((prev) => newStatus === "deleted"
+          ? prev.filter((guest) => guest.id !== id)
+          : prev.map((guest) => (guest.id === id ? data : guest)));
+        setFeedback(cacheInvalidationFailed ? translate("offlineStorageFailed") : null);
         refreshOwner.queued ??= "background";
       } else {
         console.error("Failed to update guest status:", error);
-        setFeedback(
+        reportFailure(
           error === "ATTENDANCE_SCOPE_CLOSED"
             ? translate("attendanceScopeClosed")
             : translate("updateFailed"),
@@ -876,7 +899,7 @@ export default function useDoorRosterController({
           : false;
       queuedOffline = Boolean(queued);
       if (!queued && operation.isCurrent(currentScopeKeyRef.current)) {
-        setFeedback(translate("updateFailed"));
+        reportFailure(translate("updateFailed"));
       }
     } finally {
       refreshOwner.mutations.delete(operation.id);
@@ -947,6 +970,7 @@ export default function useDoorRosterController({
   return {
     displayData,
     feedback,
+    deleteFailure: deleteFailure?.scopeKey === requestScopeKey ? deleteFailure : null,
     guests,
     handleClearResolvedOfflineMutations,
     handleStatusChange,

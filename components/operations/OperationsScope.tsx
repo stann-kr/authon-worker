@@ -1,0 +1,51 @@
+"use client";
+
+import { useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { useTranslations } from "next-intl";
+import Icon from "@/components/Icon";
+import Sheet from "@/components/overlays/Sheet";
+
+/** Only the controls move into a mobile sheet; their scope and event data stay with the caller. */
+export default function OperationsScope({ venueName, date, label, disabled = false, children }: {
+  venueName?: string; date: string; label: string; disabled?: boolean; children: ReactNode;
+}) {
+  const t = useTranslations("Workspace");
+  const summaryId = useId();
+  const [desktop, setDesktop] = useState(false);
+  const [open, setOpen] = useState(false);
+  const controlsRef = useRef<HTMLDivElement>(null);
+  const restoreDesktopFocus = useRef(false);
+  useEffect(() => {
+    const media = window.matchMedia("(min-width: 1000px)");
+    const update = () => {
+      if (media.matches) restoreDesktopFocus.current = controlsRef.current?.contains(document.activeElement) ?? false;
+      else if (controlsRef.current?.contains(document.activeElement)) setOpen(true);
+      setDesktop(media.matches);
+    };
+    update();
+    media.addEventListener("change", update);
+    return () => media.removeEventListener("change", update);
+  }, []);
+  useLayoutEffect(() => {
+    if (desktop && restoreDesktopFocus.current) {
+      controlsRef.current?.querySelector<HTMLElement>("input, select, button")?.focus({ preventScroll: true });
+      restoreDesktopFocus.current = false;
+    }
+  }, [desktop]);
+  const controls = <div ref={controlsRef} className="operations-scope">{children}</div>;
+  return <div className="operations-scope-bar">
+    {desktop ? controls : <>
+      <button type="button" className="operations-scope-trigger" disabled={disabled}
+        aria-label={t("chooseScope")} aria-describedby={`${summaryId}-date ${summaryId}-event`} aria-haspopup="dialog" aria-expanded={open} onClick={() => setOpen(true)}>
+        <span className="operations-scope-dot" aria-hidden="true" />
+        <span id={`${summaryId}-date`} className="operations-scope-date">{venueName ? `${venueName} · ` : ""}{date.slice(5).replace("-", ".")}</span>
+        <span id={`${summaryId}-event`} className="operations-scope-name">{label}</span>
+        <Icon name="chevron-down" size={16} />
+      </button>
+      <Sheet open={open} title={t("chooseScope")} onClose={() => setOpen(false)} busy={disabled}>
+        {controls}
+        <button type="button" className="app-button rounded-control bg-surface-raised px-4 py-3 text-sm" disabled={disabled} onClick={() => setOpen(false)}>{t("applyScope")}</button>
+      </Sheet>
+    </>}
+  </div>;
+}

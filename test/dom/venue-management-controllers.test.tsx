@@ -153,6 +153,7 @@ function DirectoryHarness({
         {controller.venues.map((venue) => venue.id).join(",")}
       </output>
       <output data-testid="directory-error">{controller.listError}</output>
+      <button onClick={() => void controller.refreshAfterMutation()}>Refresh venues</button>
     </>
   );
 }
@@ -291,6 +292,7 @@ async function renderVenueCard({
       />
     </NextIntlClientProvider>,
   );
+  if (!actionsDisabled) fireEvent.click(screen.getByRole("button", { name: new RegExp(venue.name) }));
   return { ...view, VenueCard };
 }
 
@@ -382,6 +384,24 @@ test("directory keeps partial and full failures distinct from an empty success",
     screen.getByTestId("directory-state").textContent,
     "success-empty",
   );
+});
+
+test("one directory refresh clears a failed list and also refreshes the active venue scope", async () => {
+  let unavailable = true;
+  let activeRefreshes = 0;
+  renderDirectory(createDirectoryDependencies({
+    fetchVenues: async () => unavailable
+      ? { data: null, error: "UNAVAILABLE" }
+      : { data: [VENUE_A, VENUE_B], error: null },
+  }), async () => { activeRefreshes += 1; });
+  await flushAsyncWork();
+  assert.equal(screen.getByTestId("directory-state").textContent, "error");
+  unavailable = false;
+  fireEvent.click(screen.getByRole("button", { name: "Refresh venues" }));
+  await flushAsyncWork();
+  assert.equal(screen.getByTestId("directory-error").textContent, "");
+  assert.equal(screen.getByTestId("directory-venues").textContent, "venue-a,venue-b");
+  assert.equal(activeRefreshes, 1);
 });
 
 test("create validates the name and submits the captured normalized draft", async () => {
@@ -1205,14 +1225,8 @@ test("card toggle preserves busy confirmation and exposes deferred dialog state"
 
 test("disabled directory state removes card actions from keyboard activation", async () => {
   await renderVenueCard({ actionsDisabled: true });
-  const editButton = screen.getByRole("button", {
-    name: messages.VenueAdmin.edit,
-  }) as HTMLButtonElement;
-  const deactivateButton = screen.getByRole("button", {
-    name: messages.VenueAdmin.deactivate,
-  }) as HTMLButtonElement;
-  assert.equal(editButton.disabled, true);
-  assert.equal(deactivateButton.disabled, true);
-  fireEvent.click(editButton);
-  assert.equal(screen.queryByLabelText(messages.VenueAdmin.venueName), null);
+  const openButton = screen.getByRole("button", { name: /Venue A/ }) as HTMLButtonElement;
+  assert.equal(openButton.disabled, true);
+  fireEvent.click(openButton);
+  assert.equal(screen.queryByRole("dialog"), null);
 });

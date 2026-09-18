@@ -38,13 +38,25 @@ export function normalizeBaseUrl(value: string | null | undefined): string | nul
   }
 }
 
-export function baseUrlForHostname(hostname: string): string {
-  const protocol =
+export function isLocalHostname(hostname: string): boolean {
+  return (
     hostname === "localhost" ||
     hostname === "127.0.0.1" ||
     hostname === "::1" ||
     hostname.endsWith(".localhost")
-      ? "http"
-      : "https";
-  return `${protocol}://${hostname}`;
+  );
+}
+
+export function baseUrlForHostname(hostname: string, requestHost?: string | null): string {
+  const local = isLocalHostname(hostname);
+  const host = hostname === "::1" ? "[::1]" : hostname;
+  const baseUrl = new URL(`${local ? "http" : "https"}://${host}`);
+  if (local && requestHost && isLocalHostname(normalizeHostname(requestHost) ?? "")) {
+    try {
+      baseUrl.port = new URL(`http://${requestHost}`).port;
+    } catch {
+      // Invalid request authorities never replace the configured hostname.
+    }
+  }
+  return baseUrl.origin;
 }

@@ -89,7 +89,7 @@ export default function DisclosureSection({
         aria-disabled={disabled || undefined}
         tabIndex={disabled ? -1 : undefined}
         onClick={disabled ? (event) => event.preventDefault() : undefined}
-        className={`pressable -mx-1 flex min-h-11 list-none items-center justify-between gap-3 px-1 py-2 text-sm font-medium text-text-muted group-open:text-text-heading [&::-webkit-details-marker]:hidden ${
+        className={`pressable flex min-h-11 list-none items-center justify-between gap-3 px-3 py-2 text-sm font-medium text-text-muted group-open:text-text-heading [&::-webkit-details-marker]:hidden ${
           disabled
             ? "cursor-default opacity-75"
             : "cursor-pointer hover:text-text-heading"

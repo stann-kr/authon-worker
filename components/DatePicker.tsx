@@ -1,9 +1,10 @@
 "use client";
 
 import { useId } from "react";
-import { formatDateDisplay, getBusinessDate } from "@/lib/date";
+import { getBusinessDate } from "@/lib/date";
 import Icon from "./Icon";
-import { useLocale, useTranslations } from "next-intl";
+import DateField from "./dates/DateField";
+import { useTranslations } from "next-intl";
 
 /**
  * DatePicker: 날짜 선택 패널 컴포넌트.
@@ -18,6 +19,7 @@ interface DatePickerProps {
   businessDate?: string;
   className?: string;
   disabled?: boolean;
+  compact?: boolean;
 }
 
 function offsetDate(baseYmd: string, deltaDays: number): string {
@@ -25,11 +27,14 @@ function offsetDate(baseYmd: string, deltaDays: number): string {
   if (!match) return baseYmd;
 
   const [, year, month, day] = match.map(Number);
-  const date = new Date(year, month - 1, day);
+  const date = new Date(0);
+  date.setFullYear(year, month - 1, day);
+  date.setHours(12, 0, 0, 0);
   date.setDate(date.getDate() + deltaDays);
+  if (date.getFullYear() < 1 || date.getFullYear() > 9999) return baseYmd;
 
   return [
-    date.getFullYear(),
+    String(date.getFullYear()).padStart(4, "0"),
     String(date.getMonth() + 1).padStart(2, "0"),
     String(date.getDate()).padStart(2, "0"),
   ].join("-");
@@ -41,52 +46,28 @@ export default function DatePicker({
   businessDate = getBusinessDate(),
   className = "",
   disabled = false,
+  compact = false,
 }: DatePickerProps) {
   const t = useTranslations("Common");
-  const locale = useLocale() as "en" | "ko";
   const inputId = useId();
   const isToday = value === businessDate;
 
   return (
     <div
+      data-compact={compact}
       className={`operational-date-control min-w-0 ${disabled ? "opacity-60" : ""} ${className}`}
     >
       <label htmlFor={inputId} className="type-context-title">
         {t("operationalDate")}
       </label>
       <div className="operational-date-layout">
-        <div className="relative h-[46px] min-w-0 flex-1 group">
-          {/* Mirroring UI Layer: 사용자가 실제로 보게 되는 텍스트와 달력 아이콘 */}
-          <div className="pointer-events-none absolute inset-0 flex items-center justify-between rounded-control border border-border-strong bg-surface-raised px-4 py-3 group-focus-within:border-border-focus">
-            <span className="min-w-0 truncate pr-3 text-sm font-medium text-text-heading">
-              {formatDateDisplay(value, locale)}
-            </span>
-            <Icon name="calendar" size={18} className="text-text-muted" />
-          </div>
-
-          {/* Hidden Native Input: 클릭 이벤트를 감지하여 달력을 띄우는 역할 */}
-          <input
-            id={inputId}
-            name="operational-date"
-            type="date"
-            value={value}
-            disabled={disabled}
-            autoComplete="off"
-            onChange={(e) => onChange(e.target.value)}
-            onClick={(e) => {
-              const input = e.currentTarget as HTMLInputElement & {
-                showPicker?: () => void;
-              };
-              input.showPicker?.();
-            }}
-            className="absolute inset-0 z-10 h-full w-full cursor-pointer opacity-0 disabled:cursor-not-allowed [color-scheme:dark]"
-          />
-        </div>
+        <DateField id={inputId} name="operational-date" value={value} onChange={onChange}
+          businessDate={businessDate} disabled={disabled} className="operational-date-field flex-1" />
 
         <div
           role="group"
           aria-label={t("changeOperationalDate")}
-          className="operational-date-quick grid h-[46px] grid-cols-3 divide-x divide-border-default border border-border-default"
+          className="operational-date-quick grid h-[46px] grid-cols-3"
         >
           <button
             type="button"
@@ -96,7 +77,7 @@ export default function DatePicker({
             className="pressable flex min-h-11 touch-manipulation items-center justify-center gap-1 bg-surface-raised px-3 font-mono text-xs text-text-body hover:bg-surface-hover hover:text-text-heading disabled:cursor-not-allowed"
           >
             <Icon name="chevron-left" size={15} />
-            <span>-1D</span>
+            <span className="date-offset-label">-1D</span>
           </button>
           <button
             type="button"
@@ -106,7 +87,7 @@ export default function DatePicker({
             aria-label={t("setToday")}
             className={`pressable min-h-11 touch-manipulation px-3 font-mono text-xs font-semibold disabled:cursor-not-allowed ${
               isToday
-                ? "bg-action-primary text-action-text"
+                ? "bg-surface-active text-text-heading"
                 : "bg-surface-raised text-text-body hover:bg-surface-hover hover:text-text-heading"
             }`}
           >
@@ -119,7 +100,7 @@ export default function DatePicker({
             aria-label={t("nextDate")}
             className="pressable flex min-h-11 touch-manipulation items-center justify-center gap-1 bg-surface-raised px-3 font-mono text-xs text-text-body hover:bg-surface-hover hover:text-text-heading disabled:cursor-not-allowed"
           >
-            <span>+1D</span>
+            <span className="date-offset-label">+1D</span>
             <Icon name="chevron-right" size={15} />
           </button>
         </div>
