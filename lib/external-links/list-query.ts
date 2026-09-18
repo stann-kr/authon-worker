@@ -1,7 +1,17 @@
-import { and, asc, desc, eq, gt, isNull, lt, or, sql } from "drizzle-orm";
-import { externalDjLinks as links } from "../db/schema";
+import { and, asc, desc, eq, gt, inArray, isNull, lt, or, sql } from "drizzle-orm";
+import { externalDjLinks as links, guests } from "../db/schema";
 
-import type { LinkListOptions } from "./list-types";
+import type { LinkListCursor, LinkListOptions } from "./list-types";
+
+export function buildLinkGuestQuery(venueId: string, linkId: string, cursor?: LinkListCursor | null) {
+  return {
+    join: and(eq(guests.externalLinkId, links.id), eq(guests.venueId, links.venueId)),
+    where: and(eq(links.venueId, venueId), eq(links.id, linkId), isNull(links.deletedAt),
+      inArray(guests.status, ["pending", "checked"]),
+      cursor ? or(lt(guests.createdAt, cursor.value), and(eq(guests.createdAt, cursor.value), lt(guests.id, cursor.id))) : undefined),
+    order: [desc(guests.createdAt), desc(guests.id)],
+  };
+}
 
 export function buildLinkListQuery(venueId: string, options: LinkListOptions, eventId: string | null, includeLegacy: boolean) {
   const scope = and(eq(links.venueId, venueId), isNull(links.deletedAt),

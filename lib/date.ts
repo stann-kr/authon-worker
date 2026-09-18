@@ -109,6 +109,24 @@ export function formatVenueDateTime(
   }).format(date);
 }
 
+const venueTimeFormatters = new Map<string, Intl.DateTimeFormat>();
+
+/** Compact, 24-hour venue time for roster columns. */
+export function formatVenueTime(value: string | null | undefined, timeZone?: string | null): string | null {
+  if (!value) return null;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  let formatter = venueTimeFormatters.get(timeZone || DEFAULT_VENUE_TIMEZONE);
+  if (!formatter) {
+    const zone = isValidTimeZone(timeZone) ? timeZone : DEFAULT_VENUE_TIMEZONE;
+    formatter = venueTimeFormatters.get(zone) ?? new Intl.DateTimeFormat("en-GB", {
+      hour: "2-digit", minute: "2-digit", hourCycle: "h23", timeZone: zone,
+    });
+    venueTimeFormatters.set(zone, formatter);
+  }
+  return formatter.format(date);
+}
+
 /**
  * 베뉴 현지 시각과 운영시간을 기준으로 영업일을 반환합니다.
  * 운영시간이 자정을 넘는 경우에만 closing 이전 시각을 전날 영업일로 봅니다.

@@ -465,7 +465,7 @@ test("rendered link management loads ten more at the scroll boundary and retains
       if (!url.startsWith("mock:link-scroll:")) return nextLoad(url, context);
       const source = url.endsWith("components/VenueSelector")
         ? 'export const useVenueSelector = () => ({ venueId: "venue-a", venues: [], selectedVenueId: "venue-a", currentVenue: {}, isSuperAdmin: false }); export default function VenueSelector() { return null; }'
-        : 'export const fetchExternalLinkPage = (...args) => globalThis.__linkPage(...args); export const fetchExternalLinkCreateSuggestions = async () => ({data:null,error:null}); export const createExternalLink = fetchExternalLinkCreateSuggestions; export const deleteExternalLink = async () => ({error:null}); export const deactivateExternalLink = deleteExternalLink; export const activateExternalLink = deleteExternalLink;';
+        : 'export const fetchExternalLinkPage = (...args) => globalThis.__linkPage(...args); export const fetchExternalLinkGuests = async () => ({data:{guests:[{id:"linked-guest",name:"Linked guest",status:"checked",createdAt:"2026-09-18T09:00:00Z",checkInTime:"2026-09-18T10:00:00Z"}],nextCursor:null},error:null}); export const fetchExternalLinkCreateSuggestions = async () => ({data:null,error:null}); export const createExternalLink = fetchExternalLinkCreateSuggestions; export const deleteExternalLink = async () => ({error:null}); export const deactivateExternalLink = deleteExternalLink; export const activateExternalLink = deleteExternalLink;';
       return { format: "module", shortCircuit: true, source };
     },
   });
@@ -479,6 +479,7 @@ test("rendered link management loads ten more at the scroll boundary and retains
     const opener = screen.getByRole("button", { name: /^DJ 0/ });
     fireEvent.click(opener);
     const detail = screen.getByRole("region", { name: "DJ 0" });
+    assert.ok(await within(detail).findByText("Linked guest"));
     assert.equal(detail.closest("article")?.contains(opener), true);
     assert.equal(detail.hasAttribute("aria-modal"), false);
     act(() => { intersect?.(); intersect?.(); });
@@ -498,4 +499,35 @@ test("rendered link management loads ten more at the scroll boundary and retains
     if (previousObserver) globalThis.IntersectionObserver = previousObserver;
     else Reflect.deleteProperty(globalThis, "IntersectionObserver");
   }
+});
+
+test("a linked guest list rejects stale scopes and retries a failed next page without losing names", async () => {
+  const { default: LinkRegisteredGuests } = await import("@/app/admin/components/LinkRegisteredGuests");
+  const stale = createDeferred<{ data: { guests: []; nextCursor: null }; error: null }>();
+  const guest = { id: "guest-b", name: "Current guest", status: "pending" as const, createdAt: "2026-09-18", checkInTime: null };
+  const cursor = { id: guest.id, value: guest.createdAt };
+  const calls: unknown[] = [];
+  let fail = true;
+  const fetchPage = async (_venue: string, linkId: string, nextCursor?: typeof cursor | null) => {
+    calls.push([linkId, nextCursor]);
+    if (linkId === "a") return stale.promise;
+    if (nextCursor && fail) return { data: null, error: "offline" };
+    return { data: { guests: [nextCursor ? { ...guest, id: "last", name: "Last guest" } : guest], nextCursor: nextCursor ? null : cursor }, error: null };
+  };
+  const frame = (id: string) => <NextIntlClientProvider locale="en" messages={messages}>
+    <LinkRegisteredGuests venueId="venue-a" linkId={id} registeredCount={2} fetchPage={fetchPage} />
+  </NextIntlClientProvider>;
+  const view = render(frame("a"));
+  view.rerender(frame("b"));
+  assert.ok(await screen.findByText("Current guest"));
+  await act(async () => { stale.resolve({ data: { guests: [], nextCursor: null }, error: null }); });
+  assert.ok(screen.getByText("Current guest"));
+  fireEvent.click(screen.getByRole("button", { name: messages.LinkAdmin.loadMore }));
+  assert.ok(await screen.findByRole("alert"));
+  assert.ok(screen.getByText("Current guest"));
+  fail = false;
+  fireEvent.click(screen.getByRole("button", { name: messages.Common.retry }));
+  assert.ok(await screen.findByText("Last guest"));
+  assert.deepEqual(calls.slice(-2), [["b", cursor], ["b", cursor]]);
+  assert.equal(screen.queryByRole("button", { name: messages.LinkAdmin.loadMore }), null);
 });

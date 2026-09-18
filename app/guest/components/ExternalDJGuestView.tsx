@@ -456,6 +456,7 @@ export default function ExternalDJGuestView({ token }: ExternalDJGuestViewProps)
               <div className="product-roster-rows">
                 {displayGuests.map((guest, index) => (
                   <GuestListCard
+                      timeZone={venueInfo?.timezone}
                     key={guest.id}
                     guest={guest}
                     index={index}

@@ -1782,3 +1782,16 @@ test("switching record accordions protects an unsaved draft and resumes only aft
   assert.equal(screen.queryByRole("region", { name: "A" }) === null, true);
   assert.ok(screen.getByRole("region", { name: "B" }));
 });
+
+test("roster timestamps keep machine-readable values and use the venue timezone", () => {
+  render(<NextIntlClientProvider locale="en" messages={messages}>
+    <GuestListCard mode="operations" index={0} timeZone="America/New_York"
+      guest={{ id: "timed", name: "Timed guest", status: "checked", createdAt: "2026-09-18T18:30:00Z", checkInTime: "2026-09-18T19:45:00Z" }} />
+  </NextIntlClientProvider>);
+  const registered = screen.getByText(messages.Roster.registeredAt).parentElement!.querySelector("time")!;
+  const checked = screen.getByText(messages.Roster.checkedInAt).parentElement!.querySelector("time")!;
+  assert.equal(registered.textContent, "14:30");
+  assert.equal(checked.textContent, "15:45");
+  assert.equal(registered.dateTime, "2026-09-18T18:30:00Z");
+  assert.equal(checked.dateTime, "2026-09-18T19:45:00Z");
+});

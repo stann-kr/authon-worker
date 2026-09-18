@@ -124,7 +124,7 @@ export default function RosterView({ header, filters, filtersActive = false, var
         </div>
       </Sheet>
       {variant === "operations" && <div className="product-roster-headings" aria-hidden="true">
-        <span>{t("guestName")}</span><span>{t("rowActions")}</span><span>{t("owner")}</span><span>{t("status")}</span>
+        <span>{t("guestName")}</span><span>{t("rowActions")}</span><span>{t("owner")}</span><span className="product-guest-registered-time">{t("registeredAt")}</span><span className="product-guest-checked-time">{t("checkedInAt")}</span><span>{t("status")}</span>
       </div>}
       {children}
     </div>

@@ -76,3 +76,8 @@ export interface ExternalLinkPage {
   nextCursor: LinkListCursor | null;
   stats: LinkListStats;
 }
+
+export interface ExternalLinkGuestPage {
+  guests: ExternalLinkPublicGuest[];
+  nextCursor: LinkListCursor | null;
+}

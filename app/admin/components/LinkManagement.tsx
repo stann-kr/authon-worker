@@ -39,6 +39,7 @@ import {
   type ManageFilter,
   type ManageSort,
 } from "./linkStatus";
+import LinkRegisteredGuests from "./LinkRegisteredGuests";
 import ExternalDjCombobox from "./ExternalDjCombobox";
 import ExternalEventCombobox from "./ExternalEventCombobox";
 import {
@@ -862,6 +863,9 @@ export default function LinkManagement({
                             </div>
                           </div>
                         )}
+
+                        <LinkRegisteredGuests key={`${venueId}:${link.id}`} venueId={venueId} linkId={link.id}
+                          registeredCount={link.usedGuests} timeZone={currentVenue?.timezone} />
 
                         <div className="mt-3 flex flex-wrap justify-end gap-3">
                           <Button

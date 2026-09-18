@@ -30,6 +30,7 @@
     }
   },
   "Common": {
+    "retry": "다시 시도",
     "language": "언어",
     "english": "English",
     "korean": "한국어",
@@ -698,6 +699,10 @@
     "noGuestsForDate": "이 운영일에 게스트가 없습니다"
   },
   "LinkAdmin": {
+    "registeredGuests": "등록 게스트",
+    "noRegisteredGuests": "아직 등록된 게스트가 없습니다.",
+    "guestLoadFailed": "등록 게스트를 불러오지 못했습니다.",
+    "refreshGuests": "등록 게스트 새로고침",
     "title": "관리자 링크 관리",
     "loadFailed": "링크를 불러오지 못했습니다.",
     "createFailed": "링크를 생성하지 못했습니다.",
@@ -1172,6 +1177,8 @@
     "discard": "내용 버리고 닫기"
   },
   "Roster": {
+    "registeredAt": "등록시간",
+    "checkedInAt": "입장시간",
     "filters": "필터 및 정렬",
     "filtersApplied": "필터 및 정렬, 변경한 조건 적용 중",
     "guestName": "이름",

@@ -649,6 +649,7 @@ export default function AuthenticatedGuestView({ user }: AuthenticatedGuestViewP
                 >
                   {displayGuests.map((guest, index) => (
                     <GuestListCard
+                      timeZone={currentVenue?.timezone}
                       key={guest.id}
                       guest={guest}
                       index={index}

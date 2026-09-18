@@ -522,6 +522,7 @@ function DoorPageContent() {
                   {displayGuests.map((guest, index) => {
                     const contributor = getContributor(guest);
                     return <GuestListCard
+                      timeZone={currentVenue?.timezone}
                       key={guest.id}
                       guest={{
                         id: guest.id,

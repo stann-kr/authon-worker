@@ -30,6 +30,7 @@
     }
   },
   "Common": {
+    "retry": "Retry",
     "language": "Language",
     "english": "English",
     "korean": "한국어",
@@ -698,6 +699,10 @@
     "noGuestsForDate": "No guests for this date"
   },
   "LinkAdmin": {
+    "registeredGuests": "Registered guests",
+    "noRegisteredGuests": "No guests have registered yet.",
+    "guestLoadFailed": "Could not load registered guests.",
+    "refreshGuests": "Refresh registered guests",
     "title": "Admin link management",
     "loadFailed": "Unable to load links right now.",
     "createFailed": "Failed to create the link.",
@@ -1172,6 +1177,8 @@
     "discard": "Discard and close"
   },
   "Roster": {
+    "registeredAt": "Registered at",
+    "checkedInAt": "Checked in at",
     "filters": "Filters and sorting",
     "filtersApplied": "Filters and sorting, changes applied",
     "guestName": "Guest",

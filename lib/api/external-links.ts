@@ -5,8 +5,8 @@ import { measureServerOperation } from "@/lib/observability/server-performance";
 import { reportServerError } from "@/lib/observability/structured-log";
 
 import { getD1Database } from "@/lib/db/client";
-import { buildLinkListQuery } from "../external-links/list-query";
-import { LINK_PAGE_SIZE, type LinkListOptions } from "../external-links/list-types";
+import { buildLinkGuestQuery, buildLinkListQuery } from "../external-links/list-query";
+import { LINK_PAGE_SIZE, type LinkListCursor, type LinkListOptions } from "../external-links/list-types";
 import { headers } from "next/headers";
 import {
   eq,
@@ -14,7 +14,7 @@ import {
   desc,
   isNull,
 } from "drizzle-orm";
-import { externalDjLinks } from "../db/schema";
+import { externalDjLinks, guests } from "../db/schema";
 import type { ApiResponse } from "./response";
 import type {
   BulkGuestCreateInput,
@@ -23,6 +23,7 @@ import type { ExternalDjSuggestion } from "@/lib/contributors/types";
 import type {
   ExternalDJLink,
   ExternalLinkPage,
+  ExternalLinkGuestPage,
   ExternalLinkCreateSuggestions,
   ExternalLinkPublicGuest,
   ExternalLinkPublicGuestCreateResult,
@@ -197,6 +198,38 @@ export async function fetchExternalLinkPage(
   } catch (error: unknown) {
     await reportServerError("external_link.list_page", error);
     return { data: null, error: "Unable to load external links right now." };
+  }
+}
+
+export async function fetchExternalLinkGuests(
+  venueId: string,
+  linkId: string,
+  cursor?: LinkListCursor | null,
+): Promise<ApiResponse<ExternalLinkGuestPage>> {
+  try {
+    const user = await requireRole(["super_admin", "venue_admin"]);
+    const effectiveVenueId = await scopedVenueId(user, venueId);
+    if (typeof linkId !== "string" || !linkId || linkId.length > 200 ||
+      (cursor && (typeof cursor.id !== "string" || !cursor.id || cursor.id.length > 200 ||
+        typeof cursor.value !== "string" || cursor.value.length > 64))) throw new Error("INVALID_LINK_GUEST_PAGE");
+    const db = getDb();
+    const [link] = await db.select({ id: externalDjLinks.id }).from(externalDjLinks)
+      .where(and(eq(externalDjLinks.id, linkId), eq(externalDjLinks.venueId, effectiveVenueId), isNull(externalDjLinks.deletedAt))).limit(1);
+    if (!link) throw new Error("LINK_NOT_FOUND");
+    const query = buildLinkGuestQuery(effectiveVenueId, linkId, cursor);
+    const rows = await db.select({ id: guests.id, name: guests.name, status: guests.status,
+      createdAt: guests.createdAt, checkInTime: guests.checkInTime })
+      .from(guests).innerJoin(externalDjLinks, query.join).where(query.where)
+      .orderBy(...query.order).limit(LINK_PAGE_SIZE + 1);
+    const page = rows.slice(0, LINK_PAGE_SIZE);
+    const last = page.at(-1);
+    return { data: {
+      guests: page.map((guest) => ({ ...guest, status: guest.status as "pending" | "checked" })),
+      nextCursor: rows.length > LINK_PAGE_SIZE && last ? { id: last.id, value: last.createdAt } : null,
+    }, error: null };
+  } catch (error) {
+    await reportServerError("external_link.guests", error);
+    return { data: null, error: "Unable to load registered guests right now." };
   }
 }
 

@@ -2,8 +2,8 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { DatabaseSync } from "node:sqlite";
 import { drizzle } from "drizzle-orm/sqlite-proxy";
-import { externalDjLinks } from "@/lib/db/schema";
-import { buildLinkListQuery } from "@/lib/external-links/list-query";
+import { externalDjLinks, guests } from "@/lib/db/schema";
+import { buildLinkGuestQuery, buildLinkListQuery } from "@/lib/external-links/list-query";
 import { LINK_PAGE_SIZE, type LinkListOptions } from "@/lib/external-links/list-types";
 
 function fixture() {
@@ -93,5 +93,34 @@ test("page filters and totals agree on expired, expiring, full, and inactive lin
     assert.deepEqual(active.rows.map((r) => r.id), ["expiring", "later", "full", "ordinary"]);
     const attention = read({ filter: "attention", sort: "djName" });
     assert.deepEqual(attention.rows.map((r) => r.id), ["expired", "expiring", "full", "inactive"]);
+  } finally { sqlite.close(); }
+});
+
+
+test("linked guest pages isolate venue and link ownership, omit deleted rows, and continue through ties", () => {
+  const { sqlite, add } = fixture();
+  try {
+    add("target"); add("other"); add("foreign", "venue-b"); add("removed");
+    sqlite.exec("UPDATE external_dj_links SET deleted_at = '2026-09-18' WHERE id = 'removed'");
+    sqlite.exec("CREATE TABLE guests (id TEXT, venue_id TEXT, external_link_id TEXT, status TEXT, created_at TEXT)");
+    const insert = sqlite.prepare("INSERT INTO guests VALUES (?, ?, ?, ?, ?)");
+    for (let i = 0; i < 13; i++) insert.run(`g-${String(i).padStart(2, "0")}`, "venue-a", "target", i === 1 ? "checked" : "pending", "2026-09-18");
+    for (const [id, venue, link, status] of [["deleted", "venue-a", "target", "deleted"], ["wrong-link", "venue-a", "other", "pending"],
+      ["wrong-venue", "venue-b", "target", "pending"], ["foreign", "venue-b", "foreign", "checked"], ["removed-link", "venue-a", "removed", "pending"]]) insert.run(id, venue, link, status, "2026-09-18");
+    const db = drizzle(async () => ({ rows: [] }));
+    const read = (linkId: string, cursor?: LinkListOptions["cursor"]) => {
+      const query = buildLinkGuestQuery("venue-a", linkId, cursor);
+      const stmt = db.select({ id: guests.id, value: guests.createdAt }).from(guests)
+        .innerJoin(externalDjLinks, query.join).where(query.where).orderBy(...query.order).limit(11).toSQL();
+      return sqlite.prepare(stmt.sql).all(...stmt.params as string[]) as Array<{ id: string; created_at: string }>;
+    };
+    const first = read("target");
+    assert.equal(first.length, 11);
+    assert.equal(first.every((row) => row.id.startsWith("g-")), true);
+    const next = read("target", { id: first[9].id, value: first[9].created_at });
+    assert.equal(next.length, 3);
+    assert.equal(new Set([...first.slice(0, 10), ...next].map((row) => row.id)).size, 13);
+    assert.deepEqual(read("foreign"), []);
+    assert.deepEqual(read("removed"), []);
   } finally { sqlite.close(); }
 });
