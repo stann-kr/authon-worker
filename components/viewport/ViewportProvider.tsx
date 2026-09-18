@@ -37,7 +37,8 @@ export default function ViewportProvider({ children }: { children: ReactNode }) 
         width = window.innerWidth;
       }
       if (!open && !editing) baseline = window.innerHeight;
-      const threshold = Math.max(120, baseline * 0.18);
+      // Wait for the keyboard's closing movement to settle before returning chrome.
+      const threshold = open ? 64 : Math.max(120, baseline * 0.18);
       const obscured = Math.max(window.innerHeight, root.clientHeight) - height;
       const resizedTouchViewport = window.matchMedia("(any-pointer: coarse)").matches && baseline - height > threshold;
       // Browser toolbars and pinch zoom must not be mistaken for a keyboard.

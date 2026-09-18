@@ -140,6 +140,8 @@ test("the mobile dock leaves text entry clear and returns when the software keyb
     assert.equal(screen.queryByRole("button", { name: "Add guest" }), null);
     assert.equal(document.activeElement, input);
     assert.equal(input.value, "Keep this name");
+    resize(window.innerHeight - 100);
+    assert.equal(navigation(), null, "do not reveal the dock midway through keyboard dismissal");
     act(() => input.blur());
     await act(async () => new Promise((resolve) => setTimeout(resolve, 5)));
     assert.equal(navigation(), null, "keep the dock hidden during keyboard dismissal");

@@ -40,9 +40,11 @@
   position: fixed; bottom: var(--door-mobile-dock-height, 0px); left: calc((100% + env(safe-area-inset-left) - env(safe-area-inset-right)) / 2); transform: translateX(-50%);
   z-index: var(--app-z-chrome); display: flex; flex-direction: column; align-items: center; gap: 12px;
   width: max-content; max-width: calc(100% - 24px - env(safe-area-inset-left) - env(safe-area-inset-right)); padding: 12px 0 calc(18px + env(safe-area-inset-bottom)); pointer-events: none;
+  opacity: 1; visibility: visible;
+  transition: opacity 200ms var(--app-ease-out), transform 240ms cubic-bezier(0.32, 0.72, 0, 1);
 }
 .workspace-primary-nav { display: flex; gap: 10px; min-width: 0; max-width: 100%; pointer-events: auto; }
-.workspace-dock[hidden] { display: none; }
+.workspace-dock[data-keyboard-hidden="true"] { opacity: 0; visibility: hidden; transform: translate(-50%, 12px); transition: none; }
 @media (max-width: 999px) {
   :root[data-keyboard-open="true"] .workspace-shell--authenticated > .page-scroll { padding-bottom: 16px; }
 }
@@ -135,6 +137,7 @@
   .workspace-header :is(.workspace-action, .app-button), .workspace-header-account button { min-height: 40px; }
 }
 @media (prefers-reduced-motion: reduce) {
+  .workspace-dock { transition: none; }
   .workspace-shell :is(a, button), .workspace-menu-backdrop :is(a, button) { transition: none; }
 }
 

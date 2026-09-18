@@ -1679,6 +1679,43 @@ test("a credential result owns Escape while the underlying detail stays availabl
   assert.notEqual(document.body.style.overflow, "hidden");
 });
 
+test("nested modals keep the browser canvas theme until the final modal closes", () => {
+  const root = document.documentElement;
+  const originalSurface = root.style.getPropertyValue("--app-surface");
+  const theme = document.createElement("meta");
+  theme.name = "theme-color";
+  theme.content = "#010101";
+  document.head.appendChild(theme);
+  root.style.setProperty("--app-surface", "#123456");
+  function Harness() {
+    const [first, setFirst] = useState(true);
+    const [second, setSecond] = useState(false);
+    return <NextIntlClientProvider locale="en" messages={messages}>
+      <Sheet title="First modal" presentation="modal" open={first} onClose={() => setFirst(false)}>
+        <button onClick={() => setSecond(true)}>Open nested modal</button>
+      </Sheet>
+      <Sheet title="Second modal" presentation="modal" open={second} onClose={() => setSecond(false)}>Content</Sheet>
+    </NextIntlClientProvider>;
+  }
+  try {
+    render(<Harness />);
+    assert.equal(root.dataset.modalOpen, "true");
+    assert.equal(theme.content, "#123456");
+    fireEvent.click(screen.getByRole("button", { name: "Open nested modal" }));
+    fireEvent.click(within(screen.getByRole("dialog", { name: "Second modal" })).getByRole("button", { name: messages.Sheet.close }));
+    assert.equal(theme.content, "#123456");
+    assert.equal(root.dataset.modalOpen, "true");
+    fireEvent.click(within(screen.getByRole("dialog", { name: "First modal" })).getByRole("button", { name: messages.Sheet.close }));
+    assert.equal(root.hasAttribute("data-modal-open"), false);
+    assert.equal(theme.content, "#010101");
+  } finally {
+    cleanup();
+    theme.remove();
+    if (originalSurface) root.style.setProperty("--app-surface", originalSurface);
+    else root.style.removeProperty("--app-surface");
+  }
+});
+
 test("removing an inline panel and its confirmation keeps the workspace available", async () => {
   function Harness() {
     const [open, setOpen] = useState(true);

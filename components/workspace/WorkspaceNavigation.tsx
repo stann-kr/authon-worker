@@ -146,7 +146,8 @@ export default function WorkspaceNavigation({
   </aside>;
 
   return <>
-    <div className="workspace-dock" ref={dockRef} hidden={keyboardOpen}>
+    <div className="workspace-dock" ref={dockRef} data-keyboard-hidden={keyboardOpen}
+      inert={keyboardOpen || undefined} aria-hidden={keyboardOpen || undefined}>
       {actions && <div className="workspace-context-actions" role="group" aria-label={t("actions")}>{actions}</div>}
       <nav ref={navRef} className="workspace-primary-nav" aria-label={t("navigation")}>
         <div className="workspace-primary-scroll">{getWorkspacePrimaryItems(items, activeId).map((item) => link(item))}</div>
