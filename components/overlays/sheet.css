@@ -1,12 +1,12 @@
 .product-sheet-layer { width: 100%; min-width: 0; grid-column: 1 / -1; }
 .product-sheet-layer[hidden] { display: none; }
-.product-sheet { min-width: 0; width: 100%; padding: 0 16px; border-top: 1px solid var(--app-border-subtle); background: var(--app-surface-secondary); color: var(--app-text); }
+.product-sheet { min-width: 0; width: 100%; padding: 0 16px; border-top: 1px solid var(--app-border-subtle); background: var(--disclosure-background, var(--app-surface-secondary)); color: var(--app-text); }
 .product-sheet-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 0; }
 .product-sheet-header h2 { min-width: 0; font-size: 14px; line-height: 22px; font-weight: 500; overflow-wrap: anywhere; }
 .product-sheet-body { container: sheet-content / inline-size; min-width: 0; display: grid; gap: 16px; padding-bottom: 20px; }
 .product-sheet-body[hidden] { display: none; }
 .product-sheet-discard { display: grid; gap: 12px; padding-block: 12px 20px; font-size: 14px; }
-.inline-confirmation { min-width: 0; grid-column: 1 / -1; padding: 16px; border-top: 1px solid var(--app-border); background: var(--app-surface-secondary); }
+.inline-confirmation { min-width: 0; grid-column: 1 / -1; padding: 16px; border-top: 1px solid var(--app-border); background: var(--disclosure-background, var(--app-surface-secondary)); }
 .product-detail-list { display: grid; font-size: 13px; }
 .product-detail-list > div { display: flex; justify-content: space-between; align-items: baseline; gap: 16px; padding: 12px 0; border-bottom: 1px solid var(--app-border-subtle); }
 .product-detail-list dt { color: var(--app-text-muted); flex-shrink: 0; max-width: 45%; }

@@ -16,7 +16,7 @@
 .account-row { min-height: 64px; }
 .account-row:where(:nth-child(even of .account-row)) { background: var(--app-row-stripe); }
 @media (hover: hover) and (pointer: fine) { .account-row:hover { background: var(--app-surface-hover); } }
-.account-row[data-selected="true"] { background: var(--app-surface-active); }
+.account-row[data-selected="true"] { background: var(--app-surface-hover); }
 .account-open { display: block; width: 100%; min-width: 0; min-height: 48px; padding: 4px 0; border: 0; background: transparent; text-align: left; border-radius: 5px; }
 .account-open strong { display: block; font-size: 14px; font-weight: 500; line-height: 20px; color: var(--app-text); overflow-wrap: anywhere; }
 .account-open small { display: block; margin-top: 3px; font-size: 12px; line-height: 18px; color: var(--app-text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -80,3 +80,5 @@
 }
 
 .account-table .account-detail-row > td { padding: 0; }
+
+.account-detail-row { --disclosure-background: var(--app-surface-hover); background: var(--app-surface-hover); }
