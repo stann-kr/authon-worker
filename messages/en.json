@@ -1073,6 +1073,7 @@
   },
   "GuestLimitAdmin": {
     "title": "Additional guest requests",
+    "pendingScopeHint": "Pending requests include all dates and events at this venue. Date and event filters apply to decision history.",
     "loadFailed": "Unable to load additional guest requests.",
     "selectVenue": "Select a venue to review requests.",
     "noPending": "No additional guest requests are awaiting review.",

@@ -69,7 +69,7 @@ export default function EventManagement({
   const transitionTriggerRef = useRef<HTMLButtonElement | null>(null);
   const cancelTransitionRef = useRef<HTMLButtonElement>(null);
   const eventCardRefs = useRef(new Map<string, HTMLElement>());
-  const isTransitioningRef = useRef(false);
+  const isMutatingRef = useRef(false);
   const [name, setName] = useState("");
   const [capacity, setCapacity] = useState("");
   const [targetGuests, setTargetGuests] = useState("");
@@ -127,7 +127,8 @@ export default function EventManagement({
 
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!venueId || busyId) return;
+    if (!venueId || busyId || isMutatingRef.current) return;
+    isMutatingRef.current = true;
     const draft = {
       venueId,
       businessDate: selectedDate,
@@ -138,30 +139,36 @@ export default function EventManagement({
     };
     setBusyId("create");
     setFeedback(null);
-    const response = await createEvent(draft);
-    if (response.error || !response.data) {
+    try {
+      const response = await createEvent(draft);
+      if (response.error || !response.data) {
+        setFeedback({ type: "error", message: t("createFailed") });
+      } else {
+        setName("");
+        setCapacity("");
+        setTargetGuests("");
+        setTemplateSourceEventId(null);
+        setCreateOpen(false);
+        onSelectedEventChange(response.data.event.id);
+        setFeedback({
+          type: "success",
+          message: response.data.event.templateSourceEventId
+            ? t("createdFromTemplate")
+            : t("created"),
+        });
+        await loadEvents();
+        onEventsChanged();
+      }
+    } catch {
       setFeedback({ type: "error", message: t("createFailed") });
-    } else {
-      setName("");
-      setCapacity("");
-      setTargetGuests("");
-      setTemplateSourceEventId(null);
-      setCreateOpen(false);
-      onSelectedEventChange(response.data.event.id);
-      setFeedback({
-        type: "success",
-        message: response.data.event.templateSourceEventId
-          ? t("createdFromTemplate")
-          : t("created"),
-      });
-      await loadEvents();
-      onEventsChanged();
+    } finally {
+      isMutatingRef.current = false;
+      setBusyId(null);
     }
-    setBusyId(null);
   };
 
   const transition = async (event: Event, nextState: EventState) => {
-    if (busyId || isTransitioningRef.current) return;
+    if (busyId || isMutatingRef.current) return;
     if (nextState === "closed" || nextState === "archived") {
       if (
         pendingTransition?.scope !== scope ||
@@ -170,26 +177,31 @@ export default function EventManagement({
         pendingTransition.nextState !== nextState
       ) return;
     }
-    isTransitioningRef.current = true;
+    isMutatingRef.current = true;
     setPendingTransition(null);
     eventCardRefs.current.get(event.id)?.focus({ preventScroll: true });
     setBusyId(event.id);
     setFeedback(null);
-    const response = await transitionEventState(event.id, nextState);
-    if (response.error || !response.data) {
-      setFeedback({ type: "error", message: t("transitionFailed") });
-    } else {
-      setFeedback({ type: "success", message: t("stateChanged") });
-      await loadEvents();
-      onEventsChanged();
-    }
-    window.requestAnimationFrame(() => {
-      if (document.activeElement === document.body) {
-        eventCardRefs.current.get(event.id)?.focus({ preventScroll: true });
+    try {
+      const response = await transitionEventState(event.id, nextState);
+      if (response.error || !response.data) {
+        setFeedback({ type: "error", message: t("transitionFailed") });
+      } else {
+        setFeedback({ type: "success", message: t("stateChanged") });
+        await loadEvents();
+        onEventsChanged();
       }
-    });
-    isTransitioningRef.current = false;
-    setBusyId(null);
+    } catch {
+      setFeedback({ type: "error", message: t("transitionFailed") });
+    } finally {
+      window.requestAnimationFrame(() => {
+        if (document.activeElement === document.body) {
+          eventCardRefs.current.get(event.id)?.focus({ preventScroll: true });
+        }
+      });
+      isMutatingRef.current = false;
+      setBusyId(null);
+    }
   };
 
   const explicitEvents = useMemo(
@@ -381,7 +393,7 @@ export default function EventManagement({
             <div className="record-list">
               {explicitEvents.map((event) => <article key={event.id} className="record-row">
                 <div className="record-summary">
-                  <button type="button" className="record-open" onClick={() => setDetailId(event.id)} disabled={Boolean(busyId)} aria-haspopup="dialog" aria-expanded={detailId === event.id}>
+                  <button type="button" className="record-open" onClick={() => { setFeedback(null); setDetailId(event.id); }} disabled={Boolean(busyId)} aria-haspopup="dialog" aria-expanded={detailId === event.id}>
                     <span className="record-identity"><strong>{event.name}</strong><small>{event.businessDate}{selectedEventId === event.id ? ` · ${t("selected")}` : ""}</small></span>
                     <span className="record-value">{t("capacity")} {event.capacity ?? "—"}</span>
                     <span className="record-status">{t(`state.${event.state}`)}</span>

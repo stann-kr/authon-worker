@@ -26,6 +26,7 @@ export interface GuestLimitRequest {
 export interface GuestLimitRequestView extends GuestLimitRequest {
   userName: string;
   userRole: User["role"];
+  eventName?: string | null;
 }
 
 export interface GuestQuota {
