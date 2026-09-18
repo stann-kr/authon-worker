@@ -501,6 +501,17 @@ export function useLinkCreateController({
 
   return {
     formData,
+    hasDraft: Object.entries(EMPTY_FORM_DATA(selectedDate)).some(([key, value]) => formData[key as keyof LinkCreateFormData] !== value),
+    resetDraft: () => {
+      if (activeCreateOperationIdRef.current !== null || isGeneratedLinkActionPending) return;
+      setFormData(EMPTY_FORM_DATA(selectedDate));
+      setGeneratedLink(null);
+      setGeneratedLinkScopeKey("");
+      setCreateError(null);
+      setCreateErrorScopeKey("");
+      setFormValidationError(null);
+      setTemplateNotice(null);
+    },
     setFormData,
     handleDateChange,
     isGenerating,

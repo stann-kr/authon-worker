@@ -352,9 +352,6 @@ function DoorPageContent() {
                   >
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                       <div>
-                        <h2 className="text-sm font-semibold text-text-heading">
-                          {t("offlineOperations")}
-                        </h2>
                         {(isOfflineMode || isOfflineSyncing) && (
                           <p
                             className="mt-1 text-xs leading-relaxed text-text-muted"

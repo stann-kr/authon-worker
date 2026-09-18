@@ -223,7 +223,7 @@ export default function LinkManagement({
         headingLevel={null}
         dashboard={
           <>
-        {(activeTab === "create" || manageScope === "date") && (
+        {activeTab === "manage" && manageScope === "date" && (
           scopeSelector ? scopeSelector(scopeControls, isGenerating) : <div className="operations-scope">{scopeControls}</div>
         )}
         {(showSectionNavigation || activeTab === "manage") && (
@@ -283,11 +283,12 @@ export default function LinkManagement({
 
       <div className="min-w-0">
         {activeTab === "create" && (
+          <Sheet id="link-create-panel" presentation="modal" title={t("createAccessLink")}
+            busy={isGenerating || isGeneratedLinkActionPending} dirty={create.hasDraft}
+            onClose={() => { create.resetDraft(); setActiveTab("manage"); }}>
+          {scopeSelector ? scopeSelector(scopeControls, isGenerating) : <div className="operations-scope">{scopeControls}</div>}
           <div className="record-form space-y-6">
             <div className="app-panel record-form-panel">
-              <h3 className="record-form-title">
-                {t("createAccessLink")}
-              </h3>
 
               {templateNotice && (
                 <Alert
@@ -646,6 +647,7 @@ export default function LinkManagement({
               </div>
             )}
           </div>
+          </Sheet>
         )}
 
         {activeTab === "manage" && (

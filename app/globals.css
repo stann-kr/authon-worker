@@ -460,7 +460,7 @@ main[tabindex="-1"]:focus-visible {
   outline-offset: 3px;
 }
 
-main[tabindex="-1"][data-route-focus="true"]:focus-visible {
+main[tabindex="-1"]:is([data-route-focus="true"], [data-overlay-focus="true"]):focus-visible {
   outline: none;
 }
 
