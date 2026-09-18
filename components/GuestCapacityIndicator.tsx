@@ -4,7 +4,7 @@ interface GuestCapacityIndicatorProps {
   limit: number | null;
 }
 
-/** 게스트 추가 패널 header에서 남은 정원과 사용률 경계선을 표시합니다. */
+/** 게스트 추가 영역의 남은 정원과 부족 상태를 표시합니다. */
 export default function GuestCapacityIndicator({
   label,
   remaining,
@@ -18,7 +18,6 @@ export default function GuestCapacityIndicator({
       : isUnlimited
         ? 100
         : 0;
-  const usedRatio = isUnlimited ? 0 : 100 - remainingRatio;
   const isAtLimit = !isUnlimited && remaining <= 0;
   const isRunningLow =
     !isUnlimited && !isAtLimit && limit > 0 && remainingRatio <= 25;
@@ -27,11 +26,6 @@ export default function GuestCapacityIndicator({
     : isRunningLow
       ? "text-status-waiting"
       : "text-text-heading";
-  const meterClasses = isAtLimit
-    ? "bg-status-danger"
-    : isRunningLow
-      ? "bg-status-waiting"
-      : "bg-text-muted";
 
   return (
     <dl className="flex shrink-0 items-baseline gap-2 whitespace-nowrap">
@@ -49,15 +43,6 @@ export default function GuestCapacityIndicator({
             / {limit}
           </span>
         )}
-      </dd>
-      <dd
-        className="absolute inset-x-0 -bottom-px h-0.5"
-        aria-hidden="true"
-      >
-        <span
-          className={`block h-full ${meterClasses}`}
-          style={{ width: `${usedRatio}%` }}
-        />
       </dd>
     </dl>
   );
