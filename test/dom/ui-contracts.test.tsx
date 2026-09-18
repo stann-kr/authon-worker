@@ -676,6 +676,11 @@ test("external DJ autocomplete supports keyboard selection and a new-name fallba
   fireEvent.change(input, { target: { value: "DJ STA" } });
   assert.ok(screen.getByRole("listbox", { name: "Existing DJ names" }));
 
+  fireEvent.keyDown(input, { key: "Enter", isComposing: true });
+  assert.equal((input as HTMLInputElement).value, "DJ STA");
+  assert.equal(screen.getByTestId("selected-dj").textContent, "new");
+  fireEvent.keyDown(input, { key: "Escape", isComposing: true });
+  assert.ok(screen.getByRole("listbox"));
   fireEvent.keyDown(input, { key: "ArrowDown" });
   fireEvent.keyDown(input, { key: "ArrowUp" });
   fireEvent.keyDown(input, { key: "Enter" });
@@ -737,6 +742,10 @@ test("external event autocomplete supports keyboard selection and free text", ()
   fireEvent.focus(input);
   fireEvent.change(input, { target: { value: "fri" } });
   assert.ok(screen.getByRole("listbox", { name: "Existing event names" }));
+  fireEvent.keyDown(input, { key: "Enter", isComposing: true });
+  fireEvent.keyDown(input, { key: "Enter", keyCode: 229 });
+  assert.equal(screen.getByTestId("event-value").textContent, "FRI");
+  assert.ok(screen.getByRole("listbox"));
   fireEvent.keyDown(input, { key: "Enter" });
   assert.equal(screen.getByTestId("event-value").textContent, "FRIDAY NIGHT");
   assert.equal(screen.queryByRole("listbox") === null, true);
@@ -1371,6 +1380,7 @@ test("product sheet protects changed input, blocks dismissal while saving and re
 
 test("detail moves between desktop accordion and mobile modal without losing its draft or focus", () => {
   let mobile = false;
+  let closeCount = 0;
   const originalMedia = window.matchMedia;
   const listeners = new Set<() => void>();
   window.matchMedia = (query) => ({ ...originalMedia(query),
@@ -1382,7 +1392,7 @@ test("detail moves between desktop accordion and mobile modal without losing its
   try {
     const frame = (size: "default" | "record" = "default") => <NextIntlClientProvider locale="en" messages={messages}>
       <div className="workspace-shell"><main id="main-content" /></div>
-      <Sheet title="Guest detail" presentation="detail" size={size} onClose={() => {}}>
+      <Sheet title="Guest detail" presentation="detail" size={size} onClose={() => { closeCount++; }}>
         <label>Note<input defaultValue="Selected guest" /></label>
       </Sheet>
     </NextIntlClientProvider>;
@@ -1403,6 +1413,11 @@ test("detail moves between desktop accordion and mobile modal without losing its
     assert.equal(input.selectionStart, 2);
     assert.equal(input.selectionEnd, 5);
     assert.equal(input.value, "Unsubmitted guest note");
+    fireEvent.keyDown(input, { key: "Escape", isComposing: true });
+    assert.equal(screen.getByRole("dialog", { name: "Guest detail" }), panel);
+    assert.equal(closeCount, 0);
+    fireEvent.keyDown(input, { key: "Escape" });
+    assert.equal(closeCount, 1);
     resize(false);
     assert.equal(panel.hasAttribute("aria-modal"), false);
     assert.equal(screen.getByRole("region", { name: "Guest detail" }), panel);

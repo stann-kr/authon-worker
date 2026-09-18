@@ -1,0 +1,9 @@
+/* Keep suggestions in the mobile document flow so a keyboard cannot strand
+   the last options underneath a fixed dock or a clipping form container. */
+@media (max-width: 999px) {
+  .link-name-suggestions {
+    position: static;
+    max-height: min(16rem, max(88px, calc(var(--app-viewport-height, 100dvh) * 0.35)));
+    overscroll-behavior: contain;
+  }
+}

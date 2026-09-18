@@ -7,6 +7,7 @@ import Button from "../Button";
 import Icon from "../Icon";
 import { useIsRouteTransitionActive } from "../RouteTransitionProvider";
 import { lockModalBackground } from "./modal-lock";
+import { useKeyboardOpen } from "../viewport/ViewportProvider";
 
 interface SheetProps {
   id?: string;
@@ -54,6 +55,7 @@ export default function Sheet({ id, open = true, title, children, onClose, prese
   wide = false, size = "default", busy = false, dirty = false, protectEdits = false,
   blockDuringRouteTransition = true }: SheetProps) {
   const t = useTranslations("Sheet");
+  const keyboardOpen = useKeyboardOpen();
   const routeTransitionActive = useIsRouteTransitionActive();
   const transitioning = blockDuringRouteTransition && routeTransitionActive;
   const [mobile, setMobile] = useState(false);
@@ -64,6 +66,7 @@ export default function Sheet({ id, open = true, title, children, onClose, prese
   const layerRef = useRef<HTMLDivElement>(null);
   const titleId = useId();
   const panelRef = useRef<HTMLDivElement>(null);
+  const bodyRef = useRef<HTMLDivElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
   const continueRef = useRef<HTMLButtonElement>(null);
   const editFocus = useRef<HTMLElement | null>(null);
@@ -161,23 +164,40 @@ export default function Sheet({ id, open = true, title, children, onClose, prese
   }, [open]);
 
   useLayoutEffect(() => {
+    if (!open || !modal || !keyboardOpen || transitioning) return;
+    let frame = 0;
+    const revealInput = () => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => {
+        const body = bodyRef.current;
+        const input = document.activeElement;
+        if (!body || !(input instanceof HTMLElement) || !body.contains(input)) return;
+        const visible = body.getBoundingClientRect();
+        const field = input.getBoundingClientRect();
+        if (field.top < visible.top + 12) body.scrollTop += field.top - visible.top - 12;
+        else if (field.bottom > visible.bottom - 12) {
+          body.scrollTop += Math.min(field.top - visible.top - 12, field.bottom - visible.bottom + 12);
+        }
+      });
+    };
+    revealInput();
+    const body = bodyRef.current;
+    body?.addEventListener("focusin", revealInput);
+    window.visualViewport?.addEventListener("resize", revealInput);
+    return () => {
+      cancelAnimationFrame(frame);
+      body?.removeEventListener("focusin", revealInput);
+      window.visualViewport?.removeEventListener("resize", revealInput);
+    };
+  }, [open, modal, keyboardOpen, transitioning]);
+
+  useLayoutEffect(() => {
     if (!open || !modal || transitioning || !host) return;
     const layer = layerRef.current;
     if (!layer) return;
     const unlock = lockModalBackground(host);
-    const measure = () => {
-      const viewport = window.visualViewport;
-      const height = viewport?.height ?? window.innerHeight;
-      const top = viewport?.offsetTop ?? 0;
-      layer.style.setProperty("--sheet-viewport-top", `${top}px`);
-      layer.style.setProperty("--sheet-viewport-bottom", `${Math.max(0, window.innerHeight - top - height)}px`);
-      layer.style.setProperty("--sheet-max-height", `${Math.max(120, height - 16)}px`);
-    };
-    measure();
-    window.addEventListener("resize", measure);
-    window.visualViewport?.addEventListener("resize", measure);
-    window.visualViewport?.addEventListener("scroll", measure);
     const keydown = (event: KeyboardEvent) => {
+      if (event.isComposing || event.keyCode === 229) return;
       const panel = panelRef.current;
       if (event.defaultPrevented || !panel ||
         [...document.querySelectorAll('.product-sheet-layer[data-modal="true"]:not([hidden])')].at(-1) !== layer) return;
@@ -204,9 +224,6 @@ export default function Sheet({ id, open = true, title, children, onClose, prese
     document.addEventListener("keydown", keydown);
     return () => {
       document.removeEventListener("keydown", keydown);
-      window.removeEventListener("resize", measure);
-      window.visualViewport?.removeEventListener("resize", measure);
-      window.visualViewport?.removeEventListener("scroll", measure);
       unlock();
     };
   }, [open, modal, transitioning, host]);
@@ -218,6 +235,7 @@ export default function Sheet({ id, open = true, title, children, onClose, prese
       <div id={id} ref={panelRef} className="product-sheet" data-wide={wide} data-size={size} role={modal ? "dialog" : "region"} aria-modal={modal || undefined} data-presentation={presentation}
         aria-labelledby={titleId} aria-busy={busy} tabIndex={-1}
         onKeyDown={(event) => {
+          if (event.nativeEvent.isComposing || event.nativeEvent.keyCode === 229) return;
           if (event.key !== "Escape" || event.defaultPrevented || transitioning) return;
           event.preventDefault();
           event.stopPropagation();
@@ -244,7 +262,7 @@ export default function Sheet({ id, open = true, title, children, onClose, prese
           <Button ref={continueRef} onClick={keepEditing}>{t("continue")}</Button>
           <Button variant="outline" onClick={completeClose} disabled={busy}>{t("discard")}</Button>
         </div>}
-        <div id={`${titleId}-body`} className="product-sheet-body" hidden={discard}>{children}</div>
+        <div ref={bodyRef} id={`${titleId}-body`} className="product-sheet-body" hidden={discard}>{children}</div>
       </div>
     </div>);
   return <><div ref={anchorRef} style={{ display: "contents" }} />{createPortal(content, host)}</>;
