@@ -1020,7 +1020,13 @@ test("CSV mapping and line preview controls keep native labels and file boundari
   const fileInput = screen.getByLabelText("Import a CSV file");
   assert.equal(fileInput.getAttribute("type"), "file");
   assert.match(fileInput.getAttribute("accept") ?? "", /text\/csv/);
-  assert.equal(screen.getByLabelText("Names to paste").tagName, "TEXTAREA");
+  const namesInput = screen.getByLabelText("Names to paste");
+  assert.equal(namesInput.tagName, "TEXTAREA");
+  const pasteSection = namesInput.closest("details")!;
+  const csvSection = fileInput.closest("details")!;
+  assert.notEqual(csvSection, pasteSection);
+  assert.equal(csvSection.parentElement, pasteSection.parentElement);
+  assert.ok(pasteSection.compareDocumentPosition(csvSection) & Node.DOCUMENT_POSITION_FOLLOWING);
 });
 
 test("a completed CSV submission clears the import draft before the sheet closes", async () => {
@@ -1034,12 +1040,15 @@ test("a completed CSV submission clears the import draft before the sheet closes
     </Sheet>
   </NextIntlClientProvider>);
   const fileInput = screen.getByLabelText(messages.BulkGuestEntry.csv.fileLabel) as HTMLInputElement;
+  fireEvent.click(fileInput.closest("details")!.querySelector("summary")!);
   const file = new File(["name\nCSV Guest"], "guests.csv", { type: "text/csv" });
   Object.defineProperty(file, "text", { value: async () => "name\nCSV Guest" });
   // JSDOM does not populate the native file input value when its files change.
   Object.defineProperty(fileInput, "value", { configurable: true, writable: true, value: "C:\\fakepath\\guests.csv" });
   await act(async () => { fireEvent.change(fileInput, { target: { files: [file] } }); });
   fireEvent.click(screen.getByRole("button", { name: messages.BulkGuestEntry.csv.apply }));
+  const namesInput = screen.getByLabelText("Names to paste") as HTMLTextAreaElement;
+  assert.equal(namesInput.closest("details")!.open, true);
   await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Add 1" })); });
   assert.equal((screen.getByLabelText("Names to paste") as HTMLTextAreaElement).value, "");
   assert.equal(fileInput.value, "");
