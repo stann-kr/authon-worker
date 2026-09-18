@@ -274,7 +274,9 @@ test("mobile scope choices retain their owner state when the controls move betwe
   fireEvent.click(screen.getByRole("button", { name: messages.Workspace.applyScope }));
   await waitFor(() => assert.equal(document.activeElement === trigger, true));
   assert.match(trigger.textContent ?? "", /Night event/);
-  fireEvent.click(trigger);
+  resize(true);
+  assert.equal(document.activeElement === screen.getByRole("combobox"), true, "the collapsed mobile trigger hands focus to desktop controls");
+  resize(false);
   screen.getByRole("combobox").focus();
   resize(true);
   assert.equal(screen.queryByRole("dialog", { name: "All menus" }) === null, true);

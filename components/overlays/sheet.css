@@ -4,10 +4,10 @@
 html[data-modal-open="true"], html[data-modal-open="true"] body { background-color: var(--app-surface); }
 .product-sheet-layer[data-modal="true"]:not([hidden]) { position: fixed; inset: 0; z-index: var(--app-z-dialog); background: rgb(0 0 0 / 0.6); }
 .product-sheet-layer[data-modal="true"] > .product-sheet-viewport { position: absolute; inset: var(--app-viewport-top, 0px) 0 auto; height: var(--app-viewport-height, 100dvh); display: flex; align-items: flex-end; justify-content: center; }
-.product-sheet-layer[data-modal="true"] > .product-sheet-viewport > .product-sheet { display: flex; flex-direction: column; width: min(100%, 560px); max-height: calc(100% - 16px); overflow-y: auto; overscroll-behavior: contain; scroll-padding-block: 84px 16px; border: 0; border-radius: 20px 20px 0 0; padding: 0; background: var(--app-surface); }
-.product-sheet-layer[data-modal="true"] > .product-sheet-viewport > .product-sheet > .product-sheet-header { position: sticky; top: 0; z-index: 1; flex-shrink: 0; padding-inline: max(20px, env(safe-area-inset-left)) max(20px, env(safe-area-inset-right)); border-bottom: 1px solid var(--app-border-subtle); background: var(--app-surface); }
+.product-sheet-layer[data-modal="true"] > .product-sheet-viewport > .product-sheet { display: flex; flex-direction: column; width: min(100%, 560px); max-height: calc(100% - 16px); overflow: hidden; border: 0; border-radius: 20px 20px 0 0; padding: 0; background: var(--app-surface); }
+.product-sheet-layer[data-modal="true"] > .product-sheet-viewport > .product-sheet > .product-sheet-header { flex-shrink: 0; padding-inline: max(20px, env(safe-area-inset-left)) max(20px, env(safe-area-inset-right)); border-bottom: 1px solid var(--app-border-subtle); background: var(--app-surface); }
 .product-sheet-layer[data-modal="true"] > .product-sheet-viewport > .product-sheet > .product-sheet-header h2 { font-size: 16px; }
-.product-sheet-layer[data-modal="true"] > .product-sheet-viewport > .product-sheet > :is(.product-sheet-body, .product-sheet-discard) { position: relative; z-index: 0; flex-shrink: 0; overflow: visible; padding: 16px max(22px, env(safe-area-inset-right)) max(20px, var(--app-safe-area-bottom, env(safe-area-inset-bottom))) max(22px, env(safe-area-inset-left)); }
+.product-sheet-layer[data-modal="true"] > .product-sheet-viewport > .product-sheet > :is(.product-sheet-body, .product-sheet-discard) { min-height: 0; overflow-y: auto; overscroll-behavior: contain; scroll-padding-block: 16px; padding: 16px max(22px, env(safe-area-inset-right)) max(20px, var(--app-safe-area-bottom, env(safe-area-inset-bottom))) max(22px, env(safe-area-inset-left)); }
 @media (max-width: 999px) {
   /* Paint the obscured area as part of the sheet; only its visible viewport scrolls. */
   .product-sheet-layer[data-modal="true"]:not([hidden])::after { content: ""; position: absolute; top: calc(var(--app-viewport-top, 0px) + var(--app-viewport-height, 100dvh)); bottom: 0; left: 50%; transform: translateX(-50%); width: min(100%, 560px); background: var(--app-surface); pointer-events: none; }
@@ -21,9 +21,11 @@ html[data-modal-open="true"], html[data-modal-open="true"] body { background-col
 .product-sheet { min-width: 0; width: 100%; padding: 0 16px; border-top: 1px solid var(--app-border-subtle); background: var(--disclosure-background, var(--app-surface-secondary)); color: var(--app-text); }
 .product-sheet-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 0; }
 .product-sheet-header h2 { min-width: 0; font-size: 14px; line-height: 22px; font-weight: 500; overflow-wrap: anywhere; }
-.product-sheet-body { container: sheet-content / inline-size; min-width: 0; display: grid; gap: 16px; padding-bottom: 20px; }
+.product-sheet-body { container: sheet-content / inline-size; min-width: 0; display: grid; align-content: start; gap: 16px; padding-bottom: 20px; }
 .product-sheet-body[hidden] { display: none; }
 .product-sheet-discard { display: grid; gap: 12px; padding-block: 12px 20px; font-size: 14px; }
+.product-sheet-body > .record-form { width: 100%; }
+.product-sheet-body .record-form-panel { padding: 0; border: 0; background: transparent; }
 .inline-confirmation { min-width: 0; grid-column: 1 / -1; padding: 16px; border-top: 1px solid var(--app-border); background: var(--disclosure-background, var(--app-surface-secondary)); }
 .product-detail-list { display: grid; font-size: 13px; }
 .product-detail-list > div { display: flex; justify-content: space-between; align-items: baseline; gap: 16px; padding: 12px 0; border-bottom: 1px solid var(--app-border-subtle); }

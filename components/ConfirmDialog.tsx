@@ -2,6 +2,7 @@
 
 import { useEffect, useId, useRef, type ReactNode } from "react";
 import Button from "./Button";
+import { restoreOverlayFocus } from "./overlays/restore-focus";
 
 interface ConfirmDialogProps {
   open: boolean;
@@ -35,7 +36,7 @@ export default function ConfirmDialog({ open, title, description, confirmLabel, 
       const available = opener?.isConnected && !opener.closest("[hidden], [inert]") && !opener.matches(":disabled");
       const target = available ? opener : document.getElementById("main-content");
       if (target && !target.hasAttribute("tabindex") && target.tagName === "MAIN") target.tabIndex = -1;
-      target?.focus({ preventScroll: true });
+      restoreOverlayFocus(target);
     };
   }, [open]);
   if (!open) return null;

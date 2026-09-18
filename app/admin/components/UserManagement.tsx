@@ -268,7 +268,7 @@ export default function UserManagement({
     >
 
       <div className="min-w-0">
-        {activeTab === "create" && <div className="record-form"><InviteUser /></div>}
+        {activeTab === "create" && <InviteUser onClose={() => setActiveTab("users")} />}
         {activeTab === "users" && (
           <div className="account-directory">
             <div className="account-directory-body">

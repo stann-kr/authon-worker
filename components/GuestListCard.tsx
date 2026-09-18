@@ -4,6 +4,7 @@ import Icon from "./Icon";
 import StatusLabel from "./StatusLabel";
 import ConfirmDialog from "./ConfirmDialog";
 import Sheet from "./overlays/Sheet";
+import { restoreOverlayFocus } from "./overlays/restore-focus";
 import { RosterSelection } from "./guests/RosterView";
 import { formatVenueTime } from "@/lib/date";
 import { useTranslations } from "next-intl";
@@ -107,7 +108,7 @@ const GuestListCard: React.FC<GuestListCardProps> = ({
     if (!restoreFocusAfterDeleteRef.current || document.activeElement !== document.body) return;
     const mainContent = document.getElementById("main-content");
     if (mainContent && !mainContent.hasAttribute("tabindex")) mainContent.tabIndex = -1;
-    mainContent?.focus({ preventScroll: true });
+    restoreOverlayFocus(mainContent);
   }, []);
 
   const cancelDelete = () => {

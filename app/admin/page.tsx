@@ -216,6 +216,9 @@ function AdminPageContent() {
       actions={contextTasks.length > 0 && activeTask !== "password-requests" ? contextTasks.map((task) => (
         <WorkspaceAction key={task.id} icon={task.id.endsWith("create") ? "add" : "view"} tone={task.id.endsWith("create") ? "accent" : "muted"}
           aria-pressed={activeTask === task.id} disabled={!isRoleReady || isRouteTransitionActive}
+          aria-haspopup={task.id.endsWith("create") ? "dialog" : undefined}
+          aria-expanded={task.id.endsWith("create") ? activeTask === task.id : undefined}
+          aria-controls={task.id.endsWith("create") && activeTask === task.id ? `${task.id}-panel` : undefined}
           onClick={() => changeTask(task.id)}>{task.label}</WorkspaceAction>
       )) : undefined}>
       <h1 id="admin-page-title" className="sr-only">
