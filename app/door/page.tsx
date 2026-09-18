@@ -382,12 +382,9 @@ function DoorPageContent() {
                     type="button"
                     aria-pressed={prioritizeWaiting}
                     onClick={() => setPrioritizeWaiting((current) => !current)}
-                    className={`pressable min-h-11 whitespace-nowrap border px-3 py-2 text-xs font-medium ${
-                      prioritizeWaiting
-                        ? "border-border-strong bg-surface-active text-text-heading"
-                        : "border-border-default bg-surface-raised text-text-muted hover:border-border-strong hover:text-text-heading"
-                    }`}
+                    className="collection-toggle-button pressable min-h-11 whitespace-nowrap border border-border-default bg-surface-raised px-3 py-2 text-xs font-medium text-text-muted"
                   >
+                    <Icon name="check" size={14} className={prioritizeWaiting ? "" : "invisible"} />
                     {t("prioritizeWaiting")}
                   </button>
                 }

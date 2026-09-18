@@ -6,3 +6,27 @@
 .auth-heading h1 { font-size: 22px; line-height: 1.4; font-weight: 600; letter-spacing: -0.4px; overflow-wrap: anywhere; }
 .auth-panel form { min-width: 0; }
 .auth-panel .app-field { background: #0c0c0c; }
+
+.auth-login-page { display: grid; align-items: center; background: var(--app-canvas); }
+.auth-login-page .auth-frame { max-width: 400px; }
+.auth-login-header { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px 20px; padding-bottom: 20px; border-bottom: 1px solid var(--app-border-subtle); }
+.auth-login-header .auth-brand { margin: 0; color: var(--app-text); font-size: 18px; font-weight: 500; letter-spacing: -0.4px; }
+.auth-login-header [role="group"] { gap: 2px; padding: 0; border: 0; background: transparent; }
+.auth-login-header button { min-height: 44px; border-radius: 8px; }
+.auth-login-page .auth-panel { padding-top: 28px; padding-bottom: 0; }
+.auth-login-page .auth-heading { margin-bottom: 24px; }
+.auth-login-page .auth-heading h1 { font-size: 20px; font-weight: 500; }
+.auth-login-form { display: grid; gap: 20px; }
+.auth-login-page .app-field { border-radius: 8px; background: var(--app-surface-secondary); }
+.auth-login-form > .app-button { min-height: 46px; padding-block: 10px; border-radius: 8px; }
+.auth-login-options { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 4px 16px; margin-block: -4px; }
+.auth-login-remember { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; font-size: 13px; color: var(--app-text-body); cursor: pointer; }
+.auth-login-link { display: inline-flex; align-items: center; min-height: 44px; font-size: 13px; color: var(--app-text-muted); }
+.auth-login-secondary { display: flex; align-items: center; justify-content: center; min-width: 0; min-height: 44px; padding: 8px 12px; border: 1px solid var(--app-border-subtle); border-radius: 8px; color: var(--app-text-body); font-size: 13px; text-align: center; overflow-wrap: anywhere; }
+.auth-login-secondary:disabled { opacity: 0.5; }
+.auth-login-page footer > div { margin-top: 24px; padding-block: 16px 0; border: 0; }
+.auth-login-page footer p { font-size: 11px; }
+@media (hover: hover) and (pointer: fine) {
+  .auth-login-link:hover { color: var(--app-text); }
+  .auth-login-secondary:hover { background: var(--app-surface-hover); }
+}

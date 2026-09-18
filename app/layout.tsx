@@ -9,6 +9,7 @@ import "./admin/components/user-management.css";
 import "./guest/components/external-guest.css";
 import "@/components/overlays/sheet.css";
 import "@/components/guests/roster.css";
+import "@/components/guests/bulk-entry.css";
 import "@/components/records/records.css";
 import "@/components/operations/operations.css";
 import "@/components/dates/date-field.css";

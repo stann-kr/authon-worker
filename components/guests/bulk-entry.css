@@ -1,0 +1,13 @@
+.guest-bulk-entry { min-width: 0; }
+.guest-bulk-entry > .disclosure-section > summary { padding-inline: 0; }
+.guest-csv-import { display: grid; gap: 12px; padding-block: 4px 12px; }
+.guest-csv-import > .app-helper { margin-top: 0; }
+.guest-csv-file { display: block; width: 100%; min-width: 0; min-height: 44px; border: 0; border-radius: 0; background: transparent; color: var(--app-text-muted); font: inherit; font-size: 13px; }
+.guest-csv-file::file-selector-button { min-height: 44px; margin-right: 12px; padding: 10px 16px; border: 1px solid var(--app-border-subtle); border-radius: 8px; background: var(--app-surface-raised); color: var(--app-text); font: inherit; font-weight: 500; cursor: pointer; }
+.guest-csv-file:disabled { opacity: 0.5; }
+.guest-csv-file:disabled::file-selector-button { cursor: not-allowed; }
+.guest-csv-file:focus-visible { outline: 2px solid var(--app-focus); outline-offset: 4px; border-radius: 8px; }
+.guest-csv-preview { padding: 12px; border: 1px solid var(--app-border-subtle); border-radius: 8px; background: var(--app-surface-secondary); color: var(--app-text-body); font-size: 12px; line-height: 1.6; }
+@media (hover: hover) and (pointer: fine) {
+  .guest-csv-file:not(:disabled)::file-selector-button:hover { background: var(--app-surface-hover); }
+}
