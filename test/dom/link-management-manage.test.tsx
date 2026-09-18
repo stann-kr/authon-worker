@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { registerHooks } from "node:module";
 import { afterEach, test } from "node:test";
 import { NextIntlClientProvider } from "next-intl";
 import {
@@ -7,6 +8,8 @@ import {
   fireEvent,
   render,
   screen,
+  waitFor,
+  within,
 } from "@testing-library/react";
 
 import messages from "@/messages/en.json";
@@ -15,7 +18,7 @@ import {
   useLinkManageController,
   type LinkManageControllerActions,
 } from "@/app/admin/components/useLinkManageController";
-import type { ExternalDJLink } from "@/lib/external-links/types";
+import type { ExternalDJLink, ExternalLinkPage } from "@/lib/external-links/types";
 
 afterEach(cleanup);
 
@@ -41,12 +44,15 @@ function createDeferred<T>() {
   return { promise, resolve };
 }
 
+function page(links: ExternalDJLink[], nextCursor: ExternalLinkPage["nextCursor"] = null): ExternalLinkPage {
+  return { links, nextCursor, stats: { total: links.length, active: links.filter((link) => link.active).length, attention: 0 } };
+}
+
 function createActions(
   overrides: Partial<LinkManageControllerActions> = {},
 ): LinkManageControllerActions {
   return {
-    fetchByDate: async () => ({ data: [], error: null }),
-    fetchRecent: async () => ({ data: [], error: null }),
+    fetchPage: async () => ({ data: page([]), error: null }),
     deleteLink: async () => ({ error: null }),
     deactivateLink: async () => ({ error: null }),
     activateLink: async () => ({ error: null }),
@@ -128,6 +134,12 @@ function ManageHarness({
       >
         Template
       </button>
+      <button onClick={() => void manage.loadMore()}>More</button>
+      <button onClick={() => manage.setManageFilter("active")}>Active filter</button>
+      <output data-testid="more-busy">{String(manage.isLoadingMore)}</output>
+      <output data-testid="has-more">{String(manage.hasMore)}</output>
+      <output data-testid="more-error">{manage.loadMoreError}</output>
+      <output data-testid="total">{manage.dashboardStats.total}</output>
       <output data-testid="state">{manage.listState}</output>
       <output data-testid="links">{manage.sortedLinks.length}</output>
       <output data-testid="ordered-ids">{manage.sortedLinks.map((link) => link.id).join(",")}</output>
@@ -165,16 +177,12 @@ async function flushAsyncWork() {
 test("management starts with recent links across dates and switches to the explicit date scope", async () => {
   const reads: unknown[] = [];
   const actions = createActions({
-    fetchRecent: async (...args) => {
-      reads.push(["recent", ...args]);
-      return { data: [
-        { ...LINK, id: "older", createdAt: "2026-08-19T12:00:00Z" },
+    fetchPage: async (...args) => {
+      reads.push(args);
+      return { data: page(args[1].date ? [LINK] : [
         { ...LINK, id: "newer", createdAt: "2026-08-20T12:00:00Z" },
-      ], error: null };
-    },
-    fetchByDate: async (...args) => {
-      reads.push(["date", ...args]);
-      return { data: [LINK], error: null };
+        { ...LINK, id: "older", createdAt: "2026-08-19T12:00:00Z" },
+      ]), error: null };
     },
   });
   render(<NextIntlClientProvider locale="en" messages={messages}>
@@ -185,49 +193,48 @@ test("management starts with recent links across dates and switches to the expli
   await flushAsyncWork();
   assert.equal(screen.getByTestId("scope").textContent, "recent");
   assert.equal(screen.getByTestId("ordered-ids").textContent, "newer,older");
-  assert.deepEqual(reads, [["recent", "venue-a", 5, null]]);
+  assert.deepEqual(reads, [["venue-a", { filter: "all", sort: "newest", cursor: null }]]);
 
   fireEvent.click(screen.getByRole("button", { name: "By date" }));
   await flushAsyncWork();
   assert.equal(screen.getByTestId("scope").textContent, "date");
-  assert.deepEqual(reads.at(-1), ["date", "venue-a", "2026-08-20", "event-a"]);
+  assert.deepEqual(reads.at(-1), ["venue-a", { date: "2026-08-20", eventId: "event-a", filter: "all", sort: "newest", cursor: null }]);
 });
 
 test("a stale date-scope response cannot replace the current recent list", async () => {
   const dateRequest = createDeferred<{
-    data: ExternalDJLink[];
+    data: ExternalLinkPage;
     error: null;
   }>();
   const recentRequest = createDeferred<{
-    data: ExternalDJLink[];
+    data: ExternalLinkPage;
     error: null;
   }>();
   renderHarness(
     createActions({
-      fetchByDate: async () => dateRequest.promise,
-      fetchRecent: async () => recentRequest.promise,
+      fetchPage: async (_venue, options) => options.date ? dateRequest.promise : recentRequest.promise,
     }),
   );
 
   fireEvent.click(screen.getByRole("button", { name: "By date" }));
   fireEvent.click(screen.getByRole("button", { name: "Recent" }));
   await act(async () => {
-    recentRequest.resolve({ data: [LINK], error: null });
+    recentRequest.resolve({ data: page([LINK]), error: null });
     await recentRequest.promise;
   });
   assert.equal(screen.getByTestId("links").textContent, "1");
 
   await act(async () => {
-    dateRequest.resolve({ data: [], error: null });
+    dateRequest.resolve({ data: page([]), error: null });
     await dateRequest.promise;
   });
   assert.equal(screen.getByTestId("links").textContent, "1");
 });
 
-test("full and partial failures remain distinct from an empty success", async () => {
+test("failed pages remain distinct from an empty success", async () => {
   const errorView = renderHarness(
     createActions({
-      fetchRecent: async () => ({ data: null, error: "LOAD_FAILED" }),
+      fetchPage: async () => ({ data: null, error: "LOAD_FAILED" }),
     }),
   );
   await flushAsyncWork();
@@ -236,11 +243,11 @@ test("full and partial failures remain distinct from an empty success", async ()
   errorView.unmount();
   renderHarness(
     createActions({
-      fetchRecent: async () => ({ data: [LINK], error: "PARTIAL" }),
+      fetchPage: async () => ({ data: page([LINK]), error: "PARTIAL" }),
     }),
   );
   await flushAsyncWork();
-  assert.equal(screen.getByTestId("state").textContent, "partial");
+  assert.equal(screen.getByTestId("state").textContent, "error");
 });
 
 test("the rendered pending lock prevents a duplicate lifecycle mutation", async () => {
@@ -307,19 +314,19 @@ test("one per-link lease rejects contradictory lifecycle writes in the same act"
 
 test("a late pre-commit refresh cannot overwrite the authoritative lifecycle reload", async () => {
   const staleRefresh = createDeferred<{
-    data: ExternalDJLink[];
+    data: ExternalLinkPage;
     error: null;
   }>();
   const activation = createDeferred<{ error: null }>();
   let fetchCalls = 0;
   renderHarness(
     createActions({
-      fetchRecent: async () => {
+      fetchPage: async () => {
         fetchCalls += 1;
         if (fetchCalls === 1)
-          return { data: [{ ...LINK, active: false }], error: null };
+          return { data: page([{ ...LINK, active: false }]), error: null };
         if (fetchCalls === 2) return staleRefresh.promise;
-        return { data: [{ ...LINK, active: true }], error: null };
+        return { data: page([{ ...LINK, active: true }]), error: null };
       },
       activateLink: async () => activation.promise,
     }),
@@ -338,7 +345,7 @@ test("a late pre-commit refresh cannot overwrite the authoritative lifecycle rel
 
   await act(async () => {
     staleRefresh.resolve({
-      data: [{ ...LINK, active: false }],
+      data: page([{ ...LINK, active: false }]),
       error: null,
     });
     await staleRefresh.promise;
@@ -384,4 +391,111 @@ test("a stale managed share cannot publish feedback in a new scope", async () =>
     await shareRequest.promise;
   });
   assert.equal(screen.getByTestId("toast").textContent, "");
+});
+
+test("ten-item pagination deduplicates requests, retains previous rows on failure, and retries the same cursor", async () => {
+  const links = Array.from({ length: 10 }, (_, i) => ({ ...LINK, id: `link-${i}` }));
+  const cursor = { value: "2026-09-18", id: "link-9" };
+  const pending = createDeferred<{ data: ExternalLinkPage | null; error: string | null }>();
+  const reads: unknown[] = [];
+  renderHarness(createActions({ fetchPage: async (_venue, options) => {
+    reads.push(options.cursor);
+    if (!options.cursor) return { data: { ...page(links, cursor), stats: { total: 11, active: 11, attention: 0 } }, error: null };
+    if (reads.length === 2) return pending.promise;
+    return { data: page([links[9], { ...LINK, id: "last" }]), error: null };
+  } }));
+  await flushAsyncWork();
+  assert.equal(screen.getByTestId("links").textContent, "10");
+  assert.equal(screen.getByTestId("total").textContent, "11");
+  fireEvent.click(screen.getByRole("button", { name: "More" }));
+  fireEvent.click(screen.getByRole("button", { name: "More" }));
+  assert.equal(reads.length, 2);
+  assert.equal(screen.getByTestId("more-busy").textContent, "true");
+  await act(async () => { pending.resolve({ data: null, error: "NETWORK" }); });
+  assert.equal(screen.getByTestId("links").textContent, "10");
+  assert.equal(screen.getByTestId("more-busy").textContent, "false");
+  assert.equal(screen.getByTestId("more-error").textContent, messages.LinkAdmin.loadMoreFailed);
+  fireEvent.click(screen.getByRole("button", { name: "More" }));
+  await flushAsyncWork();
+  assert.deepEqual(reads, [null, cursor, cursor]);
+  assert.equal(screen.getByTestId("links").textContent, "11");
+  assert.equal(screen.getByTestId("has-more").textContent, "false");
+});
+
+test("an old next page cannot append after a filter change or a refresh", async () => {
+  for (const nextAction of ["Active filter", "Refresh"]) {
+    const pending = createDeferred<{ data: ExternalLinkPage; error: null }>();
+    let initialCalls = 0;
+    const view = renderHarness(createActions({ fetchPage: async (_venue, options) => {
+      if (options.cursor) return pending.promise;
+      initialCalls++;
+      return { data: page([{ ...LINK, id: initialCalls === 1 ? "old" : "current" }], initialCalls === 1 ? { value: "date", id: "old" } : null), error: null };
+    } }));
+    await flushAsyncWork();
+    fireEvent.click(screen.getByRole("button", { name: "More" }));
+    fireEvent.click(screen.getByRole("button", { name: nextAction }));
+    await flushAsyncWork();
+    await act(async () => { pending.resolve({ data: page([{ ...LINK, id: "stale" }]), error: null }); });
+    assert.equal(screen.getByTestId("ordered-ids").textContent, "current");
+    assert.equal(screen.getByTestId("has-more").textContent, "false");
+    view.unmount();
+  }
+});
+
+test("rendered link management loads ten more at the scroll boundary and retains its inline detail", async () => {
+  const runtime = globalThis as typeof globalThis & { __linkPage?: LinkManageControllerActions["fetchPage"] };
+  const first = createDeferred<{ data: ExternalLinkPage; error: null }>();
+  const next = createDeferred<{ data: ExternalLinkPage; error: null }>();
+  const links = Array.from({ length: 10 }, (_, i) => ({ ...LINK, id: `visible-${i}`, djName: `DJ ${i}`, guestUrl: "https://example.com/guest" }));
+  let calls = 0;
+  runtime.__linkPage = async () => { calls++; return calls === 1 ? first.promise : next.promise; };
+  let intersect: (() => void) | undefined;
+  const previousObserver = globalThis.IntersectionObserver;
+  globalThis.IntersectionObserver = class {
+    constructor(callback: IntersectionObserverCallback) { intersect = () => callback([{ isIntersecting: true } as IntersectionObserverEntry], this as unknown as IntersectionObserver); }
+    observe() {}
+    disconnect() {}
+  } as unknown as typeof IntersectionObserver;
+  const hooks = registerHooks({
+    resolve(specifier, context, nextResolve) {
+      const suffix = ["lib/api/external-links", "components/VenueSelector"].find((value) => specifier.endsWith(value));
+      return suffix ? { url: `mock:link-scroll:${suffix}`, shortCircuit: true } : nextResolve(specifier, context);
+    },
+    load(url, context, nextLoad) {
+      if (!url.startsWith("mock:link-scroll:")) return nextLoad(url, context);
+      const source = url.endsWith("components/VenueSelector")
+        ? 'export const useVenueSelector = () => ({ venueId: "venue-a", venues: [], selectedVenueId: "venue-a", currentVenue: {}, isSuperAdmin: false }); export default function VenueSelector() { return null; }'
+        : 'export const fetchExternalLinkPage = (...args) => globalThis.__linkPage(...args); export const fetchExternalLinkCreateSuggestions = async () => ({data:null,error:null}); export const createExternalLink = fetchExternalLinkCreateSuggestions; export const deleteExternalLink = async () => ({error:null}); export const deactivateExternalLink = deleteExternalLink; export const activateExternalLink = deleteExternalLink;';
+      return { format: "module", shortCircuit: true, source };
+    },
+  });
+  try {
+    const { default: LinkManagement } = await import("@/app/admin/components/LinkManagement");
+    render(<NextIntlClientProvider locale="en" messages={messages}><RouteTransitionProvider>
+      <LinkManagement selectedDate="2026-08-20" businessDate="2026-08-20" onDateChange={() => {}} activeSection="manage" />
+    </RouteTransitionProvider></NextIntlClientProvider>);
+    assert.ok(screen.getByRole("status", { name: messages.Common.loadingContent }));
+    await act(async () => { first.resolve({ data: page(links, { id: "visible-9", value: "2026" }), error: null }); });
+    const opener = screen.getByRole("button", { name: /^DJ 0/ });
+    fireEvent.click(opener);
+    const detail = screen.getByRole("region", { name: "DJ 0" });
+    assert.equal(detail.closest("article")?.contains(opener), true);
+    assert.equal(detail.hasAttribute("aria-modal"), false);
+    act(() => { intersect?.(); intersect?.(); });
+    assert.equal(calls, 2);
+    assert.ok(screen.getByRole("status", { name: messages.Common.loadingContent }));
+    assert.equal(detail.isConnected, true);
+    await act(async () => { next.resolve({ data: page([{ ...LINK, id: "last", djName: "Last DJ" }]), error: null }); });
+    await waitFor(() => assert.ok(screen.getByRole("button", { name: /^Last DJ/ })));
+    assert.equal(screen.queryByRole("button", { name: messages.LinkAdmin.loadMore }) === null, true);
+    fireEvent.click(within(detail).getByRole("button", { name: messages.LinkAdmin.delete }));
+    assert.ok(screen.getByRole("group", { name: messages.LinkAdmin.deleteTitle }));
+    fireEvent.click(opener);
+    assert.equal(screen.queryByRole("region", { name: "DJ 0" }) === null, true);
+    assert.equal(screen.queryByRole("group", { name: messages.LinkAdmin.deleteTitle }) === null, true);
+  } finally {
+    cleanup(); hooks.deregister(); delete runtime.__linkPage;
+    if (previousObserver) globalThis.IntersectionObserver = previousObserver;
+    else Reflect.deleteProperty(globalThis, "IntersectionObserver");
+  }
 });

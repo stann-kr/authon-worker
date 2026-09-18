@@ -92,8 +92,8 @@ export default function RosterView({ header, filters, filtersActive = false, var
             <Icon name="search" size={18} />
           </button>
           <button type="button" className="product-roster-icon" data-active={filtersActive}
-            aria-label={filtersActive ? t("filtersApplied") : t("filters")} aria-haspopup="dialog"
-            aria-expanded={filtersOpen} onClick={() => setFiltersOpen(true)}><Icon name="settings" size={18} /></button>
+            aria-label={filtersActive ? t("filtersApplied") : t("filters")}
+            aria-expanded={filtersOpen} aria-controls={filtersOpen ? `${searchId}-filters` : undefined} onClick={() => setFiltersOpen((open) => !open)}><Icon name="settings" size={18} /></button>
         </div>}
        </div>
        <div ref={toolsRef} id={searchId} className="product-roster-tools" hidden={!searchVisible}>
@@ -117,7 +117,7 @@ export default function RosterView({ header, filters, filtersActive = false, var
         <div className="product-roster-extra">{header}</div>
        </div>}
       </div>
-      <Sheet open={filtersOpen && !wideSearch} title={t("filters")} onClose={() => setFiltersOpen(false)}>
+      <Sheet id={`${searchId}-filters`} open={filtersOpen && !wideSearch} title={t("filters")} onClose={() => setFiltersOpen(false)}>
         <div ref={filterPanelRef} className="product-roster-filter-panel">
           {filters}
           <div className="product-roster-filter-actions">{header}</div>

@@ -275,7 +275,7 @@ const GuestListCard: React.FC<GuestListCardProps> = ({
         </dl>
         {mode === "operations" && onDelete && guest.status !== "deleted" && <div className="product-guest-detail-actions">
           <Button ref={deleteTriggerRef} variant="danger" onClick={() => setDeleteConfirmation(confirmationKey)}
-            disabled={isDeleteDisabled} isLoading={isDeleteLoading} aria-haspopup="dialog">
+            disabled={isDeleteDisabled} isLoading={isDeleteLoading}>
             {t("deleteGuest")}
           </Button>
           {deleteError && <p className="mt-2 text-sm text-status-danger" role="alert">{deleteError}</p>}
@@ -283,7 +283,6 @@ const GuestListCard: React.FC<GuestListCardProps> = ({
         </div>}
         </div></div>
       </div>
-    </article>
       {onUndo && undoConfirmation === confirmationKey && guest.status === "checked" && <ConfirmDialog open
         title={rosterT("undoTitle")} description={rosterT("undoDescription", { name: guest.name })}
         confirmLabel={rosterT("undoConfirm")} cancelLabel={t("cancel")} isLoading={isUndoLoading}
@@ -302,6 +301,7 @@ const GuestListCard: React.FC<GuestListCardProps> = ({
           confirmDisabled={isDeleteDisabled}
         />
       )}
+    </article>
     </>
   );
 };

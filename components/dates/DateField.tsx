@@ -5,7 +5,6 @@ import { useLocale, useTranslations } from "next-intl";
 import { formatDateDisplay, getBusinessDate } from "@/lib/date";
 import Icon from "../Icon";
 import Sheet from "../overlays/Sheet";
-import { lockInertSurface } from "../overlays/modal-lock";
 
 function dateAt(year: number, month: number, day = 1) {
   const date = new Date(0);
@@ -105,14 +104,9 @@ const DateField = forwardRef<HTMLInputElement, DateFieldProps>(function DateFiel
     calendarRef.current?.querySelector<HTMLButtonElement>(`button[data-date="${cursorValue}"]`)?.focus({ preventScroll: true });
     focusDay.current = false;
   }, [open, disabled, cursorValue]);
-  useLayoutEffect(() => {
-    if (!open || disabled) return;
-    // The scope sheet stays open underneath the calendar, with its own lock intact.
-    return lockInertSurface(inputRef.current?.closest<HTMLElement>(".product-sheet") ?? null);
-  }, [open, disabled]);
   useLayoutEffect(() => { if (disabled) setOpen(false); }, [disabled]);
 
-  return <>
+  return <div className="date-field-group">
     <div className={`date-field app-field-frame ${className}`}>
       <div className={`app-field date-field-display ${invalid ? "border-status-danger" : ""}`}>
         <span>{formatDateDisplay(value, locale)}</span><Icon name="calendar" size={18} className="text-text-muted" />
@@ -123,8 +117,8 @@ const DateField = forwardRef<HTMLInputElement, DateFieldProps>(function DateFiel
         else if (forwardedRef) forwardedRef.current = element;
       }} className="date-field-input" type="text" role="combobox" readOnly value={value}
         autoComplete="off" disabled={disabled} aria-required={required || undefined} aria-invalid={invalid || undefined}
-        aria-describedby={describedBy} aria-haspopup="dialog" aria-expanded={open && !disabled}
-        aria-controls={open && !disabled ? dialogId : undefined}
+        aria-describedby={describedBy} aria-haspopup="grid" aria-expanded={open && !disabled}
+        aria-controls={open && !disabled ? `${dialogId}-grid` : undefined}
         onClick={openCalendar} onKeyDown={(event) => {
           if (["Enter", " ", "ArrowDown"].includes(event.key)) { event.preventDefault(); openCalendar(); }
         }} />
@@ -159,7 +153,7 @@ const DateField = forwardRef<HTMLInputElement, DateFieldProps>(function DateFiel
             onClick={() => move(changeMonth(cursor, 1))}><Icon name="chevron-right" size={20} /></button>
         </div>
         <p className="sr-only" role="status" aria-live="polite">{monthLabel}</p>
-        <div role="grid" aria-label={monthLabel} className="date-calendar-grid">
+        <div id={`${dialogId}-grid`} role="grid" aria-label={monthLabel} className="date-calendar-grid">
           <div role="row" className="date-calendar-weekdays">
             {days.slice(0, 7).map((day) => <span role="columnheader" key={day.getDay()}>{weekday.format(day)}</span>)}
           </div>
@@ -179,7 +173,7 @@ const DateField = forwardRef<HTMLInputElement, DateFieldProps>(function DateFiel
         <button type="button" className="date-calendar-today" onClick={() => choose(today)}>{commonT("today")}</button>
       </div>
     </Sheet>
-  </>;
+  </div>;
 });
 
 export default DateField;

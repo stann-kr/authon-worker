@@ -1,6 +1,6 @@
 /* Shared product chrome. Data and task ownership stay in the existing pages. */
 .workspace-shell,
-.workspace-menu-backdrop {
+.workspace-menu-panel {
   --workspace-bg: var(--app-canvas);
   --workspace-secondary: var(--app-surface-secondary);
   --workspace-surface: var(--app-surface);
@@ -63,11 +63,7 @@
 .workspace-sidebar { display: none; }
 .workspace-nav-tooltip { display: none; }
 .workspace-brand-short { display: none; }
-.workspace-menu-backdrop { position: fixed; inset: 0; z-index: var(--app-z-dialog); background: rgb(0 0 0 / 0.6); backdrop-filter: blur(10px); display: flex; align-items: flex-end; justify-content: center; }
-.workspace-menu-panel { width: min(100%, 560px); max-height: calc(100dvh - 32px); overflow-y: auto; overscroll-behavior: contain; padding: 20px 20px calc(20px + env(safe-area-inset-bottom)); border: 0; border-radius: 24px 24px 0 0; background: var(--app-surface); }
-.workspace-menu-panel > header { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 12px; }
-.workspace-menu-panel > header h2 { font-size: 20px; font-weight: 600; }
-.workspace-menu-panel > header button { background: var(--app-surface-raised); color: var(--workspace-muted); border-radius: 8px; padding: 8px 14px; font-size: 13px; }
+.workspace-menu-panel { width: 100%; min-width: 0; margin-bottom: 16px; }
 .workspace-nav-group { margin-top: 12px; }
 .workspace-nav-group h2 { margin: 0; padding: 8px 10px; color: var(--workspace-muted); font-size: 12px; font-weight: 400; }
 .workspace-group-links:not([hidden]) { display: grid; gap: 6px; }
@@ -123,7 +119,7 @@
 @media (max-width: 360px) {
   .workspace-header { padding-inline: 12px; gap: 8px; }
   .workspace-nav-link { padding-inline: 12px; font-size: 13px; }
-  .workspace-menu-panel { padding-inline: 16px; }
+
 }
 @media (hover: hover) and (pointer: fine) {
   .workspace-nav-link:not([aria-current="page"]):hover,
@@ -250,20 +246,6 @@
 @media (max-width: 359px) { .workspace-shell .page-container { padding-left: max(16px, env(safe-area-inset-left)); padding-right: max(16px, env(safe-area-inset-right)); } }
 
 
-/* The menu retains its focus/scroll owner through a short, interruptible exit. */
-.workspace-menu-backdrop[data-motion="true"] {
-  opacity: 1; transition: opacity 180ms var(--app-ease-out);
-  @starting-style { opacity: 0; }
-}
-.workspace-menu-backdrop[data-motion="true"] .workspace-menu-panel {
-  opacity: 1; transform: translateY(0) scale(1); transform-origin: bottom center;
-  transition: transform 220ms cubic-bezier(0.32, 0.72, 0, 1), opacity 180ms var(--app-ease-out);
-  @starting-style { opacity: 0; transform: translateY(24px) scale(0.985); }
-}
-.workspace-menu-backdrop[data-state="closing"][data-motion="true"] { opacity: 0; }
-.workspace-menu-backdrop[data-state="closing"][data-motion="true"] .workspace-menu-panel {
-  opacity: 0; transform: translateY(18px) scale(0.985); transition-duration: 180ms;
-}
 @media (max-width: 999px) {
   .workspace-dock :is(.workspace-nav-link, .workspace-action) {
     transition: color 140ms var(--app-ease-out), background-color 180ms var(--app-ease-out), border-color 140ms var(--app-ease-out);
@@ -280,11 +262,8 @@
   .workspace-dock :is(.workspace-nav-link, .workspace-action):focus-visible { transition: none; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .workspace-menu-backdrop[data-motion="true"],
-  .workspace-menu-backdrop[data-motion="true"] .workspace-menu-panel { transition: none; }
-  .workspace-menu-backdrop[data-motion="true"] .workspace-menu-panel {
-    transform: none;
-    @starting-style { transform: none; }
-  }
   .workspace-dock :is(.workspace-nav-label, .workspace-action > span) { transform: none !important; transition: none; }
 }
+
+.workspace-disclosures { position: relative; z-index: var(--app-z-chrome); flex: none; }
+.workspace-disclosures:not(:has(.product-sheet)) { display: none; }

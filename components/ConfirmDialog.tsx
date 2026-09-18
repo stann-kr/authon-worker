@@ -1,22 +1,12 @@
 "use client";
 
-import {
-  useCallback,
-  useEffect,
-  useId,
-  useRef,
-  useState,
-  type ReactNode,
-} from "react";
-import { createPortal } from "react-dom";
+import { useEffect, useId, useRef, type ReactNode } from "react";
 import Button from "./Button";
-import { lockModalBackground } from "./overlays/modal-lock";
 
 interface ConfirmDialogProps {
   open: boolean;
   title: string;
   description?: string;
-  role?: "alertdialog" | "dialog";
   confirmLabel: string;
   cancelLabel: string;
   onConfirm: () => void;
@@ -27,205 +17,42 @@ interface ConfirmDialogProps {
   children?: ReactNode;
 }
 
-function isAvailableFocusTarget(target: HTMLElement | null): target is HTMLElement {
-  return Boolean(
-    target &&
-      target !== document.body &&
-      target.isConnected &&
-      !target.closest("[inert]") &&
-      !target.matches(":disabled") &&
-      target.getAttribute("aria-disabled") !== "true",
-  );
-}
-
-export default function ConfirmDialog({
-  open,
-  title,
-  description,
-  role = "alertdialog",
-  confirmLabel,
-  cancelLabel,
-  onConfirm,
-  onCancel,
-  isLoading = false,
-  confirmDisabled = false,
-  tone = "danger",
-  children,
+export default function ConfirmDialog({ open, title, description, confirmLabel, cancelLabel,
+  onConfirm, onCancel, isLoading = false, confirmDisabled = false, tone = "danger", children,
 }: ConfirmDialogProps) {
-  const dialogRef = useRef<HTMLDivElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
   const cancelRef = useRef<HTMLButtonElement>(null);
-  const previousFocusRef = useRef<HTMLElement | null>(null);
-  const onCancelRef = useRef(onCancel);
-  const isLoadingRef = useRef(isLoading);
-  const isClosingRef = useRef(false);
-  const closeTimerRef = useRef<number | null>(null);
-  const [isClosing, setIsClosing] = useState(false);
   const titleId = useId();
   const descriptionId = useId();
-
-  useEffect(() => {
-    onCancelRef.current = onCancel;
-    isLoadingRef.current = isLoading;
-  }, [isLoading, onCancel]);
-
-  const requestCancel = useCallback(() => {
-    if (isLoadingRef.current || isClosingRef.current) return;
-    const shouldReduceMotion = window.matchMedia(
-      "(prefers-reduced-motion: reduce)",
-    ).matches;
-    if (shouldReduceMotion) {
-      onCancelRef.current();
-      return;
-    }
-
-    isClosingRef.current = true;
-    setIsClosing(true);
-    closeTimerRef.current = window.setTimeout(() => {
-      closeTimerRef.current = null;
-      onCancelRef.current();
-    }, 140);
-  }, []);
-
-  useEffect(
-    () => () => {
-      if (closeTimerRef.current !== null) {
-        window.clearTimeout(closeTimerRef.current);
-      }
-    },
-    [],
-  );
-
-  useEffect(() => {
-    if (open) return;
-    if (closeTimerRef.current !== null) {
-      window.clearTimeout(closeTimerRef.current);
-      closeTimerRef.current = null;
-    }
-    isClosingRef.current = false;
-    setIsClosing(false);
-  }, [open]);
-
   useEffect(() => {
     if (!open) return;
-
-    previousFocusRef.current = document.activeElement as HTMLElement | null;
-    const mainContent = document.getElementById("main-content");
-    const dialogElement = dialogRef.current;
-    const unlock = lockModalBackground(mainContent);
+    const opener = document.activeElement as HTMLElement | null;
+    const panel = panelRef.current;
     cancelRef.current?.focus();
-
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        event.preventDefault();
-        event.stopPropagation();
-        requestCancel();
-        return;
-      }
-
-      if (event.key !== "Tab" || !dialogRef.current) return;
-      const focusable = Array.from(
-        dialogRef.current.querySelectorAll<HTMLElement>(
-          'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
-        ),
-      );
-      if (focusable.length === 0) {
-        event.preventDefault();
-        dialogRef.current.focus();
-        return;
-      }
-      const first = focusable[0];
-      const last = focusable[focusable.length - 1];
-
-      if (!dialogRef.current.contains(document.activeElement)) {
-        event.preventDefault();
-        first.focus();
-      } else if (event.shiftKey && document.activeElement === first) {
-        event.preventDefault();
-        last?.focus();
-      } else if (!event.shiftKey && document.activeElement === last) {
-        event.preventDefault();
-        first?.focus();
-      }
-    };
-
-    document.addEventListener("keydown", handleKeyDown);
     return () => {
-      document.removeEventListener("keydown", handleKeyDown);
-      unlock();
-      const activeElement = document.activeElement as HTMLElement | null;
-      const focusWasLostWithDialog =
-        !activeElement ||
-        activeElement === document.body ||
-        !activeElement.isConnected ||
-        Boolean(dialogElement?.contains(activeElement));
-      if (!focusWasLostWithDialog) return;
-      const previousFocus = previousFocusRef.current;
-      const focusTarget = isAvailableFocusTarget(previousFocus)
-        ? previousFocus
-        : isAvailableFocusTarget(mainContent)
-          ? mainContent
-          : null;
-      if (
-        mainContent &&
-        focusTarget === mainContent &&
-        !mainContent.hasAttribute("tabindex")
-      ) {
-        mainContent.tabIndex = -1;
-      }
-      focusTarget?.focus({ preventScroll: true });
+      const active = document.activeElement;
+      if (active !== document.body && active?.isConnected && !panel?.contains(active)) return;
+      const available = opener?.isConnected && !opener.closest("[hidden], [inert]") && !opener.matches(":disabled");
+      const target = available ? opener : document.getElementById("main-content");
+      if (target && !target.hasAttribute("tabindex") && target.tagName === "MAIN") target.tabIndex = -1;
+      target?.focus({ preventScroll: true });
     };
-  }, [open, requestCancel]);
-
+  }, [open]);
   if (!open) return null;
-
-  if (typeof document === "undefined") return null;
-
-  return createPortal(
-    <div
-      className="app-dialog-backdrop fixed inset-0 z-[var(--app-z-dialog)] flex items-center justify-center bg-black/80 p-4"
-      data-state={isClosing ? "closing" : "open"}
-    >
-      <div
-        ref={dialogRef}
-        role={role}
-        aria-modal="true"
-        aria-busy={isLoading || isClosing}
-        aria-labelledby={titleId}
-        aria-describedby={description ? descriptionId : undefined}
-        tabIndex={-1}
-        className="app-dialog-panel rounded-[20px] max-h-[calc(100dvh-2rem)] w-full max-w-md overscroll-contain overflow-y-auto border border-border-strong bg-canvas p-5 sm:p-6"
-      >
-        <h2 id={titleId} className="type-panel-title">
-          {title}
-        </h2>
-        {description && (
-          <p id={descriptionId} className="mt-3 text-sm leading-relaxed text-text-muted">
-            {description}
-          </p>
-        )}
-        {children && <div className="mt-4">{children}</div>}
-        <div className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <Button
-            ref={cancelRef}
-            type="button"
-            variant="outline"
-            onClick={requestCancel}
-            disabled={isLoading || isClosing}
-          >
-            {cancelLabel}
-          </Button>
-          <Button
-            type="button"
-            variant={tone === "danger" ? "danger" : "primary"}
-            onClick={onConfirm}
-            isLoading={isLoading}
-            disabled={isClosing || confirmDisabled}
-          >
-            {confirmLabel}
-          </Button>
-        </div>
-      </div>
-    </div>,
-    document.body,
-  );
+  return <div ref={panelRef} role="group" className="inline-confirmation" aria-busy={isLoading}
+    aria-labelledby={titleId} aria-describedby={description ? descriptionId : undefined}
+    onKeyDown={(event) => {
+      if (event.key !== "Escape" || event.defaultPrevented) return;
+      event.preventDefault(); event.stopPropagation();
+      if (!isLoading) onCancel();
+    }}>
+    <h3 id={titleId} className="text-sm font-semibold text-text-heading">{title}</h3>
+    {description && <p id={descriptionId} className="mt-3 text-sm leading-relaxed text-text-muted">{description}</p>}
+    {children && <div className="mt-4">{children}</div>}
+    <div className="mt-4 flex flex-wrap justify-end gap-3">
+      <Button ref={cancelRef} type="button" variant="outline" onClick={onCancel} disabled={isLoading}>{cancelLabel}</Button>
+      <Button type="button" variant={tone === "danger" ? "danger" : "primary"} onClick={onConfirm}
+        isLoading={isLoading} disabled={confirmDisabled}>{confirmLabel}</Button>
+    </div>
+  </div>;
 }

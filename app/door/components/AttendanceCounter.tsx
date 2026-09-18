@@ -25,7 +25,7 @@ import useAttendanceCounterController, {
   type AttendanceCounterDependencies,
 } from "./useAttendanceCounterController";
 import AttendanceReconciliationForm from "./AttendanceReconciliationForm";
-import Sheet from "@/components/overlays/Sheet";
+import Sheet, { requestSheetClose } from "@/components/overlays/Sheet";
 import Button from "@/components/Button";
 
 interface AttendanceCounterProps {
@@ -150,7 +150,7 @@ export default function AttendanceCounter({
       disabled={!canRecord} aria-describedby={unavailableText ? "attendance-counter-unavailable" : undefined}>
       {t("addWalkIn")} +1
     </WorkspaceAction>
-    <WorkspaceAction icon="chart-line" tone="muted" onClick={() => setDetailsOpen(true)} aria-haspopup="dialog">
+    <WorkspaceAction icon="chart-line" tone="muted" onClick={() => detailsOpen ? requestSheetClose("attendance-detail-panel") : setDetailsOpen(true)} aria-expanded={detailsOpen} aria-controls={detailsOpen ? "attendance-detail-panel" : undefined}>
       {t("title")} · {isLoading ? "—" : displayedCheckedInGuests + walkIns}
     </WorkspaceAction>
   </>;
@@ -161,7 +161,7 @@ export default function AttendanceCounter({
     {failedMutations.length > 0 && <button type="button" className="text-left text-xs text-status-waiting" onClick={() => setDetailsOpen(true)}>
       {t("failedItems", { count: failedMutations.length })}
     </button>}
-    <Sheet open={detailsOpen} title={t("title")} onClose={() => setDetailsOpen(false)}
+    <Sheet id="attendance-detail-panel" open={detailsOpen} title={t("title")} onClose={() => setDetailsOpen(false)}
       busy={isAdjusting} protectEdits>
       <dl className="product-detail-list">
         <div><dt>{t("checkedInGuests")}</dt><dd>{displayedCheckedInGuests}</dd></div>

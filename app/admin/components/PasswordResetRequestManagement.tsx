@@ -514,6 +514,153 @@ export default function PasswordResetRequestManagement({
                       </Button>
                     </div>
                   )}
+                  {pendingAction?.kind === "approve" && pendingAction.request.id === request.id && (
+                    <ConfirmDialog
+                      open
+                      title={t("approveTitle", { name: pendingAction.request.userName })}
+                      description={t("approveDescription")}
+                      confirmLabel={t("approve")}
+                      cancelLabel={commonT("cancel")}
+                      onConfirm={handlePendingAction}
+                      onCancel={() => {
+                        if (!activeDecisionRef.current) closePendingAction();
+                      }}
+                      isLoading={busyRequestId === pendingAction.request.id}
+                      confirmDisabled={
+                        !verificationMethod ||
+                        !verificationAttested ||
+                        !/^\d{4}$/.test(verificationChallenge.trim())
+                      }
+                      tone="primary"
+                    >
+                      {actionError && (
+                        <div
+                          ref={actionErrorRef}
+                          id="password-reset-action-error"
+                          className="mb-4 outline-none"
+                          tabIndex={-1}
+                        >
+                          <Alert type="error" message={actionError.message} />
+                        </div>
+                      )}
+                      <div className="space-y-4">
+                          <fieldset
+                            aria-describedby={
+                              actionError?.focusTarget === "verification-method"
+                                ? "password-reset-action-error"
+                                : undefined
+                            }
+                          >
+                            <legend className="app-label">
+                              {t("verificationMethod")}
+                            </legend>
+                            <div className="space-y-2">
+                              {([
+                                "in_person",
+                                "registered_phone",
+                                "verified_messenger",
+                              ] as const).map((method) => (
+                                <label
+                                  key={method}
+                                  className="flex cursor-pointer items-start gap-3 border border-border-default bg-canvas p-3"
+                                >
+                                  <input
+                                    ref={method === "in_person" ? verificationMethodRef : undefined}
+                                    type="radio"
+                                    name="password-reset-verification-method"
+                                    value={method}
+                                    checked={verificationMethod === method}
+                                    onChange={() => {
+                                      setVerificationMethod(method);
+                                      setActionError(null);
+                                    }}
+                                    required
+                                    disabled={busyRequestId === pendingAction.request.id}
+                                    className="mt-1 accent-action-primary"
+                                  />
+                                  <span className="text-sm text-text-body">
+                                    {t(`verification_${method}`)}
+                                  </span>
+                                </label>
+                              ))}
+                            </div>
+                          </fieldset>
+
+                          <div>
+                            <label htmlFor="password-reset-verification-challenge" className="app-label">
+                              {t("verificationChallenge")}
+                            </label>
+                            <input
+                              ref={verificationChallengeRef}
+                              id="password-reset-verification-challenge"
+                              name="password-reset-verification-challenge"
+                              type="text"
+                              inputMode="numeric"
+                              pattern="[0-9]{4}"
+                              maxLength={4}
+                              value={verificationChallenge}
+                              onChange={(event) => {
+                                setVerificationChallenge(
+                                  event.target.value.replace(/\D/g, "").slice(0, 4),
+                                );
+                                setActionError(null);
+                              }}
+                              disabled={busyRequestId === pendingAction.request.id}
+                              autoComplete="off"
+                              required
+                              placeholder="0000"
+                              className="app-field font-mono text-center text-lg tracking-[0.35em]"
+                              aria-describedby={`password-reset-verification-help${
+                                actionError?.focusTarget === "verification-challenge"
+                                  ? " password-reset-action-error"
+                                  : ""
+                              }`}
+                              aria-required="true"
+                              aria-invalid={
+                                (verificationChallenge.length > 0 &&
+                                  !/^\d{4}$/.test(verificationChallenge.trim())) ||
+                                actionError?.focusTarget === "verification-challenge"
+                              }
+                            />
+                            <p
+                              id="password-reset-verification-help"
+                              className="app-helper"
+                            >
+                              {verificationChallenge.length > 0 &&
+                              !/^\d{4}$/.test(verificationChallenge.trim())
+                                ? t("verificationChallengeInvalid")
+                                : t("verificationChallengeHelp")}
+                            </p>
+                          </div>
+
+                          <label className="flex cursor-pointer items-start gap-3 border border-border-default bg-canvas p-3">
+                            <input
+                              ref={verificationAttestationRef}
+                              type="checkbox"
+                              required
+                              checked={verificationAttested}
+                              onChange={(event) => {
+                                setVerificationAttested(event.target.checked);
+                                setActionError(null);
+                              }}
+                              disabled={busyRequestId === pendingAction.request.id}
+                              className="mt-1 accent-action-primary"
+                              aria-describedby={
+                                actionError?.focusTarget === "verification-attestation"
+                                  ? "password-reset-action-error"
+                                  : undefined
+                              }
+                              aria-invalid={
+                                actionError?.focusTarget === "verification-attestation"
+                              }
+                            />
+                            <span className="text-xs leading-relaxed text-text-muted">
+                              {t("verificationAttestation")}
+                            </span>
+                          </label>
+                      </div>
+                    </ConfirmDialog>
+                  )}
                 </article>
               ))}
             </div>
@@ -541,154 +688,7 @@ export default function PasswordResetRequestManagement({
         </div>
       </section>
 
-      {pendingAction?.kind === "approve" && (
-        <ConfirmDialog
-          open
-          role="dialog"
-          title={t("approveTitle", { name: pendingAction.request.userName })}
-          description={t("approveDescription")}
-          confirmLabel={t("approve")}
-          cancelLabel={commonT("cancel")}
-          onConfirm={handlePendingAction}
-          onCancel={() => {
-            if (!activeDecisionRef.current) closePendingAction();
-          }}
-          isLoading={busyRequestId === pendingAction.request.id}
-          confirmDisabled={
-            !verificationMethod ||
-            !verificationAttested ||
-            !/^\d{4}$/.test(verificationChallenge.trim())
-          }
-          tone="primary"
-        >
-          {actionError && (
-            <div
-              ref={actionErrorRef}
-              id="password-reset-action-error"
-              className="mb-4 outline-none"
-              tabIndex={-1}
-            >
-              <Alert type="error" message={actionError.message} />
-            </div>
-          )}
-          <div className="space-y-4">
-              <fieldset
-                aria-describedby={
-                  actionError?.focusTarget === "verification-method"
-                    ? "password-reset-action-error"
-                    : undefined
-                }
-              >
-                <legend className="app-label">
-                  {t("verificationMethod")}
-                </legend>
-                <div className="space-y-2">
-                  {([
-                    "in_person",
-                    "registered_phone",
-                    "verified_messenger",
-                  ] as const).map((method) => (
-                    <label
-                      key={method}
-                      className="flex cursor-pointer items-start gap-3 border border-border-default bg-canvas p-3"
-                    >
-                      <input
-                        ref={method === "in_person" ? verificationMethodRef : undefined}
-                        type="radio"
-                        name="password-reset-verification-method"
-                        value={method}
-                        checked={verificationMethod === method}
-                        onChange={() => {
-                          setVerificationMethod(method);
-                          setActionError(null);
-                        }}
-                        required
-                        disabled={busyRequestId === pendingAction.request.id}
-                        className="mt-1 accent-action-primary"
-                      />
-                      <span className="text-sm text-text-body">
-                        {t(`verification_${method}`)}
-                      </span>
-                    </label>
-                  ))}
-                </div>
-              </fieldset>
 
-              <div>
-                <label htmlFor="password-reset-verification-challenge" className="app-label">
-                  {t("verificationChallenge")}
-                </label>
-                <input
-                  ref={verificationChallengeRef}
-                  id="password-reset-verification-challenge"
-                  name="password-reset-verification-challenge"
-                  type="text"
-                  inputMode="numeric"
-                  pattern="[0-9]{4}"
-                  maxLength={4}
-                  value={verificationChallenge}
-                  onChange={(event) => {
-                    setVerificationChallenge(
-                      event.target.value.replace(/\D/g, "").slice(0, 4),
-                    );
-                    setActionError(null);
-                  }}
-                  disabled={busyRequestId === pendingAction.request.id}
-                  autoComplete="off"
-                  required
-                  placeholder="0000"
-                  className="app-field font-mono text-center text-lg tracking-[0.35em]"
-                  aria-describedby={`password-reset-verification-help${
-                    actionError?.focusTarget === "verification-challenge"
-                      ? " password-reset-action-error"
-                      : ""
-                  }`}
-                  aria-required="true"
-                  aria-invalid={
-                    (verificationChallenge.length > 0 &&
-                      !/^\d{4}$/.test(verificationChallenge.trim())) ||
-                    actionError?.focusTarget === "verification-challenge"
-                  }
-                />
-                <p
-                  id="password-reset-verification-help"
-                  className="app-helper"
-                >
-                  {verificationChallenge.length > 0 &&
-                  !/^\d{4}$/.test(verificationChallenge.trim())
-                    ? t("verificationChallengeInvalid")
-                    : t("verificationChallengeHelp")}
-                </p>
-              </div>
-
-              <label className="flex cursor-pointer items-start gap-3 border border-border-default bg-canvas p-3">
-                <input
-                  ref={verificationAttestationRef}
-                  type="checkbox"
-                  required
-                  checked={verificationAttested}
-                  onChange={(event) => {
-                    setVerificationAttested(event.target.checked);
-                    setActionError(null);
-                  }}
-                  disabled={busyRequestId === pendingAction.request.id}
-                  className="mt-1 accent-action-primary"
-                  aria-describedby={
-                    actionError?.focusTarget === "verification-attestation"
-                      ? "password-reset-action-error"
-                      : undefined
-                  }
-                  aria-invalid={
-                    actionError?.focusTarget === "verification-attestation"
-                  }
-                />
-                <span className="text-xs leading-relaxed text-text-muted">
-                  {t("verificationAttestation")}
-                </span>
-              </label>
-          </div>
-        </ConfirmDialog>
-      )}
     </>
   );
 }

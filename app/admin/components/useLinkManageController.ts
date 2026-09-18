@@ -10,28 +10,14 @@ import {
   type ExternalLinkShareData,
   type ExternalLinkShareResult,
 } from "@/lib/external-links/domain";
-import type { ExternalDJLink } from "@/lib/external-links/types";
-import {
-  filterLinksByManageFilter,
-  getDashboardStats,
-  sortLinks,
-  type ManageFilter,
-  type ManageSort,
-} from "./linkStatus";
+import type { ExternalLinkPage, ExternalDJLink } from "@/lib/external-links/types";
+import type { ManageFilter, ManageSort } from "./linkStatus";
+import { LINK_PAGE_SIZE, type LinkListCursor, type LinkListOptions, type LinkListStats } from "@/lib/external-links/list-types";
 
 const EMPTY_LINKS: ExternalDJLink[] = [];
 
 export interface LinkManageControllerActions {
-  fetchByDate: (
-    venueId: string,
-    date: string,
-    eventId: string | null,
-  ) => Promise<{ data: ExternalDJLink[] | null; error: string | null }>;
-  fetchRecent: (
-    venueId: string,
-    limit: 5 | 10,
-    eventId: string | null,
-  ) => Promise<{ data: ExternalDJLink[] | null; error: string | null }>;
+  fetchPage: (venueId: string, options: LinkListOptions) => Promise<{ data: ExternalLinkPage | null; error: string | null }>;
   deleteLink: (id: string) => Promise<{ error: string | null }>;
   deactivateLink: (id: string) => Promise<{ error: string | null }>;
   activateLink: (id: string) => Promise<{ error: string | null }>;
@@ -66,17 +52,20 @@ export function useLinkManageController({
   venueId,
   eventId,
   isActive,
-  locale,
   actions,
 }: Options) {
   const t = useTranslations("LinkAdmin");
   const [manageScope, setManageScope] = useState<"date" | "recent">("recent");
-  const [recentLimit, setRecentLimit] = useState<5 | 10>(5);
   const [manageFilter, setManageFilter] = useState<ManageFilter>("all");
   const [manageSort, setManageSort] = useState<ManageSort>("newest");
   const [now, setNow] = useState(() => Date.now());
   const [links, setLinks] = useState<ExternalDJLink[]>([]);
   const [isFetching, setIsFetching] = useState(false);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [nextCursor, setNextCursor] = useState<LinkListCursor | null>(null);
+  const [loadMoreError, setLoadMoreError] = useState<string | null>(null);
+  const [dashboardStats, setDashboardStats] = useState<LinkListStats>({ total: 0, active: 0, attention: 0 });
+  const pagingRef = useRef(false);
   const [loadedScopeKey, setLoadedScopeKey] = useState("");
   const [loadOutcome, setLoadOutcome] = useState<
     "idle" | "success" | "partial" | "error"
@@ -108,7 +97,7 @@ export function useLinkManageController({
   const mutationGuard = useScopedOperationGuard();
   const shareGuard = useScopedOperationGuard();
   const scopedEventId = manageScope === "date" ? eventId : null;
-  const requestScopeKey = `${venueId}:${manageScope}:${manageScope === "recent" ? recentLimit : selectedDate}:${scopedEventId ?? "general"}`;
+  const requestScopeKey = `${venueId}:${manageScope}:${manageScope === "recent" ? "all" : selectedDate}:${scopedEventId ?? "general"}:${manageFilter}:${manageScope === "recent" ? "newest" : manageSort}`;
   const currentScopeRef = useRef(requestScopeKey);
   const isActiveRef = useRef(isActive);
   const actionsRef = useRef(actions);
@@ -134,6 +123,12 @@ export function useLinkManageController({
     setSuccess(null);
     setSuccessScopeKey("");
     setLoadOutcome("idle");
+    setNextCursor(null);
+    setLoadMoreError(null);
+    setIsLoadingMore(false);
+    pagingRef.current = false;
+    setVisibleLinkId(null);
+    setDashboardStats({ total: 0, active: 0, attention: 0 });
   }, [mutationGuard, requestGuard, requestScopeKey, shareGuard]);
 
   useEffect(() => {
@@ -144,6 +139,8 @@ export function useLinkManageController({
     activeLifecycleLeasesRef.current.clear();
     toastOwnerRef.current = null;
     setIsFetching(false);
+    setIsLoadingMore(false);
+    pagingRef.current = false;
     setLoadingStates({});
     setLifecycleBusyIds({});
     setPendingDeleteLink(null);
@@ -156,71 +153,78 @@ export function useLinkManageController({
       displayCacheRef.current = { scopeKey: requestScopeKey, links };
   }, [isFetching, links, loadedScopeKey, requestScopeKey]);
 
+  const pageOptions = useMemo<LinkListOptions>(() => ({
+    ...(manageScope === "date" ? { date: selectedDate, eventId: scopedEventId } : {}),
+    filter: manageFilter,
+    sort: manageScope === "recent" ? "newest" : manageSort,
+  }), [manageScope, selectedDate, scopedEventId, manageFilter, manageSort]);
+
   const loadLinks = useCallback(async () => {
-    if (!isActiveRef.current || currentScopeRef.current !== requestScopeKey)
-      return;
+    if (!isActiveRef.current || currentScopeRef.current !== requestScopeKey) return;
     const isLatestRequest = requestGuard.beginRequest();
-    if (!venueId) {
-      setLinks([]);
-      setLoadedScopeKey(requestScopeKey);
-      setLoadOutcome("success");
-      setIsFetching(false);
-      return;
-    }
+    const current = () => isLatestRequest() && isActiveRef.current && currentScopeRef.current === requestScopeKey;
+    pagingRef.current = true;
+    setIsLoadingMore(false);
+    setLoadMoreError(null);
     setIsFetching(true);
     setError(null);
+    const cached = displayCacheRef.current.scopeKey === requestScopeKey ? displayCacheRef.current.links : [];
     try {
-      const result =
-        manageScope === "recent"
-          ? await actionsRef.current.fetchRecent(venueId, recentLimit, scopedEventId)
-          : await actionsRef.current.fetchByDate(
-              venueId,
-              selectedDate,
-              scopedEventId,
-            );
-      if (
-        !isLatestRequest() ||
-        !isActiveRef.current ||
-        currentScopeRef.current !== requestScopeKey
-      )
-        return;
-      if (result.error) {
-        setError(tRef.current("loadFailed"));
-        setErrorScopeKey(requestScopeKey);
-        setLoadOutcome(result.data ? "partial" : "error");
-      } else setLoadOutcome("success");
-      setLinks(result.data ?? []);
+      const collected: ExternalDJLink[] = [];
+      let cursor: LinkListCursor | null = null;
+      let stats: LinkListStats = { total: 0, active: 0, attention: 0 };
+      if (venueId) do {
+        const result = await actionsRef.current.fetchPage(venueId, { ...pageOptions, cursor });
+        if (!current()) return;
+        if (result.error || !result.data) throw new Error("LINK_PAGE_UNAVAILABLE");
+        collected.push(...result.data.links);
+        cursor = result.data.nextCursor;
+        stats = result.data.stats;
+      } while (cursor && collected.length < Math.max(LINK_PAGE_SIZE, cached.length));
+      if (!current()) return;
+      setLinks(collected);
+      setNextCursor(cursor);
+      setDashboardStats(stats);
       setLoadedScopeKey(requestScopeKey);
-    } catch (loadError) {
-      if (
-        !isLatestRequest() ||
-        !isActiveRef.current ||
-        currentScopeRef.current !== requestScopeKey
-      )
-        return;
-      console.error("Failed to load links:", loadError);
-      setLinks([]);
+      setLoadOutcome("success");
+    } catch {
+      if (!current()) return;
+      setLinks(cached);
       setLoadedScopeKey(requestScopeKey);
+      setNextCursor(null);
       setError(tRef.current("loadFailed"));
       setErrorScopeKey(requestScopeKey);
-      setLoadOutcome("error");
+      setLoadOutcome(cached.length ? "partial" : "error");
     } finally {
-      if (
-        isLatestRequest() &&
-        isActiveRef.current &&
-        currentScopeRef.current === requestScopeKey
-      )
-        setIsFetching(false);
+      if (current()) { setIsFetching(false); pagingRef.current = false; }
     }
-  }, [
-    scopedEventId,
-    manageScope,
-    recentLimit,
-    requestGuard,
-    requestScopeKey,
-    selectedDate,
-    venueId,
-  ]);
+  }, [pageOptions, requestGuard, requestScopeKey, venueId]);
+
+  const loadMore = useCallback(async () => {
+    if (!nextCursor || pagingRef.current || activeLifecycleLeasesRef.current.size ||
+      !isActiveRef.current || currentScopeRef.current !== requestScopeKey) return;
+    pagingRef.current = true;
+    setIsLoadingMore(true);
+    setLoadMoreError(null);
+    const isLatestRequest = requestGuard.beginRequest();
+    const current = () => isLatestRequest() && isActiveRef.current && currentScopeRef.current === requestScopeKey;
+    try {
+      const result = await actionsRef.current.fetchPage(venueId, { ...pageOptions, cursor: nextCursor });
+      if (!current()) return;
+      if (result.error || !result.data) throw new Error("LINK_PAGE_UNAVAILABLE");
+      const page = result.data;
+      setLinks((existing) => {
+        const ids = new Set(existing.map((link) => link.id));
+        return [...existing, ...page.links.filter((link) => !ids.has(link.id))];
+      });
+      setNextCursor(page.nextCursor);
+      setDashboardStats(page.stats);
+    } catch {
+      if (current()) setLoadMoreError(tRef.current("loadMoreFailed"));
+    } finally {
+      if (current()) { setIsLoadingMore(false); pagingRef.current = false; }
+    }
+  }, [nextCursor, pageOptions, requestGuard, requestScopeKey, venueId]);
 
   useEffect(() => {
     if (isActive) void loadLinks();
@@ -237,23 +241,7 @@ export function useLinkManageController({
     : isFetching && displayCacheRef.current.scopeKey === requestScopeKey
       ? displayCacheRef.current.links
       : links;
-  const dashboardStats = useMemo(
-    () => getDashboardStats(displayLinks, now),
-    [displayLinks, now],
-  );
-  const filteredLinks = useMemo(
-    () => filterLinksByManageFilter(displayLinks, manageFilter, now),
-    [displayLinks, manageFilter, now],
-  );
-  const sortedLinks = useMemo(
-    () =>
-      sortLinks(
-        filteredLinks,
-        manageScope === "recent" ? "newest" : manageSort,
-        locale === "ko" ? "ko-KR" : "en-US",
-      ),
-    [filteredLinks, locale, manageScope, manageSort],
-  );
+  const sortedLinks = displayLinks;
   const listState = deriveAsyncListState({
     hasStarted: isFetching || loadOutcome !== "idle",
     isLoading: isCurrentScopeFetching,
@@ -476,8 +464,6 @@ export function useLinkManageController({
   return {
     manageScope,
     setManageScope,
-    recentLimit,
-    setRecentLimit,
     manageFilter,
     setManageFilter,
     manageSort,
@@ -487,6 +473,10 @@ export function useLinkManageController({
     sortedLinks,
     listState,
     isCurrentScopeFetching,
+    isLoadingMore,
+    hasMore: hasCurrentScopeData && Boolean(nextCursor),
+    loadMoreError,
+    loadMore,
     scopedManageError: errorScopeKey === requestScopeKey ? error : null,
     scopedSuccess: successScopeKey === requestScopeKey ? success : null,
     linkActionFeedback,

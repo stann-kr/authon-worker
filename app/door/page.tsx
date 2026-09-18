@@ -289,9 +289,9 @@ function DoorPageContent() {
       contentClassName="gap-4 md:pb-8 lg:gap-6"
       footerLayer="below-mobile-dock"
       actions={<>
-        {offlineScope && <WorkspaceAction icon="search" onClick={() => setTool("code")}>{t("guestCodeLookup")}</WorkspaceAction>}
+        {offlineScope && <WorkspaceAction icon="search" onClick={() => setTool(tool === "code" ? null : "code")} disabled={isDoorCodeLoading || isOfflineSyncing} aria-expanded={tool === "code"} aria-controls={tool === "code" ? "door-code-panel" : undefined}>{t("guestCodeLookup")}</WorkspaceAction>}
         {attendanceActions}
-        {offlineScope && <WorkspaceAction icon="refresh" tone="muted" onClick={() => setTool("offline")}>{t("offlineOperations")} {offlineQueueCounts.queued > 0 ? offlineQueueCounts.queued : ""}</WorkspaceAction>}
+        {offlineScope && <WorkspaceAction icon="refresh" tone="muted" onClick={() => setTool(tool === "offline" ? null : "offline")} disabled={isDoorCodeLoading || isOfflineSyncing} aria-expanded={tool === "offline"} aria-controls={tool === "offline" ? "door-offline-panel" : undefined}>{t("offlineOperations")} {offlineQueueCounts.queued > 0 ? offlineQueueCounts.queued : ""}</WorkspaceAction>}
       </>}
     >
       {venueLoadError && (
@@ -300,6 +300,116 @@ function DoorPageContent() {
           isLoading={isLoadingVenues}
         />
       )}
+      <Sheet id="door-code-panel" open={tool === "code"} title={t("guestCodeLookup")} onClose={() => setTool(null)} busy={isDoorCodeLoading}>
+              {offlineScope && (
+                <form
+                  onSubmit={handleDoorCodeLookup}
+                  className="border-b border-border-subtle bg-surface px-4 py-3 sm:px-5"
+                >
+                  <label htmlFor="door-guest-code" className="app-label">
+                    {t("guestCode")}
+                  </label>
+                  <div className="flex flex-col gap-2 sm:flex-row">
+                    <input
+                      id="door-guest-code"
+                      name="door-guest-code"
+                      value={doorCode}
+                      onChange={(event) => handleDoorCodeChange(event.target.value)}
+                      autoComplete="off"
+                      autoCapitalize="characters"
+                      spellCheck={false}
+                      placeholder={t("guestCodePlaceholder")}
+                      className="app-field min-h-11 flex-1 font-mono"
+                    />
+                    <button
+                      type="submit"
+                      disabled={!doorCode.trim() || isDoorCodeLoading}
+                      className="pressable min-h-11 border border-action-primary bg-action-primary px-4 py-2 text-sm font-semibold text-action-text disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {isDoorCodeLoading ? t("guestCodeLookingUp") : t("guestCodeLookup")}
+                    </button>
+                  </div>
+                  {doorCodeFeedback && (
+                    <p
+                      className={`mt-2 text-xs ${
+                        doorCodeFeedback === "found"
+                          ? "text-status-checked"
+                          : "text-status-danger"
+                      }`}
+                      role={doorCodeFeedback === "found" ? "status" : "alert"}
+                    >
+                      {t(`guestCodeFeedback.${doorCodeFeedback}`)}
+                    </p>
+                  )}
+                </form>
+              )}
+      </Sheet>
+      <Sheet id="door-offline-panel" open={tool === "offline"} title={t("offlineOperations")} onClose={() => setTool(null)} busy={isOfflineSyncing}>
+                {offlineScope && (
+                  <div
+                    className="app-panel space-y-3 p-4 sm:p-5"
+                    aria-label={t("offlineOperations")}
+                  >
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                      <div>
+                        <h2 className="text-sm font-semibold text-text-heading">
+                          {t("offlineOperations")}
+                        </h2>
+                        {(isOfflineMode || isOfflineSyncing) && (
+                          <p
+                            className="mt-1 text-xs leading-relaxed text-text-muted"
+                            role="status"
+                            aria-live="polite"
+                          >
+                            {isOfflineMode
+                              ? t("offlineCachedRoster")
+                              : t("offlineSyncing")}
+                          </p>
+                        )}
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          onClick={() => void syncOfflineQueue()}
+                          disabled={isOfflineSyncing || offlineQueueCounts.queued === 0}
+                          className="pressable min-h-11 border border-border-default bg-surface-raised px-3 py-2 text-xs font-medium text-text-heading disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          {t("retryOfflineSync")}
+                        </button>
+                        {hasResolvedOfflineMutations && (
+                          <button
+                            type="button"
+                            onClick={() => void handleClearResolvedOfflineMutations()}
+                            className="pressable min-h-11 border border-border-default bg-canvas px-3 py-2 text-xs font-medium text-text-muted hover:text-text-heading"
+                          >
+                            {t("clearOfflineResults")}
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                    <dl className="grid grid-cols-2 gap-2 font-mono text-xs sm:grid-cols-5">
+                      <div><dt className="text-text-dim">{t("offlineQueued")}</dt><dd className="mt-1 text-text-heading">{offlineQueueCounts.queued}</dd></div>
+                      <div><dt className="text-text-dim">{t("offlineConfirmed")}</dt><dd className="mt-1 text-status-checked">{offlineQueueCounts.confirmed}</dd></div>
+                      <div><dt className="text-text-dim">{t("offlineConflicts")}</dt><dd className="mt-1 text-status-waiting">{offlineQueueCounts.conflict}</dd></div>
+                      <div><dt className="text-text-dim">{t("offlineRejected")}</dt><dd className="mt-1 text-status-danger">{offlineQueueCounts.rejected}</dd></div>
+                      <div><dt className="text-text-dim">{t("offlineScopeClosed")}</dt><dd className="mt-1 text-status-danger">{offlineQueueCounts.scope_closed}</dd></div>
+                    </dl>
+                    {offlineNotice && (
+                      <p
+                        className={`border-l-2 px-3 py-2 text-xs ${
+                          offlineNotice === "syncFailed" || offlineNotice === "scopeClosed"
+                            ? "border-status-danger bg-status-danger/10 text-status-danger"
+                            : "border-status-waiting bg-status-waiting/10 text-text-muted"
+                        }`}
+                        role={offlineNotice === "syncFailed" || offlineNotice === "scopeClosed" ? "alert" : "status"}
+                      >
+                        {t(`offlineNotice.${offlineNotice}`)}
+                      </p>
+                    )}
+                  </div>
+                )}
+
+      </Sheet>
       <OperationsLayout
         variant="stacked"
         title={commonT("door")}
@@ -318,7 +428,7 @@ function DoorPageContent() {
 
                 {attendanceDetails}
                 {(isOfflineMode || offlineQueueCounts.queued > 0 || hasResolvedOfflineMutations || offlineNotice) &&
-                  <button type="button" className="text-left text-xs text-status-waiting" onClick={() => setTool("offline")}>
+                  <button type="button" className="text-left text-xs text-status-waiting" onClick={() => setTool(tool === "offline" ? null : "offline")} disabled={isDoorCodeLoading || isOfflineSyncing} aria-expanded={tool === "offline"} aria-controls={tool === "offline" ? "door-offline-panel" : undefined}>
                     {isOfflineMode ? t("offlineCachedRoster") : t("offlineOperations")} · {t("offlineQueued")} {offlineQueueCounts.queued}
                     {offlineNotice ? ` · ${t(`offlineNotice.${offlineNotice}`)}` : ""}
                   </button>}
@@ -447,116 +557,7 @@ function DoorPageContent() {
           </RosterView>
             </section>
       </OperationsLayout>
-      <Sheet open={tool === "code"} title={t("guestCodeLookup")} onClose={() => setTool(null)} busy={isDoorCodeLoading}>
-              {offlineScope && (
-                <form
-                  onSubmit={handleDoorCodeLookup}
-                  className="border-b border-border-subtle bg-surface px-4 py-3 sm:px-5"
-                >
-                  <label htmlFor="door-guest-code" className="app-label">
-                    {t("guestCode")}
-                  </label>
-                  <div className="flex flex-col gap-2 sm:flex-row">
-                    <input
-                      id="door-guest-code"
-                      name="door-guest-code"
-                      value={doorCode}
-                      onChange={(event) => handleDoorCodeChange(event.target.value)}
-                      autoComplete="off"
-                      autoCapitalize="characters"
-                      spellCheck={false}
-                      placeholder={t("guestCodePlaceholder")}
-                      className="app-field min-h-11 flex-1 font-mono"
-                    />
-                    <button
-                      type="submit"
-                      disabled={!doorCode.trim() || isDoorCodeLoading}
-                      className="pressable min-h-11 border border-action-primary bg-action-primary px-4 py-2 text-sm font-semibold text-action-text disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      {isDoorCodeLoading ? t("guestCodeLookingUp") : t("guestCodeLookup")}
-                    </button>
-                  </div>
-                  {doorCodeFeedback && (
-                    <p
-                      className={`mt-2 text-xs ${
-                        doorCodeFeedback === "found"
-                          ? "text-status-checked"
-                          : "text-status-danger"
-                      }`}
-                      role={doorCodeFeedback === "found" ? "status" : "alert"}
-                    >
-                      {t(`guestCodeFeedback.${doorCodeFeedback}`)}
-                    </p>
-                  )}
-                </form>
-              )}
-      </Sheet>
-      <Sheet open={tool === "offline"} title={t("offlineOperations")} onClose={() => setTool(null)} busy={isOfflineSyncing}>
-                {offlineScope && (
-                  <div
-                    className="app-panel space-y-3 p-4 sm:p-5"
-                    aria-label={t("offlineOperations")}
-                  >
-                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                      <div>
-                        <h2 className="text-sm font-semibold text-text-heading">
-                          {t("offlineOperations")}
-                        </h2>
-                        {(isOfflineMode || isOfflineSyncing) && (
-                          <p
-                            className="mt-1 text-xs leading-relaxed text-text-muted"
-                            role="status"
-                            aria-live="polite"
-                          >
-                            {isOfflineMode
-                              ? t("offlineCachedRoster")
-                              : t("offlineSyncing")}
-                          </p>
-                        )}
-                      </div>
-                      <div className="flex flex-wrap gap-2">
-                        <button
-                          type="button"
-                          onClick={() => void syncOfflineQueue()}
-                          disabled={isOfflineSyncing || offlineQueueCounts.queued === 0}
-                          className="pressable min-h-11 border border-border-default bg-surface-raised px-3 py-2 text-xs font-medium text-text-heading disabled:cursor-not-allowed disabled:opacity-50"
-                        >
-                          {t("retryOfflineSync")}
-                        </button>
-                        {hasResolvedOfflineMutations && (
-                          <button
-                            type="button"
-                            onClick={() => void handleClearResolvedOfflineMutations()}
-                            className="pressable min-h-11 border border-border-default bg-canvas px-3 py-2 text-xs font-medium text-text-muted hover:text-text-heading"
-                          >
-                            {t("clearOfflineResults")}
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                    <dl className="grid grid-cols-2 gap-2 font-mono text-xs sm:grid-cols-5">
-                      <div><dt className="text-text-dim">{t("offlineQueued")}</dt><dd className="mt-1 text-text-heading">{offlineQueueCounts.queued}</dd></div>
-                      <div><dt className="text-text-dim">{t("offlineConfirmed")}</dt><dd className="mt-1 text-status-checked">{offlineQueueCounts.confirmed}</dd></div>
-                      <div><dt className="text-text-dim">{t("offlineConflicts")}</dt><dd className="mt-1 text-status-waiting">{offlineQueueCounts.conflict}</dd></div>
-                      <div><dt className="text-text-dim">{t("offlineRejected")}</dt><dd className="mt-1 text-status-danger">{offlineQueueCounts.rejected}</dd></div>
-                      <div><dt className="text-text-dim">{t("offlineScopeClosed")}</dt><dd className="mt-1 text-status-danger">{offlineQueueCounts.scope_closed}</dd></div>
-                    </dl>
-                    {offlineNotice && (
-                      <p
-                        className={`border-l-2 px-3 py-2 text-xs ${
-                          offlineNotice === "syncFailed" || offlineNotice === "scopeClosed"
-                            ? "border-status-danger bg-status-danger/10 text-status-danger"
-                            : "border-status-waiting bg-status-waiting/10 text-text-muted"
-                        }`}
-                        role={offlineNotice === "syncFailed" || offlineNotice === "scopeClosed" ? "alert" : "status"}
-                      >
-                        {t(`offlineNotice.${offlineNotice}`)}
-                      </p>
-                    )}
-                  </div>
-                )}
 
-      </Sheet>
     </WorkspaceShell>}
     </AttendanceCounter>
   );
