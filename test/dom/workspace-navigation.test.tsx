@@ -13,6 +13,7 @@ import { RouteTransitionProvider, useRouteLoadingTask, useRouteTransition } from
 import WorkspaceShell from "@/components/WorkspaceShell";
 import RouteLoadingShell from "@/components/RouteLoadingShell";
 import WorkspaceNavigation from "@/components/workspace/WorkspaceNavigation";
+import ViewportProvider from "@/components/viewport/ViewportProvider";
 import OperationsScope from "@/components/operations/OperationsScope";
 import { getWorkspaceActiveId, getWorkspaceItems, getWorkspacePrimaryItems } from "@/components/workspace/navigation";
 import useAdminWorkspaceNavigation from "@/app/admin/useAdminWorkspaceNavigation";
@@ -114,6 +115,80 @@ function MenuHarness({ subject = admin, initial = "events", disabled = false }: 
       }} />
   </div></div>;
 }
+
+test("the mobile dock leaves text entry clear and returns when the software keyboard closes", async () => {
+  viewport(false);
+  const originalViewport = Object.getOwnPropertyDescriptor(window, "visualViewport");
+  const visual = Object.assign(new window.EventTarget(), { height: window.innerHeight, offsetTop: 0, scale: 1 });
+  Object.defineProperty(window, "visualViewport", { configurable: true, value: visual });
+  try {
+    const view = render(<Providers><ViewportProvider><MenuHarness /></ViewportProvider></Providers>);
+    const input = screen.getByLabelText("Unsubmitted name") as HTMLInputElement;
+    const navigation = () => screen.queryByRole("navigation", { name: "Main navigation" });
+    const resize = (height: number, scale = 1) => act(() => {
+      Object.assign(visual, { height, scale });
+      visual.dispatchEvent(new window.Event("resize"));
+    });
+    act(() => input.focus());
+    assert.ok(navigation(), "hardware-keyboard focus alone keeps navigation available");
+    resize(window.innerHeight - 70);
+    assert.ok(navigation(), "browser toolbar changes are not a keyboard");
+    resize(window.innerHeight / 2, 2);
+    assert.ok(navigation(), "pinch zoom is not a keyboard");
+    resize(window.innerHeight - 330);
+    assert.equal(navigation(), null);
+    assert.equal(screen.queryByRole("button", { name: "Add guest" }), null);
+    assert.equal(document.activeElement, input);
+    assert.equal(input.value, "Keep this name");
+    act(() => input.blur());
+    await act(async () => new Promise((resolve) => setTimeout(resolve, 5)));
+    assert.equal(navigation(), null, "keep the dock hidden during keyboard dismissal");
+    resize(window.innerHeight);
+    assert.ok(navigation());
+    resize(window.innerHeight - 330);
+    assert.ok(navigation(), "a shrunken viewport without text entry is not a keyboard");
+    view.unmount();
+    assert.equal(document.documentElement.hasAttribute("data-keyboard-open"), false);
+    resize(window.innerHeight);
+    assert.equal(document.documentElement.hasAttribute("data-keyboard-open"), false, "viewport listeners are removed");
+  } finally {
+    cleanup();
+    if (originalViewport) Object.defineProperty(window, "visualViewport", originalViewport);
+    else Reflect.deleteProperty(window, "visualViewport");
+  }
+});
+
+test("touch browsers that resize the layout viewport also restore the dock without losing input focus", () => {
+  viewport(false);
+  const media = window.matchMedia;
+  window.matchMedia = (query) => ({ ...media(query), matches: query === "(any-pointer: coarse)" || media(query).matches });
+  const initialHeight = window.innerHeight;
+  const originalHeight = Object.getOwnPropertyDescriptor(window, "innerHeight")!;
+  const originalViewport = Object.getOwnPropertyDescriptor(window, "visualViewport");
+  Object.defineProperty(window, "visualViewport", { configurable: true, value: undefined });
+  try {
+    render(<Providers><ViewportProvider><MenuHarness /></ViewportProvider></Providers>);
+    const input = screen.getByLabelText("Unsubmitted name");
+    act(() => input.focus());
+    act(() => {
+      Object.defineProperty(window, "innerHeight", { configurable: true, value: initialHeight - 300 });
+      window.dispatchEvent(new window.Event("resize"));
+    });
+    assert.equal(screen.queryByRole("navigation", { name: "Main navigation" }) === null, true);
+    act(() => {
+      Object.defineProperty(window, "innerHeight", originalHeight);
+      window.dispatchEvent(new window.Event("resize"));
+    });
+    assert.ok(screen.getByRole("navigation", { name: "Main navigation" }));
+    assert.equal(document.activeElement, input);
+  } finally {
+    cleanup();
+    Object.defineProperty(window, "innerHeight", originalHeight);
+    if (originalViewport) Object.defineProperty(window, "visualViewport", originalViewport);
+    else Reflect.deleteProperty(window, "visualViewport");
+    window.matchMedia = media;
+  }
+});
 
 test("mobile all-menu traps focus, preserves input and exposes every permitted task", async () => {
   viewport(false);

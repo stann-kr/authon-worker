@@ -1,4 +1,7 @@
 .guest-bulk-entry { min-width: 0; }
+@media (max-width: 999px) {
+  :root[data-keyboard-open="true"] .guest-bulk-entry textarea { min-height: 96px; max-height: max(96px, calc(var(--app-viewport-height, 100dvh) * 0.35)); }
+}
 .guest-bulk-entry > .disclosure-section > summary { padding-inline: 0; }
 .guest-csv-import { display: grid; gap: 12px; padding-block: 4px 12px; }
 .guest-csv-import > .app-helper { margin-top: 0; }

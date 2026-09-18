@@ -6,6 +6,7 @@ import "./home.css";
 import "./auth/auth.css";
 import "./profile/profile.css";
 import "./admin/components/user-management.css";
+import "./admin/components/link-combobox.css";
 import "./guest/components/external-guest.css";
 import "@/components/overlays/sheet.css";
 import "@/components/guests/roster.css";
@@ -15,6 +16,7 @@ import "@/components/operations/operations.css";
 import "@/components/dates/date-field.css";
 import "@/components/workspace/workspace.css";
 import DesignSystemProvider from "@/components/DesignSystemProvider";
+import ViewportProvider from "@/components/viewport/ViewportProvider";
 import VenueBrandProvider from "@/components/VenueBrandProvider";
 import { RouteTransitionProvider } from "@/components/RouteTransitionProvider";
 import { VenueDataProvider } from "@/components/VenueSelector";
@@ -75,16 +77,18 @@ export default async function RootLayout({
             initialUser={sessionUser ? toClientUser(sessionUser) : null}
           >
             <VenueBrandProvider tenant={tenant}>
-              <DesignSystemProvider>
-                <RouteTransitionProvider>
-                  <VenueDataProvider>
-                    <a href="#main-content" className="skip-link">
-                      {t("skipToContent")}
-                    </a>
-                    {children}
-                  </VenueDataProvider>
-                </RouteTransitionProvider>
-              </DesignSystemProvider>
+              <ViewportProvider>
+                <DesignSystemProvider>
+                  <RouteTransitionProvider>
+                    <VenueDataProvider>
+                      <a href="#main-content" className="skip-link">
+                        {t("skipToContent")}
+                      </a>
+                      {children}
+                    </VenueDataProvider>
+                  </RouteTransitionProvider>
+                </DesignSystemProvider>
+              </ViewportProvider>
             </VenueBrandProvider>
           </AuthSessionProvider>
         </NextIntlClientProvider>

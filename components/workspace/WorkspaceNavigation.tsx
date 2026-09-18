@@ -4,6 +4,7 @@ import { useId, useLayoutEffect, useRef, useState, type MouseEvent, type ReactNo
 import { useTranslations } from "next-intl";
 import TransitionLink from "@/components/TransitionLink";
 import Icon, { type IconName } from "@/components/Icon";
+import { useKeyboardOpen } from "@/components/viewport/ViewportProvider";
 import WorkspaceMenu from "./WorkspaceMenu";
 import { getWorkspacePrimaryItems, workspaceGroups, type WorkspaceItem } from "./navigation";
 
@@ -32,6 +33,7 @@ export default function WorkspaceNavigation({
   collapsed = false, onToggleSidebar,
 }: WorkspaceNavigationProps) {
   const t = useTranslations("Workspace");
+  const keyboardOpen = useKeyboardOpen();
   const navigationId = useId();
   const [desktop, setDesktop] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -144,7 +146,7 @@ export default function WorkspaceNavigation({
   </aside>;
 
   return <>
-    <div className="workspace-dock" ref={dockRef}>
+    <div className="workspace-dock" ref={dockRef} hidden={keyboardOpen}>
       {actions && <div className="workspace-context-actions" role="group" aria-label={t("actions")}>{actions}</div>}
       <nav ref={navRef} className="workspace-primary-nav" aria-label={t("navigation")}>
         <div className="workspace-primary-scroll">{getWorkspacePrimaryItems(items, activeId).map((item) => link(item))}</div>

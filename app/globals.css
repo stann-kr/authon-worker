@@ -31,6 +31,7 @@
   --app-field-focus: #8e8e93;
   --app-status-waiting: #d5b479;
   --app-header-height: calc(4.5rem + env(safe-area-inset-top));
+  --app-safe-area-bottom: env(safe-area-inset-bottom, 0px);
   --app-z-route-overlay: 40;
   --app-z-chrome: 45;
   --app-z-toast: 50;
@@ -45,6 +46,8 @@
   --app-duration-standard: 200ms;
   --app-tap-highlight: transparent;
 }
+
+:root[data-keyboard-open="true"] { --app-safe-area-bottom: 0px; }
 
 html,
 body {
@@ -121,7 +124,7 @@ pre,
 }
 
 /* iOS Safari: 16px 미만 input focus 시 자동 zoom 방지 (모바일 전용) */
-@media (max-width: 639px) {
+@media (max-width: 999px), (pointer: coarse) {
   input,
   select,
   textarea {

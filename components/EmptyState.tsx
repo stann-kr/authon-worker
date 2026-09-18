@@ -25,11 +25,11 @@ export default function EmptyState({
       <div className="mx-auto mb-4 flex h-10 w-10 items-center justify-center text-text-muted">
         <Icon name={icon} size={22} />
       </div>
-      <p className="text-sm font-semibold text-text-heading">
+      <p className="break-keep text-sm font-semibold text-text-heading [overflow-wrap:anywhere]">
         {message}
       </p>
       {description && (
-        <p className="mx-auto mt-2 max-w-sm text-sm leading-relaxed text-text-muted">
+        <p className="mx-auto mt-2 max-w-sm break-keep text-sm leading-relaxed text-text-muted [overflow-wrap:anywhere]">
           {description}
         </p>
       )}
