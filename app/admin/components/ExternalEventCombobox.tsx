@@ -92,6 +92,7 @@ const ExternalEventCombobox = forwardRef<
   };
 
   const handleKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
+    if (event.nativeEvent.isComposing || event.nativeEvent.keyCode === 229) return;
     if (disabled) return;
     if (event.key === "ArrowDown") {
       event.preventDefault();
@@ -158,7 +159,7 @@ const ExternalEventCombobox = forwardRef<
           id={listboxId}
           role="listbox"
           aria-label={t("eventSuggestions")}
-          className="absolute z-30 mt-1 max-h-64 w-full space-y-1 overflow-y-auto rounded-control border border-border-default bg-surface-raised p-1 shadow-lg"
+          className="link-name-suggestions absolute z-30 mt-1 max-h-64 w-full space-y-1 overflow-y-auto rounded-control border border-border-default bg-surface-raised p-1 shadow-lg"
         >
           {filteredSuggestions.map((suggestion, index) => (
             <li

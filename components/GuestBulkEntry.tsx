@@ -412,6 +412,8 @@ export default function GuestBulkEntry({
           }
           placeholder={t("placeholder")}
           autoComplete="off"
+          autoCorrect="off"
+          spellCheck={false}
           className="app-field min-h-32 resize-y leading-relaxed read-only:cursor-wait read-only:opacity-70"
         />
         <p id={helperId} className="app-helper">

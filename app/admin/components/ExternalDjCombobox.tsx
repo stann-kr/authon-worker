@@ -99,6 +99,7 @@ const ExternalDjCombobox = forwardRef<HTMLInputElement, ExternalDjComboboxProps>
     };
 
     const handleKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
+      if (event.nativeEvent.isComposing || event.nativeEvent.keyCode === 229) return;
       if (!isDirectoryEnabled || disabled) return;
       if (event.key === "ArrowDown") {
         event.preventDefault();
@@ -180,7 +181,7 @@ const ExternalDjCombobox = forwardRef<HTMLInputElement, ExternalDjComboboxProps>
             id={listboxId}
             role="listbox"
             aria-label={t("djSuggestions")}
-            className="absolute z-30 mt-1 max-h-64 w-full space-y-1 overflow-y-auto rounded-control border border-border-default bg-surface-raised p-1 shadow-lg"
+            className="link-name-suggestions absolute z-30 mt-1 max-h-64 w-full space-y-1 overflow-y-auto rounded-control border border-border-default bg-surface-raised p-1 shadow-lg"
           >
             {filteredSuggestions.map((suggestion, index) => (
               <li
