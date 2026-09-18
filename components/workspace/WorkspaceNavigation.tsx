@@ -35,7 +35,6 @@ export default function WorkspaceNavigation({
   const navigationId = useId();
   const [desktop, setDesktop] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
-  const [menuMotion, setMenuMotion] = useState(false);
   const navRef = useRef<HTMLElement>(null);
   const dockRef = useRef<HTMLDivElement>(null);
   const restoreFocusRef = useRef(false);
@@ -104,7 +103,6 @@ export default function WorkspaceNavigation({
         if (disabled) { event.preventDefault(); return; }
         onSelect(item, event);
         if (event.button === 0 && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey) {
-          setMenuMotion(event.detail > 0);
           setMenuOpen(false);
         }
       }}>
@@ -150,16 +148,16 @@ export default function WorkspaceNavigation({
       {actions && <div className="workspace-context-actions" role="group" aria-label={t("actions")}>{actions}</div>}
       <nav ref={navRef} className="workspace-primary-nav" aria-label={t("navigation")}>
         <div className="workspace-primary-scroll">{getWorkspacePrimaryItems(items, activeId).map((item) => link(item))}</div>
-        <button type="button" className="workspace-nav-link workspace-more" aria-haspopup="dialog"
+        <button type="button" className="workspace-nav-link workspace-more"
           aria-label={t("allMenu")} aria-expanded={menuOpen}
           aria-controls={menuOpen ? "workspace-all-menu" : undefined}
-          disabled={disabled} onClick={(event) => { setMenuMotion(event.detail > 0); setMenuOpen(true); }}>
+          disabled={disabled} onClick={() => setMenuOpen((open) => !open)}>
           <span className="workspace-nav-label">{t("more")}</span>
         </button>
       </nav>
     </div>
-    <WorkspaceMenu open={menuOpen} motion={menuMotion} title={t("allMenu")} closeLabel={t("close")}
-      onClose={(motion = false) => { setMenuMotion(motion); setMenuOpen(false); }}>
+    <WorkspaceMenu open={menuOpen} title={t("allMenu")}
+      onClose={() => setMenuOpen(false)}>
       <nav aria-label={t("allMenu")}>{home && link(home, false, "menu")}{groupedLinks("menu")}{profile && link(profile, false, "menu")}</nav>
     </WorkspaceMenu>
   </>;

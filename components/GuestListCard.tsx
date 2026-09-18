@@ -4,6 +4,7 @@ import Icon from "./Icon";
 import StatusLabel from "./StatusLabel";
 import ConfirmDialog from "./ConfirmDialog";
 import { RosterSelection } from "./guests/RosterView";
+import { formatVenueTime } from "@/lib/date";
 import { useTranslations } from "next-intl";
 
 export interface Guest {
@@ -15,10 +16,6 @@ export interface Guest {
   date?: string | null;
 }
 
-const formatTime = (timeStr: string) => {
-  const date = new Date(timeStr);
-  return `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
-};
 
 interface GuestListCardProps {
   guest: Guest;
@@ -28,6 +25,7 @@ interface GuestListCardProps {
   accountKind?: "personal" | "shared";
   registeredByName?: string | null;
   showRegisteredAt?: boolean;
+  timeZone?: string | null;
   onCheck?: () => void;
   onUndo?: () => void;
   onDelete?: () => void;
@@ -48,6 +46,7 @@ const GuestListCard: React.FC<GuestListCardProps> = ({
   accountKind = "personal",
   registeredByName,
   showRegisteredAt = false,
+  timeZone,
   onCheck,
   onUndo,
   onDelete,
@@ -61,6 +60,8 @@ const GuestListCard: React.FC<GuestListCardProps> = ({
 }) => {
   const t = useTranslations("Common");
   const rosterT = useTranslations("Roster");
+  const formatTime = (value: string) => formatVenueTime(value, timeZone) ?? "—";
+  const timestamp = (value?: string | null) => value ? <time dateTime={value}>{formatTime(value)}</time> : "—";
   const selection = useContext(RosterSelection);
   const [localDetail, setLocalDetail] = useState(false);
   const isDetailOpen = selection ? selection.selectedId === guest.id : localDetail;
@@ -221,8 +222,10 @@ const GuestListCard: React.FC<GuestListCardProps> = ({
           <div className="product-guest-owner" aria-hidden="true"><span>{djName || "—"}</span>
             {registeredByName && <small>{registeredByName}</small>}
           </div>
+          <span className="product-guest-time product-guest-registered-time"><span className="sr-only">{rosterT("registeredAt")} </span>{timestamp(guest.createdAt)}</span>
+          <span className="product-guest-time product-guest-checked-time"><span className="sr-only">{rosterT("checkedInAt")} </span>{timestamp(guest.status === "checked" ? guest.checkInTime : null)}</span>
           <span className="product-guest-status" aria-hidden="true">
-            {guest.status === "checked" ? <><Icon name="check" size={14} />{guest.checkInTime ? formatTime(guest.checkInTime) : rosterT("checked")}</>
+            {guest.status === "checked" ? <><Icon name="check" size={14} /><span className="product-guest-status-compact">{guest.checkInTime ? formatTime(guest.checkInTime) : rosterT("checked")}</span><span className="product-guest-status-wide">{rosterT("checked")}</span></>
               : guest.status === "pending" ? rosterT("pending") : t("removed")}
           </span>
         </>}
@@ -275,7 +278,7 @@ const GuestListCard: React.FC<GuestListCardProps> = ({
         </dl>
         {mode === "operations" && onDelete && guest.status !== "deleted" && <div className="product-guest-detail-actions">
           <Button ref={deleteTriggerRef} variant="danger" onClick={() => setDeleteConfirmation(confirmationKey)}
-            disabled={isDeleteDisabled} isLoading={isDeleteLoading} aria-haspopup="dialog">
+            disabled={isDeleteDisabled} isLoading={isDeleteLoading}>
             {t("deleteGuest")}
           </Button>
           {deleteError && <p className="mt-2 text-sm text-status-danger" role="alert">{deleteError}</p>}
@@ -283,7 +286,6 @@ const GuestListCard: React.FC<GuestListCardProps> = ({
         </div>}
         </div></div>
       </div>
-    </article>
       {onUndo && undoConfirmation === confirmationKey && guest.status === "checked" && <ConfirmDialog open
         title={rosterT("undoTitle")} description={rosterT("undoDescription", { name: guest.name })}
         confirmLabel={rosterT("undoConfirm")} cancelLabel={t("cancel")} isLoading={isUndoLoading}
@@ -302,6 +304,7 @@ const GuestListCard: React.FC<GuestListCardProps> = ({
           confirmDisabled={isDeleteDisabled}
         />
       )}
+    </article>
     </>
   );
 };

@@ -126,13 +126,21 @@ function ReadyWorkspaceShell({
         {actions && <div className="workspace-header-actions" role="group" aria-label={t("actions")}>{actions}</div>}
         <div className="workspace-header-account">
           {user && <button type="button" className="workspace-profile-link"
-            aria-label={t("profile")} aria-haspopup="dialog" aria-expanded={accountOpen} onClick={() => setAccountOpen(true)}>
+            aria-label={t("profile")} aria-expanded={accountOpen} aria-controls={accountOpen ? "workspace-account-panel" : undefined} onClick={() => setAccountOpen((open) => !open)}>
             <Icon name="user" size={21} />
           </button>}
           <div className="workspace-desktop-logout"><LogoutControl /></div>
         </div>
       </header>
       <div className={`page-scroll ${bottomInsetClassName}`}>
+        <div className={`page-container workspace-disclosures ${widthClasses[width]}`}>
+          {user && <Sheet id="workspace-account-panel" open={accountOpen} title={user.name} onClose={() => setAccountOpen(false)} blockDuringRouteTransition={false}>
+            <p className="text-sm text-text-muted"><RoleLabel role={user.account_kind === "shared" ? "shared" : user.role} /></p>
+            <TransitionLink href="/profile" className="app-button rounded-control bg-surface-raised px-4 py-3 text-center text-sm" onClick={() => setAccountOpen(false)}>{t("profile")}</TransitionLink>
+            <LogoutControl expanded />
+          </Sheet>}
+          <div id="workspace-menu-slot" />
+        </div>
         <main
           id="main-content"
           tabIndex={-1}
@@ -148,11 +156,7 @@ function ReadyWorkspaceShell({
           counts={{ "password-requests": adminNavigation?.pendingPasswordResetCount ?? 0 }}
           actions={actions} onSelect={selectItem} />}
       </div>
-      {user && <Sheet open={accountOpen} title={user.name} onClose={() => setAccountOpen(false)} blockDuringRouteTransition={false}>
-        <p className="text-sm text-text-muted"><RoleLabel role={user.account_kind === "shared" ? "shared" : user.role} /></p>
-        <TransitionLink href="/profile" className="app-button rounded-control bg-surface-raised px-4 py-3 text-center text-sm" onClick={() => setAccountOpen(false)}>{t("profile")}</TransitionLink>
-        <LogoutControl expanded />
-      </Sheet>}
+
     </div>
   );
 }

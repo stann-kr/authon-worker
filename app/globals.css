@@ -375,37 +375,7 @@ input[type="date"] {
     animation: skeleton-breathe 1.4s var(--app-ease-in-out) infinite;
   }
 
-  .app-dialog-backdrop {
-    opacity: 1;
-    transition: opacity var(--app-duration-release) var(--app-ease-out);
 
-    @starting-style {
-      opacity: 0;
-    }
-  }
-
-  .app-dialog-panel {
-    opacity: 1;
-    transform: scale(1);
-    transform-origin: center;
-    transition: transform var(--app-duration-enter) var(--app-ease-out),
-      opacity var(--app-duration-release) var(--app-ease-out);
-
-    @starting-style {
-      opacity: 0;
-      transform: scale(0.98);
-    }
-  }
-
-  .app-dialog-backdrop[data-state="closing"] {
-    opacity: 0;
-  }
-
-  .app-dialog-backdrop[data-state="closing"] .app-dialog-panel {
-    opacity: 0;
-    transform: scale(0.985);
-    transition-duration: var(--app-duration-release);
-  }
 }
 
 @keyframes disclosure-enter {
@@ -505,19 +475,6 @@ main[tabindex="-1"][data-route-focus="true"]:focus-visible {
   button:active:not(:disabled),
   .pressable:active:not(:disabled) {
     transform: none !important;
-  }
-
-  .app-dialog-panel {
-    transform: none;
-    transition-property: opacity;
-
-    @starting-style {
-      transform: none;
-    }
-  }
-
-  .app-dialog-backdrop[data-state="closing"] .app-dialog-panel {
-    transform: none;
   }
 
   .skip-link {

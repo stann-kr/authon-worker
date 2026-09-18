@@ -1,8 +1,10 @@
 "use client";
 
+import type { ReactNode } from "react";
+
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useLocalStorage } from "../../../lib/hooks";
-import Sheet from "@/components/overlays/Sheet";
+import Sheet, { requestSheetClose } from "@/components/overlays/Sheet";
 import RecordList, { useRecordDetail } from "@/components/records/RecordList";
 import InviteUser from "./InviteUser";
 import VenueSelector, {
@@ -452,6 +454,24 @@ export default function UserManagement({
                       })) : undefined}
                       activityUnavailable={listState === "partial"}
                       feedback={scopedFeedback}
+                      confirmation={pendingUserAction?.user.id === user.id && (
+                        <ConfirmDialog
+                          open
+                          title={pendingActionTitle}
+                          description={pendingActionDescription}
+                          confirmLabel={pendingActionLabel}
+                          cancelLabel={commonT("cancel")}
+                          onConfirm={confirmPendingUserAction}
+                          onCancel={() => setPendingUserAction(null)}
+                          isLoading={isUserMutationPending}
+                          tone={
+                            pendingUserAction.kind === "reset-password" ||
+                            (pendingUserAction.kind === "toggle" && !pendingUserAction.user.active)
+                              ? "primary"
+                              : "danger"
+                          }
+                        />
+                      )}
                       isBusy={busyUserId === user.id}
                       actionsDisabled={
                         isUserMutationPending || isCurrentScopeLoading
@@ -506,24 +526,7 @@ export default function UserManagement({
         )}
       </div>
     </OperationsLayout>
-      {pendingUserAction && (
-        <ConfirmDialog
-          open
-          title={pendingActionTitle}
-          description={pendingActionDescription}
-          confirmLabel={pendingActionLabel}
-          cancelLabel={commonT("cancel")}
-          onConfirm={confirmPendingUserAction}
-          onCancel={() => setPendingUserAction(null)}
-          isLoading={isUserMutationPending}
-          tone={
-            pendingUserAction.kind === "reset-password" ||
-            (pendingUserAction.kind === "toggle" && !pendingUserAction.user.active)
-              ? "primary"
-              : "danger"
-          }
-        />
-      )}
+
     </>
   );
 }
@@ -538,6 +541,7 @@ export function UserCard({
   activityUnavailable = false,
   isBusy,
   feedback,
+  confirmation,
   actionsDisabled,
   onUpdate,
   onToggleActive,
@@ -552,6 +556,7 @@ export function UserCard({
   activity?: Array<{ id: string; actor: string; action: string; createdAt: string; displayTime: string }>;
   activityUnavailable?: boolean;
   isBusy: boolean;
+  confirmation?: ReactNode;
   feedback?: { type: "success" | "error"; message: string } | null;
   actionsDisabled: boolean;
   onUpdate: (
@@ -702,7 +707,7 @@ export function UserCard({
     <>
     <tr className="account-row" aria-busy={isBusy} data-selected={detail.open}>
       <td className="account-name-cell">
-        <button type="button" className="account-open" onClick={detail.show} disabled={actionsDisabled} aria-haspopup="dialog" aria-expanded={detail.open}>
+        <button type="button" className="account-open" onClick={() => detail.open ? requestSheetClose(`account-detail-${user.id}`) : detail.show()} disabled={actionsDisabled} aria-expanded={detail.open} aria-controls={detail.open ? `account-detail-${user.id}` : undefined}>
           <strong>{user.name}</strong><small>{isDeleted ? t("deletedAccount") : user.email}</small>
           <span className="account-mobile-role"><RoleLabel role={role} /></span>
         </button>
@@ -713,7 +718,7 @@ export function UserCard({
       <td className="account-status-cell"><span className="record-status" data-tone={isSetupPending ? "waiting" : !user.active || isDeleted ? "inactive" : "neutral"}>{statusLabel}</span></td>
       <td className="account-login-cell">{user.lastLoginAt ? <time dateTime={user.lastLoginAt}>{formatDate(user.lastLoginAt)}</time> : t("never")}</td>
     </tr>
-    {detail.open && <Sheet title={user.name} presentation="detail" size="record" onClose={() => { closeEditor(); detail.close(); }} busy={actionsDisabled} dirty={dirty}>
+    {detail.open && <tr className="account-detail-row"><td colSpan={6}><Sheet id={`account-detail-${user.id}`} title={user.name} presentation="detail" size="record" onClose={() => { closeEditor(); detail.close(); }} busy={actionsDisabled} dirty={dirty}>
       {feedback && <Alert type={feedback.type} message={feedback.message} />}
       {!isEditing ? (
         <>
@@ -922,7 +927,8 @@ export function UserCard({
           </div>
         </div>
       )}
-      </Sheet>}
+      {confirmation}
+      </Sheet></td></tr>}
     </>
   );
 }
