@@ -1,7 +1,7 @@
 "use client";
 
 import Sheet from "@/components/overlays/Sheet";
-import { useState, useCallback, type ReactNode } from "react";
+import { useState, useCallback, useEffect, useRef, type ReactNode } from "react";
 import VenueSelector, {
   useVenueSelector,
 } from "../../../components/VenueSelector";
@@ -19,8 +19,7 @@ import Button from "../../../components/Button";
 import { formatDateDisplay } from "../../../lib/date";
 import { shouldShowEmptyState } from "../../../lib/ui/async-list-state";
 import {
-  fetchExternalLinksByDate,
-  fetchRecentExternalLinks,
+  fetchExternalLinkPage,
   fetchExternalLinkCreateSuggestions,
   createExternalLink,
   deleteExternalLink,
@@ -40,6 +39,7 @@ import {
   type ManageFilter,
   type ManageSort,
 } from "./linkStatus";
+import LinkRegisteredGuests from "./LinkRegisteredGuests";
 import ExternalDjCombobox from "./ExternalDjCombobox";
 import ExternalEventCombobox from "./ExternalEventCombobox";
 import {
@@ -57,8 +57,7 @@ const LINK_CREATE_ACTIONS: LinkCreateControllerActions = Object.freeze({
   shareLink: shareExternalLink,
 });
 const LINK_MANAGE_ACTIONS: LinkManageControllerActions = Object.freeze({
-  fetchByDate: fetchExternalLinksByDate,
-  fetchRecent: fetchRecentExternalLinks,
+  fetchPage: fetchExternalLinkPage,
   deleteLink: deleteExternalLink,
   deactivateLink: deactivateExternalLink,
   activateLink: activateExternalLink,
@@ -158,8 +157,6 @@ export default function LinkManagement({
   const {
     manageScope,
     setManageScope,
-    recentLimit,
-    setRecentLimit,
     manageFilter,
     setManageFilter,
     manageSort,
@@ -169,6 +166,7 @@ export default function LinkManagement({
     sortedLinks,
     listState,
     isCurrentScopeFetching,
+    isLoadingMore, hasMore, loadMoreError, loadMore,
     scopedManageError,
     scopedSuccess,
     linkActionFeedback,
@@ -188,6 +186,17 @@ export default function LinkManagement({
     clearFeedbackForTemplateHandoff,
     getGuestPageUrl,
   } = manage;
+  const loadMoreRef = useRef<HTMLDivElement>(null);
+  const lifecycleBusy = Object.values(lifecycleBusyIds).some(Boolean);
+  useEffect(() => {
+    const sentinel = loadMoreRef.current;
+    if (!sentinel || activeTab !== "manage" || !hasMore || isCurrentScopeFetching || isLoadingMore || loadMoreError || lifecycleBusy || typeof IntersectionObserver === "undefined") return;
+    const observer = new IntersectionObserver((entries) => {
+      if (entries.some((entry) => entry.isIntersecting)) void loadMore();
+    }, { rootMargin: "240px" });
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [activeTab, hasMore, isCurrentScopeFetching, isLoadingMore, loadMoreError, loadMore, lifecycleBusy]);
   const linkActionToast = create.linkActionToast ?? manageLinkActionToast;
 
   const handleUseAsTemplate = (link: ExternalDJLink) => {
@@ -261,28 +270,7 @@ export default function LinkManagement({
                   ))}
                 </div>
                 </div>
-                {manageScope === "recent" && (
-                  <div>
-                    <p className="app-label">{t("items")}</p>
-                    <div className="flex gap-2">
-                      {([5, 10] as const).map((limit) => (
-                        <button
-                          key={limit}
-                          type="button"
-                          aria-pressed={recentLimit === limit}
-                          onClick={() => setRecentLimit(limit)}
-                          className={`min-h-11 border px-3 py-2 font-mono text-xs ${
-                            recentLimit === limit
-                              ? "border-border-strong bg-surface-active text-text-heading"
-                              : "border-border-default bg-surface-raised text-text-muted"
-                          }`}
-                        >
-                          {limit}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )}
+
               </div>
             )}
           </div>
@@ -660,7 +648,7 @@ export default function LinkManagement({
             <div className="record-collection">
               <PanelHeader
                 title={t("linkList")}
-                count={sortedLinks.length}
+                count={isCurrentScopeFetching ? undefined : sortedLinks.length}
                 onRefresh={loadLinks}
                 isLoading={isCurrentScopeFetching}
               />
@@ -684,7 +672,7 @@ export default function LinkManagement({
                             : "border-border-default bg-canvas text-text-muted hover:border-border-strong hover:text-text-heading"
                         }`}
                       >
-                        {filter.label} {filter.count}
+                        {filter.label} {isCurrentScopeFetching ? "—" : filter.count}
                       </button>
                     ))}
                   </div>
@@ -721,13 +709,13 @@ export default function LinkManagement({
 
                 <p className="mt-3 text-xs text-text-dim">
                   {manageScope === "recent"
-                    ? t("latestCreated", { count: recentLimit })
+                    ? t("latestCreated", { count: sortedLinks.length })
                     : formatDateDisplay(selectedDate, locale)}
                 </p>
               </div>
 
               {listState === "loading" ? (
-                <Skeleton rows={5} />
+                <Skeleton rows={10} />
               ) : listState === "error" ? null : (
                 <div
                   aria-busy={isCurrentScopeFetching}
@@ -768,7 +756,7 @@ export default function LinkManagement({
                       return (
                       <article key={link.id} className="record-row">
                         <div className="record-summary">
-                          <button type="button" className="record-open" onClick={() => setVisibleLinkId(link.id)} aria-haspopup="dialog" aria-expanded={isLinkVisible}>
+                          <button type="button" className="record-open" onClick={() => { setPendingDeleteLink(null); setVisibleLinkId(isLinkVisible ? null : link.id); }} disabled={lifecycleBusy} aria-expanded={isLinkVisible} aria-controls={isLinkVisible ? `link-detail-${link.id}` : undefined}>
                             <span className="record-identity"><strong>{link.djName}</strong><small>{link.event || t("untitledEvent")} · {link.date ? formatDateDisplay(link.date, locale) : t("noDate")}</small></span>
                             <span className="record-value">{link.usedGuests}/{link.maxGuests}</span>
                             <span className={`record-status ${primaryStatus.tone}`}>{primaryStatus.label}</span>
@@ -777,7 +765,7 @@ export default function LinkManagement({
                             {completedLinkAction === "shared" ? t("shared") : completedLinkAction === "copied" ? t("copied") : nativeShareAvailable ? t("shareLink") : t("copyLink")}
                           </Button>
                         </div>
-                        {isLinkVisible && <Sheet title={link.djName} presentation="detail" onClose={() => setVisibleLinkId(null)} busy={Boolean(lifecycleBusyIds[link.id])}>
+                        {isLinkVisible && <Sheet id={`link-detail-${link.id}`} title={link.djName} presentation="detail" onClose={() => { setPendingDeleteLink(null); setVisibleLinkId(null); }} busy={Boolean(lifecycleBusyIds[link.id])}>
                           {scopedManageError && <Alert type="error" message={scopedManageError} />}
                           <p className="text-sm text-text-muted">{link.event || t("untitledEvent")} · {link.kind === "self_rsvp" ? t("selfRsvpLink") : t("contributorLink")}</p>
                         <dl className="record-detail-grid">
@@ -876,6 +864,9 @@ export default function LinkManagement({
                           </div>
                         )}
 
+                        <LinkRegisteredGuests key={`${venueId}:${link.id}`} venueId={venueId} linkId={link.id}
+                          registeredCount={link.usedGuests} timeZone={currentVenue?.timezone} />
+
                         <div className="mt-3 flex flex-wrap justify-end gap-3">
                           <Button
                             type="button"
@@ -945,12 +936,43 @@ export default function LinkManagement({
                             {t("delete")}
                           </Button>
                         </div>
+                        {pendingDeleteLink?.id === link.id && (
+                          <ConfirmDialog
+                            open
+                            title={t("deleteTitle")}
+                            description={t("deleteDescription")}
+                            confirmLabel={t("deleteLink")}
+                            cancelLabel={commonT("cancel")}
+                            onConfirm={() => handleDeleteLink(pendingDeleteLink.id)}
+                            onCancel={() => setPendingDeleteLink(null)}
+                            isLoading={loadingStates[`delete_${pendingDeleteLink.id}`]}
+                          >
+                            <div className="border border-border-strong bg-surface p-3">
+                              <p className="break-words text-sm font-medium text-text-heading">
+                                {pendingDeleteLink.djName} / {pendingDeleteLink.event}
+                              </p>
+                              <p className="mt-2 text-xs text-text-muted">
+                                {t("usage")} {pendingDeleteLink.usedGuests}/{pendingDeleteLink.maxGuests}
+                              </p>
+                            </div>
+                          </ConfirmDialog>
+                        )}
                         </Sheet>}
                       </article>
                     )})
                   )}
                 </div>
               )}
+              <div ref={loadMoreRef} className="py-4">
+                {isLoadingMore && <Skeleton rows={10} />}
+                {loadMoreError && <Alert type="error" message={loadMoreError} />}
+                {hasMore && <Button variant="outline" onClick={() => void loadMore()} disabled={isLoadingMore || isCurrentScopeFetching || lifecycleBusy}>
+                  {loadMoreError ? commonT("retry") : t("loadMore")}
+                </Button>}
+                {!isCurrentScopeFetching && (listState === "success-data" || listState === "success-empty") && <p role="status" className="mt-3 text-xs text-text-muted">
+                  {t(hasMore ? "loadedCount" : "allLoaded", { count: sortedLinks.length })}
+                </p>}
+              </div>
             </div>
           </div>
         )}
@@ -965,27 +987,7 @@ export default function LinkManagement({
         </div>
       )}
 
-      {pendingDeleteLink && (
-        <ConfirmDialog
-          open
-          title={t("deleteTitle")}
-          description={t("deleteDescription")}
-          confirmLabel={t("deleteLink")}
-          cancelLabel={commonT("cancel")}
-          onConfirm={() => handleDeleteLink(pendingDeleteLink.id)}
-          onCancel={() => setPendingDeleteLink(null)}
-          isLoading={loadingStates[`delete_${pendingDeleteLink.id}`]}
-        >
-          <div className="border border-border-strong bg-surface p-3">
-            <p className="break-words text-sm font-medium text-text-heading">
-              {pendingDeleteLink.djName} / {pendingDeleteLink.event}
-            </p>
-            <p className="mt-2 text-xs text-text-muted">
-              {t("usage")} {pendingDeleteLink.usedGuests}/{pendingDeleteLink.maxGuests}
-            </p>
-          </div>
-        </ConfirmDialog>
-      )}
+
     </>
   );
 }

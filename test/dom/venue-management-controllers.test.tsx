@@ -1154,7 +1154,7 @@ test("card toggle preserves busy confirmation and exposes deferred dialog state"
   }) as HTMLButtonElement;
   deactivateButton.focus();
   fireEvent.click(deactivateButton);
-  let dialog = screen.getByRole("alertdialog");
+  let dialog = screen.getByRole("group");
 
   view.rerender(
     <NextIntlClientProvider locale="en" messages={messages}>
@@ -1181,7 +1181,7 @@ test("card toggle preserves busy confirmation and exposes deferred dialog state"
       />
     </NextIntlClientProvider>,
   );
-  dialog = screen.getByRole("alertdialog");
+  dialog = screen.getByRole("group");
   confirmButton = within(dialog).getByRole("button", {
     name: messages.VenueAdmin.deactivate,
   }) as HTMLButtonElement;
@@ -1191,7 +1191,7 @@ test("card toggle preserves busy confirmation and exposes deferred dialog state"
     await Promise.resolve();
   });
   assert.equal(toggleCalls, 1);
-  dialog = screen.getByRole("alertdialog");
+  dialog = screen.getByRole("group");
   assert.equal(dialog.getAttribute("aria-busy"), "false");
   confirmButton = within(dialog).getByRole("button", {
     name: messages.VenueAdmin.deactivate,
@@ -1203,7 +1203,7 @@ test("card toggle preserves busy confirmation and exposes deferred dialog state"
     confirmButton.click();
   });
   assert.equal(toggleCalls, 2);
-  dialog = screen.getByRole("alertdialog");
+  dialog = screen.getByRole("group");
   assert.equal(dialog.getAttribute("aria-busy"), "true");
   confirmButton = within(dialog).getByRole("button", {
     name: messages.VenueAdmin.deactivate,
@@ -1218,7 +1218,7 @@ test("card toggle preserves busy confirmation and exposes deferred dialog state"
     toggleRequest.resolve({ status: "failed", error: null });
     await toggleRequest.promise;
   });
-  assert.equal(screen.queryByRole("alertdialog"), null);
+  assert.equal(screen.queryByRole("group") === null, true);
   assert.equal(document.activeElement === deactivateButton, true);
   assert.equal(deactivateButton.disabled, false);
 });
@@ -1228,5 +1228,5 @@ test("disabled directory state removes card actions from keyboard activation", a
   const openButton = screen.getByRole("button", { name: /Venue A/ }) as HTMLButtonElement;
   assert.equal(openButton.disabled, true);
   fireEvent.click(openButton);
-  assert.equal(screen.queryByRole("dialog"), null);
+  assert.equal(screen.queryByRole("region") === null, true);
 });

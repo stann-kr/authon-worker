@@ -24,6 +24,7 @@ import ExternalEventCombobox from "@/app/admin/components/ExternalEventCombobox"
 import AsyncListContent from "@/components/AsyncListContent";
 import ConfirmDialog from "@/components/ConfirmDialog";
 import Sheet from "@/components/overlays/Sheet";
+import RecordList, { useRecordDetail } from "@/components/records/RecordList";
 import DateField from "@/components/dates/DateField";
 import RosterView, { type RosterStatus } from "@/components/guests/RosterView";
 import GuestListCard from "@/components/GuestListCard";
@@ -66,7 +67,7 @@ test("date selection handles leap days, preserves month-control focus and cancel
   assert.equal(document.activeElement === screen.getByRole("button", { name: dayName("2024-02-29") }), true);
   fireEvent.click(document.activeElement!);
   assert.equal(field.value, "2024-02-29");
-  assert.equal(screen.queryByRole("dialog"), null);
+  assert.equal(screen.queryByRole("region") === null, true);
   await waitFor(() => assert.equal(document.activeElement === field, true));
 
   fireEvent.click(field);
@@ -90,7 +91,7 @@ test("date selection handles leap days, preserves month-control focus and cancel
   await waitFor(() => assert.equal(document.activeElement === field, true));
 });
 
-test("a calendar opened in a scope sheet restores that sheet and its input before unlocking the workspace", async () => {
+test("an inline calendar keeps its parent available and restores field focus", async () => {
   function Harness() {
     const [open, setOpen] = useState(true);
     return <><main id="main-content">Workspace</main>
@@ -100,19 +101,19 @@ test("a calendar opened in a scope sheet restores that sheet and its input befor
       </Sheet></>;
   }
   render(<NextIntlClientProvider locale="en" messages={messages}><RouteTransitionProvider><Harness /></RouteTransitionProvider></NextIntlClientProvider>);
-  const parent = screen.getByRole("dialog", { name: "Scope" });
+  const parent = screen.getByRole("region", { name: "Scope" });
   const field = screen.getByRole("combobox", { name: "Operating date" });
   field.focus();
   fireEvent.click(field);
-  assert.equal(parent.hasAttribute("inert"), true);
-  assert.ok(screen.getByRole("dialog", { name: "Choose date" }));
-  fireEvent.keyDown(document, { key: "Escape" });
-  assert.equal(screen.queryByRole("dialog", { name: "Choose date" }), null);
   assert.equal(parent.hasAttribute("inert"), false);
-  assert.equal(document.getElementById("main-content")!.hasAttribute("inert"), true);
+  assert.ok(screen.getByRole("region", { name: "Choose date" }));
+  fireEvent.keyDown(document.activeElement ?? document, { key: "Escape" });
+  assert.equal(screen.queryByRole("region", { name: "Choose date" }) === null, true);
+  assert.equal(parent.hasAttribute("inert"), false);
+  assert.equal(document.getElementById("main-content")!.hasAttribute("inert"), false);
   await waitFor(() => assert.equal(document.activeElement === field, true));
   fireEvent.keyDown(field, { key: "Escape" });
-  assert.equal(screen.queryByRole("dialog"), null);
+  assert.equal(screen.queryByRole("region") === null, true);
   assert.equal(document.getElementById("main-content")!.hasAttribute("inert"), false);
 });
 
@@ -173,7 +174,7 @@ test("event selection, scope sheet reopening and parent renders reuse the loaded
     await waitFor(() => assert.equal(select.disabled, false));
     fireEvent.change(select, { target: { value: "event-a" } });
     fireEvent.click(screen.getByRole("button", { name: messages.Workspace.applyScope }));
-    assert.equal(screen.queryByRole("combobox"), null);
+    assert.equal(screen.queryByRole("combobox") === null, true);
     view.rerender(<Harness revision={1} />);
     await act(async () => {});
     const scope = screen.getByRole("button", { name: messages.Workspace.chooseScope });
@@ -202,7 +203,7 @@ test("event list network failure releases loading and supports retry", async () 
     const retry = await screen.findByRole("button", { name: messages.EventScope.retry });
     assert.equal((screen.getByRole("combobox") as HTMLSelectElement).disabled, false);
     fireEvent.click(retry);
-    await waitFor(() => assert.equal(screen.queryByRole("button", { name: messages.EventScope.retry }), null));
+    await waitFor(() => assert.equal(screen.queryByRole("button", { name: messages.EventScope.retry }) === null, true));
     assert.equal(calls, 2);
   } finally {
     globalThis.fetch = originalFetch;
@@ -680,7 +681,7 @@ test("external DJ autocomplete supports keyboard selection and a new-name fallba
   fireEvent.keyDown(input, { key: "Enter" });
   assert.equal((input as HTMLInputElement).value, "DJ STANN");
   assert.equal(screen.getByTestId("selected-dj").textContent, "dj-stann");
-  assert.equal(screen.queryByRole("listbox"), null);
+  assert.equal(screen.queryByRole("listbox") === null, true);
 
   fireEvent.change(input, { target: { value: "DJ NEW" } });
   assert.equal(screen.getByTestId("selected-dj").textContent, "new");
@@ -692,7 +693,7 @@ test("external DJ autocomplete supports keyboard selection and a new-name fallba
   fireEvent.change(input, { target: { value: "DJ STA" } });
   assert.ok(screen.getByRole("listbox"));
   fireEvent.keyDown(input, { key: "Escape" });
-  assert.equal(screen.queryByRole("listbox"), null);
+  assert.equal(screen.queryByRole("listbox") === null, true);
 });
 
 test("external event autocomplete supports keyboard selection and free text", () => {
@@ -738,15 +739,16 @@ test("external event autocomplete supports keyboard selection and free text", ()
   assert.ok(screen.getByRole("listbox", { name: "Existing event names" }));
   fireEvent.keyDown(input, { key: "Enter" });
   assert.equal(screen.getByTestId("event-value").textContent, "FRIDAY NIGHT");
-  assert.equal(screen.queryByRole("listbox"), null);
+  assert.equal(screen.queryByRole("listbox") === null, true);
 
   fireEvent.change(input, { target: { value: "NEW EVENT" } });
   assert.equal(screen.getByTestId("event-value").textContent, "NEW EVENT");
   assert.equal(input.getAttribute("aria-expanded"), "false");
 });
 
-for (const role of ["alertdialog", "dialog"] as const) {
-test(`${role} traps the interaction, Escape closes it, and focus returns`, async () => {
+for (const withDescription of [true, false]) {
+const role = "group";
+test(`inline confirmation description=${withDescription}, Escape closes it, and focus returns`, async () => {
   function Harness() {
     const [open, setOpen] = useState(false);
     return (
@@ -757,8 +759,7 @@ test(`${role} traps the interaction, Escape closes it, and focus returns`, async
         <ConfirmDialog
           open={open}
           title="Confirm action"
-          role={role}
-          description={role === "alertdialog" ? "Check before continuing" : undefined}
+          description={withDescription ? "Check before continuing" : undefined}
           confirmLabel="Confirm"
           cancelLabel="Cancel"
           onConfirm={() => {}}
@@ -774,14 +775,14 @@ test(`${role} traps the interaction, Escape closes it, and focus returns`, async
   fireEvent.click(opener);
 
   const dialog = screen.getByRole(role);
-  assert.equal(dialog.getAttribute("aria-modal"), "true");
-  assert.equal(dialog.hasAttribute("aria-describedby"), role === "alertdialog");
-  assert.equal(document.getElementById("main-content")?.hasAttribute("inert"), true);
-  assert.equal(document.activeElement, screen.getByRole("button", { name: "Cancel" }));
+  assert.equal(dialog.hasAttribute("aria-modal"), false);
+  assert.equal(dialog.hasAttribute("aria-describedby"), withDescription);
+  assert.equal(document.getElementById("main-content")?.hasAttribute("inert"), false);
+  assert.equal(document.activeElement === screen.getByRole("button", { name: "Cancel" }), true);
 
-  fireEvent.keyDown(document, { key: "Escape" });
-  await waitFor(() => assert.equal(screen.queryByRole(role), null));
-  assert.equal(document.activeElement, opener);
+  fireEvent.keyDown(document.activeElement ?? document, { key: "Escape" });
+  await waitFor(() => assert.equal(screen.queryByRole(role) === null, true));
+  assert.equal(document.activeElement === opener, true);
 });
 }
 
@@ -804,12 +805,12 @@ test("busy dialog reports aria-busy and ignores Escape", () => {
     </NextIntlClientProvider>,
   );
 
-  const dialog = screen.getByRole("alertdialog");
+  const dialog = screen.getByRole("group");
   assert.equal(dialog.getAttribute("aria-busy"), "true");
   assert.equal(screen.getByRole("button", { name: "Cancel" }).hasAttribute("disabled"), true);
-  fireEvent.keyDown(document, { key: "Escape" });
+  fireEvent.keyDown(document.activeElement ?? document, { key: "Escape" });
   assert.equal(cancelled, false);
-  assert.ok(screen.getByRole("alertdialog"));
+  assert.ok(screen.getByRole("group"));
 });
 
 test("dialog falls back to main when confirmation removes its opener", () => {
@@ -849,8 +850,8 @@ test("dialog falls back to main when confirmation removes its opener", () => {
   confirmButton.focus();
   fireEvent.click(confirmButton);
 
-  assert.equal(screen.queryByRole("button", { name: "Remove opener" }), null);
-  assert.equal(document.activeElement, document.getElementById("main-content"));
+  assert.equal(screen.queryByRole("button", { name: "Remove opener" }) === null, true);
+  assert.equal(document.activeElement === document.getElementById("main-content"), true);
 });
 
 test("dialog cleanup preserves focus already moved outside", () => {
@@ -887,7 +888,7 @@ test("dialog cleanup preserves focus already moved outside", () => {
   try {
     externalButton.focus();
     act(() => closeDialog?.());
-    assert.equal(document.activeElement, externalButton);
+    assert.equal(document.activeElement === externalButton, true);
   } finally {
     externalButton.remove();
   }
@@ -910,13 +911,13 @@ test("pending guest deletion confirms inline, restores focus, and respects a new
   trigger.focus();
   fireEvent.click(trigger);
   assert.equal(deleteCalls, 0);
-  assert.equal(screen.queryByRole("alertdialog"), null);
+  assert.equal(screen.queryByRole("alertdialog") === null, true);
   assert.equal(document.getElementById("main-content")?.hasAttribute("inert"), false);
   const group = screen.getByRole("group", { name: /Guest A/ });
-  assert.equal(document.activeElement, within(group).getByRole("button", { name: "Cancel" }));
+  assert.equal(document.activeElement === within(group).getByRole("button", { name: "Cancel" }), true);
   fireEvent.keyDown(group, { key: "Escape" });
-  assert.equal(screen.queryByRole("group"), null);
-  assert.equal(document.activeElement, trigger);
+  assert.equal(screen.queryByRole("group") === null, true);
+  assert.equal(document.activeElement === trigger, true);
 
   fireEvent.click(trigger);
   view.rerender(card(true));
@@ -927,7 +928,7 @@ test("pending guest deletion confirms inline, restores focus, and respects a new
   view.rerender(card());
   fireEvent.click(within(screen.getByRole("group")).getByRole("button", { name: "Delete" }));
   assert.equal(deleteCalls, 1);
-  assert.equal(screen.queryByRole("group"), null);
+  assert.equal(screen.queryByRole("group") === null, true);
 });
 
 test("removing a pending guest row returns focus to the main content", () => {
@@ -948,8 +949,8 @@ test("removing a pending guest row returns focus to the main content", () => {
   render(<Harness />);
   fireEvent.click(screen.getByRole("button", { name: "Delete" }));
   fireEvent.click(within(screen.getByRole("group")).getByRole("button", { name: "Delete" }));
-  assert.equal(screen.queryByRole("article"), null);
-  assert.equal(document.activeElement, document.getElementById("main-content"));
+  assert.equal(screen.queryByRole("article") === null, true);
+  assert.equal(document.activeElement === document.getElementById("main-content"), true);
 });
 
 test("checked guest deletion requires a fresh named dialog after the guest status changes", () => {
@@ -968,13 +969,13 @@ test("checked guest deletion requires a fresh named dialog after the guest statu
   const view = render(card("pending"));
   fireEvent.click(screen.getByRole("button", { name: "Guest A" }));
   fireEvent.click(screen.getByRole("button", { name: messages.Common.deleteGuest }));
-  assert.ok(screen.getByRole("alertdialog"));
+  assert.ok(screen.getByRole("group"));
   view.rerender(card("checked"));
-  assert.equal(screen.queryByRole("group"), null);
-  assert.equal(screen.queryByRole("alertdialog"), null);
+  assert.equal(screen.queryByRole("group") === null, true);
+  assert.equal(screen.queryByRole("group") === null, true);
   assert.ok(screen.getByRole("region", { name: "Guest A" }));
   fireEvent.click(screen.getByRole("button", { name: messages.Common.deleteGuest }));
-  const dialog = screen.getByRole("alertdialog", { name: /Guest A/ });
+  const dialog = screen.getByRole("group", { name: /Guest A/ });
   const descriptionId = dialog.getAttribute("aria-describedby");
   assert.ok(descriptionId);
   assert.equal(
@@ -1055,7 +1056,7 @@ test("a completed CSV submission clears the import draft before the sheet closes
   assert.equal(screen.queryByLabelText(messages.BulkGuestEntry.csv.columnLabel), null);
   fireEvent.click(screen.getByRole("button", { name: messages.Sheet.close }));
   assert.equal(closed, true);
-  assert.equal(screen.queryByRole("group", { name: messages.Sheet.unsaved }), null);
+  assert.equal(screen.queryByRole("group", { name: messages.Sheet.unsaved }) === null, true);
 });
 
 test("bulk preview keeps its submitted names stable until registration and refresh finish", async () => {
@@ -1349,25 +1350,26 @@ test("product sheet protects changed input, blocks dismissal while saving and re
   render(<Harness />);
   const opener = screen.getByRole("button", { name: "Open form" });
   opener.focus(); fireEvent.click(opener);
-  assert.equal(document.querySelector(".workspace-shell")?.hasAttribute("inert"), true);
+  assert.equal(document.querySelector(".workspace-shell")?.hasAttribute("inert"), false);
   const input = screen.getByLabelText("Name") as HTMLInputElement;
   fireEvent.change(input, { target: { value: "Retained guest" } });
   fireEvent.click(screen.getByRole("button", { name: "Save draft" }));
-  fireEvent.keyDown(document, { key: "Escape" });
-  assert.ok(screen.getByRole("dialog", { name: "Edit guest" }));
+  fireEvent.keyDown(document.activeElement ?? document, { key: "Escape" });
+  assert.ok(screen.getByRole("region", { name: "Edit guest" }));
   fireEvent.click(screen.getByRole("button", { name: "Simulate save failure" }));
   assert.equal(input.value, "Retained guest");
-  fireEvent.keyDown(document, { key: "Escape" });
+  fireEvent.keyDown(document.activeElement ?? document, { key: "Escape" });
   assert.ok(screen.getByRole("group", { name: messages.Sheet.unsaved }));
   fireEvent.click(screen.getByRole("button", { name: messages.Sheet.continue }));
   assert.equal(screen.getByLabelText("Name") === input, true);
-  fireEvent.keyDown(document, { key: "Escape" });
+  await act(async () => { await new Promise((resolve) => requestAnimationFrame(resolve)); });
+  fireEvent.keyDown(input, { key: "Escape" });
   fireEvent.click(screen.getByRole("button", { name: messages.Sheet.discard }));
   await waitFor(() => assert.equal(document.activeElement === opener, true));
   assert.equal(document.querySelector(".workspace-shell")?.hasAttribute("inert"), false);
 });
 
-test("product detail changes between side panel and modal without replacing the form or selection", () => {
+test("inline detail preserves form, selection, and unlocked workspace through resizing", () => {
   let width = 1200;
   const originalRect = HTMLElement.prototype.getBoundingClientRect;
   HTMLElement.prototype.getBoundingClientRect = function () {
@@ -1381,24 +1383,24 @@ test("product detail changes between side panel and modal without replacing the 
       </Sheet>
     </NextIntlClientProvider>;
     const view = render(frame());
-    const panel = screen.getByRole("dialog", { name: "Guest detail" });
-    assert.equal(panel.getAttribute("aria-modal"), "false");
+    const panel = screen.getByRole("region", { name: "Guest detail" });
+    assert.equal(panel.hasAttribute("aria-modal"), false);
     const input = screen.getByLabelText("Note") as HTMLInputElement;
     input.focus(); input.setSelectionRange(2, 5);
     width = 600; fireEvent(window, new Event("resize"));
-    assert.equal(panel.getAttribute("aria-modal"), "true");
+    assert.equal(panel.hasAttribute("aria-modal"), false);
     assert.equal(screen.getByLabelText("Note") === input, true);
     assert.equal(document.activeElement === input, true);
     assert.equal(input.selectionStart, 2);
     assert.equal(input.selectionEnd, 5);
     width = 1200; fireEvent(window, new Event("resize"));
-    assert.equal(panel.getAttribute("aria-modal"), "false");
+    assert.equal(panel.hasAttribute("aria-modal"), false);
     assert.equal(document.activeElement === input, true);
     view.rerender(frame("record"));
-    assert.equal(panel.getAttribute("aria-modal"), "true");
+    assert.equal(panel.hasAttribute("aria-modal"), false);
     assert.equal(screen.getByLabelText("Note"), input);
     assert.equal(input.selectionStart, 2);
-    assert.equal(document.querySelector(".workspace-shell")?.hasAttribute("inert"), true);
+    assert.equal(document.querySelector(".workspace-shell")?.hasAttribute("inert"), false);
   } finally { HTMLElement.prototype.getBoundingClientRect = originalRect; }
 });
 
@@ -1458,18 +1460,18 @@ test("mobile roster expands search with two-step Escape and keeps owner filterin
     </NextIntlClientProvider>;
   }
   render(<Harness />);
-  assert.equal(screen.queryByRole("searchbox"), null);
-  assert.equal(screen.queryByRole("combobox"), null);
+  assert.equal(screen.queryByRole("searchbox") === null, true);
+  assert.equal(screen.queryByRole("combobox") === null, true);
   const searchToggle = screen.getByRole("button", { name: messages.Common.searchGuestNames });
   fireEvent.click(searchToggle);
   const search = screen.getByRole("searchbox") as HTMLInputElement;
-  assert.equal(document.activeElement, search);
+  assert.equal(document.activeElement === search, true);
   fireEvent.change(search, { target: { value: "Guest" } });
   const clearSearch = screen.getByRole("button", { name: messages.Common.clearSearch });
   clearSearch.focus();
   fireEvent.click(clearSearch);
   assert.equal(search.value, "");
-  assert.equal(document.activeElement, search);
+  assert.equal(document.activeElement === search, true);
   fireEvent.change(search, { target: { value: "Guest" } });
   fireEvent.keyDown(search, { key: "Escape", isComposing: true });
   assert.equal(search.value, "Guest");
@@ -1477,17 +1479,17 @@ test("mobile roster expands search with two-step Escape and keeps owner filterin
   assert.equal(search.value, "");
   assert.equal(screen.getByRole("searchbox"), search);
   fireEvent.keyDown(search, { key: "Escape" });
-  assert.equal(screen.queryByRole("searchbox"), null);
-  assert.equal(document.activeElement, searchToggle);
+  assert.equal(screen.queryByRole("searchbox") === null, true);
+  assert.equal(document.activeElement === searchToggle, true);
   const filters = screen.getByRole("button", { name: messages.Roster.filters });
   filters.focus(); fireEvent.click(filters);
-  let dialog = screen.getByRole("dialog", { name: messages.Roster.filters });
+  let dialog = screen.getByRole("region", { name: messages.Roster.filters });
   fireEvent.change(within(dialog).getByRole("combobox"), { target: { value: "dj" } });
   fireEvent.click(within(dialog).getByRole("button", { name: messages.Sheet.close }));
   await waitFor(() => assert.equal(document.activeElement === filters, true));
   assert.equal(screen.getByRole("button", { name: messages.Roster.filtersApplied }) === filters, true);
   fireEvent.click(filters);
-  dialog = screen.getByRole("dialog", { name: messages.Roster.filters });
+  dialog = screen.getByRole("region", { name: messages.Roster.filters });
   assert.equal((within(dialog).getByRole("combobox") as HTMLSelectElement).value, "dj");
   assert.ok(within(dialog).getByRole("button", { name: "Sort names" }));
   within(dialog).getByRole("combobox").focus();
@@ -1499,11 +1501,11 @@ test("mobile roster expands search with two-step Escape and keeps owner filterin
   };
   try {
     fireEvent(window, new Event("resize"));
-    assert.equal(screen.queryByRole("dialog"), null);
+    assert.equal(screen.queryByRole("region") === null, true);
     assert.equal((screen.getByRole("combobox") as HTMLSelectElement).value, "dj");
     assert.equal(document.activeElement === screen.getByRole("searchbox"), true);
     width = 500; fireEvent(window, new Event("resize"));
-    assert.equal(screen.queryByRole("dialog"), null);
+    assert.equal(screen.queryByRole("region") === null, true);
     assert.equal(document.activeElement === screen.getByRole("searchbox"), true);
     assert.ok(screen.getByRole("button", { name: messages.Roster.filtersApplied }));
   } finally { HTMLElement.prototype.getBoundingClientRect = originalRect; }
@@ -1529,7 +1531,7 @@ test("closed entry scope locks row, detail, and an already-open undo confirmatio
   view.rerender(card("checked", false));
   fireEvent.click(screen.getByRole("button", { name: /Undo check-in for/ }));
   view.rerender(card("checked", true));
-  const confirm = within(screen.getByRole("alertdialog")).getByRole("button", { name: messages.Roster.undoConfirm });
+  const confirm = within(screen.getByRole("group")).getByRole("button", { name: messages.Roster.undoConfirm });
   assert.equal(confirm.hasAttribute("disabled"), true);
   fireEvent.click(confirm);
   assert.equal(mutations, 0);
@@ -1545,11 +1547,11 @@ test("check-in stays immediate while undo requires confirmation for the current 
   const view = render(card("pending"));
   fireEvent.click(screen.getByRole("button", { name: messages.Common.checkIn }));
   assert.equal(checkCalls, 1);
-  assert.equal(screen.queryByRole("alertdialog"), null);
+  assert.equal(screen.queryByRole("group") === null, true);
   view.rerender(card("checked"));
   fireEvent.click(screen.getByRole("button", { name: /Undo check-in/ }));
   assert.equal(undoCalls, 0);
-  const dialog = screen.getByRole("alertdialog", { name: messages.Roster.undoTitle });
+  const dialog = screen.getByRole("group", { name: messages.Roster.undoTitle });
   fireEvent.click(within(dialog).getByRole("button", { name: messages.Roster.undoConfirm }));
   assert.equal(undoCalls, 1);
 });
@@ -1578,13 +1580,13 @@ test("event details hand off a template to a guarded create sheet and retain fai
         selectedEventId={null} onSelectedEventChange={() => {}} onEventsChanged={() => {}} />
     </NextIntlClientProvider>);
     fireEvent.click(await screen.findByRole("button", { name: /Test night/ }));
-    const details = screen.getByRole("dialog", { name: "Test night" });
+    const details = screen.getByRole("region", { name: "Test night" });
     const open = within(details).getByRole("button", { name: messages.EventAdmin.transition.open });
     fireEvent.click(open);
     await waitFor(() => assert.ok(within(details).getByText(messages.EventAdmin.transitionFailed)));
     assert.equal(open.hasAttribute("disabled"), false);
     fireEvent.click(screen.getByRole("button", { name: messages.EventAdmin.useTemplate }));
-    const dialog = screen.getByRole("dialog", { name: messages.EventAdmin.createTitle });
+    const dialog = screen.getByRole("region", { name: messages.EventAdmin.createTitle });
     const name = within(dialog).getByLabelText(messages.EventAdmin.name) as HTMLInputElement;
     assert.match(name.value, /Test night/);
     fireEvent.change(name, { target: { value: "New night" } });
@@ -1598,7 +1600,7 @@ test("event details hand off a template to a guarded create sheet and retain fai
   } finally { cleanup(); hooks.deregister(); }
 });
 
-test("a credential result sheet owns Escape while the underlying detail keeps the workspace locked", async () => {
+test("a credential result owns Escape while the underlying detail stays available", async () => {
   function Harness() {
     const [result, setResult] = useState(false);
     const [details, setDetails] = useState(true);
@@ -1612,19 +1614,20 @@ test("a credential result sheet owns Escape while the underlying detail keeps th
   }
   render(<Harness />);
   fireEvent.click(screen.getByRole("button", { name: "Issue credential" }));
-  fireEvent.keyDown(document, { key: "Escape" });
-  assert.equal(screen.queryByRole("dialog", { name: "Credential result" }), null);
-  assert.ok(screen.getByRole("dialog", { name: "Account details" }));
-  assert.equal(document.querySelector(".workspace-shell")?.hasAttribute("inert"), true);
-  assert.equal(document.body.style.overflow, "hidden");
-  fireEvent.keyDown(document, { key: "Escape" });
-  assert.equal(screen.queryByRole("dialog"), null);
+  fireEvent.keyDown(document.activeElement ?? document, { key: "Escape" });
+  assert.equal(screen.queryByRole("region", { name: "Credential result" }) === null, true);
+  assert.ok(screen.getByRole("region", { name: "Account details" }));
+  assert.equal(document.querySelector(".workspace-shell")?.hasAttribute("inert"), false);
+  assert.notEqual(document.body.style.overflow, "hidden");
+  await act(async () => {});
+  fireEvent.keyDown(document.activeElement ?? document, { key: "Escape" });
+  assert.equal(screen.queryByRole("region") === null, true);
   await act(async () => {});
   assert.equal(document.querySelector(".workspace-shell")?.hasAttribute("inert"), false);
   assert.notEqual(document.body.style.overflow, "hidden");
 });
 
-test("removing a sheet and its confirmation in one commit releases all modal locks", async () => {
+test("removing an inline panel and its confirmation keeps the workspace available", async () => {
   function Harness() {
     const [open, setOpen] = useState(true);
     const [confirm, setConfirm] = useState(false);
@@ -1639,17 +1642,17 @@ test("removing a sheet and its confirmation in one commit releases all modal loc
   }
   render(<Harness />);
   fireEvent.click(screen.getByRole("button", { name: "Delete record" }));
-  assert.equal(document.body.style.overflow, "hidden");
+  assert.notEqual(document.body.style.overflow, "hidden");
   fireEvent.click(screen.getByRole("button", { name: "Remove" }));
   await act(async () => {});
-  assert.equal(screen.queryByRole("dialog"), null);
-  assert.equal(screen.queryByRole("alertdialog"), null);
+  assert.equal(screen.queryByRole("region") === null, true);
+  assert.equal(screen.queryByRole("group") === null, true);
   assert.notEqual(document.body.style.overflow, "hidden");
   assert.equal(document.querySelector(".workspace-shell")?.hasAttribute("inert"), false);
   assert.equal(document.getElementById("main-content")?.hasAttribute("inert"), false);
 });
 
-test("route loading locks a portal sheet without replacing its draft", () => {
+test("route loading locks an inline panel without replacing its draft", () => {
   let start: ((href: string) => boolean) | undefined;
   function Harness() {
     start = useRouteTransition().startRouteTransition;
@@ -1661,7 +1664,7 @@ test("route loading locks a portal sheet without replacing its draft", () => {
   act(() => { start?.("/other"); });
   const layer = input.closest(".product-sheet-layer");
   assert.equal(layer?.hasAttribute("inert"), true);
-  assert.equal(layer?.getAttribute("aria-hidden"), "true");
+  assert.equal(layer?.hasAttribute("hidden"), true);
   assert.equal(input.value, "Retained");
   assert.equal(input.isConnected, true);
 });
@@ -1687,7 +1690,7 @@ test("saved input and a persistent operator do not produce a false discard promp
   fireEvent.click(screen.getByRole("button", { name: "Save" }));
   fireEvent.click(screen.getByRole("button", { name: "Load quota" }));
   fireEvent.click(screen.getByRole("button", { name: messages.Sheet.close }));
-  assert.equal(screen.queryByRole("dialog"), null);
+  assert.equal(screen.queryByRole("region") === null, true);
 });
 
 
@@ -1699,28 +1702,28 @@ test("operations deletion is only in guest details, confirms, and restores focus
         onDelete={allowed ? () => { calls += 1; } : undefined} isDeleteDisabled={disabled} />
     </NextIntlClientProvider>;
     const view = render(frame());
-    assert.equal(screen.queryByRole("button", { name: messages.Common.deleteGuest }), null);
+    assert.equal(screen.queryByRole("button", { name: messages.Common.deleteGuest }) === null, true);
     fireEvent.click(screen.getByRole("button", { name: "Guest One" }));
     const trigger = screen.getByRole("button", { name: messages.Common.deleteGuest });
     trigger.focus();
     fireEvent.click(trigger);
     assert.equal(calls, 0);
-    const confirmation = screen.getByRole("alertdialog");
+    const confirmation = screen.getByRole("group");
     assert.equal(document.activeElement === within(confirmation).getByRole("button", { name: messages.Common.cancel }), true);
-    fireEvent.keyDown(document, { key: "Escape" });
-    await waitFor(() => assert.equal(screen.queryByRole("alertdialog"), null));
+    fireEvent.keyDown(document.activeElement ?? document, { key: "Escape" });
+    await waitFor(() => assert.equal(screen.queryByRole("group") === null, true));
     assert.ok(screen.getByRole("region", { name: "Guest One" }));
     assert.equal(document.activeElement === trigger, true);
     fireEvent.click(trigger);
     view.rerender(frame(true));
-    fireEvent.click(within(screen.getByRole("alertdialog")).getByRole("button", { name: messages.Common.delete }));
+    fireEvent.click(within(screen.getByRole("group")).getByRole("button", { name: messages.Common.delete }));
     assert.equal(calls, 0);
     view.rerender(frame(false, false));
-    assert.equal(screen.queryByRole("alertdialog"), null);
-    assert.equal(screen.queryByRole("button", { name: messages.Common.deleteGuest }), null);
+    assert.equal(screen.queryByRole("group") === null, true);
+    assert.equal(screen.queryByRole("button", { name: messages.Common.deleteGuest }) === null, true);
     view.rerender(frame());
     fireEvent.click(screen.getByRole("button", { name: messages.Common.deleteGuest }));
-    fireEvent.click(within(screen.getByRole("alertdialog")).getByRole("button", { name: messages.Common.delete }));
+    fireEvent.click(within(screen.getByRole("group")).getByRole("button", { name: messages.Common.delete }));
     assert.equal(calls, 1);
     cleanup();
   }
@@ -1742,7 +1745,7 @@ test("guest rows toggle inline details while action buttons stay independent and
   fireEvent.click(row);
   const detail = screen.getByRole("region", { name: "Accordion guest" });
   assert.equal(row.getAttribute("aria-controls"), detail.id);
-  assert.equal(screen.queryByRole("dialog"), null);
+  assert.equal(screen.queryByRole("dialog") === null, true);
   assert.notEqual(document.body.style.overflow, "hidden");
   fireEvent.click(check);
   assert.equal(checks, 2);
@@ -1750,8 +1753,45 @@ test("guest rows toggle inline details while action buttons stay independent and
   fireEvent.keyDown(within(detail).getByRole("button", { name: messages.Common.deleteGuest }), { key: "Escape" });
   assert.equal(row.getAttribute("aria-expanded"), "false");
   assert.equal(document.activeElement === row, true);
-  assert.equal(screen.queryByRole("region", { name: "Accordion guest" }), null);
+  assert.equal(screen.queryByRole("region", { name: "Accordion guest" }) === null, true);
   fireEvent.click(row);
   fireEvent.click(row);
   assert.equal(row.getAttribute("aria-expanded"), "false");
+});
+
+
+test("switching record accordions protects an unsaved draft and resumes only after discard", () => {
+  function Record({ id }: { id: string }) {
+    const detail = useRecordDetail(id);
+    return <article><button onClick={detail.show}>Open {id}</button>
+      <Sheet id={`record-${id}`} open={detail.open} title={id} onClose={detail.close} protectEdits>
+        <label>{id} note<input defaultValue="" /></label>
+      </Sheet>
+    </article>;
+  }
+  render(<NextIntlClientProvider locale="en" messages={messages}><RecordList><Record id="A" /><Record id="B" /></RecordList></NextIntlClientProvider>);
+  fireEvent.click(screen.getByRole("button", { name: "Open A" }));
+  const note = screen.getByLabelText("A note") as HTMLInputElement;
+  fireEvent.change(note, { target: { value: "Keep draft" } });
+  fireEvent.click(screen.getByRole("button", { name: "Open B" }));
+  assert.equal(screen.queryByRole("region", { name: "B" }) === null, true);
+  fireEvent.click(screen.getByRole("button", { name: messages.Sheet.continue }));
+  assert.equal(note.value, "Keep draft");
+  fireEvent.click(screen.getByRole("button", { name: "Open B" }));
+  fireEvent.click(screen.getByRole("button", { name: messages.Sheet.discard }));
+  assert.equal(screen.queryByRole("region", { name: "A" }) === null, true);
+  assert.ok(screen.getByRole("region", { name: "B" }));
+});
+
+test("roster timestamps keep machine-readable values and use the venue timezone", () => {
+  render(<NextIntlClientProvider locale="en" messages={messages}>
+    <GuestListCard mode="operations" index={0} timeZone="America/New_York"
+      guest={{ id: "timed", name: "Timed guest", status: "checked", createdAt: "2026-09-18T18:30:00Z", checkInTime: "2026-09-18T19:45:00Z" }} />
+  </NextIntlClientProvider>);
+  const registered = screen.getByText(messages.Roster.registeredAt).parentElement!.querySelector("time")!;
+  const checked = screen.getByText(messages.Roster.checkedInAt).parentElement!.querySelector("time")!;
+  assert.equal(registered.textContent, "14:30");
+  assert.equal(checked.textContent, "15:45");
+  assert.equal(registered.dateTime, "2026-09-18T18:30:00Z");
+  assert.equal(checked.dateTime, "2026-09-18T19:45:00Z");
 });

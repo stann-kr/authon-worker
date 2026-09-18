@@ -441,7 +441,7 @@ test("activation runs directly once while deactivation still requires confirmati
     duplicate = controller!.requestActiveChange(USER_INACTIVE);
   });
   assert.deepEqual(updates, [{ id: USER_INACTIVE.id, active: true }]);
-  assert.equal(screen.queryByRole("alertdialog"), null);
+  assert.equal(screen.queryByRole("group", { name: "Confirm user action" }) === null, true);
   assert.equal(screen.getByTestId("mutation-pending").textContent, "true");
   await act(async () => {
     activation.resolve({ data: { ...USER_INACTIVE, active: true }, error: null });
@@ -450,7 +450,7 @@ test("activation runs directly once while deactivation still requires confirmati
   assert.equal(screen.getByTestId("feedback-type").textContent, "success");
 
   await act(async () => { await controller!.requestActiveChange(USER_A); });
-  assert.ok(screen.getByRole("alertdialog"));
+  assert.ok(screen.getByRole("group", { name: "Confirm user action" }));
   assert.equal(updates.length, 1);
   await act(async () => { await controller!.confirmPendingUserAction(); });
   assert.deepEqual(updates[1], { id: USER_A.id, active: false });

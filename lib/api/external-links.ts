@@ -5,15 +5,16 @@ import { measureServerOperation } from "@/lib/observability/server-performance";
 import { reportServerError } from "@/lib/observability/structured-log";
 
 import { getD1Database } from "@/lib/db/client";
+import { buildLinkGuestQuery, buildLinkListQuery } from "../external-links/list-query";
+import { LINK_PAGE_SIZE, type LinkListCursor, type LinkListOptions } from "../external-links/list-types";
 import { headers } from "next/headers";
 import {
   eq,
   and,
   desc,
   isNull,
-  or,
 } from "drizzle-orm";
-import { externalDjLinks } from "../db/schema";
+import { externalDjLinks, guests } from "../db/schema";
 import type { ApiResponse } from "./response";
 import type {
   BulkGuestCreateInput,
@@ -21,6 +22,8 @@ import type {
 import type { ExternalDjSuggestion } from "@/lib/contributors/types";
 import type {
   ExternalDJLink,
+  ExternalLinkPage,
+  ExternalLinkGuestPage,
   ExternalLinkCreateSuggestions,
   ExternalLinkPublicGuest,
   ExternalLinkPublicGuestCreateResult,
@@ -154,87 +157,79 @@ export async function fetchExternalLinks(venueId: string): Promise<ApiResponse<E
   });
 }
 
-export async function fetchExternalLinksByDate(
+export async function fetchExternalLinkPage(
   venueId: string,
-  date: string,
-  eventId?: string | null,
-): Promise<ApiResponse<ExternalDJLink[]>> {
+  options: LinkListOptions,
+): Promise<ApiResponse<ExternalLinkPage>> {
   try {
     const user = await requireRole(["super_admin", "venue_admin"]);
-    const db = getDb();
     const effectiveVenueId = await scopedVenueId(user, venueId);
-    const conditions = [
-      eq(externalDjLinks.venueId, effectiveVenueId),
-      eq(externalDjLinks.date, date),
-      isNull(externalDjLinks.deletedAt),
-    ];
-    if (eventId) {
-      const event = await loadEventById(db, eventId);
-      if (
-        !event ||
-        event.venueId !== effectiveVenueId ||
-        event.businessDate !== date
-      ) {
-        throw new Error("EVENT_NOT_FOUND");
+    if (!options || !["all", "active", "attention"].includes(options.filter) ||
+      !["newest", "expiresSoonest", "djName"].includes(options.sort) ||
+      (options.date !== undefined && !/^\d{4}-\d{2}-\d{2}$/.test(options.date)) ||
+      (options.cursor && (typeof options.cursor.id !== "string" || !options.cursor.id || options.cursor.id.length > 200 ||
+        typeof options.cursor.value !== "string" || options.cursor.value.length > 500))) throw new Error("INVALID_LINK_PAGE");
+    const db = getDb();
+    let scopedEventId: string | null = null;
+    let includeLegacy = false;
+    if (options.date) {
+      if (options.eventId) {
+        const event = await loadEventById(db, options.eventId);
+        if (!event || event.venueId !== effectiveVenueId || event.businessDate !== options.date) throw new Error("EVENT_NOT_FOUND");
+        scopedEventId = event.id;
+      } else {
+        const event = await findCompatibilityEvent(effectiveVenueId, options.date);
+        if (event && eventIncludesLegacyDateRows(event)) { scopedEventId = event.id; includeLegacy = true; }
       }
-      conditions.push(eq(externalDjLinks.eventId, event.id));
-    } else {
-      const compatibilityEvent = await findCompatibilityEvent(
-        effectiveVenueId,
-        date,
-      );
-      conditions.push(
-        compatibilityEvent && eventIncludesLegacyDateRows(compatibilityEvent)
-          ? or(
-              eq(externalDjLinks.eventId, compatibilityEvent.id),
-              isNull(externalDjLinks.eventId),
-            )!
-          : isNull(externalDjLinks.eventId),
-      );
     }
-    const result = await db.select().from(externalDjLinks)
-      .where(
-        and(...conditions),
-      )
-      .orderBy(desc(externalDjLinks.createdAt));
-    return { data: await addGuestUrls(effectiveVenueId, result), error: null };
+    const query = buildLinkListQuery(effectiveVenueId, options, scopedEventId, includeLegacy);
+    const [rows, counts] = await Promise.all([
+      db.select({ link: externalDjLinks, cursorValue: query.value.as("cursorValue") }).from(externalDjLinks)
+        .where(query.where).orderBy(...query.order).limit(LINK_PAGE_SIZE + 1),
+      db.select(query.stats).from(externalDjLinks).where(query.scope),
+    ]);
+    const page = rows.slice(0, LINK_PAGE_SIZE);
+    const last = page.at(-1);
+    return { data: {
+      links: await addGuestUrls(effectiveVenueId, page.map((row) => row.link)),
+      nextCursor: rows.length > LINK_PAGE_SIZE && last ? { value: last.cursorValue, id: last.link.id } : null,
+      stats: counts[0],
+    }, error: null };
   } catch (error: unknown) {
-    await reportServerError("external_link.list_by_date", error);
+    await reportServerError("external_link.list_page", error);
     return { data: null, error: "Unable to load external links right now." };
   }
 }
 
-export async function fetchRecentExternalLinks(
+export async function fetchExternalLinkGuests(
   venueId: string,
-  limit: 5 | 10,
-  eventId?: string | null,
-): Promise<ApiResponse<ExternalDJLink[]>> {
+  linkId: string,
+  cursor?: LinkListCursor | null,
+): Promise<ApiResponse<ExternalLinkGuestPage>> {
   try {
     const user = await requireRole(["super_admin", "venue_admin"]);
-    const db = getDb();
     const effectiveVenueId = await scopedVenueId(user, venueId);
-    const normalizedLimit = limit === 10 ? 10 : 5;
-    const conditions = [
-      eq(externalDjLinks.venueId, effectiveVenueId),
-      isNull(externalDjLinks.deletedAt),
-    ];
-    if (eventId) {
-      const event = await loadEventById(db, eventId);
-      if (!event || event.venueId !== effectiveVenueId) {
-        throw new Error("EVENT_NOT_FOUND");
-      }
-      conditions.push(eq(externalDjLinks.eventId, event.id));
-    }
-    const result = await db
-      .select()
-      .from(externalDjLinks)
-      .where(and(...conditions))
-      .orderBy(desc(externalDjLinks.createdAt), desc(externalDjLinks.date))
-      .limit(normalizedLimit);
-    return { data: await addGuestUrls(effectiveVenueId, result), error: null };
-  } catch (error: unknown) {
-    await reportServerError("external_link.list_recent", error);
-    return { data: null, error: "Unable to load recent external links right now." };
+    if (typeof linkId !== "string" || !linkId || linkId.length > 200 ||
+      (cursor && (typeof cursor.id !== "string" || !cursor.id || cursor.id.length > 200 ||
+        typeof cursor.value !== "string" || cursor.value.length > 64))) throw new Error("INVALID_LINK_GUEST_PAGE");
+    const db = getDb();
+    const [link] = await db.select({ id: externalDjLinks.id }).from(externalDjLinks)
+      .where(and(eq(externalDjLinks.id, linkId), eq(externalDjLinks.venueId, effectiveVenueId), isNull(externalDjLinks.deletedAt))).limit(1);
+    if (!link) throw new Error("LINK_NOT_FOUND");
+    const query = buildLinkGuestQuery(effectiveVenueId, linkId, cursor);
+    const rows = await db.select({ id: guests.id, name: guests.name, status: guests.status,
+      createdAt: guests.createdAt, checkInTime: guests.checkInTime })
+      .from(guests).innerJoin(externalDjLinks, query.join).where(query.where)
+      .orderBy(...query.order).limit(LINK_PAGE_SIZE + 1);
+    const page = rows.slice(0, LINK_PAGE_SIZE);
+    const last = page.at(-1);
+    return { data: {
+      guests: page.map((guest) => ({ ...guest, status: guest.status as "pending" | "checked" })),
+      nextCursor: rows.length > LINK_PAGE_SIZE && last ? { id: last.id, value: last.createdAt } : null,
+    }, error: null };
+  } catch (error) {
+    await reportServerError("external_link.guests", error);
+    return { data: null, error: "Unable to load registered guests right now." };
   }
 }
 

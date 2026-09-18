@@ -4,7 +4,7 @@ import { fetchEvents } from "@/lib/events/client";
 
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useLocale, useTranslations } from "next-intl";
-import Sheet from "@/components/overlays/Sheet";
+import Sheet, { requestSheetClose } from "@/components/overlays/Sheet";
 import Button from "@/components/Button";
 import Alert from "@/components/Alert";
 import DatePicker from "@/components/DatePicker";
@@ -356,7 +356,6 @@ export default function EventManagement({
       <EventCloseout eventId={event.id} eventState={event.state} timeZone={currentVenue?.timezone} />
     </div>;
   };
-  const detailEvent = explicitEvents.find((event) => event.id === detailId);
 
   const scopeControls = <>
     <DatePicker compact value={selectedDate} onChange={onDateChange} businessDate={businessDate} disabled={Boolean(busyId)} />
@@ -374,38 +373,12 @@ export default function EventManagement({
         <PanelHeader
           title={t("listTitle")}
           headingId="event-list-title"
-          actions={<Button onClick={() => { setFeedback(null); setCreateOpen(true); }} disabled={!venueId || Boolean(busyId)}>{t("createTitle")}</Button>}
+          actions={<Button aria-expanded={createOpen} aria-controls={createOpen ? "event-create-panel" : undefined} onClick={() => { setFeedback(null); if (createOpen) requestSheetClose("event-create-panel"); else setCreateOpen(true); }} disabled={!venueId || Boolean(busyId)}>{t("createTitle")}</Button>}
           count={explicitEvents.length}
           onRefresh={loadEvents}
           isLoading={isLoading}
         />
-        <div className="record-collection-body">
-          {loadError && <Alert type="error" message={t("loadFailed")} />}
-          {!venueId ? (
-            <p className="border border-border-default bg-canvas p-4 text-sm text-text-muted">
-              {t("selectVenue")}
-            </p>
-          ) : listState === "loading" ? (
-            <Skeleton rows={4} />
-          ) : shouldShowEmptyState(listState) ? (
-            <EmptyState icon="calendar" message={t("empty")} />
-          ) : (
-            <div className="record-list">
-              {explicitEvents.map((event) => <article key={event.id} className="record-row">
-                <div className="record-summary">
-                  <button type="button" className="record-open" onClick={() => { setFeedback(null); setDetailId(event.id); }} disabled={Boolean(busyId)} aria-haspopup="dialog" aria-expanded={detailId === event.id}>
-                    <span className="record-identity"><strong>{event.name}</strong><small>{event.businessDate}{selectedEventId === event.id ? ` · ${t("selected")}` : ""}</small></span>
-                    <span className="record-value">{t("capacity")} {event.capacity ?? "—"}</span>
-                    <span className="record-status">{t(`state.${event.state}`)}</span>
-                  </button>
-                </div>
-              </article>)}
-            </div>
-          )}
-        </div>
-      </section>
-
-      <Sheet open={createOpen} title={t("createTitle")} onClose={() => {
+      <Sheet id="event-create-panel" open={createOpen} title={t("createTitle")} onClose={() => {
         setCreateOpen(false); setName(""); setCapacity(""); setTargetGuests(""); setTemplateSourceEventId(null);
       }} dirty={Boolean(name || capacity || targetGuests)} busy={Boolean(busyId)}>
         {feedback && <Alert type={feedback.type} message={feedback.message} />}
@@ -467,9 +440,37 @@ export default function EventManagement({
           </fieldset>
         </form>
       </Sheet>
-      {detailEvent && <Sheet title={detailEvent.name} presentation="detail" size="record" onClose={() => { setDetailId(null); setPendingTransition(null); }} busy={Boolean(busyId)}>
-        {renderDetails(detailEvent)}
-      </Sheet>}
+        <div className="record-collection-body">
+          {loadError && <Alert type="error" message={t("loadFailed")} />}
+          {!venueId ? (
+            <p className="border border-border-default bg-canvas p-4 text-sm text-text-muted">
+              {t("selectVenue")}
+            </p>
+          ) : listState === "loading" ? (
+            <Skeleton rows={4} />
+          ) : shouldShowEmptyState(listState) ? (
+            <EmptyState icon="calendar" message={t("empty")} />
+          ) : (
+            <div className="record-list">
+              {explicitEvents.map((event) => <article key={event.id} className="record-row">
+                <div className="record-summary">
+                  <button type="button" className="record-open" onClick={() => { setFeedback(null); setDetailId(detailId === event.id ? null : event.id); setPendingTransition(null); }} disabled={Boolean(busyId)} aria-expanded={detailId === event.id} aria-controls={detailId === event.id ? `event-detail-${event.id}` : undefined}>
+                    <span className="record-identity"><strong>{event.name}</strong><small>{event.businessDate}{selectedEventId === event.id ? ` · ${t("selected")}` : ""}</small></span>
+                    <span className="record-value">{t("capacity")} {event.capacity ?? "—"}</span>
+                    <span className="record-status">{t(`state.${event.state}`)}</span>
+                  </button>
+                </div>
+                {detailId === event.id && <Sheet id={`event-detail-${event.id}`} title={event.name} presentation="detail" size="record" onClose={() => { setDetailId(null); setPendingTransition(null); }} busy={Boolean(busyId)}>
+                  {renderDetails(event)}
+                </Sheet>}
+              </article>)}
+            </div>
+          )}
+        </div>
+      </section>
+
+
+
     </div>
   );
 }

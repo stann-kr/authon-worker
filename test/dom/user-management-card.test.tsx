@@ -160,8 +160,8 @@ test("password approval keeps its proof form and rejection confirms inline with 
   );
   const process = await screen.findByRole("button", { name: messages.PasswordResetAdmin.process });
   fireEvent.click(process);
-  const dialog = screen.getByRole("dialog");
-  assert.equal(screen.queryByRole("alertdialog"), null);
+  const dialog = screen.getByRole("group", { name: messages.PasswordResetAdmin.approveTitle.replace("{name}", USER_A.name) });
+  assert.equal(screen.queryByRole("alertdialog") === null, true);
   const approve = within(dialog).getByRole("button", { name: messages.PasswordResetAdmin.approve });
   assert.equal((approve as HTMLButtonElement).disabled, true);
   fireEvent.click(within(dialog).getByRole("radio", { name: messages.PasswordResetAdmin.verification_in_person }));
@@ -174,12 +174,12 @@ test("password approval keeps its proof form and rejection confirms inline with 
   await waitFor(() => assert.equal(document.activeElement === challenge, true));
   assert.equal(within(dialog).getByRole("alert").textContent?.includes(messages.PasswordResetAdmin.verificationFailed), true);
   fireEvent.click(within(dialog).getByRole("button", { name: messages.Common.cancel }));
-  await waitFor(() => assert.equal(screen.queryByRole("dialog"), null));
+  await waitFor(() => assert.equal(screen.queryByRole("dialog") === null, true));
 
   const getReject = () => screen.getByRole("button", { name: messages.PasswordResetAdmin.reject });
   fireEvent.click(getReject());
   const confirmation = screen.getByRole("group");
-  assert.equal(screen.queryByRole("dialog"), null);
+  assert.equal(screen.queryByRole("dialog") === null, true);
   const cancel = within(confirmation).getByRole("button", { name: messages.Common.cancel });
   await waitFor(() => assert.equal(document.activeElement === cancel, true));
   fireEvent.keyDown(cancel, { key: "Escape" });
@@ -199,7 +199,7 @@ test("password approval keeps its proof form and rejection confirms inline with 
     rejection.resolve({ error: null });
     await rejection.promise;
   });
-  await waitFor(() => assert.equal(screen.queryByRole("group"), null));
+  await waitFor(() => assert.equal(screen.queryByRole("group") === null, true));
   const panel = screen.getByRole("region", {
     name: (name) => name.startsWith(messages.PasswordResetAdmin.title),
   });
@@ -283,8 +283,8 @@ test("account detail shows effective Door access and preserves audit visibility 
       user: { ...USER_A, role: "staff", accountKind: "shared", doorAccessEnabled: scenario.doorAccessEnabled },
       actorRole: scenario.actorRole, activityUnavailable: scenario.activityUnavailable, activity,
     });
-    const dialog = screen.getByRole("dialog", { name: USER_A.name });
-    assert.equal(dialog.getAttribute("aria-modal"), "true");
+    const dialog = screen.getByRole("region", { name: USER_A.name });
+    assert.equal(dialog.hasAttribute("aria-modal"), false);
     assert.ok(within(dialog).getByRole("heading", { name: messages.UserAdmin.basicInformation }));
     assert.ok(within(dialog).getByText("Test venue"));
     assert.equal(
@@ -410,6 +410,6 @@ test("a scope-wide disabled state removes every user card action", async () => {
     const openButton = card.getByRole("button") as HTMLButtonElement;
     assert.equal(openButton.disabled, true);
     fireEvent.click(openButton);
-    assert.equal(screen.queryByRole("dialog"), null);
+    assert.equal(screen.queryByRole("dialog") === null, true);
   }
 });

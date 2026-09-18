@@ -99,10 +99,10 @@ test("unified check-in exposes deletion only to admins and only inside details",
     location();
     render(frame(account));
     await screen.findByRole("button", { name: "Roster guest" });
-    assert.equal(screen.queryByRole("button", { name: messages.Common.deleteGuest }), null);
+    assert.equal(screen.queryByRole("button", { name: messages.Common.deleteGuest }) === null, true);
     const detail = await openGuest();
     assert.equal(Boolean(within(detail).queryByRole("button", { name: messages.Common.deleteGuest })), account.role === "venue_admin");
-    assert.equal(screen.queryByRole("link", { name: messages.Workspace.roster }), null);
+    assert.equal(screen.queryByRole("link", { name: messages.Workspace.roster }) === null, true);
     cleanup();
   }
 });
@@ -137,7 +137,7 @@ test("a failed deletion keeps the detail available and a confirmed retry removes
     const trigger = within(detail).getByRole("button", { name: messages.Common.deleteGuest });
     await waitFor(() => assert.equal(trigger.hasAttribute("disabled"), false));
     fireEvent.click(trigger);
-    fireEvent.click(within(screen.getByRole("alertdialog")).getByRole("button", { name: messages.Common.delete }));
+    fireEvent.click(within(screen.getByRole("group", { name: messages.Common.deleteGuestConfirm.replace("{name}", "Roster guest") })).getByRole("button", { name: messages.Common.delete }));
     if (!succeeds) {
       await waitFor(() => assert.equal(runtime.__doorPageTest.deleteCalls, 1));
       await waitFor(() => assert.equal(trigger.hasAttribute("disabled"), false));

@@ -1,6 +1,6 @@
 "use client";
 
-import Sheet from "@/components/overlays/Sheet";
+import Sheet, { requestSheetClose } from "@/components/overlays/Sheet";
 import RecordList, { useRecordDetail } from "@/components/records/RecordList";
 
 import { fetchVenues } from "@/lib/venues/client";
@@ -675,13 +675,13 @@ export function VenueCard({
     <>
       <article className="record-row">
         <div className="record-summary">
-          <button type="button" className="record-open" onClick={detail.show} disabled={actionsDisabled} aria-haspopup="dialog" aria-expanded={detail.open}>
+          <button type="button" className="record-open" onClick={() => detail.open ? requestSheetClose(`venue-detail-${venue.id}`) : detail.show()} disabled={actionsDisabled} aria-expanded={detail.open} aria-controls={detail.open ? `venue-detail-${venue.id}` : undefined}>
             <span className="record-identity"><strong>{venue.name}</strong><small>{venue.primaryDomain || venue.address || venueTypeLabels[venue.type]}</small></span>
             <span className="record-value">{venueTypeLabels[venue.type]}</span>
             <span className="record-status">{venue.active ? t("active") : t("inactive")}</span>
           </button>
         </div>
-      {detail.open && <Sheet title={venue.name} presentation="detail" size="record" onClose={() => { handleCancelEdit(); detail.close(); }}
+      {detail.open && <Sheet id={`venue-detail-${venue.id}`} title={venue.name} presentation="detail" size="record" onClose={() => { handleCancelEdit(); detail.close(); }}
         busy={actionsDisabled || isSaving || isTogglingActive} dirty={isEditing && JSON.stringify(editData) !== JSON.stringify(createVenueEditData(venue))}>
         {error && <Alert type="error" message={error} />}
       {!isEditing ? (
@@ -1019,8 +1019,6 @@ export function VenueCard({
           </div>
         </fieldset>
       )}
-      </Sheet>}
-      </article>
       <ConfirmDialog
         open={isDeactivateConfirmOpen}
         title={t("deactivateTitle")}
@@ -1032,6 +1030,8 @@ export function VenueCard({
         isLoading={isTogglingActive}
         confirmDisabled={actionsDisabled}
       />
+      </Sheet>}
+      </article>
     </>
   );
 }

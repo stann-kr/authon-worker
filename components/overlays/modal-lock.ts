@@ -1,7 +1,5 @@
-// Sheets, confirmations and the workspace menu can overlap and close in either order.
+// Route transitions may share ownership of an inert content surface.
 const inertLocks = new Map<HTMLElement, { count: number; wasInert: boolean }>();
-let scrollLocks = 0;
-let unlockedOverflow = "";
 
 export function lockInertSurface(surface: HTMLElement | null) {
   if (surface) {
@@ -16,17 +14,5 @@ export function lockInertSurface(surface: HTMLElement | null) {
       if (!lock.wasInert) surface.removeAttribute("inert");
       inertLocks.delete(surface);
     }
-  };
-}
-
-export function lockModalBackground(surface: HTMLElement | null) {
-  if (scrollLocks++ === 0) {
-    unlockedOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-  }
-  const unlock = lockInertSurface(surface);
-  return () => {
-    if (--scrollLocks === 0) document.body.style.overflow = unlockedOverflow;
-    unlock();
   };
 }

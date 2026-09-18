@@ -1,3 +1,4 @@
+import type { LinkListCursor, LinkListStats } from "./list-types";
 import type { BulkGuestCreateStatus } from "../guests/types";
 import type { ExternalDjSuggestion } from "../contributors/types";
 import type { Venue } from "../venues/types";
@@ -68,4 +69,15 @@ export interface ExternalLinkPublicValidationData {
   link: ExternalDJLink;
   venue: Venue;
   guests: ExternalLinkPublicGuest[];
+}
+
+export interface ExternalLinkPage {
+  links: ExternalDJLink[];
+  nextCursor: LinkListCursor | null;
+  stats: LinkListStats;
+}
+
+export interface ExternalLinkGuestPage {
+  guests: ExternalLinkPublicGuest[];
+  nextCursor: LinkListCursor | null;
 }

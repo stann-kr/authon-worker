@@ -3,7 +3,7 @@
 import WorkspaceAction from "@/components/workspace/WorkspaceAction";
 import OperationsScope from "@/components/operations/OperationsScope";
 
-import Sheet from "@/components/overlays/Sheet";
+import Sheet, { requestSheetClose } from "@/components/overlays/Sheet";
 import RosterView, { type RosterStatus } from "@/components/guests/RosterView";
 
 import { useState, useEffect, useRef, useCallback } from "react";
@@ -466,7 +466,7 @@ export default function AuthenticatedGuestView({ user }: AuthenticatedGuestViewP
 
   return (
     <WorkspaceShell contentClassName="gap-4 pb-8 lg:gap-6" actions={
-      <WorkspaceAction icon="add" onClick={() => setEntryOpen(true)}>{t("addGuest")}</WorkspaceAction>
+      <WorkspaceAction icon="add" onClick={() => entryOpen ? requestSheetClose("guest-entry-panel") : setEntryOpen(true)} aria-expanded={entryOpen} aria-controls={entryOpen ? "guest-entry-panel" : undefined}>{t("addGuest")}</WorkspaceAction>
     }>
       {venueLoadError && (
         <VenueLoadNotice
@@ -474,90 +474,7 @@ export default function AuthenticatedGuestView({ user }: AuthenticatedGuestViewP
           isLoading={isLoadingVenues}
         />
       )}
-      <OperationsLayout
-        variant="stacked"
-        title={commonT("guest")}
-        dashboard={
-          <>
-                <EventScopeSelector venueId={effectiveVenueId} businessDate={selectedDate}
-                  value={selectedEventId} onChange={setSelectedEventId} disabled={isBulkSubmitting}
-                  renderScope={(selector, label) => <OperationsScope venueName={currentVenue?.brandName || currentVenue?.name} date={selectedDate} label={label} disabled={isBulkSubmitting}>
-                    <DatePicker compact value={selectedDate} onChange={setSelectedDate} businessDate={businessDate} disabled={isBulkSubmitting} />
-                    {isSuperAdmin && <VenueSelector venues={venues} selectedVenueId={selectedVenueId} onVenueChange={setSelectedVenueId} disabled={isBulkSubmitting} />}
-                    {selector}
-                  </OperationsScope>} />
-
-                {error && <Alert type="error" message={error} />}
-
-          </>
-        }
-      >
-            <section
-              className="min-w-0"
-              aria-label={t("todaysGuests")}
-              aria-busy={isCurrentScopeFetching}
-            >
-              <dl className="product-roster-quota">
-                <div><dt>{commonT("registered")}</dt><dd>{hasCurrentScopeData ? (displayQuota?.used ?? activeGuestsCount) : "—"}</dd></div>
-                <div><dt>{t("remaining")}</dt><dd>{hasCurrentScopeData ? (remaining ?? "∞") : "—"}</dd></div>
-              </dl>
-              <RosterView filtersActive={sortMode !== "default"} header={<PanelHeader
-                title={t("todaysGuests")}
-                headingLevel={2}
-                headingId="guest-list-title"
-                count={displayGuests.length}
-                sortMode={sortMode}
-                onSortToggle={() =>
-                  setSortMode((prev) =>
-                    prev === "default" ? "alpha" : "default",
-                  )
-                }
-                onRefresh={loadGuests}
-                isLoading={isCurrentScopeFetching}
-              />} query={searchQuery} onQueryChange={setSearchQuery}
-            status={rosterStatus} onStatusChange={setRosterStatus}
-            loading={!hasCurrentScopeData} counts={{ all: filteredGuests.length, pending: pendingGuests.length, checked: checkedGuests.length }}>
-
-              {listState === "loading" ? (
-                <Skeleton rows={5} />
-              ) : shouldShowEmptyState(listState) ? (
-                <EmptyState
-                  icon="user-add"
-                  message={
-                    searchQuery || rosterStatus !== "all"
-                      ? t("noSearchResults")
-                      : t("noGuestsForDate")
-                  }
-                />
-              ) : (
-                <div
-                  className={`product-roster-rows ${
-                    isCurrentScopeFetching ? "pointer-events-none" : ""
-                  }`}
-                >
-                  {displayGuests.map((guest, index) => (
-                    <GuestListCard
-                      key={guest.id}
-                      guest={guest}
-                      index={index}
-                      mode="registration"
-                      accountKind={user?.account_kind}
-                      registeredByName={guest.registeredByName}
-                      onDelete={
-                        guest.status === "pending"
-                          ? () => handleDelete(guest.id)
-                          : undefined
-                      }
-                      isDeleteLoading={isLoading}
-                      isDeleteDisabled={isBulkSubmitting}
-                    />
-                  ))}
-                </div>
-              )}
-          </RosterView>
-            </section>
-      </OperationsLayout>
-      <Sheet open={entryOpen} title={t("addGuest")} onClose={() => {
+      <Sheet id="guest-entry-panel" open={entryOpen} title={t("addGuest")} onClose={() => {
         setEntryOpen(false); setGuestName("");
         guestLimitRequestController.updateRequestDraft({ requestedExtra: "1", requestReason: "" });
       }}
@@ -669,6 +586,91 @@ export default function AuthenticatedGuestView({ user }: AuthenticatedGuestViewP
                     />
                   </div>
       </Sheet>
+      <OperationsLayout
+        variant="stacked"
+        title={commonT("guest")}
+        dashboard={
+          <>
+                <EventScopeSelector venueId={effectiveVenueId} businessDate={selectedDate}
+                  value={selectedEventId} onChange={setSelectedEventId} disabled={isBulkSubmitting}
+                  renderScope={(selector, label) => <OperationsScope venueName={currentVenue?.brandName || currentVenue?.name} date={selectedDate} label={label} disabled={isBulkSubmitting}>
+                    <DatePicker compact value={selectedDate} onChange={setSelectedDate} businessDate={businessDate} disabled={isBulkSubmitting} />
+                    {isSuperAdmin && <VenueSelector venues={venues} selectedVenueId={selectedVenueId} onVenueChange={setSelectedVenueId} disabled={isBulkSubmitting} />}
+                    {selector}
+                  </OperationsScope>} />
+
+                {error && <Alert type="error" message={error} />}
+
+          </>
+        }
+      >
+            <section
+              className="min-w-0"
+              aria-label={t("todaysGuests")}
+              aria-busy={isCurrentScopeFetching}
+            >
+              <dl className="product-roster-quota">
+                <div><dt>{commonT("registered")}</dt><dd>{hasCurrentScopeData ? (displayQuota?.used ?? activeGuestsCount) : "—"}</dd></div>
+                <div><dt>{t("remaining")}</dt><dd>{hasCurrentScopeData ? (remaining ?? "∞") : "—"}</dd></div>
+              </dl>
+              <RosterView filtersActive={sortMode !== "default"} header={<PanelHeader
+                title={t("todaysGuests")}
+                headingLevel={2}
+                headingId="guest-list-title"
+                count={displayGuests.length}
+                sortMode={sortMode}
+                onSortToggle={() =>
+                  setSortMode((prev) =>
+                    prev === "default" ? "alpha" : "default",
+                  )
+                }
+                onRefresh={loadGuests}
+                isLoading={isCurrentScopeFetching}
+              />} query={searchQuery} onQueryChange={setSearchQuery}
+            status={rosterStatus} onStatusChange={setRosterStatus}
+            loading={!hasCurrentScopeData} counts={{ all: filteredGuests.length, pending: pendingGuests.length, checked: checkedGuests.length }}>
+
+              {listState === "loading" ? (
+                <Skeleton rows={5} />
+              ) : shouldShowEmptyState(listState) ? (
+                <EmptyState
+                  icon="user-add"
+                  message={
+                    searchQuery || rosterStatus !== "all"
+                      ? t("noSearchResults")
+                      : t("noGuestsForDate")
+                  }
+                />
+              ) : (
+                <div
+                  className={`product-roster-rows ${
+                    isCurrentScopeFetching ? "pointer-events-none" : ""
+                  }`}
+                >
+                  {displayGuests.map((guest, index) => (
+                    <GuestListCard
+                      timeZone={currentVenue?.timezone}
+                      key={guest.id}
+                      guest={guest}
+                      index={index}
+                      mode="registration"
+                      accountKind={user?.account_kind}
+                      registeredByName={guest.registeredByName}
+                      onDelete={
+                        guest.status === "pending"
+                          ? () => handleDelete(guest.id)
+                          : undefined
+                      }
+                      isDeleteLoading={isLoading}
+                      isDeleteDisabled={isBulkSubmitting}
+                    />
+                  ))}
+                </div>
+              )}
+          </RosterView>
+            </section>
+      </OperationsLayout>
+
     </WorkspaceShell>
   );
 }

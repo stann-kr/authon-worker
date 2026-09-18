@@ -19,7 +19,7 @@
 .date-calendar-grid > [role="row"] { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 2px; }
 .date-calendar-weekdays { color: var(--app-text-muted); text-align: center; font-size: 12px; line-height: 28px; }
 .date-calendar-grid [role="gridcell"] { min-width: 0; }
-.date-calendar-grid button { width: 100%; min-width: 44px; min-height: 48px; border-radius: 8px; color: var(--app-text); font-size: 15px; font-variant-numeric: tabular-nums; }
+.date-calendar-grid button { width: 100%; min-width: 0; min-height: 48px; border-radius: 8px; color: var(--app-text); font-size: 15px; font-variant-numeric: tabular-nums; }
 .date-calendar-grid button[data-outside="true"] { color: var(--app-text-muted); }
 .date-calendar-grid button[aria-current="date"] { box-shadow: inset 0 0 0 1px var(--app-border-strong); }
 .date-calendar-grid [aria-selected="true"] button { background: var(--app-action); color: var(--app-action-text); font-weight: 600; }
@@ -33,3 +33,8 @@
   .date-calendar-navigation { grid-template-columns: 44px minmax(0, 1fr) 72px 44px; gap: 6px; }
   .date-calendar-grid, .date-calendar-grid > [role="row"] { gap: 0; }
 }
+
+.date-field-group { min-width: 0; width: 100%; }
+.operational-date-layout > .date-field-group { display: contents; }
+.operational-date-layout > .date-field-group > .product-sheet-layer { flex: 1 0 100%; order: 1; }
+.date-field-group > .product-sheet-layer > .product-sheet { padding-inline: 0; }
