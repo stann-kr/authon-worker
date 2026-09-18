@@ -12,7 +12,7 @@ export type WorkspaceItem = {
 };
 
 export const workspaceGroups: WorkspaceGroup[] = [
-  "preparation", "operations", "records", "management",
+  "operations", "preparation", "records", "management",
 ];
 
 function adminItem(

@@ -270,10 +270,9 @@
   }
   /* Compress the contents while retaining the full-size touch target. */
   .workspace-dock :is(.workspace-nav-label, .workspace-action > span) {
-    display: inline-block; transform: translateY(0) scale(1);
+    transform: translateY(0) scale(1);
     transition: transform 160ms cubic-bezier(0.2, 0.8, 0.2, 1);
   }
-  .workspace-dock .workspace-action-icon { display: grid; }
   .workspace-dock button:active:not(:disabled) { transform: none; }
   .workspace-dock :is(.workspace-nav-link, .workspace-action):where(:not(:focus-visible):not(:disabled):not([aria-disabled="true"])):active > :is(.workspace-nav-label, span) {
     transform: translateY(1px) scale(0.96); transition-duration: 70ms;

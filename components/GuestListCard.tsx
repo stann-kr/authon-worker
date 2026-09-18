@@ -140,7 +140,6 @@ const GuestListCard: React.FC<GuestListCardProps> = ({
           aria-label={[guest.name, djName, registeredByName !== djName ? registeredByName : null].filter(Boolean).join(" ")}
           aria-controls={detailId} aria-expanded={isDetailOpen} aria-disabled={isDeleteLoading} />
         <div className="product-guest-identity">
-          <Icon name="chevron-down" size={16} className="product-guest-chevron" />
           <span className="product-guest-index" aria-hidden="true">{String(index + 1).padStart(2, "0")}</span>
           <span className="product-guest-name">
             <strong>{guest.name}</strong>
