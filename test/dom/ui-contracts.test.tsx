@@ -904,7 +904,7 @@ test("dialog cleanup preserves focus already moved outside", () => {
   }
 });
 
-test("pending guest deletion confirms inline, restores focus, and respects a new disabled state", () => {
+test("pending guest deletion stays in details, restores focus, and respects a new disabled state", () => {
   let deleteCalls = 0;
   const card = (disabled = false) => (
     <NextIntlClientProvider locale="en" messages={messages}>
@@ -917,19 +917,28 @@ test("pending guest deletion confirms inline, restores focus, and respects a new
     </NextIntlClientProvider>
   );
   const view = render(card());
-  const trigger = screen.getByRole("button", { name: "Delete" });
+  assert.equal(screen.queryByRole("button", { name: messages.Common.deleteGuest }), null);
+  fireEvent.click(screen.getByRole("button", { name: "Guest A" }));
+  const trigger = screen.getByRole("button", { name: messages.Common.deleteGuest });
   trigger.focus();
   fireEvent.click(trigger);
   assert.equal(deleteCalls, 0);
   assert.equal(screen.queryByRole("alertdialog") === null, true);
   assert.equal(document.getElementById("main-content")?.hasAttribute("inert"), false);
   const group = screen.getByRole("group", { name: /Guest A/ });
+  assert.equal(screen.queryByRole("button", { name: messages.Common.deleteGuest }), null);
+  assert.ok(screen.getByRole("region", { name: "Guest A" }).contains(group));
   assert.equal(document.activeElement === within(group).getByRole("button", { name: "Cancel" }), true);
   fireEvent.keyDown(group, { key: "Escape" });
   assert.equal(screen.queryByRole("group") === null, true);
   assert.equal(document.activeElement === trigger, true);
 
   fireEvent.click(trigger);
+  fireEvent.click(screen.getByRole("button", { name: "Guest A" }));
+  assert.equal(screen.queryByRole("region", { name: "Guest A" }), null);
+  fireEvent.click(screen.getByRole("button", { name: "Guest A" }));
+  assert.equal(screen.queryByRole("group"), null);
+  fireEvent.click(screen.getByRole("button", { name: messages.Common.deleteGuest }));
   view.rerender(card(true));
   const confirm = within(screen.getByRole("group")).getByRole("button", { name: "Delete" });
   assert.equal(confirm.hasAttribute("disabled"), true);
@@ -957,7 +966,8 @@ test("removing a pending guest row returns focus to the main content", () => {
     );
   }
   render(<Harness />);
-  fireEvent.click(screen.getByRole("button", { name: "Delete" }));
+  fireEvent.click(screen.getByRole("button", { name: "Guest A" }));
+  fireEvent.click(screen.getByRole("button", { name: messages.Common.deleteGuest }));
   fireEvent.click(within(screen.getByRole("group")).getByRole("button", { name: "Delete" }));
   assert.equal(screen.queryByRole("article") === null, true);
   assert.equal(document.activeElement === document.getElementById("main-content"), true);

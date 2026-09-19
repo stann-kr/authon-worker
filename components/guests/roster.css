@@ -58,8 +58,9 @@
 .product-guest-actions .app-button { min-width: 76px; padding: 8px 12px; font-size: 13px; font-weight: 500; border-radius: 7px; }
 .product-guest-actions .app-button[data-variant="ghost"] { min-width: 44px; }
 .product-guest-row[data-status="checked"] .product-guest-name strong { color: var(--app-text-muted); }
-.product-guest-row[data-selected="true"] { --disclosure-background: var(--app-surface-hover); background: var(--app-surface-hover); border-radius: 0 0 10px 10px; }
+.product-guest-row[data-selected="true"] { --disclosure-background: var(--app-surface-hover); background: var(--app-surface-hover); border-radius: 0; }
 .product-guest-disclosure[aria-expanded="true"] { border-radius: 0; }
+.product-guest-detail-actions > .inline-confirmation { padding: 16px 0; background: transparent; }
 .product-roster-context { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr)); gap: 12px; align-items: end; }
 .product-roster-context > .context-bar { display: contents; }
 .product-roster[data-columns="2"] .product-roster-headings { display: none; }

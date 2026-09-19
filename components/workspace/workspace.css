@@ -91,7 +91,7 @@
   .workspace-header-actions { display: flex; flex-wrap: wrap; gap: 8px; padding-right: 16px; margin-right: 4px; border-right: 1px solid var(--workspace-line); }
   .workspace-header-actions .workspace-action { min-height: var(--workspace-control-height); border: 1px solid transparent; border-radius: 8px; padding: 8px 12px; background: transparent; color: var(--app-text-muted); font-size: 13px; }
   .workspace-header-actions .workspace-action[aria-pressed="true"] { background: var(--app-surface-raised); border-color: var(--app-border); color: var(--app-text); }
-  .workspace-header-actions .workspace-action[data-tone="accent"]:not([aria-pressed]) { background: var(--app-action); color: var(--app-action-text); font-weight: 600; }
+  .workspace-header-actions .workspace-action[data-tone="accent"] { background: var(--app-action); color: var(--app-action-text); font-weight: 600; }
   .workspace-sidebar { display: flex; position: fixed; inset: 0 auto 0 0; z-index: var(--app-z-chrome); width: var(--workspace-sidebar-width); flex-direction: column; border-right: 1px solid var(--workspace-line); padding: env(safe-area-inset-top) 12px calc(12px + env(safe-area-inset-bottom)); background: var(--workspace-secondary); }
   .workspace-sidebar-heading { display: flex; min-height: 56px; align-items: center; gap: 4px; }
   .workspace-brand { display: flex; align-items: center; min-width: 0; flex: 1; padding: 8px; color: var(--workspace-text); font-size: 18px; line-height: 1.4; font-weight: 500; letter-spacing: -0.5px; overflow-wrap: anywhere; }
@@ -246,7 +246,7 @@
 @media (min-width: 1000px) {
   .workspace-desktop-logout { display: block; }
   .workspace-header-actions .workspace-action-icon { width: 18px; height: 18px; background: none; color: var(--app-text-muted); }
-  .workspace-header-actions .workspace-action[data-tone="accent"]:not([aria-pressed]) .workspace-action-icon { color: inherit; }
+  .workspace-header-actions .workspace-action[data-tone="accent"] .workspace-action-icon { color: inherit; }
 }
 @media (min-width: 1000px) and (hover: hover) and (pointer: fine) {
   .workspace-shell { --workspace-control-height: 40px; }

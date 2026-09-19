@@ -357,6 +357,7 @@
     "notAllowed": "불가"
   },
   "GuestOperations": {
+    "registrationContext": "등록 대상",
     "title": "게스트 등록",
     "loadFailed": "게스트 데이터를 불러오지 못했습니다.",
     "selectVenue": "베뉴를 선택해주세요.",
