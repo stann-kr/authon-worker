@@ -497,7 +497,7 @@ export default function InviteUser({ onClose }: { onClose?: () => void } = {}) {
       </div>
     </div>
   );
-  return onClose ? <Sheet id="user-create-panel" presentation="modal" title={t("createUser")}
+  return onClose ? <Sheet id="user-create-panel" presentation="page" title={t("createUser")}
     onClose={onClose} busy={isLoading || isInvitationActionPending} dirty={hasDraft}
     closeWarning={createdInvitation ? t("invitationLinkCreatedHelp") : undefined}>
     {content}

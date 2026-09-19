@@ -117,7 +117,7 @@ export default function RosterView({ header, filters, filtersActive = false, var
         <div className="product-roster-extra">{header}</div>
        </div>}
       </div>
-      <Sheet id={`${searchId}-filters`} open={filtersOpen && !wideSearch} title={t("filters")} onClose={() => setFiltersOpen(false)}>
+      <Sheet presentation="modal" id={`${searchId}-filters`} open={filtersOpen && !wideSearch} title={t("filters")} onClose={() => setFiltersOpen(false)}>
         <div ref={filterPanelRef} className="product-roster-filter-panel">
           {filters}
           <div className="product-roster-filter-actions">{header}</div>

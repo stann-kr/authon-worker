@@ -134,7 +134,7 @@ function ReadyWorkspaceShell({
       </header>
       <div className={`page-scroll ${bottomInsetClassName}`}>
         <div className={`page-container workspace-disclosures ${widthClasses[width]}`}>
-          {user && <Sheet id="workspace-account-panel" open={accountOpen} title={user.name} onClose={() => setAccountOpen(false)} blockDuringRouteTransition={false}>
+          {user && <Sheet presentation="modal" id="workspace-account-panel" open={accountOpen} title={user.name} onClose={() => setAccountOpen(false)} blockDuringRouteTransition={false}>
             <p className="text-sm text-text-muted"><RoleLabel role={user.account_kind === "shared" ? "shared" : user.role} /></p>
             <TransitionLink href="/profile" className="app-button rounded-control bg-surface-raised px-4 py-3 text-center text-sm" onClick={() => setAccountOpen(false)}>{t("profile")}</TransitionLink>
             <LogoutControl expanded />

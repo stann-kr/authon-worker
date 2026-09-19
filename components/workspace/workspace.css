@@ -250,6 +250,7 @@
 }
 @media (min-width: 1000px) and (hover: hover) and (pointer: fine) {
   .workspace-shell { --workspace-control-height: 40px; }
+  .workspace-header-actions .workspace-action[data-tone="accent"]:not(:disabled):hover { background: var(--app-action-hover); color: var(--app-action-text); }
 }
 @media (max-width: 359px) { .workspace-shell .page-container { padding-left: max(16px, env(safe-area-inset-left)); padding-right: max(16px, env(safe-area-inset-right)); } }
 

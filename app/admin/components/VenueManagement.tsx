@@ -1,5 +1,7 @@
 "use client";
 
+import { confirmWorkspaceNavigation } from "@/components/overlays/navigation-guard";
+
 import Sheet, { requestSheetClose } from "@/components/overlays/Sheet";
 import RecordList, { useRecordDetail } from "@/components/records/RecordList";
 
@@ -99,7 +101,7 @@ export default function VenueManagement({
         onActiveSectionChange(section);
         return;
       }
-      setInternalActiveSection(section);
+      if (confirmWorkspaceNavigation()) setInternalActiveSection(section);
     },
     [onActiveSectionChange],
   );
@@ -119,6 +121,11 @@ export default function VenueManagement({
     onCreated: directory.refreshAfterMutation,
     resolveMutationMessage,
   });
+  const resetCreateDraftRef = useRef(create.resetDraft);
+  resetCreateDraftRef.current = create.resetDraft;
+  useEffect(() => {
+    if (activeTab !== "create") resetCreateDraftRef.current();
+  }, [activeTab]);
   const {
     venues,
     isLoading,
@@ -195,7 +202,7 @@ export default function VenueManagement({
       {/* Main content */}
       <div className="min-w-0">
         {activeTab === "create" && (
-          <Sheet id="venue-create-panel" presentation="modal" title={t("createNew")}
+          <Sheet id="venue-create-panel" presentation="page" title={t("createNew")}
             busy={isSubmitting} dirty={create.hasDraft} onClose={() => { create.resetDraft(); setActiveTab("list"); }}>
           <div className="record-form space-y-6">
             <div className="app-panel record-form-panel">
@@ -676,12 +683,12 @@ export function VenueCard({
       <article className="record-row">
         <div className="record-summary">
           <button type="button" className="record-open" onClick={() => detail.open ? requestSheetClose(`venue-detail-${venue.id}`) : detail.show()} disabled={actionsDisabled} aria-expanded={detail.open} aria-controls={detail.open ? `venue-detail-${venue.id}` : undefined}>
-            <span className="record-identity"><strong>{venue.name}</strong><small>{venue.primaryDomain || venue.address || venueTypeLabels[venue.type]}</small></span>
+            <span className="record-identity"><strong id={`venue-label-${venue.id}`}>{venue.name}</strong><small>{venue.primaryDomain || venue.address || venueTypeLabels[venue.type]}</small></span>
             <span className="record-value">{venueTypeLabels[venue.type]}</span>
             <span className="record-status">{venue.active ? t("active") : t("inactive")}</span>
           </button>
         </div>
-      {detail.open && <Sheet id={`venue-detail-${venue.id}`} title={venue.name} presentation="detail" size="record" onClose={() => { handleCancelEdit(); detail.close(); }}
+      {detail.open && <Sheet labelledBy={`venue-label-${venue.id}`} id={`venue-detail-${venue.id}`} title={venue.name} presentation="detail" size="record" onClose={() => { handleCancelEdit(); detail.close(); }}
         busy={actionsDisabled || isSaving || isTogglingActive} dirty={isEditing && JSON.stringify(editData) !== JSON.stringify(createVenueEditData(venue))}>
         {error && <Alert type="error" message={error} />}
       {!isEditing ? (

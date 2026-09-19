@@ -1,5 +1,7 @@
 "use client";
 
+import { confirmWorkspaceNavigation } from "@/components/overlays/navigation-guard";
+
 import Sheet from "@/components/overlays/Sheet";
 import { useState, useCallback, useEffect, useRef, type ReactNode } from "react";
 import VenueSelector, {
@@ -100,7 +102,7 @@ export default function LinkManagement({
         onActiveSectionChange(section);
         return;
       }
-      setInternalActiveSection(section);
+      if (confirmWorkspaceNavigation()) setInternalActiveSection(section);
     },
     [onActiveSectionChange],
   );
@@ -208,7 +210,7 @@ export default function LinkManagement({
   };
 
   const scopeControls = <>
-    {(activeTab === "create" || manageScope === "date") && <DatePicker compact
+    {activeTab === "manage" && manageScope === "date" && <DatePicker compact
       value={selectedDate} onChange={onDateChange} businessDate={businessDate} disabled={isGenerating} />}
     {isSuperAdmin && venues.length > 0 && <VenueSelector venues={venues} selectedVenueId={selectedVenueId}
       onVenueChange={setSelectedVenueId} disabled={isGenerating} className="scope-venue" />}
@@ -283,10 +285,10 @@ export default function LinkManagement({
 
       <div className="min-w-0">
         {activeTab === "create" && (
-          <Sheet id="link-create-panel" presentation="modal" title={t("createAccessLink")}
+          <Sheet id="link-create-panel" presentation="page" title={t("createAccessLink")}
             busy={isGenerating || isGeneratedLinkActionPending} dirty={create.hasDraft}
             onClose={() => { create.resetDraft(); setActiveTab("manage"); }}>
-          {scopeSelector ? scopeSelector(scopeControls, isGenerating) : <div className="operations-scope">{scopeControls}</div>}
+          {scopeSelector ? scopeSelector(scopeControls, isGenerating) : isSuperAdmin && <div className="operations-scope">{scopeControls}</div>}
           <div className="record-form space-y-6">
             <div className="app-panel record-form-panel">
 
@@ -307,11 +309,11 @@ export default function LinkManagement({
                 <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
                   <div>
                     <label htmlFor="link-date" className="app-label">
-                      {t("date")}
+                      {commonT("operationalDate")}
                     </label>
                     <DateField id="link-date" name="link-date" ref={linkDateInputRef}
                       value={formData.date} onChange={handleDateChange} businessDate={businessDate}
-                      disabled={isGenerating || Boolean(eventId)} required
+                      disabled={isGenerating} required
                       invalid={formValidationError?.field === "date"}
                       describedBy={formValidationError?.field === "date" ? "link-date-error" : undefined} />
                     {formValidationError?.field === "date" && (
@@ -767,15 +769,15 @@ export default function LinkManagement({
                       <article key={link.id} className="record-row">
                         <div className="record-summary">
                           <button type="button" className="record-open" onClick={() => { setPendingDeleteLink(null); setVisibleLinkId(isLinkVisible ? null : link.id); }} disabled={lifecycleBusy} aria-expanded={isLinkVisible} aria-controls={isLinkVisible ? `link-detail-${link.id}` : undefined}>
-                            <span className="record-identity"><strong>{link.djName}</strong><small>{link.event || t("untitledEvent")} · {link.date ? formatDateDisplay(link.date, locale) : t("noDate")}</small></span>
+                            <span className="record-identity"><strong id={`link-label-${link.id}`}>{link.djName}</strong><small>{link.event || t("untitledEvent")} · {link.date ? formatDateDisplay(link.date, locale) : t("noDate")}</small></span>
                             <span className="record-value">{link.usedGuests}/{link.maxGuests}</span>
                             <span className={`record-status ${primaryStatus.tone}`}>{primaryStatus.label}</span>
                           </button>
-                          <Button variant="secondary" size="sm" onClick={() => shareOrCopyManagedLink(guestPageUrl, link.id)} isLoading={loadingStates[`share_${link.id}`]}>
+                          <div hidden={pendingDeleteLink?.id === link.id}><Button variant="secondary" size="sm" onClick={() => shareOrCopyManagedLink(guestPageUrl, link.id)} isLoading={loadingStates[`share_${link.id}`]}>
                             {completedLinkAction === "shared" ? t("shared") : completedLinkAction === "copied" ? t("copied") : nativeShareAvailable ? t("shareLink") : t("copyLink")}
-                          </Button>
+                          </Button></div>
                         </div>
-                        {isLinkVisible && <Sheet id={`link-detail-${link.id}`} title={link.djName} presentation="detail" onClose={() => { setPendingDeleteLink(null); setVisibleLinkId(null); }} busy={Boolean(lifecycleBusyIds[link.id])}>
+                        {isLinkVisible && <Sheet labelledBy={`link-label-${link.id}`} id={`link-detail-${link.id}`} title={link.djName} presentation="detail" onClose={() => { setPendingDeleteLink(null); setVisibleLinkId(null); }} busy={Boolean(lifecycleBusyIds[link.id])}>
                           {scopedManageError && <Alert type="error" message={scopedManageError} />}
                           <p className="text-sm text-text-muted">{link.event || t("untitledEvent")} · {link.kind === "self_rsvp" ? t("selfRsvpLink") : t("contributorLink")}</p>
                         <dl className="record-detail-grid">
@@ -878,7 +880,7 @@ export default function LinkManagement({
                         <LinkRegisteredGuests key={`${venueId}:${link.id}`} venueId={venueId} linkId={link.id}
                           registeredCount={link.usedGuests} timeZone={currentVenue?.timezone} />
 
-                        <div className="mt-3 flex flex-wrap justify-end gap-3">
+                        <div hidden={pendingDeleteLink?.id === link.id}><div className="mt-3 flex flex-wrap justify-end gap-3">
                           <Button
                             type="button"
                             onClick={() => handleUseAsTemplate(link)}
@@ -946,6 +948,7 @@ export default function LinkManagement({
                           >
                             {t("delete")}
                           </Button>
+                        </div>
                         </div>
                         {pendingDeleteLink?.id === link.id && (
                           <ConfirmDialog

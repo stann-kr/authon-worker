@@ -5,6 +5,7 @@ import { fetchEvents } from "@/lib/events/client";
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import Sheet, { requestSheetClose } from "@/components/overlays/Sheet";
+import { confirmWorkspaceNavigation } from "@/components/overlays/navigation-guard";
 import Button from "@/components/Button";
 import Alert from "@/components/Alert";
 import DatePicker from "@/components/DatePicker";
@@ -12,7 +13,7 @@ import EmptyState from "@/components/EmptyState";
 import PanelHeader from "@/components/PanelHeader";
 import Skeleton from "@/components/Skeleton";
 import VenueSelector, { useVenueSelector } from "@/components/VenueSelector";
-import { formatVenueDateTime } from "@/lib/date";
+import { formatDateDisplay, formatVenueDateTime } from "@/lib/date";
 import {
   createEvent,
   transitionEventState,
@@ -44,6 +45,7 @@ export default function EventManagement({
   onEventsChanged,
 }: EventManagementProps) {
   const t = useTranslations("EventAdmin");
+  const commonT = useTranslations("Common");
   const locale = useLocale() as "en" | "ko";
   const {
     venueId,
@@ -276,6 +278,7 @@ export default function EventManagement({
                       <button
                         type="button"
                         onClick={() => {
+                          if (createOpen && !confirmWorkspaceNavigation()) return;
                           setDetailId(null);
                           setFeedback(null);
                           setCreateOpen(true);
@@ -378,9 +381,10 @@ export default function EventManagement({
           onRefresh={loadEvents}
           isLoading={isLoading}
         />
-      <Sheet id="event-create-panel" presentation="modal" open={createOpen} title={t("createTitle")} onClose={() => {
+      <Sheet id="event-create-panel" presentation="inline" size="form" revealOnOpen open={createOpen} title={t("createTitle")} onClose={() => {
         setCreateOpen(false); setName(""); setCapacity(""); setTargetGuests(""); setTemplateSourceEventId(null);
       }} dirty={Boolean(name || capacity || targetGuests)} busy={Boolean(busyId)}>
+        <p className="text-sm text-text-muted">{currentVenue?.brandName || currentVenue?.name} · {commonT("operationalDate")} <time dateTime={selectedDate}>{formatDateDisplay(selectedDate, locale)}</time></p>
         {feedback && <Alert type={feedback.type} message={feedback.message} />}
         <form onSubmit={submit}>
           <fieldset disabled={Boolean(busyId) || !venueId} className="grid gap-4">
@@ -455,12 +459,12 @@ export default function EventManagement({
               {explicitEvents.map((event) => <article key={event.id} className="record-row">
                 <div className="record-summary">
                   <button type="button" className="record-open" onClick={() => { setFeedback(null); setDetailId(detailId === event.id ? null : event.id); setPendingTransition(null); }} disabled={Boolean(busyId)} aria-expanded={detailId === event.id} aria-controls={detailId === event.id ? `event-detail-${event.id}` : undefined}>
-                    <span className="record-identity"><strong>{event.name}</strong><small>{event.businessDate}{selectedEventId === event.id ? ` · ${t("selected")}` : ""}</small></span>
+                    <span className="record-identity"><strong id={`event-label-${event.id}`}>{event.name}</strong><small>{event.businessDate}{selectedEventId === event.id ? ` · ${t("selected")}` : ""}</small></span>
                     <span className="record-value">{t("capacity")} {event.capacity ?? "—"}</span>
                     <span className="record-status">{t(`state.${event.state}`)}</span>
                   </button>
                 </div>
-                {detailId === event.id && <Sheet id={`event-detail-${event.id}`} title={event.name} presentation="detail" size="record" onClose={() => { setDetailId(null); setPendingTransition(null); }} busy={Boolean(busyId)}>
+                {detailId === event.id && <Sheet labelledBy={`event-label-${event.id}`} id={`event-detail-${event.id}`} title={event.name} presentation="detail" size="record" onClose={() => { setDetailId(null); setPendingTransition(null); }} busy={Boolean(busyId)}>
                   {renderDetails(event)}
                 </Sheet>}
               </article>)}
