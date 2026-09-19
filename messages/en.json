@@ -357,6 +357,7 @@
     "notAllowed": "Disabled"
   },
   "GuestOperations": {
+    "registrationContext": "Registration context",
     "title": "Guest registration",
     "loadFailed": "Failed to load guest data.",
     "selectVenue": "Please select a venue.",

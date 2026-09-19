@@ -33,7 +33,7 @@ import GuestLimitRequestPanel from "./GuestLimitRequestPanel";
 import useGuestLimitRequestController, {
   type GuestLimitRequestControllerDependencies,
 } from "./useGuestLimitRequestController";
-import { getBusinessDate } from "@/lib/date";
+import { formatDateDisplay, getBusinessDate } from "@/lib/date";
 import {
   createGuest,
   createGuests,
@@ -71,6 +71,7 @@ const GUEST_LIMIT_REQUEST_ACTIONS: GuestLimitRequestControllerDependencies =
 export default function AuthenticatedGuestView({ user }: AuthenticatedGuestViewProps) {
   const t = useTranslations("GuestOperations");
   const commonT = useTranslations("Common");
+  const eventScopeT = useTranslations("EventScope");
   const tRef = useLatestRef(t);
   const locale = useLocale() as "en" | "ko";
   const [selectedDate, setSelectedDate] = useState<string>(getBusinessDate());
@@ -464,21 +465,17 @@ export default function AuthenticatedGuestView({ user }: AuthenticatedGuestViewP
     isPartial: loadOutcome === "partial",
   });
 
-  return (
-    <WorkspaceShell contentClassName="gap-4 pb-8 lg:gap-6" actions={
-      <WorkspaceAction icon="add" onClick={() => entryOpen ? requestSheetClose("guest-entry-panel") : setEntryOpen(true)} aria-expanded={entryOpen} aria-controls={entryOpen ? "guest-entry-panel" : undefined}>{t("addGuest")}</WorkspaceAction>
-    }>
-      {venueLoadError && (
-        <VenueLoadNotice
-          onRetry={refreshVenues}
-          isLoading={isLoadingVenues}
-        />
-      )}
+  const renderGuestEntry = (scopeLabel: string) => (
       <Sheet id="guest-entry-panel" presentation="modal" open={entryOpen} title={t("addGuest")} onClose={() => {
         setEntryOpen(false); setGuestName("");
         guestLimitRequestController.updateRequestDraft({ requestedExtra: "1", requestReason: "" });
       }}
         busy={isLoading || isBulkSubmitting || guestLimitRequestController.isRequestingExtra} protectEdits dirty={Boolean(guestName.trim())}>
+                  <dl className="record-detail-grid" aria-label={t("registrationContext")}>
+                    <div><dt>{commonT("operationalDate")}</dt><dd><time dateTime={selectedDate}>{formatDateDisplay(selectedDate, locale)}</time></dd></div>
+                    <div><dt>{commonT("venue")}</dt><dd>{currentVenue?.brandName || currentVenue?.name || "—"}</dd></div>
+                    <div><dt>{eventScopeT("label")}</dt><dd>{scopeLabel}</dd></div>
+                  </dl>
                   <div className="relative flex items-center justify-end border-b border-border-subtle pb-3">
                     <GuestCapacityIndicator
                       label={t("remaining")}
@@ -586,6 +583,19 @@ export default function AuthenticatedGuestView({ user }: AuthenticatedGuestViewP
                     />
                   </div>
       </Sheet>
+  );
+
+  return (
+    <WorkspaceShell contentClassName="gap-4 pb-8 lg:gap-6" actions={
+      <WorkspaceAction icon="add" onClick={() => entryOpen ? requestSheetClose("guest-entry-panel") : setEntryOpen(true)} aria-expanded={entryOpen} aria-controls={entryOpen ? "guest-entry-panel" : undefined}>{t("addGuest")}</WorkspaceAction>
+    }>
+      {venueLoadError && (
+        <VenueLoadNotice
+          onRetry={refreshVenues}
+          isLoading={isLoadingVenues}
+        />
+      )}
+
       <OperationsLayout
         variant="stacked"
         title={commonT("guest")}
@@ -593,11 +603,11 @@ export default function AuthenticatedGuestView({ user }: AuthenticatedGuestViewP
           <>
                 <EventScopeSelector venueId={effectiveVenueId} businessDate={selectedDate}
                   value={selectedEventId} onChange={setSelectedEventId} disabled={isBulkSubmitting}
-                  renderScope={(selector, label) => <OperationsScope venueName={currentVenue?.brandName || currentVenue?.name} date={selectedDate} label={label} disabled={isBulkSubmitting}>
+                  renderScope={(selector, label) => <><OperationsScope venueName={currentVenue?.brandName || currentVenue?.name} date={selectedDate} label={label} disabled={isBulkSubmitting}>
                     <DatePicker compact value={selectedDate} onChange={setSelectedDate} businessDate={businessDate} disabled={isBulkSubmitting} />
                     {isSuperAdmin && <VenueSelector venues={venues} selectedVenueId={selectedVenueId} onVenueChange={setSelectedVenueId} disabled={isBulkSubmitting} />}
                     {selector}
-                  </OperationsScope>} />
+                  </OperationsScope>{renderGuestEntry(label)}</>} />
 
                 {error && <Alert type="error" message={error} />}
 
