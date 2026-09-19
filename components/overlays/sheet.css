@@ -15,7 +15,7 @@ html[data-modal-open="true"], html[data-modal-open="true"] body { background-col
 }
 @media (min-width: 1000px) {
   .product-sheet-layer[data-modal="true"] > .product-sheet-viewport { align-items: center; padding: 16px; }
-  .product-sheet-layer[data-modal="true"] > .product-sheet-viewport > .product-sheet { border-radius: 16px; max-height: 100%; }
+  .product-sheet-layer[data-modal="true"] > .product-sheet-viewport > .product-sheet { border-radius: 16px 16px 0 0; max-height: 100%; }
   .product-sheet-layer[data-modal="true"] > .product-sheet-viewport > .product-sheet[data-wide="true"] { width: min(100%, 800px); }
 }
 .product-sheet { min-width: 0; width: 100%; padding: 0 16px; border-top: 1px solid var(--app-border-subtle); background: var(--disclosure-background, var(--app-surface-secondary)); color: var(--app-text); }

@@ -75,11 +75,8 @@ const GuestListCard: React.FC<GuestListCardProps> = ({
   const closeDetail = () => selection ? selection.select(null) : setLocalDetail(false);
   const [undoConfirmation, setUndoConfirmation] = useState<string | null>(null);
   const [deleteConfirmation, setDeleteConfirmation] = useState<string | null>(null);
-  const deleteTriggerRef = useRef<HTMLButtonElement>(null);
-  const cancelDeleteRef = useRef<HTMLButtonElement>(null);
   const rowRef = useRef<HTMLElement>(null);
   const restoreFocusAfterDeleteRef = useRef(false);
-  const confirmationId = useId();
   const detailId = useId();
   const disclosureRef = useRef<HTMLButtonElement>(null);
   const confirmationKey = `${guest.id}:${guest.status}`;
@@ -88,21 +85,19 @@ const GuestListCard: React.FC<GuestListCardProps> = ({
       guest.status !== "deleted" &&
       deleteConfirmation === confirmationKey,
   );
-  const isInlineDeleteOpen = isDeleteConfirmOpen && mode === "registration" && guest.status === "pending";
+  const canDelete = onDelete && (mode === "operations" ? guest.status !== "deleted" : guest.status === "pending");
+  const hasDetailInformation = Boolean(djName || accountKind === "shared" || registeredByName ||
+    (showRegisteredAt && guest.createdAt) || guest.checkInTime);
 
   useEffect(() => {
     if (undoConfirmation && undoConfirmation !== confirmationKey) setUndoConfirmation(null);
-    if (deleteConfirmation && (deleteConfirmation !== confirmationKey || !onDelete)) {
+    if (deleteConfirmation && (!isDetailOpen || deleteConfirmation !== confirmationKey || !onDelete)) {
       setDeleteConfirmation(null);
       if (document.activeElement === document.body) {
         rowRef.current?.focus({ preventScroll: true });
       }
     }
-  }, [confirmationKey, deleteConfirmation, onDelete, undoConfirmation]);
-
-  useEffect(() => {
-    if (isInlineDeleteOpen) cancelDeleteRef.current?.focus();
-  }, [isInlineDeleteOpen]);
+  }, [confirmationKey, deleteConfirmation, isDetailOpen, onDelete, undoConfirmation]);
 
   useEffect(() => () => {
     if (!restoreFocusAfterDeleteRef.current || document.activeElement !== document.body) return;
@@ -111,14 +106,6 @@ const GuestListCard: React.FC<GuestListCardProps> = ({
     restoreOverlayFocus(mainContent);
   }, []);
 
-  const cancelDelete = () => {
-    setDeleteConfirmation(null);
-    if (!deleteTriggerRef.current?.disabled) {
-      deleteTriggerRef.current?.focus({ preventScroll: true });
-    } else {
-      rowRef.current?.focus({ preventScroll: true });
-    }
-  };
   const handleDelete = () => {
     if (!onDelete || !isDeleteConfirmOpen || isDeleteDisabled || isDeleteLoading) return;
     restoreFocusAfterDeleteRef.current = true;
@@ -166,21 +153,6 @@ const GuestListCard: React.FC<GuestListCardProps> = ({
                   {t("checkIn")}
                 </Button>
               )}
-
-              {mode === "registration" && onDelete && (
-                <Button
-                  ref={deleteTriggerRef}
-                  onClick={() => setDeleteConfirmation(confirmationKey)}
-                  aria-expanded={isInlineDeleteOpen}
-                  aria-controls={isInlineDeleteOpen ? confirmationId : undefined}
-                  isLoading={isDeleteLoading}
-                  disabled={isDeleteDisabled}
-                  variant="danger"
-                  className="min-w-20 px-3 sm:px-4"
-                >
-                  {t("delete")}
-                </Button>
-              )}
             </>
           )}
 
@@ -219,6 +191,7 @@ const GuestListCard: React.FC<GuestListCardProps> = ({
               {t("removed")}
             </StatusLabel>
           )}
+          {mode === "registration" && !isDetailOpen && <Icon name="chevron-down" size={16} className="text-text-muted" />}
         </div>
         {mode === "operations" && <>
           <div className="product-guest-owner" aria-hidden="true"><span>{djName || "—"}</span>
@@ -232,33 +205,6 @@ const GuestListCard: React.FC<GuestListCardProps> = ({
           </span>
         </>}
       </div>
-      {isInlineDeleteOpen && (
-        <div
-          id={confirmationId}
-          role="group"
-          aria-label={t("deleteGuestConfirm", { name: guest.name })}
-          className="mt-3 border-t border-border-default pt-3"
-          onKeyDown={(event) => {
-            if (event.key === "Escape" && !isDeleteLoading) {
-              event.preventDefault();
-              event.stopPropagation();
-              cancelDelete();
-            }
-          }}
-        >
-          <p className="text-sm text-text-muted">
-            {t("deleteGuestConfirm", { name: guest.name })}
-          </p>
-          <div className="mt-2 flex flex-wrap justify-end gap-2">
-            <Button ref={cancelDeleteRef} variant="outline" onClick={cancelDelete} disabled={isDeleteLoading}>
-              {t("cancel")}
-            </Button>
-            <Button variant="danger" onClick={handleDelete} isLoading={isDeleteLoading} disabled={isDeleteDisabled}>
-              {t("delete")}
-            </Button>
-          </div>
-        </div>
-      )}
       <Sheet id={detailId} open={isDetailOpen} title={guest.name} onClose={() => {
         setDeleteConfirmation(null);
         closeDetail();
@@ -266,33 +212,35 @@ const GuestListCard: React.FC<GuestListCardProps> = ({
         <StatusLabel appearance="inline" tone={guest.status === "checked" ? "checked" : guest.status === "pending" ? "waiting" : "neutral"}>
           {guest.status === "checked" ? t("checkedIn") : guest.status === "pending" ? t("waitingStatus") : t("removed")}
         </StatusLabel>
-        <dl className="product-detail-list" aria-label={rosterT("detail")}>
+        {hasDetailInformation && <dl className="product-detail-list" aria-label={rosterT("detail")}>
           {djName && <div><dt>{rosterT("owner")}</dt><dd>{djName}</dd></div>}
           {(accountKind === "shared" || registeredByName) && <div><dt>{rosterT("operator")}</dt><dd>{registeredByName || "—"}</dd></div>}
           {showRegisteredAt && guest.createdAt && <div><dt>{t("registered")}</dt><dd><time dateTime={guest.createdAt}>{formatTime(guest.createdAt)}</time></dd></div>}
           {guest.checkInTime && <div><dt>{t("checkedIn")}</dt><dd><time dateTime={guest.checkInTime}>{formatTime(guest.checkInTime)}</time></dd></div>}
-        </dl>
-        {mode === "operations" && onDelete && guest.status !== "deleted" && <div className="product-guest-detail-actions">
-          <Button ref={deleteTriggerRef} variant="danger" onClick={() => setDeleteConfirmation(confirmationKey)}
-            disabled={isDeleteDisabled} isLoading={isDeleteLoading}>
-            {t("deleteGuest")}
-          </Button>
+        </dl>}
+        {canDelete && <div className="product-guest-detail-actions">
+          <div hidden={isDeleteConfirmOpen}>
+            <Button variant="danger" onClick={() => setDeleteConfirmation(confirmationKey)}
+              disabled={isDeleteDisabled} isLoading={isDeleteLoading}>
+              {t("deleteGuest")}
+            </Button>
+          </div>
           {deleteError && <p className="mt-2 text-sm text-status-danger" role="alert">{deleteError}</p>}
           {isDeleteDisabled && deleteDisabledReason && <p className="mt-2 text-sm text-text-muted" role="status">{deleteDisabledReason}</p>}
+          {isDeleteConfirmOpen && (
+            <ConfirmDialog
+              open
+              title={t("deleteGuestConfirm", { name: guest.name })}
+              description={guest.status === "checked" ? t("removeGuestConfirm") : undefined}
+              confirmLabel={t("delete")}
+              cancelLabel={t("cancel")}
+              onConfirm={handleDelete}
+              onCancel={() => setDeleteConfirmation(null)}
+              isLoading={isDeleteLoading}
+              confirmDisabled={isDeleteDisabled}
+            />
+          )}
         </div>}
-      {isDeleteConfirmOpen && !isInlineDeleteOpen && (
-        <ConfirmDialog
-          open
-          title={t("deleteGuestConfirm", { name: guest.name })}
-          description={guest.status === "checked" ? t("removeGuestConfirm") : undefined}
-          confirmLabel={t("delete")}
-          cancelLabel={t("cancel")}
-          onConfirm={handleDelete}
-          onCancel={() => setDeleteConfirmation(null)}
-          isLoading={isDeleteLoading}
-          confirmDisabled={isDeleteDisabled}
-        />
-      )}
       </Sheet>
       {onUndo && undoConfirmation === confirmationKey && guest.status === "checked" && <ConfirmDialog open
         title={rosterT("undoTitle")} description={rosterT("undoDescription", { name: guest.name })}
