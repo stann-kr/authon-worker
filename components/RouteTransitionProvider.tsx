@@ -19,6 +19,7 @@ import {
 import { announceRouteTransitionStart } from "@/lib/route-transition-events";
 import Spinner from "./Spinner";
 import { lockInertSurface } from "./overlays/modal-lock";
+import { installNavigationProtection } from "./overlays/navigation-guard";
 import { beginBrowserLoading, observeBrowserPerformance } from "@/lib/observability/browser-performance";
 
 type TransitionPhase = "idle" | "visible" | "leaving";
@@ -41,6 +42,7 @@ const RouteTransitionContext = createContext<RouteTransitionContextValue | null>
 );
 
 export function RouteTransitionProvider({ children }: { children: ReactNode }) {
+  useLayoutEffect(installNavigationProtection, []);
   const t = useTranslations("Common");
   const pathname = usePathname();
   const previousPathnameRef = useRef(pathname);

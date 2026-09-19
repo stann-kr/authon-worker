@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useLocalStorage } from "../../lib/hooks";
 import { isBusinessDate } from "../../lib/events/domain";
+import { confirmWorkspaceNavigation } from "@/components/overlays/navigation-guard";
 import {
   getAdminShortcutTask,
   getAdminTaskSearch,
@@ -177,6 +178,7 @@ export default function useAdminWorkspaceNavigation({
       if (task === activeTask || !isAdminTaskAvailable(task, isSuperAdmin)) {
         return;
       }
+      if (!confirmWorkspaceNavigation()) return;
       requestWorkspaceFocusIfOwned();
       setActiveTask(task);
       const nextUrl = `/admin${getAdminTaskSearch(task)}`;
@@ -271,6 +273,7 @@ export default function useAdminWorkspaceNavigation({
       }
 
       const scope = { eventId, businessDate: eventBusinessDate, venueId };
+      if (!confirmWorkspaceNavigation()) return;
       requestWorkspaceFocusIfOwned();
       applyEventScope(scope);
       setActiveTask("event-manage");

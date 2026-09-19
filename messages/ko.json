@@ -357,6 +357,7 @@
     "notAllowed": "불가"
   },
   "GuestOperations": {
+    "hideEntry": "입력 접기",
     "registrationContext": "등록 대상",
     "title": "게스트 등록",
     "loadFailed": "게스트 데이터를 불러오지 못했습니다.",
@@ -1172,6 +1173,7 @@
     "inviteExpiry": "이 링크는 7일 동안 유효합니다."
   },
   "Sheet": {
+    "backToList": "목록으로 돌아가기",
     "close": "닫기",
     "unsaved": "아직 저장하지 않은 내용이 있습니다.",
     "continue": "계속 작성",

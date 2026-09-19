@@ -357,6 +357,7 @@
     "notAllowed": "Disabled"
   },
   "GuestOperations": {
+    "hideEntry": "Close entry",
     "registrationContext": "Registration context",
     "title": "Guest registration",
     "loadFailed": "Failed to load guest data.",
@@ -1172,6 +1173,7 @@
     "inviteExpiry": "This link is valid for 7 days."
   },
   "Sheet": {
+    "backToList": "Back to list",
     "close": "Close",
     "unsaved": "You have unsaved changes.",
     "continue": "Keep editing",

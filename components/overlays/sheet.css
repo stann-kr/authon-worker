@@ -23,6 +23,12 @@ html[data-modal-open="true"], html[data-modal-open="true"] body { background-col
 .product-sheet-header h2 { min-width: 0; font-size: 14px; line-height: 22px; font-weight: 500; overflow-wrap: anywhere; }
 .product-sheet-body { container: sheet-content / inline-size; min-width: 0; display: grid; align-content: start; gap: 16px; padding-bottom: 20px; }
 .product-sheet-body[hidden] { display: none; }
+.product-sheet[aria-labelledby]:not(:has(> .product-sheet-header)) { padding-top: 16px; }
+.product-sheet[data-presentation="page"] { max-width: 760px; margin-inline: auto; padding: 0; border: 0; background: transparent; }
+.product-sheet[data-presentation="page"] > .product-sheet-header { flex-wrap: wrap; padding: 0 0 20px; }
+.product-sheet[data-presentation="page"] > .product-sheet-header h1 { font-size: 20px; line-height: 1.4; font-weight: 500; }
+.product-sheet[data-presentation="inline"][data-size="form"] { padding: 0 16px; border: 1px solid var(--app-border-subtle); background: var(--app-surface-secondary); }
+.product-sheet:is([data-presentation="page"], [data-presentation="inline"]) { scroll-margin-top: calc(var(--app-header-height, 0px) + 20px); }
 .product-sheet-discard { display: grid; gap: 12px; padding-block: 12px 20px; font-size: 14px; }
 .product-sheet-body > .record-form { width: 100%; }
 .product-sheet-body .record-form-panel { padding: 0; border: 0; background: transparent; }

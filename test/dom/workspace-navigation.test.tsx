@@ -417,7 +417,7 @@ for (const desktop of [true, false]) {
     act(() => { finishOldRoute = transition.registerRouteLoadingTask(); });
 
     fireEvent.click(screen.getByRole("button", { name: messages.Workspace.profile }));
-    const account = screen.getByRole(desktop ? "region" : "dialog", { name: "Operator" });
+    const account = screen.getByRole("dialog", { name: "Operator" });
     assert.equal(account.closest(".product-sheet-layer")?.hasAttribute("inert"), false);
     fireEvent.keyDown(document.activeElement ?? document, { key: "Escape" });
     assert.equal(screen.queryByRole("dialog", { name: "All menus" }) === null, true);

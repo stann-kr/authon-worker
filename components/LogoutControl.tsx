@@ -4,6 +4,7 @@ import { useId, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import Icon from "@/components/Icon";
 import { logout, type LogoutResult } from "@/lib/auth";
+import { confirmWorkspaceNavigation, withApprovedNavigation } from "./overlays/navigation-guard";
 
 export default function LogoutControl({
   onLogout = logout,
@@ -19,14 +20,14 @@ export default function LogoutControl({
   const [logoutFailed, setLogoutFailed] = useState(false);
 
   const handleLogout = async () => {
-    if (logoutInFlight.current) return;
+    if (logoutInFlight.current || !confirmWorkspaceNavigation()) return;
 
     logoutInFlight.current = true;
     setIsLoggingOut(true);
     setLogoutFailed(false);
 
     try {
-      const result = await onLogout();
+      const result = await withApprovedNavigation(onLogout);
       if (result.success) return;
     } catch {
       // Present the same retryable, non-sensitive error for unexpected failures.

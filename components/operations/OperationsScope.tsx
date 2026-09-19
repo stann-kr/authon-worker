@@ -44,7 +44,7 @@ export default function OperationsScope({ venueName, date, label, disabled = fal
         <span id={`${summaryId}-event`} className="operations-scope-name">{label}</span>
         <Icon name="chevron-down" size={16} />
       </button>
-      <Sheet id={`${summaryId}-panel`} open={open} title={t("chooseScope")} onClose={() => setOpen(false)} busy={disabled}>
+      <Sheet presentation="modal" id={`${summaryId}-panel`} open={open} title={t("chooseScope")} onClose={() => setOpen(false)} busy={disabled}>
         {controls}
         <button type="button" className="app-button rounded-control bg-surface-raised px-4 py-3 text-sm" disabled={disabled} onClick={() => setOpen(false)}>{t("applyScope")}</button>
       </Sheet>

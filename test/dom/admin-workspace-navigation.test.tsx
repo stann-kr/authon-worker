@@ -3,6 +3,8 @@ import { afterEach, test } from "node:test";
 import { useLayoutEffect, useRef } from "react";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 
+import { registerNavigationGuard } from "@/components/overlays/navigation-guard";
+
 import useAdminWorkspaceNavigation, {
   focusAdminWorkspaceAfterTaskChange,
   getAdminEventScope,
@@ -348,4 +350,21 @@ test("role changes replace an unavailable task with the guest list", async () =>
     assert.equal(screen.getByTestId("active-task").textContent, "guest-list");
   });
   assert.equal(window.location.search, "?tab=guests&view=list");
+});
+
+
+test("an unsaved form can cancel an admin destination before either the URL or task changes", () => {
+  setLocation("?tab=links&view=create");
+  let allow = false;
+  const remove = registerNavigationGuard({ hasPendingWork: () => true, confirmLeave: () => allow });
+  try {
+    render(<NavigationHarness />);
+    fireEvent.click(screen.getByRole("button", { name: "Open analytics" }));
+    assert.equal(screen.getByTestId("active-task").textContent, "link-create");
+    assert.equal(window.location.search, "?tab=links&view=create");
+    allow = true;
+    fireEvent.click(screen.getByRole("button", { name: "Open analytics" }));
+    assert.equal(screen.getByTestId("active-task").textContent, "analytics");
+    assert.equal(window.location.search, "?tab=analytics");
+  } finally { remove(); }
 });

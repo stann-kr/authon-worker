@@ -132,7 +132,7 @@ const GuestListCard: React.FC<GuestListCardProps> = ({
         <div className="product-guest-identity">
           <span className="product-guest-index" aria-hidden="true">{String(index + 1).padStart(2, "0")}</span>
           <span className="product-guest-name">
-            <strong>{guest.name}</strong>
+            <strong id={`${detailId}-label`}>{guest.name}</strong>
             {(djName || registeredByName) && <small>{djName || registeredByName}</small>}
           </span>
         </div>
@@ -191,7 +191,7 @@ const GuestListCard: React.FC<GuestListCardProps> = ({
               {t("removed")}
             </StatusLabel>
           )}
-          {mode === "registration" && !isDetailOpen && <Icon name="chevron-down" size={16} className="text-text-muted" />}
+          {mode === "registration" && <Icon name="chevron-down" size={16} className={isDetailOpen ? "rotate-180 text-text-muted" : "text-text-muted"} />}
         </div>
         {mode === "operations" && <>
           <div className="product-guest-owner" aria-hidden="true"><span>{djName || "—"}</span>
@@ -205,7 +205,7 @@ const GuestListCard: React.FC<GuestListCardProps> = ({
           </span>
         </>}
       </div>
-      <Sheet id={detailId} open={isDetailOpen} title={guest.name} onClose={() => {
+      <Sheet labelledBy={`${detailId}-label`} id={detailId} open={isDetailOpen} title={guest.name} onClose={() => {
         setDeleteConfirmation(null);
         closeDetail();
       }} busy={isDeleteLoading}>

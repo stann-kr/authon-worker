@@ -1,5 +1,7 @@
 "use client";
 
+import { confirmWorkspaceNavigation } from "@/components/overlays/navigation-guard";
+
 import type { ReactNode } from "react";
 
 import { useState, useEffect, useCallback, useRef } from "react";
@@ -73,7 +75,7 @@ export default function UserManagement({
         onActiveSectionChange(section);
         return;
       }
-      setInternalActiveSection(section);
+      if (confirmWorkspaceNavigation()) setInternalActiveSection(section);
     },
     [onActiveSectionChange, setInternalActiveSection],
   );
@@ -276,7 +278,7 @@ export default function UserManagement({
               {scopedFeedback && (
                 <Alert type={scopedFeedback.type} message={scopedFeedback.message} className="mb-4" />
               )}
-              {scopedPasswordLink && <Sheet title={scopedPasswordLink.userName} onClose={closePasswordLink} busy={isSharingPasswordLink}>
+              {scopedPasswordLink && <Sheet id="account-credential-result" title={scopedPasswordLink.userName} onClose={closePasswordLink} busy={isSharingPasswordLink} closeWarning={t("invitationLinkCreatedHelp")}>
                 {scopedFeedback && <Alert type={scopedFeedback.type} message={scopedFeedback.message} />}
                 <div
                   ref={passwordLinkPanelRef}
@@ -331,7 +333,7 @@ export default function UserManagement({
                       </button>
                       <button
                         type="button"
-                        onClick={closePasswordLink}
+                        onClick={() => requestSheetClose("account-credential-result")}
                         className="min-h-11 border border-border-default px-3 py-2 text-xs text-text-muted hover:text-text-heading"
                       >
                         {t("closeCredential")}
@@ -708,7 +710,7 @@ export function UserCard({
     <tr className="account-row" aria-busy={isBusy} data-selected={detail.open}>
       <td className="account-name-cell">
         <button type="button" className="account-open" onClick={() => detail.open ? requestSheetClose(`account-detail-${user.id}`) : detail.show()} disabled={actionsDisabled} aria-expanded={detail.open} aria-controls={detail.open ? `account-detail-${user.id}` : undefined}>
-          <strong>{user.name}</strong><small>{isDeleted ? t("deletedAccount") : user.email}</small>
+          <strong id={`account-label-${user.id}`}>{user.name}</strong><small>{isDeleted ? t("deletedAccount") : user.email}</small>
           <span className="account-mobile-role"><RoleLabel role={role} /></span>
         </button>
       </td>
@@ -718,7 +720,7 @@ export function UserCard({
       <td className="account-status-cell"><span className="record-status" data-tone={isSetupPending ? "waiting" : !user.active || isDeleted ? "inactive" : "neutral"}>{statusLabel}</span></td>
       <td className="account-login-cell">{user.lastLoginAt ? <time dateTime={user.lastLoginAt}>{formatDate(user.lastLoginAt)}</time> : t("never")}</td>
     </tr>
-    {detail.open && <tr className="account-detail-row"><td colSpan={6}><Sheet id={`account-detail-${user.id}`} title={user.name} presentation="detail" size="record" onClose={() => { closeEditor(); detail.close(); }} busy={actionsDisabled} dirty={dirty}>
+    {detail.open && <tr className="account-detail-row"><td colSpan={6}><Sheet labelledBy={`account-label-${user.id}`} id={`account-detail-${user.id}`} title={user.name} presentation="detail" size="record" onClose={() => { closeEditor(); detail.close(); }} busy={actionsDisabled} dirty={dirty}>
       {feedback && <Alert type={feedback.type} message={feedback.message} />}
       {!isEditing ? (
         <>
