@@ -208,6 +208,7 @@ export default function LoginPage() {
           </div>
 
           <form
+            method="post"
             onSubmit={mode === "login" ? handleSubmit : handleSetup}
             className="auth-login-form"
             aria-busy={isLoading}

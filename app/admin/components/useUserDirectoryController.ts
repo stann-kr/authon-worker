@@ -24,6 +24,25 @@ export type StatusFilter =
   | "inactive"
   | "deleted";
 
+export interface UserDirectoryFilters {
+  searchQuery: string;
+  roleFilter: "all" | "shared" | User["role"];
+  statusFilter: StatusFilter;
+}
+
+export function matchesUserDirectoryFilters(user: User, { searchQuery, roleFilter, statusFilter }: UserDirectoryFilters) {
+  const query = searchQuery.trim().toLowerCase();
+  const matchesSearch = !query || user.name.toLowerCase().includes(query) || user.email.toLowerCase().includes(query);
+  const matchesRole = roleFilter === "all" || (roleFilter === "shared" ? user.accountKind === "shared" : user.role === roleFilter);
+  const setupPending = user.active && user.migrationStatus === "pending_reset" && !user.passwordSetAt;
+  const matchesStatus = statusFilter === "current" ? !user.deletedAt
+    : statusFilter === "deleted" ? !!user.deletedAt
+      : statusFilter === "inactive" ? !user.deletedAt && !user.active
+        : statusFilter === "setup" ? !user.deletedAt && setupPending
+          : !user.deletedAt && user.active && !setupPending;
+  return matchesSearch && matchesRole && matchesStatus;
+}
+
 interface UserDirectoryScopeOwner {
   scopeKey: string;
 }
@@ -687,35 +706,9 @@ export function useUserDirectoryController({
     [scopedUsers],
   );
 
-  const filteredUsers = useMemo(() => {
-    const normalizedQuery = searchQuery.trim().toLowerCase();
-    return scopedUsers.filter((user) => {
-      const matchesSearch =
-        !normalizedQuery ||
-        user.name.toLowerCase().includes(normalizedQuery) ||
-        user.email.toLowerCase().includes(normalizedQuery);
-      const matchesRole =
-        roleFilter === "all" ||
-        (roleFilter === "shared"
-          ? user.accountKind === "shared"
-          : user.role === roleFilter);
-      const isSetupPending =
-        user.active &&
-        user.migrationStatus === "pending_reset" &&
-        !user.passwordSetAt;
-      const matchesStatus =
-        statusFilter === "current"
-          ? !user.deletedAt
-          : statusFilter === "deleted"
-            ? !!user.deletedAt
-            : statusFilter === "inactive"
-              ? !user.deletedAt && !user.active
-              : statusFilter === "setup"
-                ? !user.deletedAt && isSetupPending
-                : !user.deletedAt && user.active && !isSetupPending;
-      return matchesSearch && matchesRole && matchesStatus;
-    });
-  }, [roleFilter, scopedUsers, searchQuery, statusFilter]);
+  const filteredUsers = useMemo(() => scopedUsers.filter((user) =>
+    matchesUserDirectoryFilters(user, { searchQuery, roleFilter, statusFilter })),
+  [roleFilter, scopedUsers, searchQuery, statusFilter]);
   const listState = deriveAsyncListState({
     hasStarted: isLoading || loadOutcome !== "idle",
     isLoading: isCurrentScopeLoading,
@@ -725,6 +718,7 @@ export function useUserDirectoryController({
   });
 
   return {
+    scopeIdentity: renderedScopeOwner,
     busyUserId,
     closePasswordLink,
     confirmPendingUserAction,

@@ -52,8 +52,15 @@ function canRestoreFocus(target: HTMLElement | null, allowInert = false): target
   return true;
 }
 
-export function requestSheetClose(id: string, onClosed?: () => void) {
-  document.getElementById(id)?.dispatchEvent(new window.CustomEvent("sheet-close", { detail: onClosed }));
+interface CloseRequest {
+  onClosed?: () => void;
+  onCanceled?: () => void;
+}
+
+export function requestSheetClose(id: string, onClosed?: () => void, onCanceled?: () => void) {
+  const panel = document.getElementById(id);
+  panel?.dispatchEvent(new window.CustomEvent<CloseRequest>("sheet-close", { detail: { onClosed, onCanceled } }));
+  return Boolean(panel);
 }
 
 // Record details and forms stay in the page; only auxiliary selectors are modal.
@@ -77,7 +84,7 @@ export default function Sheet({ id, open = true, title, children, onClose, prese
   const closeRef = useRef<HTMLButtonElement>(null);
   const continueRef = useRef<HTMLButtonElement>(null);
   const editFocus = useRef<HTMLElement | null>(null);
-  const afterClose = useRef<(() => void) | undefined>(undefined);
+  const afterClose = useRef<CloseRequest | undefined>(undefined);
   const backdropDismissedKeyboard = useRef(false);
   const baseline = useRef(new Map<Element, string>());
   const [discard, setDiscard] = useState(false);
@@ -91,8 +98,10 @@ export default function Sheet({ id, open = true, title, children, onClose, prese
   useLayoutEffect(() => { hasUnsavedChangesRef.current = hasUnsavedChanges; });
 
   const keepEditing = () => {
+    const request = afterClose.current;
     afterClose.current = undefined;
     setDiscard(false);
+    request?.onCanceled?.();
     requestAnimationFrame(() => editFocus.current?.isConnected && editFocus.current.focus({ preventScroll: true }));
   };
   const completeClose = () => {
@@ -100,7 +109,7 @@ export default function Sheet({ id, open = true, title, children, onClose, prese
     afterClose.current = undefined;
     withConfirmedClose(() => {
       latest.current.onClose();
-      followup?.();
+      followup?.onClosed?.();
     });
   };
   const requestClose = () => {
@@ -184,12 +193,20 @@ export default function Sheet({ id, open = true, title, children, onClose, prese
     if (!open) return;
     const panel = panelRef.current;
     const close = (event: Event) => {
-      if (latest.current.busy) return;
-      afterClose.current = (event as CustomEvent<(() => void) | undefined>).detail;
-      requestCloseRef.current();
+      const request = (event as CustomEvent<CloseRequest>).detail;
+      if (latest.current.busy) { request.onCanceled?.(); return; }
+      afterClose.current?.onCanceled?.();
+      afterClose.current = request;
+      // A new external intent replaces the pending one, without dismissing
+      // the existing confirmation or losing the original editing focus.
+      if (!latest.current.discard) requestCloseRef.current();
     };
     panel?.addEventListener("sheet-close", close);
-    return () => panel?.removeEventListener("sheet-close", close);
+    return () => {
+      panel?.removeEventListener("sheet-close", close);
+      afterClose.current?.onCanceled?.();
+      afterClose.current = undefined;
+    };
   }, [open]);
 
   useLayoutEffect(() => {
