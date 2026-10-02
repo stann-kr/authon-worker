@@ -1466,6 +1466,21 @@ test("a one-time result stays available until the user confirms closing it", () 
   assert.equal(screen.queryByRole("dialog"), null);
 });
 
+test("page forms can sit below the workspace heading without adding another top-level heading", () => {
+  const frame = (nested: boolean) => <NextIntlClientProvider locale="en" messages={messages}>
+    {nested && <h1>Create link</h1>}
+    <Sheet title="Create access link" presentation="page" headingLevel={nested ? 2 : undefined} onClose={() => {}}>
+      <label>DJ name<input /></label>
+    </Sheet>
+  </NextIntlClientProvider>;
+  const view = render(frame(false));
+  assert.ok(screen.getByRole("heading", { level: 1, name: "Create access link" }));
+  view.rerender(frame(true));
+  assert.equal(screen.getAllByRole("heading", { level: 1 }).length, 1);
+  assert.ok(within(screen.getByRole("region", { name: "Create access link" }))
+    .getByRole("heading", { level: 2, name: "Create access link" }));
+});
+
 test("detail stays inline across mobile and desktop without losing its draft or focus", () => {
   let mobile = false;
   let closeCount = 0;

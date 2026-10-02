@@ -199,9 +199,10 @@ function AdminPageContent() {
   );
   const activeTaskLabel =
     taskOptions.find((option) => option.id === activeTask)?.label ?? t("title");
+  const hasPageForm = activeTask === "link-create" || activeTask === "user-create" || activeTask === "venue-create";
   const activeGroup = taskOptions.find((option) => option.id === activeTask)?.group;
   const contextTasks = ["links", "users", "venues"].includes(activeGroup ?? "")
-    ? taskOptions.filter((option) => option.group === activeGroup && option.id !== "password-requests")
+    ? taskOptions.filter((option) => option.group === activeGroup && option.id !== activeTask && option.id !== "password-requests")
     : [];
 
   const eventScopeSelector = (controls: ReactNode, disabled = false) => <EventScopeSelector venueId={venueId} businessDate={selectedDate}
@@ -215,7 +216,7 @@ function AdminPageContent() {
         disabled: !isRoleReady, pendingPasswordResetCount }}
       actions={contextTasks.length > 0 && activeTask !== "password-requests" ? contextTasks.map((task) => (
         <WorkspaceAction key={task.id} icon={task.id.endsWith("create") ? "add" : "view"} tone={task.id.endsWith("create") ? "accent" : "muted"}
-          aria-pressed={activeTask === task.id} disabled={!isRoleReady || isRouteTransitionActive}
+          disabled={!isRoleReady || isRouteTransitionActive}
           onClick={() => changeTask(task.id)}>{task.label}</WorkspaceAction>
       )) : undefined}>
       <h1 id="admin-page-title" className="sr-only">
@@ -239,13 +240,14 @@ function AdminPageContent() {
         <section
           ref={workspaceRef}
           id="admin-workspace"
-          aria-labelledby="admin-active-task-title"
+          aria-label={hasPageForm ? activeTaskLabel : undefined}
+          aria-labelledby={hasPageForm ? undefined : "admin-active-task-title"}
           tabIndex={-1}
           className="min-h-0 outline-none"
         >
-        <h2 id="admin-active-task-title" className="sr-only">
+        {!hasPageForm && <h2 id="admin-active-task-title" className="sr-only">
           {activeTaskLabel}
-        </h2>
+        </h2>}
         {(!isRoleReady || activeTask === "guest-list") && <AdminTaskLoading />}
         {isRoleReady && <>
         {activeTask === "guest-requests" && (

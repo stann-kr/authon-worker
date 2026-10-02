@@ -18,6 +18,7 @@ interface SheetProps {
   children: ReactNode;
   onClose: () => void;
   presentation?: "detail" | "modal" | "inline" | "page";
+  headingLevel?: 1 | 2;
   labelledBy?: string;
   revealOnOpen?: boolean;
   wide?: boolean;
@@ -65,7 +66,7 @@ export function requestSheetClose(id: string, onClosed?: () => void, onCanceled?
 
 // Record details and forms stay in the page; only auxiliary selectors are modal.
 export default function Sheet({ id, open = true, title, children, onClose, presentation = "detail",
-  labelledBy, revealOnOpen = presentation === "page",
+  labelledBy, headingLevel, revealOnOpen = presentation === "page",
   wide = false, size = "default", busy = false, dirty = false, closeWarning, protectEdits = false,
   blockDuringRouteTransition = true }: SheetProps) {
   const t = useTranslations("Sheet");
@@ -73,7 +74,7 @@ export default function Sheet({ id, open = true, title, children, onClose, prese
   const routeTransitionActive = useIsRouteTransitionActive();
   const transitioning = blockDuringRouteTransition && routeTransitionActive;
   const modal = presentation === "modal";
-  const Heading = presentation === "page" ? "h1" : "h2";
+  const Heading = (headingLevel ?? (presentation === "page" ? 1 : 2)) === 1 ? "h1" : "h2";
   const [host] = useState(() => typeof document === "undefined" ? null : document.createElement("div"));
   const anchorRef = useRef<HTMLDivElement>(null);
   const movingFocus = useRef<HTMLElement | null>(null);

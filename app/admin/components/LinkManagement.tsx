@@ -285,7 +285,7 @@ export default function LinkManagement({
 
       <div className="min-w-0">
         {activeTab === "create" && (
-          <Sheet id="link-create-panel" presentation="page" title={t("createAccessLink")}
+          <Sheet id="link-create-panel" presentation="page" headingLevel={2} title={t("createAccessLink")}
             busy={isGenerating || isGeneratedLinkActionPending} dirty={create.hasDraft}
             onClose={() => { create.resetDraft(); setActiveTab("manage"); }}>
           {scopeSelector ? scopeSelector(scopeControls, isGenerating) : isSuperAdmin && <div className="operations-scope">{scopeControls}</div>}
