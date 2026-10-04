@@ -23,7 +23,7 @@ import ExternalDjCombobox from "@/app/admin/components/ExternalDjCombobox";
 import ExternalEventCombobox from "@/app/admin/components/ExternalEventCombobox";
 import AsyncListContent from "@/components/AsyncListContent";
 import ConfirmDialog from "@/components/ConfirmDialog";
-import Sheet from "@/components/overlays/Sheet";
+import Sheet, { requestSheetClose } from "@/components/overlays/Sheet";
 import ViewportProvider from "@/components/viewport/ViewportProvider";
 import RecordList, { useRecordDetail } from "@/components/records/RecordList";
 import DateField from "@/components/dates/DateField";
@@ -1466,6 +1466,21 @@ test("a one-time result stays available until the user confirms closing it", () 
   assert.equal(screen.queryByRole("dialog"), null);
 });
 
+test("page forms can sit below the workspace heading without adding another top-level heading", () => {
+  const frame = (nested: boolean) => <NextIntlClientProvider locale="en" messages={messages}>
+    {nested && <h1>Create link</h1>}
+    <Sheet title="Create access link" presentation="page" headingLevel={nested ? 2 : undefined} onClose={() => {}}>
+      <label>DJ name<input /></label>
+    </Sheet>
+  </NextIntlClientProvider>;
+  const view = render(frame(false));
+  assert.ok(screen.getByRole("heading", { level: 1, name: "Create access link" }));
+  view.rerender(frame(true));
+  assert.equal(screen.getAllByRole("heading", { level: 1 }).length, 1);
+  assert.ok(within(screen.getByRole("region", { name: "Create access link" }))
+    .getByRole("heading", { level: 2, name: "Create access link" }));
+});
+
 test("detail stays inline across mobile and desktop without losing its draft or focus", () => {
   let mobile = false;
   let closeCount = 0;
@@ -1979,6 +1994,35 @@ test("switching record accordions protects an unsaved draft and resumes only aft
   fireEvent.click(screen.getByRole("button", { name: messages.Sheet.discard }));
   assert.equal(screen.queryByRole("region", { name: "A" }) === null, true);
   assert.ok(screen.getByRole("region", { name: "B" }));
+});
+
+test("a pending close request settles only the latest intent and cancels each replaced intent once", () => {
+  const closed: string[] = [];
+  const canceled: string[] = [];
+  function Harness() {
+    const [open, setOpen] = useState(true);
+    return <>
+      {["A", "B"].map((id) => <button key={id} onClick={() => requestSheetClose(
+        "pending-close-form", () => closed.push(id), () => canceled.push(id),
+      )}>Request {id}</button>)}
+      <Sheet id="pending-close-form" open={open} title="Draft" onClose={() => setOpen(false)} protectEdits>
+        <label>Pending note<input defaultValue="" /></label>
+      </Sheet>
+    </>;
+  }
+  render(<NextIntlClientProvider locale="en" messages={messages}><Harness /></NextIntlClientProvider>);
+  fireEvent.change(screen.getByLabelText("Pending note"), { target: { value: "Keep draft" } });
+  const request = (id: string) => fireEvent.click(screen.getByRole("button", { name: `Request ${id}` }));
+  request("A"); request("B");
+  assert.deepEqual(canceled, ["A"]);
+  fireEvent.click(screen.getByRole("button", { name: messages.Sheet.continue }));
+  assert.deepEqual(closed, []);
+  assert.deepEqual(canceled, ["A", "B"]);
+  request("A"); request("B");
+  fireEvent.click(screen.getByRole("button", { name: messages.Sheet.discard }));
+  assert.deepEqual(closed, ["B"]);
+  assert.deepEqual(canceled, ["A", "B", "A"]);
+  assert.equal(screen.queryByRole("region", { name: "Draft" }), null);
 });
 
 test("roster timestamps keep machine-readable values and use the venue timezone", () => {

@@ -202,7 +202,7 @@ export default function VenueManagement({
       {/* Main content */}
       <div className="min-w-0">
         {activeTab === "create" && (
-          <Sheet id="venue-create-panel" presentation="page" title={t("createNew")}
+          <Sheet id="venue-create-panel" presentation="page" headingLevel={2} title={t("createNew")}
             busy={isSubmitting} dirty={create.hasDraft} onClose={() => { create.resetDraft(); setActiveTab("list"); }}>
           <div className="record-form space-y-6">
             <div className="app-panel record-form-panel">

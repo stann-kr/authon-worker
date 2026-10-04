@@ -23,6 +23,11 @@ if (!window.requestAnimationFrame) {
 }
 
 const passwordResetTestState = globalThis as typeof globalThis & {
+  userDirectoryView?: {
+    users: User[];
+    venueId: string;
+    update?: () => Promise<{ data: User | null; error: string | null }>;
+  };
   adminPasswordResetActions?: {
     fetch: () => Promise<{ data: PasswordResetRequestView[]; error: null }>;
     approve: () => Promise<{ data: null; error: string }>;
@@ -62,7 +67,12 @@ registerHooks({
       return {
         format: "module",
         source: `
-          export const useVenueSelector = () => ({ venues: [], currentVenue: null });
+          export const useVenueSelector = () => ({
+            venues: [], currentVenue: null,
+            selectedVenueId: globalThis.userDirectoryView?.venueId,
+            setSelectedVenueId() {}, isSuperAdmin: true,
+            user: { id: 'actor', name: 'Operator', role: 'super_admin' },
+          });
           export default function VenueSelector() { return null; }
         `,
         shortCircuit: true,
@@ -72,9 +82,9 @@ registerHooks({
       return {
         format: "module",
         source: `
-          export const fetchManagedUsersByVenue = async () => ({ data: [], error: null });
+          export const fetchManagedUsersByVenue = async () => ({ data: globalThis.userDirectoryView?.users ?? [], error: null });
           export const fetchUserAuditEvents = async () => ({ data: [], error: null });
-          export const updateUserProfile = async () => ({ data: null, error: null });
+          export const updateUserProfile = async () => globalThis.userDirectoryView?.update?.() ?? ({ data: null, error: null });
           export const deleteUserViaEdge = async () => ({ error: null });
           export const issueManagedPasswordLinkViaEdge = async () => ({ data: null, error: null });
           export const createUserViaEdge = async () => ({ data: null, error: null });
@@ -97,6 +107,7 @@ registerHooks({
 afterEach(() => {
   cleanup();
   delete passwordResetTestState.adminPasswordResetActions;
+  delete passwordResetTestState.userDirectoryView;
 });
 
 const USER_A: User = {
@@ -227,6 +238,127 @@ function loadUserManagementModule() {
   modulePromise ??= importUserManagementModule();
   return modulePromise;
 }
+
+async function renderUserDirectory() {
+  passwordResetTestState.userDirectoryView = { users: [USER_A, USER_B], venueId: "venue-a" };
+  const { default: UserManagement } = await loadUserManagementModule();
+  const frame = () => <NextIntlClientProvider locale="en" messages={messages}>
+    <RouteTransitionProvider><UserManagement activeSection="users" showSectionNavigation={false} /></RouteTransitionProvider>
+  </NextIntlClientProvider>;
+  const view = render(frame());
+  fireEvent.click(await screen.findByRole("button", { name: new RegExp(USER_A.name) }));
+  fireEvent.click(screen.getByRole("button", { name: messages.UserAdmin.edit }));
+  const input = screen.getByRole("textbox", { name: messages.UserAdmin.name }) as HTMLInputElement;
+  fireEvent.change(input, { target: { value: "Unsaved account name" } });
+  return { input, rerender: () => view.rerender(frame()) };
+}
+
+test("account filters retain the editor and its draft when the selected account still matches", async () => {
+  const { input } = await renderUserDirectory();
+  input.setSelectionRange(2, 7);
+  fireEvent.change(screen.getByRole("searchbox"), { target: { value: "alpha" } });
+  assert.equal(screen.getByRole("textbox", { name: messages.UserAdmin.name }) === input, true);
+  assert.equal(input.value, "Unsaved account name");
+  assert.equal(input.selectionStart, 2);
+  assert.equal(input.selectionEnd, 7);
+  assert.equal(screen.queryByRole("group", { name: messages.Sheet.unsaved }), null);
+});
+
+for (const scenario of [
+  { name: "search", role: "searchbox", label: messages.UserAdmin.searchUsers, value: "beta", initial: "" },
+  { name: "empty result", role: "searchbox", label: messages.UserAdmin.searchUsers, value: "no matching account", initial: "" },
+  { name: "role", role: "combobox", label: messages.UserAdmin.roleFilter, value: "door_staff", initial: "all" },
+  { name: "status", role: "combobox", label: messages.UserAdmin.statusFilter, value: "inactive", initial: "current" },
+]) {
+  test(`account ${scenario.name} filtering confirms removal of a dirty editor and keeps the filter on cancel`, async () => {
+    const { input } = await renderUserDirectory();
+    const filter = screen.getByRole(scenario.role, { name: scenario.label }) as HTMLInputElement;
+    filter.focus();
+    fireEvent.change(filter, { target: { value: scenario.value } });
+    assert.ok(screen.getByRole("group", { name: messages.Sheet.unsaved }));
+    assert.equal(filter.value, scenario.initial);
+    assert.equal(filter.disabled, true);
+    fireEvent.click(screen.getByRole("button", { name: messages.Sheet.continue }));
+    assert.equal(filter.disabled, false);
+    assert.equal(filter.value, scenario.initial);
+    assert.equal(screen.getByRole("textbox", { name: messages.UserAdmin.name }) === input, true);
+    assert.equal(input.value, "Unsaved account name");
+    await waitFor(() => assert.equal(document.activeElement === filter, true));
+    fireEvent.change(filter, { target: { value: scenario.value } });
+    fireEvent.click(screen.getByRole("button", { name: messages.Sheet.discard }));
+    assert.equal(filter.value, scenario.value);
+    assert.equal(filter.disabled, false);
+    assert.equal(screen.queryByRole("textbox", { name: messages.UserAdmin.name }), null);
+    assert.equal(screen.queryByRole("button", { name: new RegExp(USER_A.name) }), null);
+  });
+}
+
+test("account search waits for IME composition before requesting draft dismissal", async () => {
+  const { input } = await renderUserDirectory();
+  const search = screen.getByRole("searchbox") as HTMLInputElement;
+  fireEvent.compositionStart(search);
+  fireEvent.change(search, { target: { value: "계" } });
+  assert.equal(search.value, "계");
+  assert.equal(screen.queryByRole("group", { name: messages.Sheet.unsaved }), null);
+  assert.equal(screen.getByRole("textbox", { name: messages.UserAdmin.name }) === input, true);
+  fireEvent.compositionEnd(search, { data: "계" });
+  assert.ok(screen.getByRole("group", { name: messages.Sheet.unsaved }));
+  fireEvent.click(screen.getByRole("button", { name: messages.Sheet.continue }));
+  assert.equal(search.value, "");
+  assert.equal(input.value, "Unsaved account name");
+});
+
+test("account filters cannot remove an editor while saving", async () => {
+  const { input } = await renderUserDirectory();
+  const update = createDeferred<{ data: User | null; error: string | null }>();
+  passwordResetTestState.userDirectoryView!.update = () => update.promise;
+  fireEvent.click(screen.getByRole("button", { name: messages.UserAdmin.save }));
+  const search = screen.getByRole("searchbox") as HTMLInputElement;
+  fireEvent.change(search, { target: { value: "beta" } });
+  assert.equal(search.value, "");
+  assert.equal(screen.getByRole("textbox", { name: messages.UserAdmin.name }) === input, true);
+  assert.equal(screen.queryByRole("group", { name: messages.Sheet.unsaved }), null);
+  await act(async () => { update.resolve({ data: null, error: "FORBIDDEN" }); });
+  assert.equal(input.value, "Unsaved account name");
+});
+
+test("a scope replacement cancels a pending account filter and cannot restore the old selection", async () => {
+  const { rerender } = await renderUserDirectory();
+  fireEvent.change(screen.getByRole("searchbox"), { target: { value: "beta" } });
+  assert.ok(screen.getByRole("group", { name: messages.Sheet.unsaved }));
+  passwordResetTestState.userDirectoryView!.venueId = "venue-b";
+  passwordResetTestState.userDirectoryView!.users = [{ ...USER_B, venueId: "venue-b" }];
+  rerender();
+  await screen.findByRole("button", { name: new RegExp(USER_B.name) });
+  assert.equal(screen.queryByRole("group", { name: messages.Sheet.unsaved }), null);
+  assert.equal((screen.getByRole("searchbox") as HTMLInputElement).disabled, false);
+  passwordResetTestState.userDirectoryView!.venueId = "venue-a";
+  passwordResetTestState.userDirectoryView!.users = [USER_A, USER_B];
+  rerender();
+  const opener = await screen.findByRole("button", { name: new RegExp(USER_A.name) });
+  assert.equal(opener.getAttribute("aria-expanded"), "false");
+  assert.equal((screen.getByRole("searchbox") as HTMLInputElement).value, "");
+});
+
+test("late IME events from a replaced venue cannot filter the new directory", async () => {
+  const { rerender } = await renderUserDirectory();
+  const oldSearch = screen.getByRole("searchbox");
+  fireEvent.compositionStart(oldSearch);
+  fireEvent.change(oldSearch, { target: { value: "계" } });
+  passwordResetTestState.userDirectoryView!.venueId = "venue-b";
+  passwordResetTestState.userDirectoryView!.users = [{ ...USER_B, venueId: "venue-b" }];
+  rerender();
+  await screen.findByRole("button", { name: new RegExp(USER_B.name) });
+  const newSearch = screen.getByRole("searchbox") as HTMLInputElement;
+  assert.equal(oldSearch.isConnected, false);
+  fireEvent.change(oldSearch, { target: { value: "계정" } });
+  fireEvent.compositionEnd(oldSearch, { data: "계정" });
+  assert.equal(newSearch.value, "");
+  assert.equal(screen.queryByRole("group", { name: messages.Sheet.unsaved }), null);
+  assert.ok(screen.getByRole("button", { name: new RegExp(USER_B.name) }));
+  fireEvent.change(newSearch, { target: { value: "beta" } });
+  assert.equal(newSearch.value, "beta");
+});
 
 async function renderUserCard({
   user = USER_A,

@@ -55,7 +55,10 @@
 .account-editor { display: grid; gap: 18px; width: min(100%, 680px); }
 .account-editor > div:last-child { padding-top: 16px; border-top: 1px solid var(--app-border-subtle); }
 @container records (max-width: 959px) {
+  /* Auto layout collapses the hidden columns even when details span all six. */
+  .account-table { table-layout: auto; }
   .account-table .account-login-cell { display: none; }
+  .account-table .account-name-cell { max-width: 0; }
 }
 @container records (max-width: 619px) {
   .account-table :is(.account-role-cell, .account-limit-cell, .account-door-cell) { display: none; }

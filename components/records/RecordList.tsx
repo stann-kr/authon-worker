@@ -6,8 +6,14 @@ import { requestSheetClose } from "../overlays/Sheet";
 
 const Selection = createContext<{ id: string | null; select: (id: string | null) => void } | null>(null);
 
-export default function RecordList({ children, className = "", ...props }: HTMLAttributes<HTMLDivElement>) {
-  const [id, setId] = useState<string | null>(null);
+interface RecordListProps extends HTMLAttributes<HTMLDivElement> {
+  selection?: { id: string | null; onChange: (id: string | null) => void };
+}
+
+export default function RecordList({ children, className = "", selection, ...props }: RecordListProps) {
+  const [localId, setLocalId] = useState<string | null>(null);
+  const id = selection ? selection.id : localId;
+  const setId = selection ? selection.onChange : setLocalId;
   const rootRef = useRef<HTMLDivElement>(null);
   const select = (next: string | null) => {
     const panel = rootRef.current?.querySelector<HTMLElement>(".product-sheet[id]");

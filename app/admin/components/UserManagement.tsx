@@ -35,7 +35,9 @@ import { formatVenueDateTime } from "@/lib/date";
 import { shouldShowEmptyState } from "@/lib/ui/async-list-state";
 import {
   useUserDirectoryController,
+  matchesUserDirectoryFilters,
   type StatusFilter,
+  type UserDirectoryFilters,
   type UserDirectoryControllerActions,
 } from "./useUserDirectoryController";
 
@@ -121,6 +123,7 @@ export default function UserManagement({
     scopedFeedback,
     scopedPasswordLink,
     scopedUsers,
+    scopeIdentity,
     searchQuery,
     setPendingUserAction,
     setRoleFilter,
@@ -134,6 +137,31 @@ export default function UserManagement({
     isActive: activeTab === "users",
     isSuperAdmin,
   });
+
+  const [selection, setSelection] = useState<{ scope: typeof scopeIdentity; id: string | null } | null>(null);
+  const selectedUserId = selection?.scope === scopeIdentity ? selection.id : null;
+  const [filterRequest, setFilterRequest] = useState<{ scope: typeof scopeIdentity } | null>(null);
+  const awaitingFilterConfirmation = filterRequest?.scope === scopeIdentity;
+  const [searchComposition, setSearchComposition] = useState<{ scope: typeof scopeIdentity; value: string } | null>(null);
+  const composingSearch = useRef<typeof scopeIdentity | null>(null);
+
+  const changeFilters = (patch: Partial<UserDirectoryFilters>) => {
+    const next = { searchQuery, roleFilter, statusFilter, ...patch };
+    const apply = () => {
+      setSearchQuery(next.searchQuery);
+      setRoleFilter(next.roleFilter);
+      setStatusFilter(next.statusFilter);
+    };
+    const selected = scopedUsers.find((user) => user.id === selectedUserId);
+    if (!selected || matchesUserDirectoryFilters(selected, next)) { apply(); return; }
+    const request = { scope: scopeIdentity };
+    const settle = () => setFilterRequest((current) => current === request ? null : current);
+    setFilterRequest(request);
+    if (!requestSheetClose(`account-detail-${selected.id}`, () => { settle(); apply(); }, settle)) {
+      settle();
+      apply();
+    }
+  };
 
   const formatActivityDate = (
     value: string,
@@ -349,12 +377,26 @@ export default function UserManagement({
                     {t("searchUsers")}
                   </label>
                   <input
+                    key={`${isSuperAdmin}:${effectiveVenueId}`}
                     ref={directoryFocusFallbackRef}
                     id="user-search"
                     name="user-search"
                     type="search"
-                    value={searchQuery}
-                    onChange={(event) => setSearchQuery(event.target.value)}
+                    value={searchComposition?.scope === scopeIdentity ? searchComposition.value : searchQuery}
+                    disabled={awaitingFilterConfirmation}
+                    onCompositionStart={(event) => {
+                      composingSearch.current = scopeIdentity;
+                      setSearchComposition({ scope: scopeIdentity, value: event.currentTarget.value });
+                    }}
+                    onCompositionEnd={(event) => {
+                      composingSearch.current = null;
+                      setSearchComposition(null);
+                      changeFilters({ searchQuery: event.currentTarget.value });
+                    }}
+                    onChange={(event) => {
+                      if (composingSearch.current === scopeIdentity) setSearchComposition({ scope: scopeIdentity, value: event.target.value });
+                      else changeFilters({ searchQuery: event.target.value });
+                    }}
                     className="app-field"
                     placeholder={t("searchPlaceholder")}
                     autoComplete="off"
@@ -369,8 +411,9 @@ export default function UserManagement({
                     id="user-role-filter"
                     name="user-role-filter"
                     value={roleFilter}
+                    disabled={awaitingFilterConfirmation}
                     autoComplete="off"
-                    onChange={(event) => setRoleFilter(event.target.value as typeof roleFilter)}
+                    onChange={(event) => changeFilters({ roleFilter: event.target.value as typeof roleFilter })}
                     className="app-field"
                   >
                     <option value="all">{t("allRoles")}</option>
@@ -392,8 +435,9 @@ export default function UserManagement({
                     id="user-status-filter"
                     name="user-status-filter"
                     value={statusFilter}
+                    disabled={awaitingFilterConfirmation}
                     autoComplete="off"
-                    onChange={(event) => setStatusFilter(event.target.value as StatusFilter)}
+                    onChange={(event) => changeFilters({ statusFilter: event.target.value as StatusFilter })}
                     className="app-field"
                   >
                     <option value="current">{t("currentAccounts")}</option>
@@ -424,7 +468,8 @@ export default function UserManagement({
                 />
               ) : (
                 <RecordList
-                  key={`${effectiveVenueId}:${searchQuery}:${statusFilter}:${roleFilter}`}
+                  key={`${isSuperAdmin}:${effectiveVenueId}`}
+                  selection={{ id: selectedUserId, onChange: (id) => setSelection({ scope: scopeIdentity, id }) }}
                   aria-busy={isCurrentScopeLoading}
                   className={`${
                     isCurrentScopeLoading ? "pointer-events-none" : ""
