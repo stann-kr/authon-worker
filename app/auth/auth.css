@@ -7,7 +7,8 @@
 .auth-panel form { min-width: 0; }
 .auth-panel .app-field { background: #0c0c0c; }
 
-.auth-login-page { display: grid; align-items: center; background: var(--app-canvas); }
+/* Top-anchored so inline errors grow downward instead of shifting the form. */
+.auth-login-page { display: grid; align-items: start; padding-top: max(clamp(32px, 12vh, 120px), env(safe-area-inset-top)); background: var(--app-canvas); }
 .auth-login-page .auth-frame { max-width: 400px; }
 .auth-login-header { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px 20px; padding-bottom: 20px; border-bottom: 1px solid var(--app-border-subtle); }
 .auth-login-header .auth-brand { margin: 0; color: var(--app-text); font-size: 18px; font-weight: 500; letter-spacing: -0.4px; }

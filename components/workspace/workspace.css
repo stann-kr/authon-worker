@@ -160,6 +160,8 @@
 .workspace-action-icon[data-tone="muted"] { background: #444444; color: var(--app-text); }
 .workspace-shell .font-mono, .product-sheet .font-mono { font-family: inherit; font-variant-numeric: tabular-nums; }
 .workspace-desktop-logout { display: none; }
+/* Signed-in work surfaces keep the full height for tasks; the public pages keep the footer. */
+.workspace-shell--authenticated .page-scroll > footer { display: none; }
 /* Mobile materials stay on the header and individual controls, never behind both pill rows. */
 @media (max-width: 999px) {
   .workspace-shell {
@@ -192,6 +194,7 @@
   }
   .workspace-shell .operations-layout { gap: 0; }
   .workspace-shell .page-scroll > footer { display: none; }
+
 
   .workspace-primary-nav {
     background: var(--workspace-glass-header);

@@ -29,3 +29,6 @@
 @media (max-width: 359px) {
   .external-guest-header-inner, .external-guest-workspace .page-container { padding-inline: max(16px, env(safe-area-inset-left)) max(16px, env(safe-area-inset-right)); }
 }
+
+/* Counts stay in the reading font; tabular figures keep them aligned without a slashed-zero mono face. */
+.external-guest-workspace .font-mono { font-family: inherit; font-variant-numeric: tabular-nums; }

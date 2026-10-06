@@ -270,7 +270,6 @@ export default function LoginPage() {
                   value={formData.password}
                   onChange={(e) => setFormData({...formData, password: e.target.value})}
                   inputClassName="app-field pr-12"
-                  placeholder="••••••••"
                   autoComplete="current-password"
                   required
                   disabled={isLoading}
