@@ -70,7 +70,7 @@ const LINK_MANAGE_ACTIONS: LinkManageControllerActions = Object.freeze({
 export type LinkManagementSection = "create" | "manage";
 
 interface LinkManagementProps {
-  scopeSelector?: (controls: ReactNode, disabled?: boolean) => ReactNode;
+  scopeSelector?: (controls: ReactNode, disabled?: boolean, inline?: boolean) => ReactNode;
   selectedDate: string;
   onDateChange: (date: string) => void;
   businessDate: string;
@@ -288,7 +288,7 @@ export default function LinkManagement({
           <Sheet id="link-create-panel" presentation="page" headingLevel={2} title={t("createAccessLink")}
             busy={isGenerating || isGeneratedLinkActionPending} dirty={create.hasDraft}
             onClose={() => { create.resetDraft(); setActiveTab("manage"); }}>
-          {scopeSelector ? scopeSelector(scopeControls, isGenerating) : isSuperAdmin && <div className="operations-scope">{scopeControls}</div>}
+          {scopeSelector ? scopeSelector(scopeControls, isGenerating, true) : isSuperAdmin && <div className="operations-scope">{scopeControls}</div>}
           <div className="record-form space-y-6">
             <div className="app-panel record-form-panel">
 

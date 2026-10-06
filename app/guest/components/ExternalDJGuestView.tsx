@@ -217,7 +217,7 @@ export default function ExternalDJGuestView({ token }: ExternalDJGuestViewProps)
           <dl className="external-guest-context">
             <div className="flex flex-col">
               <dt>
-                {t("guestOwner")}
+                {isSelfRsvp ? t("invitedBy") : t("guestOwner")}
               </dt>
               <dd>
                 {linkInfo?.djName ?? "-"}

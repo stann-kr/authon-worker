@@ -324,6 +324,7 @@ export default function Sheet({ id, open = true, title, children, onClose, prese
         {(!labelledBy || modal) && <header className="product-sheet-header">
           <Heading id={titleId}>{title}</Heading>
           <Button ref={closeRef} variant="ghost" onClick={requestClose} disabled={busy}
+            leftIcon={presentation === "page" ? <Icon name="arrow-left" size={16} /> : undefined}
             aria-label={presentation === "page" ? t("backToList") : t("close")}
             aria-expanded={modal || presentation === "page" ? undefined : true} aria-controls={`${titleId}-body`}>
             {presentation === "page" ? t("backToList") : <Icon name={modal ? "close" : "chevron-down"} className={modal ? undefined : "rotate-180"} size={20} />}

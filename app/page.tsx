@@ -66,14 +66,14 @@ export default function Home() {
     return () => { active = false; };
   }, [router, user]);
 
-  const accessibleMenus = useMemo(
-    () =>
-      user
-        ? menuItems
-            .filter((item) => hasAccess(user, item.requiredAccess))
-        : [],
-    [menuItems, user],
-  );
+  // Shortcut numbers follow the on-screen order, so the primary task is always 1.
+  const accessibleMenus = useMemo(() => {
+    if (!user) return [];
+    const primaryId = hasAccess(user, ["door"]) ? "door" : "guest";
+    return menuItems
+      .filter((item) => hasAccess(user, item.requiredAccess))
+      .sort((a, b) => Number(b.id === primaryId) - Number(a.id === primaryId));
+  }, [menuItems, user]);
 
   useEffect(() => {
     if (!user || accessibleMenus.length === 0) return;
@@ -124,8 +124,8 @@ export default function Home() {
     return <RouteLoadingFallback />;
   }
 
-  const primaryId = hasAccess(user, ["door"]) ? "door" : "guest";
-  const primary = accessibleMenus.find((item) => item.id === primaryId) ?? accessibleMenus[0];
+  const [primary, ...secondaryMenus] = accessibleMenus;
+  const isAdmin = hasAccess(user, ["admin"]);
   const quickLinks = getWorkspaceItems({
     role: user.role, accountKind: user.account_kind, doorAccessEnabled: user.door_access_enabled,
   }).filter((item) => ["events", "links", "users", "analytics"].includes(item.id));
@@ -135,30 +135,29 @@ export default function Home() {
     <WorkspaceShell contentClassName="home-page">
       <div className="home-overview">
         <header className="home-heading">
-          <div><p className="home-brand">{brand.name}</p><h1>{t("homeTitle")}</h1></div>
-          <TransitionLink href="/profile" className="home-identity">
-            <div><strong>{user.name}</strong><span><RoleLabel role={user.account_kind === "shared" ? "shared" : user.role} /></span></div>
-            <Icon name="chevron-right" size={18} />
-          </TransitionLink>
+          <p className="home-brand">{brand.name}</p><h1>{t("homeTitle")}</h1>
         </header>
 
         <div className="home-workbench">
           <nav aria-label={t("availableWorkspaces")} className="home-tasks">
-            {primary && <WorkspaceLink item={primary} index={accessibleMenus.indexOf(primary)} primary />}
-            <div className="home-secondary-tasks">
-              {accessibleMenus.filter((item) => item !== primary).map((item) => (
-                <WorkspaceLink key={item.id} item={item} index={accessibleMenus.indexOf(item)} />
+            {primary && <WorkspaceLink item={primary} index={0} primary />}
+            {secondaryMenus.length > 0 && <div className="home-secondary-tasks">
+              {secondaryMenus.map((item, index) => (
+                <WorkspaceLink key={item.id} item={item} index={index + 1} />
               ))}
-            </div>
+            </div>}
           </nav>
 
           <section className="home-account-panel" aria-labelledby="home-account-title">
             <h2 id="home-account-title">{t("registrationInfo")}</h2>
+            <p className="home-account-identity"><strong>{user.name}</strong>
+              <span><RoleLabel role={user.account_kind === "shared" ? "shared" : user.role} /></span></p>
             <dl>
-              <div><dt>{t("defaultGuestLimit")}</dt><dd>{user.guest_limit === null ? t("unlimited") : t("guestLimitCount", { count: user.guest_limit })}</dd></div>
+              {/* Admin accounts do not register against a personal guest quota. */}
+              {!isAdmin && <div><dt>{t("defaultGuestLimit")}</dt><dd>{user.guest_limit === null ? t("unlimited") : t("guestLimitCount", { count: user.guest_limit })}</dd></div>}
               <div><dt>{t("doorAccess")}</dt><dd>{hasAccess(user, ["door"]) ? t("allowed") : t("notAllowed")}</dd></div>
             </dl>
-            <TransitionLink href="/profile" className="home-account-link">{workspaceT("profile")}<Icon name="arrow-right" size={18} /></TransitionLink>
+            <TransitionLink href="/profile" className="home-account-link">{t("accountSettings")}<Icon name="arrow-right" size={18} /></TransitionLink>
           </section>
         </div>
 

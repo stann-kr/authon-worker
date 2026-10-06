@@ -25,8 +25,10 @@ html[data-modal-open="true"], html[data-modal-open="true"] body { background-col
 .product-sheet-body[hidden] { display: none; }
 .product-sheet[aria-labelledby]:not(:has(> .product-sheet-header)) { padding-top: 16px; }
 .product-sheet[data-presentation="page"] { max-width: 760px; margin-inline: auto; padding: 0; border: 0; background: transparent; }
-.product-sheet[data-presentation="page"] > .product-sheet-header { flex-wrap: wrap; padding: 0 0 20px; }
-.product-sheet[data-presentation="page"] > .product-sheet-header :is(h1, h2) { font-size: 20px; line-height: 1.4; font-weight: 500; }
+/* The workspace header already names the page, so the form keeps its heading for assistive technology only. */
+.product-sheet[data-presentation="page"] > .product-sheet-header { flex-direction: row-reverse; justify-content: flex-end; padding: 0 0 12px; }
+.product-sheet[data-presentation="page"] > .product-sheet-header :is(h1, h2) { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+.product-sheet[data-presentation="page"] > .product-sheet-header .app-button { margin-left: -12px; padding-inline: 12px; color: var(--app-text-muted); }
 .product-sheet[data-presentation="inline"][data-size="form"] { padding: 0 16px; border: 1px solid var(--app-border-subtle); background: var(--app-surface-secondary); }
 .product-sheet:is([data-presentation="page"], [data-presentation="inline"]) { scroll-margin-top: calc(var(--app-header-height, 0px) + 20px); }
 .product-sheet-discard { display: grid; gap: 12px; padding-block: 12px 20px; font-size: 14px; }
