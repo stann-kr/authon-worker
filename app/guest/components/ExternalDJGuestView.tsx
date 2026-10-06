@@ -60,7 +60,9 @@ export default function ExternalDJGuestView({ token }: ExternalDJGuestViewProps)
     externalViewRootRef,
     guests,
     guestName,
+    guestNameInputRef,
     handleBulkSave,
+    handleConfirmDuplicate,
     handleDelete,
     handleInitialRetry,
     handleReconciliationRetry,
@@ -74,6 +76,7 @@ export default function ExternalDJGuestView({ token }: ExternalDJGuestViewProps)
     isSelfRsvpLocked,
     isValidating,
     linkInfo,
+    notice,
     ownedGuest,
     ownerKey,
     reconciliationHeadingRef,
@@ -198,6 +201,8 @@ export default function ExternalDJGuestView({ token }: ExternalDJGuestViewProps)
   }
 
   const remaining = linkInfo ? linkInfo.maxGuests - linkInfo.usedGuests : 0;
+  const showDuplicateAction =
+    error === "duplicateRequiresConfirmation" && !isSelfRsvp;
   const isAtLimit = remaining <= 0;
   const sortedGuests =
     sortMode === "alpha"
@@ -286,7 +291,7 @@ export default function ExternalDJGuestView({ token }: ExternalDJGuestViewProps)
             </div>
           )}
 
-          {error && !requiresReconciliation && (
+          {error && !requiresReconciliation && !showDuplicateAction && (
             <Alert type="error" message={t(error)} className="mb-4" />
           )}
 
@@ -328,12 +333,14 @@ export default function ExternalDJGuestView({ token }: ExternalDJGuestViewProps)
                 </>
               )}
               {!isAtLimit || Boolean(ownedGuest) ? (
+                <>
                 <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
                   <div className="min-w-0 flex-1">
                     <label htmlFor="external-guest-name" className="app-label">
                       {isSelfRsvp ? t("yourName") : t("guestName")}
                     </label>
                     <input
+                      ref={guestNameInputRef}
                       id="external-guest-name"
                       name="external-guest-name"
                       type="text"
@@ -342,16 +349,26 @@ export default function ExternalDJGuestView({ token }: ExternalDJGuestViewProps)
                       placeholder={t("enterFullName")}
                       maxLength={100}
                       autoComplete="off"
+                      autoCorrect="off"
+                      autoCapitalize="characters"
+                      spellCheck={false}
+                      enterKeyHint="done"
                       disabled={
                         requiresReconciliation ||
                         isReconciling ||
-                        isLoading ||
-                        isBulkSubmitting ||
-                        deletingId !== null ||
                         (isSelfRsvp && !ownerKey) ||
                         isSelfRsvpLocked
                       }
-                      className="app-field min-h-11"
+                      // 저장 중에는 focus를 유지하도록 disabled 대신 readOnly로 잠급니다.
+                      readOnly={
+                        isLoading || isBulkSubmitting || deletingId !== null
+                      }
+                      aria-describedby={
+                        showDuplicateAction
+                          ? "external-guest-duplicate"
+                          : undefined
+                      }
+                      className="app-field min-h-11 read-only:opacity-70"
                       onKeyDown={(event) => {
                         if (
                           event.key === "Enter" &&
@@ -386,6 +403,26 @@ export default function ExternalDJGuestView({ token }: ExternalDJGuestViewProps)
                       : t("addGuest")}
                   </Button>
                 </div>
+                {showDuplicateAction && !requiresReconciliation && (
+                    <div
+                      id="external-guest-duplicate"
+                      role="alert"
+                      className="mt-2 flex flex-col gap-2 border-l-2 border-status-waiting bg-status-waiting/10 px-3 py-2 text-sm text-status-waiting sm:flex-row sm:items-center sm:justify-between"
+                    >
+                      <p className="leading-relaxed">{t("duplicateRequiresConfirmation")}</p>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="shrink-0"
+                        disabled={isLoading || isBulkSubmitting || deletingId !== null}
+                        onClick={() => void handleConfirmDuplicate()}
+                      >
+                        {t("addDuplicateAnyway")}
+                      </Button>
+                    </div>
+                  )}
+                </>
               ) : (
                 <div className="border-l-2 border-status-danger bg-status-danger/10 px-3 py-2 text-sm text-status-danger">
                   {t("guestLimitReached", {
@@ -394,6 +431,10 @@ export default function ExternalDJGuestView({ token }: ExternalDJGuestViewProps)
                   })}
                 </div>
               )}
+              {/* 정원에 도달해 입력란이 사라져도 마지막 등록 결과를 안내합니다. */}
+              <p role="status" aria-live="polite" aria-atomic="true" className="app-helper text-status-checked">
+                {notice ? t(notice.key, { name: notice.name }) : ""}
+              </p>
 
               {!isSelfRsvp && (
                 <GuestBulkEntry
