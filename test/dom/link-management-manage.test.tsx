@@ -489,6 +489,11 @@ test("rendered link management loads ten more at the scroll boundary and retains
     await act(async () => { next.resolve({ data: page([{ ...LINK, id: "last", djName: "Last DJ" }]), error: null }); });
     await waitFor(() => assert.ok(screen.getByRole("button", { name: /^Last DJ/ })));
     assert.equal(screen.queryByRole("button", { name: messages.LinkAdmin.loadMore }) === null, true);
+    fireEvent.click(within(detail).getByRole("button", { name: messages.LinkAdmin.deactivate }));
+    const deactivation = screen.getByRole("group", { name: messages.LinkAdmin.deactivateTitle });
+    fireEvent.click(within(deactivation).getByRole("button", { name: messages.Common.cancel }));
+    assert.equal(screen.queryByRole("group", { name: messages.LinkAdmin.deactivateTitle }), null);
+    assert.equal(within(detail).getByRole("button", { name: messages.LinkAdmin.deactivate }).isConnected, true);
     fireEvent.click(within(detail).getByRole("button", { name: messages.LinkAdmin.delete }));
     assert.ok(screen.getByRole("group", { name: messages.LinkAdmin.deleteTitle }));
     fireEvent.click(opener);

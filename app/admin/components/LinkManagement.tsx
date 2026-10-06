@@ -3,6 +3,8 @@
 import { confirmWorkspaceNavigation } from "@/components/overlays/navigation-guard";
 
 import Sheet from "@/components/overlays/Sheet";
+import { useToast } from "@/components/feedback/ToastProvider";
+import { RecordStatus, type RecordStatusTone } from "@/components/records/RecordList";
 import { useState, useCallback, useEffect, useRef, type ReactNode } from "react";
 import VenueSelector, {
   useVenueSelector,
@@ -93,6 +95,9 @@ export default function LinkManagement({
   const t = useTranslations("LinkAdmin");
   const commonT = useTranslations("Common");
   const locale = useLocale() as "en" | "ko";
+  const showToast = useToast();
+  const localeModeLabel = (mode: "auto" | "en" | "ko") =>
+    mode === "auto" ? t("auto") : mode === "ko" ? commonT("korean") : commonT("english");
   const [internalActiveSection, setInternalActiveSection] =
     useState<LinkManagementSection>("create");
   const activeTab = activeSection ?? internalActiveSection;
@@ -201,6 +206,14 @@ export default function LinkManagement({
     return () => observer.disconnect();
   }, [activeTab, hasMore, isCurrentScopeFetching, isLoadingMore, loadMoreError, loadMore, lifecycleBusy]);
   const linkActionToast = create.linkActionToast ?? manageLinkActionToast;
+  // Transient results use the app-wide toast; failures stay inline beside the list or open record.
+  useEffect(() => {
+    if (linkActionToast) showToast({ message: linkActionToast });
+  }, [linkActionToast, showToast]);
+  useEffect(() => {
+    if (scopedSuccess) showToast({ message: scopedSuccess });
+  }, [scopedSuccess, showToast]);
+  const [pendingDeactivateId, setPendingDeactivateId] = useState<string | null>(null);
 
   const handleUseAsTemplate = (link: ExternalDJLink) => {
     const draft = toExternalLinkTemplateDraft(link, selectedDate);
@@ -602,7 +615,7 @@ export default function LinkManagement({
                     {scopedGeneratedLink.maxGuests}
                   </p>
                   <p className="mt-1 font-mono text-xs text-text-dim">
-                    {t("language")}: {scopedGeneratedLink.localeMode === "auto" ? t("auto") : scopedGeneratedLink.localeMode.toUpperCase()}
+                    {t("language")}: {localeModeLabel(scopedGeneratedLink.localeMode)}
                   </p>
                   <p className="mt-1 text-xs text-text-dim">
                     {t("accessType")}: {scopedGeneratedLink.kind === "self_rsvp" ? t("selfRsvpLink") : t("contributorLink")}
@@ -654,8 +667,7 @@ export default function LinkManagement({
 
         {activeTab === "manage" && (
           <div className="space-y-4">
-            {scopedManageError && <Alert type="error" message={scopedManageError} />}
-            {scopedSuccess && <Alert type="success" message={scopedSuccess} />}
+            {scopedManageError && !visibleLinkId && <Alert type="error" message={scopedManageError} />}
 
             <div className="record-collection">
               <PanelHeader
@@ -755,32 +767,35 @@ export default function LinkManagement({
                           ? "bg-text-muted"
                           : "bg-text-heading";
 
-                      const primaryStatus = status.expired
-                        ? { label: t("expired"), tone: "border-status-danger text-status-danger", indicator: "before:bg-status-danger" }
+                      const primaryStatus: { label: string; tone: RecordStatusTone } = status.expired
+                        ? { label: t("expired"), tone: "danger" }
                         : status.inactive
-                          ? { label: t("inactive"), tone: "border-border-strong text-text-muted", indicator: "before:bg-border-strong" }
+                          ? { label: t("inactive"), tone: "inactive" }
                           : status.full
-                            ? { label: t("full"), tone: "border-status-danger text-status-danger", indicator: "before:bg-status-danger" }
+                            ? { label: t("full"), tone: "danger" }
                             : status.expiringSoon
-                              ? { label: t("expiring"), tone: "border-status-waiting text-status-waiting", indicator: "before:bg-status-waiting" }
-                              : { label: t("active"), tone: "border-status-checked text-status-checked", indicator: "before:bg-status-checked" };
+                              ? { label: t("expiring"), tone: "waiting" }
+                              : { label: t("active"), tone: "ok" };
 
                       return (
                       <article key={link.id} className="record-row">
                         <div className="record-summary">
-                          <button type="button" className="record-open" onClick={() => { setPendingDeleteLink(null); setVisibleLinkId(isLinkVisible ? null : link.id); }} disabled={lifecycleBusy} aria-expanded={isLinkVisible} aria-controls={isLinkVisible ? `link-detail-${link.id}` : undefined}>
+                          <button type="button" className="record-open" onClick={() => { setPendingDeleteLink(null); setPendingDeactivateId(null); setVisibleLinkId(isLinkVisible ? null : link.id); }} disabled={lifecycleBusy} aria-expanded={isLinkVisible} aria-controls={isLinkVisible ? `link-detail-${link.id}` : undefined}>
                             <span className="record-identity"><strong id={`link-label-${link.id}`}>{link.djName}</strong><small>{link.event || t("untitledEvent")} · {link.date ? formatDateDisplay(link.date, locale) : t("noDate")}</small></span>
                             <span className="record-value">{link.usedGuests}/{link.maxGuests}</span>
-                            <span className={`record-status ${primaryStatus.tone}`}>{primaryStatus.label}</span>
+                            <RecordStatus tone={primaryStatus.tone}>{primaryStatus.label}</RecordStatus>
                           </button>
                           {/* Expired or disabled links cannot register guests, so the list does not offer them for sharing. */}
-                          {!status.expired && !status.inactive && <div hidden={pendingDeleteLink?.id === link.id}><Button variant="secondary" size="sm" onClick={() => shareOrCopyManagedLink(guestPageUrl, link.id)} isLoading={loadingStates[`share_${link.id}`]}>
+                          {!status.expired && !status.inactive && <div hidden={pendingDeleteLink?.id === link.id || pendingDeactivateId === link.id}><Button variant="secondary" size="sm" onClick={() => shareOrCopyManagedLink(guestPageUrl, link.id)} isLoading={loadingStates[`share_${link.id}`]}>
                             {completedLinkAction === "shared" ? t("shared") : completedLinkAction === "copied" ? t("copied") : nativeShareAvailable ? t("shareLink") : t("copyLink")}
                           </Button></div>}
                         </div>
-                        {isLinkVisible && <Sheet labelledBy={`link-label-${link.id}`} id={`link-detail-${link.id}`} title={link.djName} presentation="detail" onClose={() => { setPendingDeleteLink(null); setVisibleLinkId(null); }} busy={Boolean(lifecycleBusyIds[link.id])}>
+                        {isLinkVisible && <Sheet labelledBy={`link-label-${link.id}`} id={`link-detail-${link.id}`} title={link.djName} presentation="detail" onClose={() => { setPendingDeleteLink(null); setPendingDeactivateId(null); setVisibleLinkId(null); }} busy={Boolean(lifecycleBusyIds[link.id])}>
                           {scopedManageError && <Alert type="error" message={scopedManageError} />}
-                          <p className="text-sm text-text-muted">{link.event || t("untitledEvent")} · {link.kind === "self_rsvp" ? t("selfRsvpLink") : t("contributorLink")}</p>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <RecordStatus tone={primaryStatus.tone}>{primaryStatus.label}</RecordStatus>
+                            <p className="text-sm text-text-muted">{link.event || t("untitledEvent")} · {link.kind === "self_rsvp" ? t("selfRsvpLink") : t("contributorLink")}</p>
+                          </div>
                         <dl className="record-detail-grid">
                           <div>
                             <dt className="text-xs text-text-dim">{t("eventDate")}</dt>
@@ -827,8 +842,8 @@ export default function LinkManagement({
                           </div>
                           <div>
                             <dt className="text-xs text-text-dim">{t("language")}</dt>
-                            <dd className="mt-0.5 font-mono text-xs uppercase text-text-muted">
-                              {link.localeMode === "auto" ? t("auto") : link.localeMode}
+                            <dd className="mt-0.5 text-xs text-text-muted">
+                              {localeModeLabel(link.localeMode)}
                             </dd>
                           </div>
                         </dl>
@@ -881,7 +896,7 @@ export default function LinkManagement({
                         <LinkRegisteredGuests key={`${venueId}:${link.id}`} venueId={venueId} linkId={link.id}
                           registeredCount={link.usedGuests} timeZone={currentVenue?.timezone} />
 
-                        <div hidden={pendingDeleteLink?.id === link.id}><div className="mt-3 flex flex-wrap justify-end gap-3">
+                        <div hidden={pendingDeleteLink?.id === link.id || pendingDeactivateId === link.id}><div className="mt-3 flex flex-wrap justify-end gap-3">
                           <Button
                             type="button"
                             onClick={() => handleUseAsTemplate(link)}
@@ -913,13 +928,13 @@ export default function LinkManagement({
                                     : t("copyLink")}
                           </Button>
                           {status.expired ? (
-                            <span className="record-status inline-flex min-h-11 items-center px-3 text-status-danger">
+                            <RecordStatus tone="danger" className="inline-flex min-h-11 items-center px-3">
                               {t("expired")}
-                            </span>
+                            </RecordStatus>
                           ) : link.active ? (
                             <Button
                               type="button"
-                              onClick={() => handleDeactivateLink(link.id)}
+                              onClick={() => { setPendingDeleteLink(null); setPendingDeactivateId(link.id); }}
                               variant="secondary"
                               size="sm"
                               disabled={Boolean(lifecycleBusyIds[link.id])}
@@ -941,7 +956,7 @@ export default function LinkManagement({
                           )}
                           <Button
                             type="button"
-                            onClick={() => requestDeleteLink(link)}
+                            onClick={() => { setPendingDeactivateId(null); requestDeleteLink(link); }}
                             variant="danger"
                             size="sm"
                             disabled={Boolean(lifecycleBusyIds[link.id])}
@@ -951,6 +966,19 @@ export default function LinkManagement({
                           </Button>
                         </div>
                         </div>
+                        <ConfirmDialog
+                          open={pendingDeactivateId === link.id}
+                          title={t("deactivateTitle")}
+                          description={t("deactivateDescription")}
+                          confirmLabel={t("deactivate")}
+                          cancelLabel={commonT("cancel")}
+                          onConfirm={async () => {
+                            await handleDeactivateLink(link.id);
+                            setPendingDeactivateId((current) => current === link.id ? null : current);
+                          }}
+                          onCancel={() => setPendingDeactivateId(null)}
+                          isLoading={loadingStates[`deactivate_${link.id}`]}
+                        />
                         {pendingDeleteLink?.id === link.id && (
                           <ConfirmDialog
                             open
@@ -984,7 +1012,7 @@ export default function LinkManagement({
                 {hasMore && <Button variant="outline" onClick={() => void loadMore()} disabled={isLoadingMore || isCurrentScopeFetching || lifecycleBusy}>
                   {loadMoreError ? commonT("retry") : t("loadMore")}
                 </Button>}
-                {!isCurrentScopeFetching && (listState === "success-data" || listState === "success-empty") && <p role="status" className="mt-3 text-xs text-text-muted">
+                {!isCurrentScopeFetching && listState === "success-data" && <p role="status" className="mt-3 text-xs text-text-muted">
                   {t(hasMore ? "loadedCount" : "allLoaded", { count: sortedLinks.length })}
                 </p>}
               </div>
@@ -993,15 +1021,6 @@ export default function LinkManagement({
         )}
       </div>
       </OperationsLayout>
-
-      {linkActionToast && (
-        <div className="fixed bottom-[calc(10rem+env(safe-area-inset-bottom))] right-4 z-[var(--app-z-toast)] max-w-[calc(100vw-2rem)] rounded-panel border border-border-subtle bg-surface-raised px-4 py-3 text-text-heading md:bottom-5 md:right-5" role="status" aria-live="polite" aria-atomic="true">
-          <p className="text-xs font-medium">
-            {linkActionToast}
-          </p>
-        </div>
-      )}
-
 
     </>
   );

@@ -2,12 +2,13 @@
 
 import { confirmWorkspaceNavigation } from "@/components/overlays/navigation-guard";
 
-import type { ReactNode } from "react";
+import type { FormEvent, ReactNode } from "react";
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useLocalStorage } from "../../../lib/hooks";
 import Sheet, { requestSheetClose } from "@/components/overlays/Sheet";
-import RecordList, { useRecordDetail } from "@/components/records/RecordList";
+import RecordList, { RecordStatus, useRecordDetail, type RecordStatusTone } from "@/components/records/RecordList";
+import { useToast } from "@/components/feedback/ToastProvider";
 import InviteUser from "./InviteUser";
 import VenueSelector, {
   useVenueSelector,
@@ -65,6 +66,7 @@ export default function UserManagement({
   const t = useTranslations("UserAdmin");
   const commonT = useTranslations("Common");
   const locale = useLocale();
+  const showToast = useToast();
   const [internalActiveSection, setInternalActiveSection] =
     useLocalStorage<UserManagementSection>(
     "usermgmt:activeTab",
@@ -140,6 +142,16 @@ export default function UserManagement({
 
   const [selection, setSelection] = useState<{ scope: typeof scopeIdentity; id: string | null } | null>(null);
   const selectedUserId = selection?.scope === scopeIdentity ? selection.id : null;
+
+  // Success is a transient toast; an error is shown once, in the surface where the action started.
+  const announcedFeedbackRef = useRef<typeof scopedFeedback>(null);
+  useEffect(() => {
+    if (scopedFeedback?.type !== "success" || announcedFeedbackRef.current === scopedFeedback) return;
+    announcedFeedbackRef.current = scopedFeedback;
+    showToast({ message: scopedFeedback.message });
+  }, [scopedFeedback, showToast]);
+  const actionError = scopedFeedback?.type === "error" ? scopedFeedback : null;
+  const errorInDetail = Boolean(selectedUserId && filteredUsers.some((user) => user.id === selectedUserId));
   const [filterRequest, setFilterRequest] = useState<{ scope: typeof scopeIdentity } | null>(null);
   const awaitingFilterConfirmation = filterRequest?.scope === scopeIdentity;
   const [searchComposition, setSearchComposition] = useState<{ scope: typeof scopeIdentity; value: string } | null>(null);
@@ -303,11 +315,11 @@ export default function UserManagement({
           <div className="account-directory">
             <div className="account-directory-body">
               {loadError && <Alert type="error" message={loadError} className="mb-4" />}
-              {scopedFeedback && (
-                <Alert type={scopedFeedback.type} message={scopedFeedback.message} className="mb-4" />
+              {actionError && !scopedPasswordLink && !errorInDetail && (
+                <Alert type="error" message={actionError.message} className="mb-4" />
               )}
               {scopedPasswordLink && <Sheet id="account-credential-result" title={scopedPasswordLink.userName} onClose={closePasswordLink} busy={isSharingPasswordLink} closeWarning={t("invitationLinkCreatedHelp")}>
-                {scopedFeedback && <Alert type={scopedFeedback.type} message={scopedFeedback.message} />}
+                {actionError && <Alert type="error" message={actionError.message} />}
                 <div
                   ref={passwordLinkPanelRef}
                   className="mb-4 rounded-panel border border-status-waiting/70 bg-status-waiting/10 p-4 outline-none"
@@ -500,7 +512,7 @@ export default function UserManagement({
                         createdAt: event.createdAt, displayTime: formatActivityDate(event.createdAt, event.venueId),
                       })) : undefined}
                       activityUnavailable={listState === "partial"}
-                      feedback={scopedFeedback}
+                      feedback={!scopedPasswordLink && user.id === selectedUserId ? actionError : null}
                       confirmation={pendingUserAction?.user.id === user.id && (
                         <ConfirmDialog
                           open
@@ -626,8 +638,10 @@ export function UserCard({
   const detail = useRecordDetail(user.id);
   const [isEditing, setIsEditing] = useState(false);
   const editButtonRef = useRef<HTMLButtonElement>(null);
-  const editRegionRef = useRef<HTMLDivElement>(null);
+  const editRegionRef = useRef<HTMLFormElement>(null);
   const nameInputRef = useRef<HTMLInputElement>(null);
+  const guestLimitInputRef = useRef<HTMLInputElement>(null);
+  const [fieldError, setFieldError] = useState<{ field: "name" | "guestLimit"; message: string } | null>(null);
   const shouldFocusEditorRef = useRef(false);
   const shouldRestoreEditButtonRef = useRef(false);
   const isSetupPending =
@@ -698,6 +712,7 @@ export function UserCard({
       editRegionRef.current?.contains(document.activeElement),
     );
     setIsEditing(false);
+    setFieldError(null);
     setEditData({
       name: user.name,
       role: user.role,
@@ -707,9 +722,22 @@ export function UserCard({
     });
   };
 
-  const handleSave = async () => {
+  const handleSave = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (actionsDisabled || !dirty) return;
+    if (!editData.name.trim()) {
+      setFieldError({ field: "name", message: t("nameRequired") });
+      nameInputRef.current?.focus();
+      return;
+    }
+    if (editData.guestLimit !== null && (!Number.isInteger(editData.guestLimit) || editData.guestLimit < 0)) {
+      setFieldError({ field: "guestLimit", message: t("guestLimitInvalid") });
+      guestLimitInputRef.current?.focus();
+      return;
+    }
+    setFieldError(null);
     const saved = await onUpdate(user.id, {
-      name: editData.name,
+      name: editData.name.trim(),
       guestLimit: editData.guestLimit,
       ...(canEditRole
         ? {
@@ -745,6 +773,14 @@ export function UserCard({
         ? t("setupPending")
         : t("active")
       : t("inactive");
+  const statusTone: RecordStatusTone = isDeleted
+    ? "danger"
+    : !user.active
+      ? "inactive"
+      : isSetupPending
+        ? "waiting"
+        : "ok";
+  const resetUnavailableId = `account-reset-unavailable-${user.id}`;
 
   const dirty = isEditing && (editData.name !== user.name || editData.role !== user.role ||
     editData.accountKind !== user.accountKind || editData.doorAccessEnabled !== user.doorAccessEnabled || editData.guestLimit !== user.guestLimit);
@@ -762,7 +798,7 @@ export function UserCard({
       <td className="account-role-cell"><RoleLabel role={role} /></td>
       <td className="account-limit-cell">{user.guestLimit ?? "—"}</td>
       <td className="account-door-cell">{doorAllowed ? t("enabled") : t("disabled")}</td>
-      <td className="account-status-cell"><span className="record-status" data-tone={isSetupPending ? "waiting" : !user.active || isDeleted ? "inactive" : "neutral"}>{statusLabel}</span></td>
+      <td className="account-status-cell"><RecordStatus tone={statusTone}>{statusLabel}</RecordStatus></td>
       <td className="account-login-cell">{user.lastLoginAt ? <time dateTime={user.lastLoginAt}>{formatDate(user.lastLoginAt)}</time> : t("never")}</td>
     </tr>
     {detail.open && <tr className="account-detail-row"><td colSpan={6}><Sheet labelledBy={`account-label-${user.id}`} id={`account-detail-${user.id}`} title={user.name} presentation="detail" size="record" onClose={() => { closeEditor(); detail.close(); }} busy={actionsDisabled} dirty={dirty}>
@@ -770,11 +806,11 @@ export function UserCard({
       {!isEditing ? (
         <>
           <div className="account-detail-top">
-            <div className="account-detail-status"><RoleLabel role={role} /><span className="record-status">{statusLabel}</span></div>
+            <div className="account-detail-status"><RoleLabel role={role} /><RecordStatus tone={statusTone}>{statusLabel}</RecordStatus></div>
             {canManage && <div className="account-detail-actions">
               {canEditDetails && <Button ref={editButtonRef} onClick={beginEditing} disabled={actionsDisabled} size="sm">{t("edit")}</Button>}
               <Button onClick={() => onResetPassword(user)} disabled={actionsDisabled || !user.active}
-                title={!user.active ? t("inactiveResetUnavailable") : undefined} variant="outline" size="sm">
+                aria-describedby={!user.active ? resetUnavailableId : undefined} variant="outline" size="sm">
                 {isSetupPending ? t("reissueInvitation") : t("issuePasswordResetLink")}
               </Button>
               <details className="account-more-actions" onKeyDown={(event) => {
@@ -791,6 +827,7 @@ export function UserCard({
                   {!user.active && <Button onClick={() => onDelete(user)} disabled={actionsDisabled} variant="danger" size="sm" fullWidth>{t("delete")}</Button>}
                 </div>
               </details>
+              {!user.active && <p id={resetUnavailableId} className="app-helper account-action-help">{t("inactiveResetUnavailable")}</p>}
             </div>}
           </div>
           <div className="account-detail-columns">
@@ -833,7 +870,7 @@ export function UserCard({
           </div>
         </>
       ) : (
-        <div ref={editRegionRef} className="account-editor">
+        <form ref={editRegionRef} className="account-editor" onSubmit={(event) => void handleSave(event)} noValidate>
           <div>
             <label htmlFor={`user-name-${user.id}`} className="app-label">
               {t("name")}
@@ -844,12 +881,23 @@ export function UserCard({
               name={`user-name-${user.id}`}
               type="text"
               value={editData.name}
-              onChange={(event) => setEditData({ ...editData, name: event.target.value })}
+              onChange={(event) => {
+                setEditData({ ...editData, name: event.target.value });
+                if (fieldError?.field === "name") setFieldError(null);
+              }}
               className="app-field"
               maxLength={100}
               disabled={actionsDisabled}
               autoComplete="off"
+              required
+              aria-invalid={fieldError?.field === "name" || undefined}
+              aria-describedby={fieldError?.field === "name" ? `user-name-error-${user.id}` : undefined}
             />
+            {fieldError?.field === "name" && (
+              <p id={`user-name-error-${user.id}`} className="mt-1 text-xs text-status-danger" role="alert">
+                {fieldError.message}
+              </p>
+            )}
           </div>
           {canEditRole && (
             <fieldset>
@@ -933,29 +981,41 @@ export function UserCard({
               {t("guestLimit")}
             </label>
             <input
+              ref={guestLimitInputRef}
               id={`user-guest-limit-${user.id}`}
               name={`user-guest-limit-${user.id}`}
               type="number"
+              inputMode="numeric"
               value={editData.guestLimit ?? ""}
-              onChange={(e) =>
+              onChange={(e) => {
+                const parsed = e.target.value === "" ? null : Number(e.target.value);
                 setEditData({
                   ...editData,
-                  guestLimit: e.target.value ? parseInt(e.target.value) : null,
-                })
-              }
+                  guestLimit: parsed === null || Number.isNaN(parsed) ? null : parsed,
+                });
+                if (fieldError?.field === "guestLimit") setFieldError(null);
+              }}
               className="app-field font-mono tabular-nums"
               min="0"
               max="999"
+              step="1"
               disabled={actionsDisabled}
               autoComplete="off"
+              aria-invalid={fieldError?.field === "guestLimit" || undefined}
+              aria-describedby={fieldError?.field === "guestLimit" ? `user-guest-limit-error-${user.id}` : undefined}
             />
+            {fieldError?.field === "guestLimit" && (
+              <p id={`user-guest-limit-error-${user.id}`} className="mt-1 text-xs text-status-danger" role="alert">
+                {fieldError.message}
+              </p>
+            )}
           </div>
 
           <div className="grid grid-cols-2 gap-3">
             <Button
-              type="button"
-              onClick={handleSave}
-              disabled={actionsDisabled}
+              type="submit"
+              disabled={actionsDisabled || !dirty}
+              isLoading={isBusy}
               size="sm"
               fullWidth
             >
@@ -972,7 +1032,7 @@ export function UserCard({
               {commonT("cancel")}
             </Button>
           </div>
-        </div>
+        </form>
       )}
       {confirmation}
       </Sheet></td></tr>}

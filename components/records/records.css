@@ -16,7 +16,13 @@
 .record-identity strong { display: block; font-size: 14px; font-weight: 500; color: var(--app-text); overflow-wrap: anywhere; }
 .record-identity small { display: block; margin-top: 3px; font-size: 12px; color: var(--app-text-muted); overflow-wrap: anywhere; }
 .record-value { font-size: 12px; font-variant-numeric: tabular-nums; color: var(--app-text-muted); }
-.record-status { border-radius: var(--app-radius-inner); background: var(--app-surface-raised); padding: 4px 10px; font-size: 12px; font-weight: 500; text-align: center; }
+.record-status { border: 1px solid transparent; border-radius: var(--app-radius-inner); background: var(--app-surface-raised); padding: 3px 9px; font-size: 12px; font-weight: 500; text-align: center; color: var(--app-text); }
+/* Status tones reuse the shared status palette (tailwind status-checked/waiting/danger). */
+.record-status[data-tone="ok"] { border-color: rgb(52 211 153 / 0.4); background: rgb(52 211 153 / 0.1); color: #34d399; }
+.record-status[data-tone="waiting"] { border-color: rgb(213 180 121 / 0.45); background: rgb(213 180 121 / 0.1); color: var(--app-status-waiting); }
+.record-status[data-tone="danger"] { border-color: rgb(251 113 133 / 0.45); background: rgb(251 113 133 / 0.1); color: #fb7185; }
+.record-status[data-tone="inactive"] { border-color: var(--app-border); background: transparent; color: var(--app-text-muted); }
+@media (forced-colors: active) { .record-status { border-color: CanvasText; } }
 .record-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
 .record-form { width: 100%; max-width: 760px; margin-inline: auto; }
 .record-form-panel { padding: 20px; }
