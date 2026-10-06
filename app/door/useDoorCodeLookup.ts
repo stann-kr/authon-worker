@@ -18,8 +18,10 @@ export type DoorCodeLookupFeedback =
   | "unavailable"
   | null;
 
-interface DoorCodeLookupGuest {
+export interface DoorCodeLookupGuest {
+  id: string;
   name: string;
+  status?: string;
 }
 
 export interface DoorCodeLookupDependencies {
@@ -31,16 +33,12 @@ export interface DoorCodeLookupDependencies {
   }>;
 }
 
-interface DoorCodeLookupRosterGuest {
-  id: string;
-  name: string;
-}
-
 interface UseDoorCodeLookupParams {
   scope: OfflineDoorScope | null;
-  guests: readonly DoorCodeLookupRosterGuest[];
+  guests: readonly DoorCodeLookupGuest[];
   isOfflineMode: boolean;
-  onGuestFound: (name: string) => void;
+  /** Receives the exact guest so the roster can reveal that row, not every guest sharing the name. */
+  onGuestFound: (guest: DoorCodeLookupGuest) => void;
   dependencies: DoorCodeLookupDependencies;
 }
 
@@ -80,6 +78,14 @@ export default function useDoorCodeLookup({
     setBusy(false);
   }, [operationGuard, scopeKey]);
 
+  const publishFound = useCallback((guest: DoorCodeLookupGuest) => {
+    // Clear the code so the next scan starts from an empty field.
+    codeRef.current = "";
+    setCode("");
+    onGuestFound(guest);
+    setFeedback("found");
+  }, [onGuestFound]);
+
   const change = useCallback((value: string) => {
     codeRef.current = value;
     setCode(value);
@@ -112,8 +118,7 @@ export default function useDoorCodeLookup({
             setFeedback("notFound");
             return;
           }
-          onGuestFound(localGuest.name);
-          setFeedback("found");
+          publishFound(localGuest);
           return;
         }
 
@@ -123,8 +128,7 @@ export default function useDoorCodeLookup({
         });
         if (!operation.isCurrent(currentScopeKeyRef.current)) return;
         if (response.data) {
-          onGuestFound(response.data.name);
-          setFeedback("found");
+          publishFound(response.data);
         } else {
           setFeedback(
             response.error === "DOOR_GUEST_CODE_NOT_FOUND" ||
@@ -151,8 +155,8 @@ export default function useDoorCodeLookup({
       dependencies,
       guests,
       isOfflineMode,
-      onGuestFound,
       operationGuard,
+      publishFound,
       scope,
       scopeKey,
     ],

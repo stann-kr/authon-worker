@@ -635,26 +635,35 @@ export default function useAttendanceCounterController({
     };
   }, [loadSummaryForOwner, scope, syncQueue]);
 
-  const queueWalkIn = async (): Promise<boolean> => {
-    if (!scope || !canRecord) return false;
+  // Totals come from the saved queue, not the pre-save render, so rapid taps report the real count.
+  const totalAfterSave = (
+    targetScope: AttendanceScope,
+    saved: readonly OfflineAttendanceMutation[],
+  ) => displayedCheckedInGuests + Math.max(0, (scopedSummary?.walkIns ?? 0) +
+    pendingAttendanceDelta(saved.filter((mutation) => isAttendanceScopeEqual(mutation.scope, targetScope))));
+
+  /** Resolves to the total attendance after the saved walk-in, or null when nothing was saved. */
+  const queueWalkIn = async (): Promise<number | null> => {
+    if (!scope || !canRecord) return null;
     const scopeOwner = scopeOwnerRef.current;
     try {
       await dependencies.enqueueAttendanceMutation({
         scope,
         action: "walk_in",
       });
-      await refreshLocalMutations(scope, scopeOwner);
-      if (scopeOwnerRef.current === scopeOwner) {
-        setNotice(null);
-        setAnnouncement(translate("recordedAnnouncement"));
-      }
-      return scopeOwnerRef.current === scopeOwner;
+      const saved = await refreshLocalMutations(scope, scopeOwner);
+      if (scopeOwnerRef.current !== scopeOwner) return null;
+      const total = totalAfterSave(scope, saved);
+      setNotice(null);
+      // The total changes on every tap, so repeated walk-ins are announced again.
+      setAnnouncement(`${translate("recordedAnnouncement")} ${translate("totalShort", { count: total })}`);
+      return total;
     } catch {
       if (scopeOwnerRef.current === scopeOwner) {
         setIsStorageAvailable(false);
         setNotice("queueFailed");
       }
-      return false;
+      return null;
     }
   };
 
@@ -676,10 +685,10 @@ export default function useAttendanceCounterController({
         action: "reversal",
         reversesIdempotencyKey: undoableKey,
       });
-      await refreshLocalMutations(scope, scopeOwner);
+      const saved = await refreshLocalMutations(scope, scopeOwner);
       if (scopeOwnerRef.current === scopeOwner) {
         setNotice(null);
-        setAnnouncement(translate("undoneAnnouncement"));
+        setAnnouncement(`${translate("undoneAnnouncement")} ${translate("totalShort", { count: totalAfterSave(scope, saved) })}`);
       }
       return scopeOwnerRef.current === scopeOwner;
     } catch {

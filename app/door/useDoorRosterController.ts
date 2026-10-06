@@ -109,6 +109,19 @@ export interface DoorRosterDependencies {
   randomUUID: () => string;
 }
 
+/**
+ * applied: the server confirmed the change. queued: saved on this device for a later sync.
+ * failed: nothing changed; check-in and undo callers own the visible message.
+ * skipped: the scope or permission no longer allows the change, so callers stay silent.
+ */
+export type DoorStatusChangeResult =
+  | { status: "applied" }
+  | { status: "queued" }
+  | { status: "failed"; message: string; retryable: boolean }
+  | { status: "skipped" };
+
+const SKIPPED: DoorStatusChangeResult = { status: "skipped" };
+
 interface UseDoorRosterControllerOptions {
   canDeleteGuests?: boolean;
   venueId: string;
@@ -573,7 +586,7 @@ export default function useDoorRosterController({
       if (!data) {
         if (background) {
           setFeedback(translateRef.current("loadFailed"));
-          setLoadOutcome("partial");
+          setLoadOutcome((current) => current === "error" ? "error" : "partial");
           return;
         }
         const usedCache = offlineScope
@@ -642,7 +655,7 @@ export default function useDoorRosterController({
       console.error("Failed to load data:", error);
       if (background) {
         setFeedback(translateRef.current("loadFailed"));
-        setLoadOutcome("partial");
+        setLoadOutcome((current) => current === "error" ? "error" : "partial");
         return;
       }
       const usedCache = offlineScope
@@ -733,6 +746,11 @@ export default function useDoorRosterController({
   const pollData = useCallback(async () => {
     if (!venueId || loadedScopeKey !== requestScopeKey) return;
     if (refreshOwnerRef.current.inFlight || refreshOwnerRef.current.mutations.size > 0) return;
+    if (loadOutcome === "error" || loadOutcome === "partial") {
+      // Only a full snapshot can clear a failed or partial load, so recovery polls read it in the background.
+      await requestRefresh(true);
+      return;
+    }
     const isLatestRequest = pollingGuard.beginRequest();
     const { data } = await dependencies.fetchGuestsByDate(
       selectedDate,
@@ -744,8 +762,10 @@ export default function useDoorRosterController({
     }
   }, [
     dependencies,
+    loadOutcome,
     loadedScopeKey,
     pollingGuard,
+    requestRefresh,
     requestScopeKey,
     selectedDate,
     selectedEventId,
@@ -770,8 +790,8 @@ export default function useDoorRosterController({
     async (
       guestId: string,
       status: "pending" | "checked",
-    ): Promise<boolean> => {
-      if (!offlineScope) return false;
+    ): Promise<"queued" | "failed" | "stale"> => {
+      if (!offlineScope) return "stale";
       const isCurrent = () => currentScopeOwnerRef.current === currentScopeToken;
       try {
         const mutation = await runOfflineStoreTask(isCurrent, () =>
@@ -781,7 +801,7 @@ export default function useDoorRosterController({
             action: status === "pending" ? "cancel_check_in" : "check_in",
           }),
         );
-        if (mutation === STALE_OFFLINE_STORE_TASK || !isCurrent()) return false;
+        if (mutation === STALE_OFFLINE_STORE_TASK || !isCurrent()) return "stale";
         setGuests((current) =>
           current.map((guest) =>
             guest.id === guestId
@@ -794,14 +814,12 @@ export default function useDoorRosterController({
             ),
         );
         await refreshOfflineMutations(offlineScope, isCurrent);
-        if (!isCurrent()) return false;
+        if (!isCurrent()) return "stale";
         setIsOfflineMode(true);
         setOfflineNotice("queued");
-        setFeedback(null);
-        return true;
+        return "queued";
       } catch {
-        if (isCurrent()) setFeedback(translate("offlineQueueFailed"));
-        return false;
+        return isCurrent() ? "failed" : "stale";
       }
     },
     [
@@ -810,7 +828,6 @@ export default function useDoorRosterController({
       offlineScope,
       refreshOfflineMutations,
       runOfflineStoreTask,
-      translate,
     ],
   );
 
@@ -818,17 +835,24 @@ export default function useDoorRosterController({
     id: string,
     newStatus: Guest["status"],
     action: string,
-  ): Promise<boolean> => {
-    const reportFailure = (message: string) => {
-      setFeedback(message);
-      if (newStatus === "deleted") setDeleteFailure({ scopeKey: requestScopeKey, guestId: id, message });
+  ): Promise<DoorStatusChangeResult> => {
+    // Deletion failures stay in the page banner and guest detail; check-in callers show their own feedback.
+    const reportFailure = (message: string, retryable = true): DoorStatusChangeResult => {
+      if (newStatus === "deleted") {
+        setFeedback(message);
+        setDeleteFailure({ scopeKey: requestScopeKey, guestId: id, message });
+      }
+      return { status: "failed", message, retryable };
     };
+    const queuedResult = (queued: "queued" | "failed" | "stale"): DoorStatusChangeResult =>
+      queued === "queued" ? { status: "queued" }
+        : queued === "failed" ? reportFailure(translate("offlineQueueFailed"))
+          : SKIPPED;
     if (newStatus === "deleted") {
-      if (!canDeleteGuests) return false;
+      if (!canDeleteGuests) return SKIPPED;
       if (isOfflineMode || (typeof navigator !== "undefined" && !navigator.onLine) ||
           isOfflineSyncing || offlineMutations.some((mutation) => mutation.state === "queued")) {
-        reportFailure(translate("deleteRequiresOnline"));
-        return false;
+        return reportFailure(translate("deleteRequiresOnline"));
       }
     }
     if (newStatus === "deleted") setDeleteFailure(null);
@@ -856,8 +880,9 @@ export default function useDoorRosterController({
         (isOfflineMode ||
           (typeof navigator !== "undefined" && !navigator.onLine))
       ) {
-        queuedOffline = await queueOfflineStatusChange(id, newStatus);
-        return queuedOffline;
+        const queued = await queueOfflineStatusChange(id, newStatus);
+        queuedOffline = queued === "queued";
+        return queuedResult(queued);
       }
       const { data, error } =
         newStatus === "deleted"
@@ -875,34 +900,33 @@ export default function useDoorRosterController({
           await runOfflineStoreTask(() => true, () => dependencies.removeOfflineDoorRoster(offlineScope));
         } catch { cacheInvalidationFailed = true; }
       }
-      if (!operation.isCurrent(currentScopeKeyRef.current)) return false;
+      if (!operation.isCurrent(currentScopeKeyRef.current)) return SKIPPED;
       if (!error && data) {
         setGuests((prev) => newStatus === "deleted"
           ? prev.filter((guest) => guest.id !== id)
           : prev.map((guest) => (guest.id === id ? data : guest)));
-        setFeedback(cacheInvalidationFailed ? translate("offlineStorageFailed") : null);
+        setFeedback(cacheInvalidationFailed ? translate("offlineCacheInvalidationFailed") : null);
         refreshOwner.queued ??= "background";
-        return true;
-      } else {
-        console.error("Failed to update guest status:", error);
-        reportFailure(
-          error === "ATTENDANCE_SCOPE_CLOSED"
-            ? translate("attendanceScopeClosed")
-            : translate("updateFailed"),
-        );
+        return { status: "applied" };
       }
-    } catch (error) {
-      if (!operation.isCurrent(currentScopeKeyRef.current)) return false;
       console.error("Failed to update guest status:", error);
-      const queued =
-        newStatus !== "deleted" && offlineScope
-          ? await queueOfflineStatusChange(id, newStatus)
-          : false;
-      queuedOffline = Boolean(queued);
-      if (!queued && operation.isCurrent(currentScopeKeyRef.current)) {
-        reportFailure(translate("updateFailed"));
+      return error === "ATTENDANCE_SCOPE_CLOSED"
+        ? reportFailure(translate("attendanceScopeClosed"), false)
+        : reportFailure(translate("updateFailed"));
+    } catch (error) {
+      if (!operation.isCurrent(currentScopeKeyRef.current)) return SKIPPED;
+      console.error("Failed to update guest status:", error);
+      if (newStatus !== "deleted" && offlineScope) {
+        const queued = await queueOfflineStatusChange(id, newStatus);
+        queuedOffline = queued === "queued";
+        return queuedResult(queued);
       }
-      return queuedOffline;
+      // Without an Event there is no device queue, so an offline check-in cannot be kept.
+      return reportFailure(translate(
+        newStatus !== "deleted" && typeof navigator !== "undefined" && !navigator.onLine
+          ? "offlineRequiresEvent"
+          : "updateFailed",
+      ));
     } finally {
       refreshOwner.mutations.delete(operation.id);
       if (queuedOffline) refreshOwner.queued = null;
@@ -914,7 +938,6 @@ export default function useDoorRosterController({
         void requestRefresh(refreshOwner.queued === "background");
       }
     }
-    return false;
   };
 
   const handleClearResolvedOfflineMutations = async () => {

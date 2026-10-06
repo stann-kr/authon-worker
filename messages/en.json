@@ -486,14 +486,31 @@
         "save": "Confirm close total",
         "saving": "Confirming…",
         "cancel": "Cancel",
-        "review": "Review final total"
+        "review": "Review final total",
+        "currentLoading": "Loading the current attendance record.",
+        "reload": "Reload current record",
+        "required": "required",
+        "reasonRequired": "Enter an adjustment reason to confirm."
       },
       "totalShort": "Total {count}",
       "walkInToast": "Walk-in added · {total} total",
       "walkInUndone": "Last walk-in removed"
     },
     "checkedInToast": "{name} checked in",
-    "checkInUndone": "Check-in undone for {name}"
+    "checkInUndone": "Check-in undone for {name}",
+    "checkedInQueuedToast": "{name} checked in · saved on this device, waiting to sync",
+    "checkInUndoneQueued": "Check-in undone for {name} · saved on this device, waiting to sync",
+    "guestCodeAlreadyCheckedIn": "{name} is already checked in",
+    "offlineEventScope": "You are offline. Check-ins are saved on this device and sync when connected.",
+    "offlineGeneralScope": "You are offline. Select an Event to save check-ins on this device.",
+    "offlineRequiresEvent": "Offline check-ins can only be saved when an Event is selected.",
+    "offlineCacheInvalidationFailed": "The guest was deleted, but the offline list on this device could not be updated. Refresh the page.",
+    "searchResultCount": "Matching guests: {count}",
+    "noWaitingGuests": "No guests are waiting",
+    "noCheckedGuests": "No guests have checked in yet",
+    "noOwnerGuests": "No guests for this owner",
+    "showAllGuests": "Show all guests",
+    "clearOwnerFilter": "Clear owner filter"
   },
   "AdminNav": {
     "title": "Admin",

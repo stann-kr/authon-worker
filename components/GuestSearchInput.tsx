@@ -11,6 +11,7 @@ import { useTranslations } from "next-intl";
  * @param value - 현재 검색 키워드
  * @param onChange - 검색 키워드 변경 핸들러
  * @param placeholder - 입력 필드 placeholder
+ * @param label - 화면에 보이지 않는 입력 레이블. 이름 외 필드도 검색하면 그 범위를 밝힌다.
  * @param className - 외부 래퍼 추가 클래스
  */
 
@@ -18,6 +19,7 @@ interface GuestSearchInputProps {
   value: string;
   onChange: (value: string) => void;
   placeholder?: string;
+  label?: string;
   className?: string;
   inputRef?: React.Ref<HTMLInputElement>;
   onKeyDown?: React.KeyboardEventHandler<HTMLInputElement>;
@@ -27,6 +29,7 @@ const GuestSearchInput: React.FC<GuestSearchInputProps> = ({
   value,
   onChange,
   placeholder,
+  label,
   className = "",
   inputRef,
   onKeyDown,
@@ -37,7 +40,7 @@ const GuestSearchInput: React.FC<GuestSearchInputProps> = ({
   return (
     <div className={`border-b border-border-subtle bg-surface px-4 py-3 sm:px-5 ${className}`}>
       <label htmlFor={inputId} className="sr-only">
-        {t("searchGuestNames")}
+        {label ?? t("searchGuestNames")}
       </label>
       <div className="relative flex items-center">
         <Icon name="search" size={16} className="pointer-events-none absolute left-3 text-text-dim" />

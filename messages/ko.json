@@ -486,14 +486,31 @@
         "save": "마감 합계 확정",
         "saving": "확정 중…",
         "cancel": "취소",
-        "review": "마감 검토"
+        "review": "마감 검토",
+        "currentLoading": "현재 기록을 불러오는 중입니다.",
+        "reload": "현재 기록 다시 불러오기",
+        "required": "필수",
+        "reasonRequired": "조정 사유를 입력해야 확정할 수 있습니다."
       },
       "totalShort": "총 입장 {count}",
       "walkInToast": "워크인 1명 추가 · 총 {total}명",
       "walkInUndone": "마지막 워크인을 취소했습니다"
     },
     "checkedInToast": "{name} 입장 처리",
-    "checkInUndone": "{name} 입장을 취소했습니다"
+    "checkInUndone": "{name} 입장을 취소했습니다",
+    "checkedInQueuedToast": "{name} 입장 처리 · 기기에 저장됨, 동기화 대기",
+    "checkInUndoneQueued": "{name} 입장 취소 · 기기에 저장됨, 동기화 대기",
+    "guestCodeAlreadyCheckedIn": "{name}님은 이미 입장 처리되었습니다",
+    "offlineEventScope": "오프라인 상태입니다. 입장 처리는 이 기기에 저장되고 연결되면 동기화됩니다.",
+    "offlineGeneralScope": "오프라인 상태입니다. 이벤트를 선택해야 입장 처리를 이 기기에 저장할 수 있습니다.",
+    "offlineRequiresEvent": "오프라인에서는 이벤트를 선택해야 입장 처리를 저장할 수 있습니다.",
+    "offlineCacheInvalidationFailed": "게스트를 삭제했지만 이 기기의 오프라인 명단을 갱신하지 못했습니다. 새로고침해주세요.",
+    "searchResultCount": "검색 결과 {count}명",
+    "noWaitingGuests": "입장 대기 중인 게스트가 없습니다",
+    "noCheckedGuests": "아직 입장한 게스트가 없습니다",
+    "noOwnerGuests": "이 담당자로 등록된 게스트가 없습니다",
+    "showAllGuests": "전체 게스트 보기",
+    "clearOwnerFilter": "담당자 필터 해제"
   },
   "AdminNav": {
     "title": "관리자",

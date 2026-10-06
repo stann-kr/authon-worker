@@ -36,6 +36,9 @@
   color: #34d399;
 }
 .app-toast[data-tone="neutral"] .app-toast-icon { background: var(--app-surface-active); color: var(--app-text-muted); }
+.app-toast:is([data-tone="pending"], [data-tone="warning"]) .app-toast-icon { background: rgb(213 180 121 / 0.16); color: var(--app-status-waiting); }
+.app-toast[data-tone="error"] { border-color: rgb(251 113 133 / 0.45); }
+.app-toast[data-tone="error"] .app-toast-icon { background: rgb(251 113 133 / 0.16); color: #fb7185; }
 .app-toast-message {
   flex: 1;
   min-width: 0;

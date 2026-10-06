@@ -58,6 +58,13 @@
 .product-guest-actions .app-button { min-width: 76px; padding: 8px 12px; font-size: 13px; font-weight: 500; border-radius: var(--app-radius-control); }
 .product-guest-actions .app-button[data-variant="ghost"] { min-width: 44px; }
 .product-guest-row[data-status="checked"] .product-guest-name strong { color: var(--app-text-muted); }
+/* Checked rows keep a visible mark wherever the status column is hidden. */
+.product-guest-checked-mark { display: none; flex-shrink: 0; place-items: center; width: 22px; height: 22px; border-radius: 50%; background: rgb(52 211 153 / 0.14); }
+.product-roster[data-columns="2"] .product-guest-checked-mark { display: grid; }
+.product-guest-row[data-highlighted="true"] { background: rgb(var(--app-action-rgb) / 0.08); box-shadow: inset 3px 0 0 var(--app-action); }
+.product-roster-rows { transition: opacity var(--app-duration-standard) var(--app-ease-out); }
+/* A foreground refresh keeps existing rows visible but dimmed and inert until the snapshot settles. */
+.product-roster-rows[aria-busy="true"] { opacity: 0.55; pointer-events: none; cursor: progress; }
 .product-guest-row[data-selected="true"] { --disclosure-background: var(--app-surface-hover); background: var(--app-surface-hover); border-radius: 0; }
 .product-guest-disclosure[aria-expanded="true"] { border-radius: 0; }
 .product-guest-detail-actions > .inline-confirmation { padding: 16px 0; background: transparent; }
@@ -77,6 +84,7 @@
   .product-guest-row[data-mode="operations"] .product-guest-line { grid-template-columns: minmax(0, 1fr) var(--guest-actions-width); }
   .product-guest-owner, .product-guest-status { display: none; }
   .product-guest-row[data-mode="operations"] .product-guest-name small { display: block; }
+  .product-guest-checked-mark { display: grid; }
 }
 @container roster (max-width: 699px) {
   .product-roster-filters { flex: 1; min-width: 0; gap: 8px; }
@@ -93,6 +101,7 @@
   .product-guest-row[data-status="checked"] .app-button[data-variant="outline"] { background: var(--app-surface-raised); border-color: var(--app-border-subtle); color: var(--app-text-muted); }
 }
 @media (prefers-reduced-motion: reduce) {
+  .product-roster-rows { transition: none; }
 }
 @container roster (max-width: 329px) {
   .product-roster-summary { flex-wrap: wrap; }

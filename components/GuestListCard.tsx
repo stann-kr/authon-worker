@@ -38,6 +38,8 @@ interface GuestListCardProps {
   isDeleteDisabled?: boolean;
   deleteDisabledReason?: string;
   deleteError?: string;
+  /** Marks the row a guest-code lookup resolved to. */
+  highlighted?: boolean;
 }
 
 const GuestListCard: React.FC<GuestListCardProps> = ({
@@ -59,6 +61,7 @@ const GuestListCard: React.FC<GuestListCardProps> = ({
   isDeleteDisabled = false,
   deleteDisabledReason,
   deleteError,
+  highlighted = false,
 }) => {
   const t = useTranslations("Common");
   const rosterT = useTranslations("Roster");
@@ -123,6 +126,8 @@ const GuestListCard: React.FC<GuestListCardProps> = ({
       data-status={guest.status}
       data-selected={isDetailOpen}
       data-mode={mode}
+      data-guest-id={guest.id}
+      data-highlighted={highlighted || undefined}
     >
       <div className="product-guest-line">
         {/* A stretched disclosure and separate raised actions avoid nested buttons. */}
@@ -131,6 +136,8 @@ const GuestListCard: React.FC<GuestListCardProps> = ({
           aria-controls={detailId} aria-expanded={isDetailOpen} aria-disabled={isDeleteLoading} />
         <div className="product-guest-identity">
           <span className="product-guest-index" aria-hidden="true">{String(index + 1).padStart(2, "0")}</span>
+          {mode === "operations" && guest.status === "checked" &&
+            <span className="product-guest-checked-mark text-status-checked" aria-hidden="true"><Icon name="check" size={14} /></span>}
           <span className="product-guest-name">
             <strong id={`${detailId}-label`}>{guest.name}</strong>
             {(djName || registeredByName) && <small>{djName || registeredByName}</small>}
@@ -146,9 +153,10 @@ const GuestListCard: React.FC<GuestListCardProps> = ({
                   onClick={onCheck}
                   disabled={isEntryDisabled || isDeleteLoading}
                   isLoading={isCheckLoading}
-                  variant="confirm"
+                  variant="primary"
                   size="md"
                   className="min-w-16"
+                  aria-describedby={`${detailId}-label`}
                 >
                   {t("checkIn")}
                 </Button>

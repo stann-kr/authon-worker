@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { afterEach, test } from "node:test";
+import { useState } from "react";
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { announceRouteTransitionStart } from "@/lib/route-transition-events";
 
@@ -174,6 +175,7 @@ function DoorRosterHarness({
   selectedEventId?: string | null;
   canDeleteGuests?: boolean;
 }) {
+  const [lastResult, setLastResult] = useState("");
   const roster = useDoorRosterController({
     venueId: "venue-0001",
     selectedDate: "2026-08-23",
@@ -207,10 +209,12 @@ function DoorRosterHarness({
       <output data-testid="pending-guest-mutations">{String(roster.hasPendingGuestMutations)}</output>
       <output data-testid="busy">{String(Object.values(roster.loadingStates).some(Boolean))}</output>
       <output data-testid="guest-statuses">{roster.displayData.guests.map((guest) => guest.status).join(",")}</output>
+      <output data-testid="last-result">{lastResult}</output>
       <button
         type="button"
         onClick={() =>
-          void roster.handleStatusChange(GUEST.id, "checked", "check")
+          void roster.handleStatusChange(GUEST.id, "checked", "check").then((result) =>
+            setLastResult(result.status === "failed" ? `failed:${result.message}:${result.retryable}` : result.status))
         }
       >
         Check in
@@ -483,8 +487,36 @@ test("an offline status change queues once and updates the visible roster", asyn
     assert.equal(screen.getByTestId("offline-queued").textContent, "1");
     assert.equal(screen.getByTestId("pending-guest-mutations").textContent, "true");
     assert.equal(screen.getByTestId("offline-notice").textContent, "queued");
+    // Callers can tell a device-queued change from a server-confirmed one.
+    assert.equal(screen.getByTestId("last-result").textContent, "queued");
   });
   assert.equal(enqueueCalls, 1);
+});
+
+test("a rejected check-in returns its failure to the caller without a page banner", async () => {
+  for (const [error, expected] of [["UNAVAILABLE", "failed:updateFailed:true"], ["ATTENDANCE_SCOPE_CLOSED", "failed:attendanceScopeClosed:false"]] as const) {
+    render(<DoorRosterHarness dependencies={createDependencies({ updateGuestStatus: async () => ({ data: null, error }) })} />);
+    await waitFor(() => assert.equal(screen.getByTestId("guest-count").textContent, "1"));
+    fireEvent.click(screen.getByRole("button", { name: "Check in" }));
+    await waitFor(() => assert.equal(screen.getByTestId("last-result").textContent, expected));
+    assert.equal(screen.getByTestId("feedback").textContent, "");
+    assert.equal(screen.getByTestId("guest-status").textContent, "pending");
+    cleanup();
+  }
+});
+
+test("an offline general-scope check-in fails with the Event requirement instead of queueing", async () => {
+  let enqueueCalls = 0;
+  const dependencies = createDependencies({
+    updateGuestStatus: async () => { throw new TypeError("Failed to fetch"); },
+    enqueueOfflineDoorMutation: async () => { enqueueCalls += 1; throw new Error("Unexpected enqueue"); },
+  });
+  render(<DoorRosterHarness dependencies={dependencies} />);
+  await waitFor(() => assert.equal(screen.getByTestId("guest-count").textContent, "1"));
+  setOnline(false);
+  fireEvent.click(screen.getByRole("button", { name: "Check in" }));
+  await waitFor(() => assert.equal(screen.getByTestId("last-result").textContent, "failed:offlineRequiresEvent:true"));
+  assert.equal(enqueueCalls, 0);
 });
 
 test("a deferred save from the previous scope cannot replace completed current-scope data", async () => {
