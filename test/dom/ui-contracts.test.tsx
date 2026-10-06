@@ -15,6 +15,7 @@ import {
   within,
 } from "@testing-library/react";
 
+import RouteError from "@/app/error";
 import AdminTaskSwitcher from "@/app/admin/components/AdminTaskSwitcher";
 import AnalyticsAttendance from "@/app/admin/components/analytics/AnalyticsAttendance";
 import AnalyticsContributors from "@/app/admin/components/analytics/AnalyticsContributors";
@@ -415,8 +416,8 @@ test("task and section controls expose current state and respect busy locks", ()
     />,
   );
   assert.equal(
-    screen.getByRole("button", { name: "Create" }).getAttribute("aria-pressed"),
-    "true",
+    screen.getByRole("button", { name: "Create" }).getAttribute("aria-current"),
+    "page",
   );
   assert.equal(screen.getByRole("button", { name: "Manage" }).hasAttribute("disabled"), true);
 });
@@ -471,7 +472,7 @@ test("analytics period controls expose selection and keyboard-native navigation"
   assert.equal(nextGranularity, "quarter");
   fireEvent.click(screen.getByRole("button", { name: "Previous period" }));
   assert.equal(previousAnchor, "2026-07-01");
-  assert.ok(screen.getByText(/Compared with 2026-07-01-2026-07-31/));
+  assert.ok(screen.getByText(/Compared with Jul 1, 2026-Jul 31, 2026/));
 });
 
 test("attendance analytics keeps KPIs and its empty state visible", () => {
@@ -1234,6 +1235,49 @@ test("bulk submit reports completion after unmount while its request is pending"
   assert.deepEqual(submittingStates, [true, false]);
 });
 
+test("route loading locks the page at once but paints its overlay only after the show delay", async () => {
+  let transition!: ReturnType<typeof useRouteTransition>;
+  function Harness() {
+    transition = useRouteTransition();
+    return <main id="main-content" tabIndex={-1}>Current page</main>;
+  }
+  const view = render(<NextIntlClientProvider locale="en" messages={messages}><RouteTransitionProvider><Harness /></RouteTransitionProvider></NextIntlClientProvider>);
+  const main = within(view.container).getByRole("main");
+  const overlay = () => document.querySelector(".route-transition-overlay");
+
+  let release!: () => void;
+  act(() => { release = transition.registerRouteLoadingTask(); });
+  assert.equal(transition.isRouteTransitionActive, true);
+  assert.equal(main.hasAttribute("inert"), true);
+  assert.equal(overlay() === null, true, "fast work never flashes the spinner");
+  act(() => release());
+  assert.equal(transition.isRouteTransitionActive, false);
+  assert.equal(main.hasAttribute("inert"), false);
+  await act(async () => { await new Promise((resolve) => window.setTimeout(resolve, 200)); });
+  assert.equal(overlay() === null, true);
+
+  act(() => { release = transition.registerRouteLoadingTask(); });
+  await waitFor(() => assert.equal(overlay()?.getAttribute("data-state"), "visible"));
+  assert.equal(overlay()?.getAttribute("data-enter"), "fade");
+  act(() => release());
+  await waitFor(() => assert.equal(overlay() === null, true));
+  assert.equal(main.hasAttribute("inert"), false);
+});
+
+test("the route error screen focuses its explanation and retries through reset", async () => {
+  let resets = 0;
+  // next/link reads the browser global `self`.
+  Object.defineProperty(globalThis, "self", { configurable: true, value: window });
+  render(<NextIntlClientProvider locale="en" messages={messages}><RouteTransitionProvider>
+    <RouteError error={new Error("Render failed")} reset={() => { resets += 1; }} />
+  </RouteTransitionProvider></NextIntlClientProvider>);
+  const heading = screen.getByRole("heading", { name: messages.Common.errorTitle });
+  await waitFor(() => assert.equal(document.activeElement === heading, true));
+  fireEvent.click(screen.getByRole("button", { name: messages.Common.retry }));
+  assert.equal(resets, 1);
+  assert.equal(screen.getByRole("link", { name: messages.Common.goHome }).getAttribute("href"), "/");
+});
+
 test("a cancelled route-owned target restore falls back to main after overlay removal", async () => {
   const originalRequestAnimationFrame = window.requestAnimationFrame;
   const originalCancelAnimationFrame = window.cancelAnimationFrame;
@@ -1865,7 +1909,7 @@ test("a directly opened modal receives focus after its route loading overlay rel
   });
 });
 
-test("route loading locks an inline panel without replacing its draft", () => {
+test("route loading locks an inline panel without replacing its draft", async () => {
   let start: ((href: string) => boolean) | undefined;
   function Harness() {
     start = useRouteTransition().startRouteTransition;
@@ -1877,7 +1921,9 @@ test("route loading locks an inline panel without replacing its draft", () => {
   act(() => { start?.("/other"); });
   const layer = input.closest(".product-sheet-layer");
   assert.equal(layer?.hasAttribute("inert"), true);
-  assert.equal(layer?.hasAttribute("hidden"), true);
+  // Still painted until the overlay is due, so a fast route does not blink the layout.
+  assert.equal(layer?.hasAttribute("hidden"), false);
+  await waitFor(() => assert.equal(layer?.hasAttribute("hidden"), true));
   assert.equal(input.value, "Retained");
   assert.equal(input.isConnected, true);
 });

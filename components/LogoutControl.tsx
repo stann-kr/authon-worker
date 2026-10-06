@@ -58,7 +58,7 @@ export default function LogoutControl({
       {logoutFailed && (
         <p
           id={logoutErrorId}
-          className={`mt-2 border border-status-danger/40 bg-surface-raised px-3 py-2 text-xs leading-relaxed text-status-danger ${expanded ? "" : "absolute right-0 top-full z-[var(--app-z-toast)] w-[min(20rem,calc(100vw-2rem))]"}`}
+          className={`mt-2 rounded-panel border border-status-danger/40 bg-surface-raised px-3 py-2 text-xs leading-relaxed text-status-danger ${expanded ? "" : "absolute right-0 top-full z-[var(--app-z-toast)] w-[min(20rem,calc(100vw-2rem))]"}`}
           role="alert"
           aria-live="assertive"
           aria-atomic="true"

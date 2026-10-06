@@ -47,8 +47,8 @@ export default function WorkspaceShell(props: WorkspaceShellProps) {
   // The authenticated frame needs viewport and saved navigation preferences.
   // Keep the server output and first client render on the same loading screen.
   if (user && !hydrated) {
-    return <main id="main-content" tabIndex={-1} aria-busy="true">
-      <Spinner mode="fullscreen" text={t("loading")} />
+    return <main id="main-content" tabIndex={-1} aria-busy="true" className="route-loading-frame">
+      <Spinner mode="content" text={t("loading")} />
     </main>;
   }
   return <ReadyWorkspaceShell {...props} />;

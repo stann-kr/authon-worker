@@ -68,9 +68,10 @@
 .workspace-dock .workspace-nav-link[aria-current="page"] { background: transparent; color: var(--workspace-text); font-weight: 600; }
 .workspace-dock .workspace-nav-link[aria-current="page"] .workspace-nav-icon { color: var(--app-action); }
 .workspace-dock .workspace-nav-count { position: absolute; top: 3px; left: calc(50% + 6px); min-width: 16px; padding: 0 4px; font-size: 10px; line-height: 16px; background: var(--app-action); color: var(--app-action-text); }
-.workspace-nav-link[aria-current="page"] { background: #e7e7e7; border-color: transparent; color: #111111; font-weight: 600; }
+/* Default current state (the full menu); the dock and sidebar refine it below. */
+.workspace-nav-link[aria-current="page"] { background: var(--app-surface-active); border-color: var(--app-border); color: var(--app-text); font-weight: 600; }
 .workspace-nav-link[aria-disabled="true"] { opacity: 0.5; cursor: wait; }
-.workspace-nav-count { display: inline-flex; align-items: center; justify-content: center; min-width: 18px; border-radius: var(--app-radius-inner); padding: 1px 5px; color: var(--workspace-text); background: #3a3a3a; font-size: 11px; font-variant-numeric: tabular-nums; }
+.workspace-nav-count { display: inline-flex; align-items: center; justify-content: center; min-width: 18px; border-radius: var(--app-radius-inner); padding: 1px 5px; color: var(--workspace-text); background: var(--app-border-strong); font-size: 11px; font-variant-numeric: tabular-nums; }
 /* Context actions share the tab bar's surface, so the bottom chrome reads as one docked bar. */
 .workspace-context-actions {
   display: flex; justify-content: center; gap: 8px; pointer-events: auto;
@@ -134,7 +135,7 @@
   .workspace-sidebar[data-collapsed="true"] .workspace-nav-count { position: absolute; top: 0; right: 0; font-size: 9px; min-width: 14px; padding: 1px 3px; }
   .workspace-sidebar[data-collapsed="true"] .workspace-account { padding-inline: 8px; }
   .workspace-sidebar[data-collapsed="true"] nav { overflow: visible; overflow-y: auto; }
-  .workspace-sidebar[data-collapsed="true"] :is(a:hover, a:focus-visible) .workspace-nav-tooltip { display: block; position: fixed; left: 60px; z-index: 65; width: max-content; max-width: 240px; padding: 7px 10px; border: 1px solid var(--app-border); border-radius: var(--app-radius-inner); background: var(--app-surface-raised); color: var(--app-text); font-size: 12px; line-height: 18px; box-shadow: 0 4px 12px rgb(0 0 0 / 0.18); pointer-events: none; }
+  .workspace-sidebar[data-collapsed="true"] :is(a:hover, a:focus-visible) .workspace-nav-tooltip { display: block; position: fixed; left: 60px; z-index: var(--app-z-chrome); width: max-content; max-width: 240px; padding: 7px 10px; border: 1px solid var(--app-border); border-radius: var(--app-radius-inner); background: var(--app-surface-raised); color: var(--app-text); font-size: 12px; line-height: 18px; box-shadow: 0 4px 12px rgb(0 0 0 / 0.18); pointer-events: none; }
 }
 @media (min-width: 1600px) {
   .workspace-shell .page-container, .workspace-header { padding-inline: 32px; }
@@ -158,7 +159,7 @@
 }
 
 .workspace-action-icon { display: grid; place-items: center; width: 24px; height: 24px; flex-shrink: 0; border-radius: 50%; background: var(--app-action); color: var(--app-action-text); }
-.workspace-action-icon[data-tone="muted"] { background: #444444; color: var(--app-text); }
+.workspace-action-icon[data-tone="muted"] { background: var(--app-border-strong); color: var(--app-text); }
 .workspace-shell .font-mono, .product-sheet .font-mono { font-family: inherit; font-variant-numeric: tabular-nums; }
 .workspace-desktop-logout { display: none; }
 /* Signed-in work surfaces keep the full height for tasks; the public pages keep the footer. */
@@ -167,8 +168,6 @@
 @media (max-width: 999px) {
   .workspace-shell {
     --workspace-header-edge: 14px; --workspace-content-gap: 12px;
-    --workspace-glass-surface: #1c1c20;
-    --workspace-glass-selected: #e7e7eb;
     --workspace-glass-header: #0c0c0e;
     --workspace-glass-filter: none;
     --workspace-glass-edge: rgb(255 255 255 / 0.09);
@@ -224,8 +223,6 @@
 @supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
   @media (max-width: 999px) {
     .workspace-shell {
-      --workspace-glass-surface: rgb(24 24 28 / 0.88);
-      --workspace-glass-selected: rgb(231 231 235 / 0.94);
       --workspace-glass-header: rgb(12 12 14 / 0.88);
       --workspace-glass-filter: blur(16px) saturate(110%);
     }
@@ -234,8 +231,6 @@
 @media (max-width: 999px) and (prefers-reduced-transparency: reduce),
        (max-width: 999px) and (prefers-contrast: more) {
   .workspace-shell {
-    --workspace-glass-surface: #1c1c20;
-    --workspace-glass-selected: #e7e7eb;
     --workspace-glass-header: #0c0c0e;
     --workspace-glass-filter: none;
     --workspace-header-edge: 0px;

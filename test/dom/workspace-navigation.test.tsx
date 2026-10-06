@@ -478,7 +478,9 @@ test("choosing the current admin task cancels a pending route without abandoning
     fireEvent.click(screen.getByRole("link", { name: messages.Workspace.events }));
     assert.deepEqual(destinations, ["/door", "/admin?tab=events&view=manage"]);
     assert.equal(isLatestRead(), true);
-    await waitFor(() => assert.equal(document.querySelector(".route-transition-overlay")?.getAttribute("data-state"), "leaving"));
+    // Cancelled before the show delay: the page unlocks without ever painting the overlay.
+    assert.equal(document.querySelector(".route-transition-overlay") === null, true);
+    assert.equal(within(view.container).getByRole("main").hasAttribute("inert"), false);
     fireEvent.click(screen.getByRole("link", { name: messages.Workspace.events }));
     await waitFor(() => assert.equal(document.querySelector(".route-transition-overlay") === null, true));
 

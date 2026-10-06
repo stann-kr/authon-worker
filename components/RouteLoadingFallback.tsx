@@ -1,6 +1,7 @@
 "use client";
 
 import { useTranslations } from "next-intl";
+import { useAuthSession } from "./AuthSessionProvider";
 import RouteLoadingShell from "./RouteLoadingShell";
 import Spinner from "./Spinner";
 import {
@@ -15,13 +16,19 @@ import {
 export default function RouteLoadingFallback() {
   const t = useTranslations("Common");
   const { isRouteTransitionActive } = useRouteTransition();
+  const { user } = useAuthSession();
   useRouteLoadingTask(true);
 
   if (isRouteTransitionActive) {
     return <RouteLoadingShell />;
   }
 
-  return (
+  // Signed-in screens keep the spinner where the workspace content and route overlay appear.
+  return user ? (
+    <main id="main-content" tabIndex={-1} className="route-loading-frame">
+      <Spinner mode="content" text={t("loading")} />
+    </main>
+  ) : (
     <main id="main-content" tabIndex={-1}>
       <Spinner mode="fullscreen" text={t("loading")} />
     </main>

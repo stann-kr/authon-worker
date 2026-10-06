@@ -1,6 +1,6 @@
 import { measureServerOperation } from "@/lib/observability/server-performance";
 import type { Metadata, Viewport } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Geist_Mono } from "next/font/google";
 import "./globals.css";
 import "./home.css";
 import "./auth/auth.css";
@@ -28,11 +28,6 @@ import { AuthSessionProvider } from "@/components/AuthSessionProvider";
 import { ToastProvider } from "@/components/feedback/ToastProvider";
 import { NextIntlClientProvider } from "next-intl";
 import { getLocale, getMessages, getTranslations } from "next-intl/server";
-
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
 
 const geistMono = Geist_Mono({
   variable: "--font-geist-mono",
@@ -71,7 +66,7 @@ export default async function RootLayout({
   return (
     <html lang={locale} suppressHydrationWarning={true}>
       <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased bg-canvas text-text-body`}
+        className={`${geistMono.variable} antialiased bg-canvas text-text-body`}
         style={{ minHeight: "100dvh" }}
       >
         <NextIntlClientProvider messages={messages}>

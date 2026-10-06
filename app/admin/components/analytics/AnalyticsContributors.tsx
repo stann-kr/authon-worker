@@ -2,6 +2,7 @@
 
 import { useCallback, useMemo, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
+import Icon from "@/components/Icon";
 import type { AnalyticsContributorRow } from "@/lib/analytics/types";
 
 type SortKey =
@@ -121,13 +122,18 @@ export default function AnalyticsContributors({
           <thead className="bg-surface-raised text-xs text-text-muted">
             <tr>
               <th scope="col" className="px-4 py-3 font-medium">{t("contributors.name")}</th>
-              {(["registered", "checkedIn", "entryRatePercent", "operatingDays"] as const).map((key) => (
-                <th key={key} scope="col" aria-sort={ariaSort(key)} className="px-3 py-2 text-right font-medium">
-                  <button type="button" onClick={() => changeSort(key)} className="min-h-11 px-1 text-xs text-text-muted hover:text-text-heading">
-                    {key === "operatingDays" ? t("contributors.operatingDays") : t(`summary.${key}`)}
-                  </button>
-                </th>
-              ))}
+              {(["registered", "checkedIn", "entryRatePercent", "operatingDays"] as const).map((key) => {
+                const isSorted = sortKey === key;
+                return (
+                  <th key={key} scope="col" aria-sort={ariaSort(key)} className="px-3 py-2 text-right font-medium">
+                    <button type="button" onClick={() => changeSort(key)} className={`inline-flex min-h-11 items-center gap-1 px-1 text-xs hover:text-text-heading ${isSorted ? "font-semibold text-text-heading" : "text-text-muted"}`}>
+                      {key === "operatingDays" ? t("contributors.operatingDays") : t(`summary.${key}`)}
+                      {/* The slot stays reserved so changing the sorted column never shifts the headers. */}
+                      <Icon name="chevron-down" size={14} className={`shrink-0 ${isSorted ? (isAscending ? "rotate-180" : "") : "invisible"}`} />
+                    </button>
+                  </th>
+                );
+              })}
             </tr>
           </thead>
           <tbody>

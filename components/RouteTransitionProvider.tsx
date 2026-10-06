@@ -22,10 +22,16 @@ import { lockInertSurface } from "./overlays/modal-lock";
 import { installNavigationProtection } from "./overlays/navigation-guard";
 import { beginBrowserLoading, observeBrowserPerformance } from "@/lib/observability/browser-performance";
 
-type TransitionPhase = "idle" | "visible" | "leaving";
+/**
+ * pending: 화면은 잠갔지만 overlay는 아직 그리지 않은 짧은 유예 구간.
+ * 빠른 이동은 여기서 바로 끝나 spinner를 깜빡이지 않는다.
+ */
+type TransitionPhase = "idle" | "pending" | "visible" | "leaving";
 
 interface RouteTransitionContextValue {
   isRouteTransitionActive: boolean;
+  /** True only once the loading overlay is painted; the page is locked earlier. */
+  isRouteOverlayVisible: boolean;
   registerRouteLoadingTask: () => () => void;
   startRouteTransition: (href?: string) => boolean;
   requestFocusRestore: (
@@ -33,6 +39,7 @@ interface RouteTransitionContextValue {
   ) => () => void;
 }
 
+const SHOW_DELAY_MS = 120;
 const MINIMUM_VISIBLE_MS = 160;
 const EXIT_DURATION_MS = 140;
 const TRANSITION_TIMEOUT_MS = 8_000;
@@ -51,6 +58,9 @@ export function RouteTransitionProvider({ children }: { children: ReactNode }) {
   const finishPerformanceRef = useRef<ReturnType<typeof beginBrowserLoading> | null>(null);
   const didTransitionTimeoutRef = useRef(false);
   const completionTimerRef = useRef<number | null>(null);
+  const revealTimerRef = useRef<number | null>(null);
+  // The first hydration continues the server-rendered spinner, so it is shown without delay.
+  const hasMountedRef = useRef(false);
   const exitTimerRef = useRef<number | null>(null);
   const safetyTimerRef = useRef<number | null>(null);
   const routeRequestIdRef = useRef(0);
@@ -66,6 +76,7 @@ export function RouteTransitionProvider({ children }: { children: ReactNode }) {
   const focusFrameRequestIdRef = useRef<number | null>(null);
   const focusFrameIsRouteRestoreRef = useRef(false);
   const [phase, setPhase] = useState<TransitionPhase>("idle");
+  const [fadesIn, setFadesIn] = useState(false);
   const [loadingTracker] = useState(() => createRouteLoadingTracker(pathname));
 
   const updatePhase = useCallback((nextPhase: TransitionPhase) => {
@@ -84,7 +95,7 @@ export function RouteTransitionProvider({ children }: { children: ReactNode }) {
   );
 
   const clearTimers = useCallback(() => {
-    for (const timerRef of [completionTimerRef, exitTimerRef, safetyTimerRef]) {
+    for (const timerRef of [completionTimerRef, exitTimerRef, safetyTimerRef, revealTimerRef]) {
       clearTimer(timerRef);
     }
   }, [clearTimer]);
@@ -168,36 +179,66 @@ export function RouteTransitionProvider({ children }: { children: ReactNode }) {
     };
   }, [clearFocusFrame, loadingTracker, pathname, scheduleFocusRestore]);
 
+  const finishPerformance = useCallback(() => {
+    finishPerformanceRef.current?.(didTransitionTimeoutRef.current ? "timeout" : "ready");
+    finishPerformanceRef.current = null;
+  }, []);
+
   const finishTransition = useCallback(() => {
     updatePhase("leaving");
     exitTimerRef.current = window.setTimeout(() => {
-      finishPerformanceRef.current?.(didTransitionTimeoutRef.current ? "timeout" : "ready");
-      finishPerformanceRef.current = null;
+      finishPerformance();
       updatePhase("idle");
       exitTimerRef.current = null;
     }, EXIT_DURATION_MS);
-  }, [updatePhase]);
+  }, [finishPerformance, updatePhase]);
+
+  const revealOverlay = useCallback((fade?: boolean) => {
+    clearTimer(revealTimerRef);
+    if (fade !== undefined) setFadesIn(fade);
+    visibleAtRef.current = performance.now();
+    updatePhase("visible");
+  }, [clearTimer, updatePhase]);
 
   const showLoading = useCallback(() => {
     clearTimer(completionTimerRef);
 
-    if (phaseRef.current === "idle" || phaseRef.current === "leaving") {
+    if (phaseRef.current === "leaving") {
+      // The overlay is still painted, so keep it instead of hiding and delaying again.
       clearTimer(exitTimerRef);
       finishPerformanceRef.current?.("interrupted");
       finishPerformanceRef.current = beginBrowserLoading();
       didTransitionTimeoutRef.current = false;
-      visibleAtRef.current = performance.now();
-      updatePhase("visible");
-    }
-  }, [clearTimer, updatePhase]);
-
-  const scheduleCompletion = useCallback(() => {
-    if (
-      phaseRef.current !== "visible" ||
-      loadingTracker.hasPendingWork()
-    ) {
+      revealOverlay();
       return;
     }
+    if (phaseRef.current !== "idle") return;
+
+    finishPerformanceRef.current?.("interrupted");
+    finishPerformanceRef.current = beginBrowserLoading();
+    didTransitionTimeoutRef.current = false;
+    if (!hasMountedRef.current) {
+      revealOverlay(false);
+      return;
+    }
+    updatePhase("pending");
+    revealTimerRef.current = window.setTimeout(() => {
+      revealTimerRef.current = null;
+      if (phaseRef.current === "pending") revealOverlay(true);
+    }, SHOW_DELAY_MS);
+  }, [clearTimer, revealOverlay, updatePhase]);
+
+  const scheduleCompletion = useCallback(() => {
+    if (loadingTracker.hasPendingWork()) return;
+
+    if (phaseRef.current === "pending") {
+      // Finished before the overlay was due: release the page without painting it.
+      clearTimer(revealTimerRef);
+      finishPerformance();
+      updatePhase("idle");
+      return;
+    }
+    if (phaseRef.current !== "visible") return;
 
     clearTimer(completionTimerRef);
     const elapsed = performance.now() - visibleAtRef.current;
@@ -215,7 +256,7 @@ export function RouteTransitionProvider({ children }: { children: ReactNode }) {
         finishTransition();
       }
     }, completionDelay);
-  }, [clearTimer, finishTransition, loadingTracker]);
+  }, [clearTimer, finishPerformance, finishTransition, loadingTracker, updatePhase]);
 
   const reconcileLoading = useCallback(() => {
     if (loadingTracker.hasPendingWork()) {
@@ -284,6 +325,11 @@ export function RouteTransitionProvider({ children }: { children: ReactNode }) {
 
   useEffect(observeBrowserPerformance, []);
 
+  // Child layout effects of the first commit run before this, so initial work shows at once.
+  useEffect(() => {
+    hasMountedRef.current = true;
+  }, []);
+
   useEffect(
     () => () => {
       finishPerformanceRef.current?.("interrupted");
@@ -295,6 +341,11 @@ export function RouteTransitionProvider({ children }: { children: ReactNode }) {
   );
 
   useEffect(() => {
+    if (phase === "pending") {
+      shouldRestoreFocusRef.current = true;
+      return;
+    }
+
     if (phase === "visible") {
       shouldRestoreFocusRef.current = true;
       const active = document.activeElement;
@@ -313,9 +364,10 @@ export function RouteTransitionProvider({ children }: { children: ReactNode }) {
 
   useLayoutEffect(() => {
     if (phase === "idle") return;
+    // The overlay is absent while pending; the page is still locked meanwhile.
     const overlay = overlayRef.current;
     const content = contentRef.current;
-    if (!overlay || !content) return;
+    if (!content) return;
     let observedHeader: HTMLElement | null = null;
     const lockedSurfaces = new Map<HTMLElement, () => void>();
     const updateBounds = () => {
@@ -330,7 +382,7 @@ export function RouteTransitionProvider({ children }: { children: ReactNode }) {
       }
       for (const surface of surfaces) {
         if (lockedSurfaces.has(surface)) continue;
-        if (surface.contains(document.activeElement)) overlay.focus({ preventScroll: true });
+        if (surface.contains(document.activeElement)) overlay?.focus({ preventScroll: true });
         const previousBusy = surface.getAttribute("aria-busy");
         const unlock = lockInertSurface(surface);
         surface.setAttribute("aria-busy", "true");
@@ -340,6 +392,7 @@ export function RouteTransitionProvider({ children }: { children: ReactNode }) {
           else surface.setAttribute("aria-busy", previousBusy);
         });
       }
+      if (!overlay) return;
       const header = content.querySelector<HTMLElement>(".workspace-header");
       if (header !== observedHeader) {
         resizeObserver?.disconnect();
@@ -373,6 +426,7 @@ export function RouteTransitionProvider({ children }: { children: ReactNode }) {
     <RouteTransitionContext.Provider
       value={{
         isRouteTransitionActive: phase !== "idle",
+        isRouteOverlayVisible: phase === "visible" || phase === "leaving",
         registerRouteLoadingTask,
         startRouteTransition,
         requestFocusRestore,
@@ -384,11 +438,12 @@ export function RouteTransitionProvider({ children }: { children: ReactNode }) {
       >
         {children}
       </div>
-      {phase !== "idle" && (
+      {(phase === "visible" || phase === "leaving") && (
         <div
           ref={overlayRef}
           className="route-transition-overlay"
           data-state={phase}
+          data-enter={fadesIn ? "fade" : undefined}
           role="status"
           tabIndex={-1}
           aria-busy={phase === "visible"}
@@ -404,6 +459,11 @@ export function RouteTransitionProvider({ children }: { children: ReactNode }) {
 /** Portal overlays share the route lock, including when rendered outside the inert page. */
 export function useIsRouteTransitionActive() {
   return useContext(RouteTransitionContext)?.isRouteTransitionActive ?? false;
+}
+
+/** Lets locked surfaces stay painted until the overlay actually covers them. */
+export function useIsRouteOverlayVisible() {
+  return useContext(RouteTransitionContext)?.isRouteOverlayVisible ?? false;
 }
 
 export function useRouteTransition() {

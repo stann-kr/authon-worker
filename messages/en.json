@@ -96,7 +96,9 @@
     "notFoundDescription": "The requested {brand} workspace does not exist or is no longer available.",
     "goHome": "Go home",
     "deleteGuestConfirm": "Delete guest “{name}”?",
-    "dismissNotice": "Dismiss"
+    "dismissNotice": "Dismiss",
+    "errorTitle": "Something went wrong",
+    "errorDescription": "This screen could not be displayed. Try again, or return home if the problem continues."
   },
   "Auth": {
     "signInTitle": "Sign in",

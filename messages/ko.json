@@ -96,7 +96,9 @@
     "notFoundDescription": "요청한 {brand} 작업 공간이 없거나 더 이상 사용할 수 없습니다.",
     "goHome": "홈으로 이동",
     "deleteGuestConfirm": "“{name}” 게스트를 삭제할까요?",
-    "dismissNotice": "알림 닫기"
+    "dismissNotice": "알림 닫기",
+    "errorTitle": "문제가 발생했습니다",
+    "errorDescription": "이 화면을 표시하지 못했습니다. 다시 시도하거나 문제가 계속되면 홈으로 이동해주세요."
   },
   "Auth": {
     "signInTitle": "로그인",

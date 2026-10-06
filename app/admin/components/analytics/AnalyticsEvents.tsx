@@ -4,6 +4,7 @@ import type { MouseEvent } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import type { AnalyticsEventRow } from "@/lib/analytics/types";
 import { getButtonClassName } from "@/components/buttonStyles";
+import { FULL_CALENDAR_DATE, formatCalendarDate } from "@/lib/ui/date-format";
 
 export default function AnalyticsEvents({
   rows,
@@ -17,6 +18,7 @@ export default function AnalyticsEvents({
   const t = useTranslations("AdminAnalytics");
   const locale = useLocale();
   const numberFormat = new Intl.NumberFormat(locale, { maximumFractionDigits: 1 });
+  const formatDate = (value: string) => formatCalendarDate(locale, value, FULL_CALENDAR_DATE);
   const eventHref = (row: AnalyticsEventRow) => {
     const search = new URLSearchParams({
       tab: "events",
@@ -60,7 +62,7 @@ export default function AnalyticsEvents({
               <div className="min-w-0">
                 <h4 className="break-words text-sm font-semibold text-text-heading">{row.name}</h4>
                 <p className="mt-1 text-xs text-text-muted">
-                  {row.businessDate}{" · "}
+                  <time dateTime={row.businessDate}>{formatDate(row.businessDate)}</time>{" · "}
                   <span className={row.status === "drifted" ? "text-status-waiting" : ""}>
                     {t(`events.${row.status}`)}
                   </span>
@@ -94,7 +96,7 @@ export default function AnalyticsEvents({
           <tbody>
             {rows.map((row) => (
               <tr key={row.eventId} className="border-t border-border-subtle even:bg-[var(--app-row-stripe)]">
-                <td className="whitespace-nowrap px-4 py-3 text-xs text-text-muted">{row.businessDate}</td>
+                <td className="whitespace-nowrap px-4 py-3 text-xs text-text-muted"><time dateTime={row.businessDate}>{formatDate(row.businessDate)}</time></td>
                 <th scope="row" className="px-4 py-3 font-medium text-text-heading">{row.name}</th>
                 <td className="px-4 py-3 text-right font-mono tabular-nums">{numberFormat.format(row.registered)}</td>
                 <td className="px-4 py-3 text-right font-mono tabular-nums">{numberFormat.format(row.checkedIn)}</td>
