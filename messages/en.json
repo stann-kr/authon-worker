@@ -18,7 +18,7 @@
     "collapseSidebar": "Collapse sidebar",
     "expandSidebar": "Expand sidebar",
     "allMenu": "All menus",
-    "more": "More",
+    "more": "Menu",
     "close": "Close",
     "actions": "Current page actions",
     "pendingCount": "{count} pending",
@@ -95,7 +95,8 @@
     "notFoundTitle": "Page not found",
     "notFoundDescription": "The requested {brand} workspace does not exist or is no longer available.",
     "goHome": "Go home",
-    "deleteGuestConfirm": "Delete guest “{name}”?"
+    "deleteGuestConfirm": "Delete guest “{name}”?",
+    "dismissNotice": "Dismiss"
   },
   "Auth": {
     "signInTitle": "Sign in",
@@ -441,7 +442,7 @@
       "title": "Attendance counter",
       "checkedInGuests": "Checked-in guests",
       "walkIns": "Walk-ins",
-      "addWalkIn": "Walk-in entry",
+      "addWalkIn": "Walk-in",
       "undoLast": "Undo last walk-in",
       "pending": "{count} pending",
       "syncing": "Syncing…",
@@ -484,8 +485,13 @@
         "saving": "Confirming…",
         "cancel": "Cancel",
         "review": "Review final total"
-      }
-    }
+      },
+      "totalShort": "Total {count}",
+      "walkInToast": "Walk-in added · {total} total",
+      "walkInUndone": "Last walk-in removed"
+    },
+    "checkedInToast": "{name} checked in",
+    "checkInUndone": "Check-in undone for {name}"
   },
   "AdminNav": {
     "title": "Admin",

@@ -80,9 +80,13 @@ export default function WorkspaceNavigation({
     const dock = dockRef.current;
     const scroll = dock?.closest<HTMLElement>(".page-scroll");
     if (!dock || !scroll) return;
+    const root = document.documentElement;
     const measure = () => {
       const height = Math.ceil(dock.getBoundingClientRect().height);
-      if (height > 0) scroll.style.setProperty("--workspace-dock-height", `${height + 16}px`);
+      if (height <= 0) return;
+      scroll.style.setProperty("--workspace-dock-height", `${height + 16}px`);
+      // Page-level overlays such as toasts sit above the mobile dock.
+      root.style.setProperty("--app-bottom-chrome", `${height}px`);
     };
     measure();
     const observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(measure);
@@ -90,6 +94,7 @@ export default function WorkspaceNavigation({
     return () => {
       observer?.disconnect();
       scroll.style.removeProperty("--workspace-dock-height");
+      root.style.removeProperty("--app-bottom-chrome");
     };
   }, [desktop, actions]);
 
@@ -155,6 +160,7 @@ export default function WorkspaceNavigation({
           aria-label={t("allMenu")} aria-expanded={menuOpen}
           aria-controls={menuOpen ? "workspace-all-menu" : undefined}
           disabled={disabled} onClick={() => setMenuOpen((open) => !open)}>
+          <Icon name="menu" size={18} className="workspace-nav-icon" />
           <span className="workspace-nav-label">{t("more")}</span>
         </button>
       </nav>

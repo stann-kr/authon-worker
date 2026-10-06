@@ -1,0 +1,90 @@
+/* Transient action confirmations. The region stays mounted so screen readers keep the live region. */
+.app-toast-region {
+  position: fixed;
+  z-index: var(--app-z-toast);
+  left: max(12px, env(safe-area-inset-left));
+  right: max(12px, env(safe-area-inset-right));
+  bottom: calc(max(var(--app-bottom-chrome, 0px), var(--app-safe-area-bottom)) + 8px);
+  display: flex;
+  justify-content: center;
+  pointer-events: none;
+}
+:root[data-keyboard-open="true"] .app-toast-region { bottom: 8px; }
+.app-toast {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: min(100%, 440px);
+  min-height: 52px;
+  padding: 6px 6px 6px 14px;
+  border: 1px solid var(--app-border);
+  border-radius: 14px;
+  background: #232326;
+  color: var(--app-text);
+  box-shadow: 0 10px 30px rgb(0 0 0 / 0.45), 0 1px 0 rgb(255 255 255 / 0.04) inset;
+  pointer-events: auto;
+  animation: app-toast-enter 220ms var(--app-ease-out) both;
+}
+.app-toast-icon {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: rgb(52 211 153 / 0.16);
+  color: #34d399;
+}
+.app-toast[data-tone="neutral"] .app-toast-icon { background: var(--app-surface-active); color: var(--app-text-muted); }
+.app-toast-message {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.4;
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+.app-toast-action {
+  flex-shrink: 0;
+  min-height: 40px;
+  padding: 8px 12px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--app-action);
+  font-size: 14px;
+  font-weight: 600;
+}
+.app-toast-close {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  min-width: 40px;
+  min-height: 40px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--app-text-muted);
+}
+@media (hover: hover) and (pointer: fine) {
+  .app-toast-action:hover { background: rgb(var(--app-action-rgb) / 0.12); }
+  .app-toast-close:hover { background: var(--app-surface-hover); color: var(--app-text); }
+}
+@media (pointer: coarse) {
+  .app-toast-action, .app-toast-close { min-height: 44px; min-width: 44px; }
+}
+@media (min-width: 1000px) {
+  .app-toast-region { left: auto; right: 24px; bottom: 24px; justify-content: flex-end; }
+  .app-toast { width: 400px; }
+}
+@keyframes app-toast-enter {
+  from { opacity: 0; transform: translateY(8px) scale(0.98); }
+  to { opacity: 1; transform: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .app-toast { animation: none; }
+}
+@media (forced-colors: active) {
+  .app-toast { border-color: CanvasText; }
+}

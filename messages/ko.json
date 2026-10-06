@@ -18,7 +18,7 @@
     "collapseSidebar": "사이드바 접기",
     "expandSidebar": "사이드바 펼치기",
     "allMenu": "전체 메뉴",
-    "more": "전체",
+    "more": "메뉴",
     "close": "닫기",
     "actions": "현재 화면 작업",
     "pendingCount": "대기 {count}건",
@@ -66,7 +66,7 @@
     "checkIn": "입장 확인",
     "delete": "삭제",
     "deleteGuest": "게스트 삭제",
-    "undo": "취소",
+    "undo": "되돌리기",
     "undoCheckIn": "{name}의 입장 확인 취소",
     "removeGuest": "게스트 제거",
     "removed": "제거됨",
@@ -95,7 +95,8 @@
     "notFoundTitle": "페이지를 찾을 수 없습니다",
     "notFoundDescription": "요청한 {brand} 작업 공간이 없거나 더 이상 사용할 수 없습니다.",
     "goHome": "홈으로 이동",
-    "deleteGuestConfirm": "“{name}” 게스트를 삭제할까요?"
+    "deleteGuestConfirm": "“{name}” 게스트를 삭제할까요?",
+    "dismissNotice": "알림 닫기"
   },
   "Auth": {
     "signInTitle": "로그인",
@@ -441,7 +442,7 @@
       "title": "입장객 카운터",
       "checkedInGuests": "입장 게스트",
       "walkIns": "워크인",
-      "addWalkIn": "워크인 입장",
+      "addWalkIn": "워크인",
       "undoLast": "마지막 워크인 취소",
       "pending": "동기화 대기 {count}건",
       "syncing": "동기화 중…",
@@ -484,8 +485,13 @@
         "saving": "확정 중…",
         "cancel": "취소",
         "review": "마감 검토"
-      }
-    }
+      },
+      "totalShort": "총 입장 {count}",
+      "walkInToast": "워크인 1명 추가 · 총 {total}명",
+      "walkInUndone": "마지막 워크인을 취소했습니다"
+    },
+    "checkedInToast": "{name} 입장 처리",
+    "checkInUndone": "{name} 입장을 취소했습니다"
   },
   "AdminNav": {
     "title": "관리자",

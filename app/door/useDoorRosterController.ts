@@ -818,17 +818,17 @@ export default function useDoorRosterController({
     id: string,
     newStatus: Guest["status"],
     action: string,
-  ) => {
+  ): Promise<boolean> => {
     const reportFailure = (message: string) => {
       setFeedback(message);
       if (newStatus === "deleted") setDeleteFailure({ scopeKey: requestScopeKey, guestId: id, message });
     };
     if (newStatus === "deleted") {
-      if (!canDeleteGuests) return;
+      if (!canDeleteGuests) return false;
       if (isOfflineMode || (typeof navigator !== "undefined" && !navigator.onLine) ||
           isOfflineSyncing || offlineMutations.some((mutation) => mutation.state === "queued")) {
         reportFailure(translate("deleteRequiresOnline"));
-        return;
+        return false;
       }
     }
     if (newStatus === "deleted") setDeleteFailure(null);
@@ -857,7 +857,7 @@ export default function useDoorRosterController({
           (typeof navigator !== "undefined" && !navigator.onLine))
       ) {
         queuedOffline = await queueOfflineStatusChange(id, newStatus);
-        return;
+        return queuedOffline;
       }
       const { data, error } =
         newStatus === "deleted"
@@ -875,13 +875,14 @@ export default function useDoorRosterController({
           await runOfflineStoreTask(() => true, () => dependencies.removeOfflineDoorRoster(offlineScope));
         } catch { cacheInvalidationFailed = true; }
       }
-      if (!operation.isCurrent(currentScopeKeyRef.current)) return;
+      if (!operation.isCurrent(currentScopeKeyRef.current)) return false;
       if (!error && data) {
         setGuests((prev) => newStatus === "deleted"
           ? prev.filter((guest) => guest.id !== id)
           : prev.map((guest) => (guest.id === id ? data : guest)));
         setFeedback(cacheInvalidationFailed ? translate("offlineStorageFailed") : null);
         refreshOwner.queued ??= "background";
+        return true;
       } else {
         console.error("Failed to update guest status:", error);
         reportFailure(
@@ -891,7 +892,7 @@ export default function useDoorRosterController({
         );
       }
     } catch (error) {
-      if (!operation.isCurrent(currentScopeKeyRef.current)) return;
+      if (!operation.isCurrent(currentScopeKeyRef.current)) return false;
       console.error("Failed to update guest status:", error);
       const queued =
         newStatus !== "deleted" && offlineScope
@@ -901,6 +902,7 @@ export default function useDoorRosterController({
       if (!queued && operation.isCurrent(currentScopeKeyRef.current)) {
         reportFailure(translate("updateFailed"));
       }
+      return queuedOffline;
     } finally {
       refreshOwner.mutations.delete(operation.id);
       if (queuedOffline) refreshOwner.queued = null;
@@ -912,6 +914,7 @@ export default function useDoorRosterController({
         void requestRefresh(refreshOwner.queued === "background");
       }
     }
+    return false;
   };
 
   const handleClearResolvedOfflineMutations = async () => {

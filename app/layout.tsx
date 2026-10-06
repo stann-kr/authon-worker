@@ -15,6 +15,7 @@ import "@/components/records/records.css";
 import "@/components/operations/operations.css";
 import "@/components/dates/date-field.css";
 import "@/components/workspace/workspace.css";
+import "@/components/feedback/toast.css";
 import DesignSystemProvider from "@/components/DesignSystemProvider";
 import ViewportProvider from "@/components/viewport/ViewportProvider";
 import VenueBrandProvider from "@/components/VenueBrandProvider";
@@ -24,6 +25,7 @@ import { getRequestTenantContext } from "@/lib/tenant/server";
 import { getRenderUser } from "@/lib/auth/server";
 import { toClientUser } from "@/lib/auth/user-profile";
 import { AuthSessionProvider } from "@/components/AuthSessionProvider";
+import { ToastProvider } from "@/components/feedback/ToastProvider";
 import { NextIntlClientProvider } from "next-intl";
 import { getLocale, getMessages, getTranslations } from "next-intl/server";
 
@@ -81,10 +83,12 @@ export default async function RootLayout({
                 <DesignSystemProvider>
                   <RouteTransitionProvider>
                     <VenueDataProvider>
-                      <a href="#main-content" className="skip-link">
-                        {t("skipToContent")}
-                      </a>
-                      {children}
+                      <ToastProvider>
+                        <a href="#main-content" className="skip-link">
+                          {t("skipToContent")}
+                        </a>
+                        {children}
+                      </ToastProvider>
                     </VenueDataProvider>
                   </RouteTransitionProvider>
                 </DesignSystemProvider>
