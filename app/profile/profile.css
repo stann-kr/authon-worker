@@ -9,5 +9,5 @@
 .profile-facts dt { font-size: 12px; color: var(--app-text-muted); }
 .profile-facts dd { font-size: 13px; }
 .profile-tabs { display: flex; gap: 12px; }
-.profile-tabs button { flex: 1; border: 1px solid transparent; border-radius: 8px; background: transparent; color: var(--app-text-muted); }
+.profile-tabs button { flex: 1; border: 1px solid transparent; border-radius: var(--app-radius-control); background: transparent; color: var(--app-text-muted); }
 .profile-tabs button[aria-pressed="true"] { background: var(--app-surface-active); border-color: var(--app-border); color: var(--app-text); }

@@ -26,7 +26,7 @@
 .operations-scope-bar { min-width: 0; }
 .operations-context-container:has(> .operations-context:empty) { display: contents; }
 .operations-context:empty { display: none; }
-.operations-scope-trigger { display: flex; align-items: center; gap: 8px; width: 100%; min-height: 48px; padding: 10px 12px; border: 1px solid var(--app-border-subtle); border-radius: 10px; background: var(--app-surface-secondary); color: var(--app-text-body); text-align: left; font-size: 14px; font-weight: 500; }
+.operations-scope-trigger { display: flex; align-items: center; gap: 8px; width: 100%; min-height: 48px; padding: 10px 12px; border: 1px solid var(--app-border-subtle); border-radius: var(--app-radius-control); background: var(--app-surface-secondary); color: var(--app-text-body); text-align: left; font-size: 14px; font-weight: 500; }
 .operations-scope-dot { flex-shrink: 0; width: 6px; height: 6px; border-radius: 50%; background: var(--app-action); }
 .operations-scope-date { flex-shrink: 0; max-width: 60%; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .operations-scope-name { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; color: var(--app-text-muted); }
@@ -35,7 +35,7 @@
 @media (max-width: 999px) { .operations-scope-bar { padding-bottom: 12px; } }
 
 @media (min-width: 1000px) {
-  .workspace-shell .operations-scope { gap: 12px 20px; padding: 12px 16px; border: 1px solid var(--app-border-subtle); border-radius: 12px; background: var(--app-surface-secondary); }
+  .workspace-shell .operations-scope { gap: 12px 20px; padding: 12px 16px; border: 1px solid var(--app-border-subtle); border-radius: var(--app-radius-panel); background: var(--app-surface-secondary); }
   .workspace-shell .operations-scope > .operational-date-control { flex: 0 0 360px; }
   .workspace-shell .operations-scope > .scope-venue { flex: 0 1 184px; }
   .workspace-shell .operations-scope > .venue-selector { flex: 0 1 184px; }
@@ -44,7 +44,7 @@
   .workspace-shell .operations-scope-selectors > :first-child { flex: 0.7 1 160px; }
   .workspace-shell .operations-scope-selectors > :last-child { flex: 1.3 1 200px; }
   .workspace-shell .operations-scope :is(.app-label, .type-context-title) { margin-bottom: 4px; padding-left: 12px; font-size: 11px; }
-  .workspace-shell .operations-scope .app-field { --app-surface-secondary: transparent; --app-border: transparent; height: var(--workspace-control-height); min-height: var(--workspace-control-height); padding-block: 0; padding-left: 12px; font-size: 13px; border-radius: 8px; }
+  .workspace-shell .operations-scope .app-field { --app-surface-secondary: transparent; --app-border: transparent; height: var(--workspace-control-height); min-height: var(--workspace-control-height); padding-block: 0; padding-left: 12px; font-size: 13px; border-radius: var(--app-radius-control); }
   .workspace-shell .operational-date-control[data-compact="true"] .operational-date-layout { gap: 8px; }
   .workspace-shell .operational-date-control[data-compact="true"] .operational-date-field { height: 48px; min-width: 184px; }
   .workspace-shell .operational-date-control[data-compact="true"] .operational-date-field .app-field { height: 48px; min-height: 48px; background: var(--app-canvas); border-color: var(--app-border-strong); padding-inline: 14px; }

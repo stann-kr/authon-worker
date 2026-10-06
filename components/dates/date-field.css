@@ -7,9 +7,9 @@
 .product-sheet:has(> .product-sheet-body > .date-calendar) { width: min(100%, 420px); }
 .date-calendar { display: grid; gap: 12px; min-width: 0; }
 .date-calendar-navigation { display: grid; grid-template-columns: 44px minmax(0, 1fr) 80px 44px; align-items: center; gap: 8px; }
-.date-calendar-navigation > button { display: grid; place-items: center; min-width: 44px; min-height: 48px; border-radius: 8px; background: var(--app-surface-raised); }
+.date-calendar-navigation > button { display: grid; place-items: center; min-width: 44px; min-height: 48px; border-radius: var(--app-radius-control); background: var(--app-surface-raised); }
 .date-calendar-month, .date-calendar-year { position: relative; min-width: 0; }
-.date-calendar-month select, .date-calendar-year input { width: 100%; min-height: 48px; padding: 8px 10px; border: 1px solid var(--app-border); border-radius: 8px; background: var(--app-surface-secondary); color: var(--app-text); font-size: 15px; }
+.date-calendar-month select, .date-calendar-year input { width: 100%; min-height: 48px; padding: 8px 10px; border: 1px solid var(--app-border); border-radius: var(--app-radius-control); background: var(--app-surface-secondary); color: var(--app-text); font-size: 15px; }
 .date-calendar-month select { appearance: none; padding-right: 30px; }
 .date-calendar-month > svg { position: absolute; right: 8px; top: 50%; transform: translateY(-50%); pointer-events: none; }
 .date-calendar-year input { text-align: center; appearance: textfield; }
@@ -19,11 +19,11 @@
 .date-calendar-grid > [role="row"] { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 2px; }
 .date-calendar-weekdays { color: var(--app-text-muted); text-align: center; font-size: 12px; line-height: 28px; }
 .date-calendar-grid [role="gridcell"] { min-width: 0; }
-.date-calendar-grid button { width: 100%; min-width: 0; min-height: 48px; border-radius: 8px; color: var(--app-text); font-size: 15px; font-variant-numeric: tabular-nums; }
+.date-calendar-grid button { width: 100%; min-width: 0; min-height: 48px; border-radius: var(--app-radius-control); color: var(--app-text); font-size: 15px; font-variant-numeric: tabular-nums; }
 .date-calendar-grid button[data-outside="true"] { color: var(--app-text-muted); }
 .date-calendar-grid button[aria-current="date"] { box-shadow: inset 0 0 0 1px var(--app-border-strong); }
 .date-calendar-grid [aria-selected="true"] button { background: var(--app-action); color: var(--app-action-text); font-weight: 600; }
-.date-calendar-today { min-height: 48px; padding: 10px 16px; border: 1px solid var(--app-border); border-radius: 10px; background: var(--app-surface-raised); color: var(--app-text); font-size: 14px; }
+.date-calendar-today { min-height: 48px; padding: 10px 16px; border: 1px solid var(--app-border); border-radius: var(--app-radius-control); background: var(--app-surface-raised); color: var(--app-text); font-size: 14px; }
 @media (hover: hover) and (pointer: fine) {
   .date-calendar-navigation > button:not(:disabled):hover, .date-calendar-grid [aria-selected="false"] button:not(:disabled):hover, .date-calendar-today:hover { background: var(--app-surface-hover); }
 }

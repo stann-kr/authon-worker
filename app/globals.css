@@ -30,6 +30,12 @@
   --app-focus: #b5b5ba;
   --app-field-focus: #8e8e93;
   --app-status-waiting: #d5b479;
+  /* Radius scale: controls (buttons, fields, tabs, menu items), segments nested inside a control group,
+     surfaces (panels, cards, popovers, toasts) and bottom sheets. Avatars and status dots stay circular. */
+  --app-radius-control: 10px;
+  --app-radius-inner: 6px;
+  --app-radius-panel: 12px;
+  --app-radius-sheet: 16px;
   --app-header-height: calc(4.5rem + env(safe-area-inset-top));
   --app-safe-area-bottom: env(safe-area-inset-bottom, 0px);
   --app-z-route-overlay: 40;
@@ -86,7 +92,7 @@ button,
 input,
 select,
 textarea {
-  border-radius: 10px;
+  border-radius: var(--app-radius-control);
 }
 
 button {

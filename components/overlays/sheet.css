@@ -4,7 +4,7 @@
 html[data-modal-open="true"], html[data-modal-open="true"] body { background-color: var(--app-surface); }
 .product-sheet-layer[data-modal="true"]:not([hidden]) { position: fixed; inset: 0; z-index: var(--app-z-dialog); background: rgb(0 0 0 / 0.6); }
 .product-sheet-layer[data-modal="true"] > .product-sheet-viewport { position: absolute; inset: var(--app-viewport-top, 0px) 0 auto; height: var(--app-viewport-height, 100dvh); display: flex; align-items: flex-end; justify-content: center; }
-.product-sheet-layer[data-modal="true"] > .product-sheet-viewport > .product-sheet { display: flex; flex-direction: column; width: min(100%, 560px); max-height: calc(100% - 16px); overflow: hidden; border: 0; border-radius: 20px 20px 0 0; padding: 0; background: var(--app-surface); }
+.product-sheet-layer[data-modal="true"] > .product-sheet-viewport > .product-sheet { display: flex; flex-direction: column; width: min(100%, 560px); max-height: calc(100% - 16px); overflow: hidden; border: 0; border-radius: var(--app-radius-sheet) var(--app-radius-sheet) 0 0; padding: 0; background: var(--app-surface); }
 .product-sheet-layer[data-modal="true"] > .product-sheet-viewport > .product-sheet > .product-sheet-header { flex-shrink: 0; padding-inline: max(20px, env(safe-area-inset-left)) max(20px, env(safe-area-inset-right)); border-bottom: 1px solid var(--app-border-subtle); background: var(--app-surface); }
 .product-sheet-layer[data-modal="true"] > .product-sheet-viewport > .product-sheet > .product-sheet-header h2 { font-size: 16px; }
 .product-sheet-layer[data-modal="true"] > .product-sheet-viewport > .product-sheet > :is(.product-sheet-body, .product-sheet-discard) { min-height: 0; overflow-y: auto; overscroll-behavior: contain; scroll-padding-block: 16px; padding: 16px max(22px, env(safe-area-inset-right)) max(20px, var(--app-safe-area-bottom, env(safe-area-inset-bottom))) max(22px, env(safe-area-inset-left)); }
@@ -15,7 +15,7 @@ html[data-modal-open="true"], html[data-modal-open="true"] body { background-col
 }
 @media (min-width: 1000px) {
   .product-sheet-layer[data-modal="true"] > .product-sheet-viewport { align-items: center; padding: 16px; }
-  .product-sheet-layer[data-modal="true"] > .product-sheet-viewport > .product-sheet { border-radius: 16px 16px 0 0; max-height: 100%; }
+  .product-sheet-layer[data-modal="true"] > .product-sheet-viewport > .product-sheet { border-radius: var(--app-radius-panel); max-height: 100%; }
   .product-sheet-layer[data-modal="true"] > .product-sheet-viewport > .product-sheet[data-wide="true"] { width: min(100%, 800px); }
 }
 .product-sheet { min-width: 0; width: 100%; padding: 0 16px; border-top: 1px solid var(--app-border-subtle); background: var(--disclosure-background, var(--app-surface-secondary)); color: var(--app-text); }
@@ -39,3 +39,5 @@ html[data-modal-open="true"], html[data-modal-open="true"] body { background-col
 .product-detail-list > div { display: flex; justify-content: space-between; align-items: baseline; gap: 16px; padding: 12px 0; border-bottom: 1px solid var(--app-border-subtle); }
 .product-detail-list dt { color: var(--app-text-muted); flex-shrink: 0; max-width: 45%; }
 .product-detail-list dd { min-width: 0; overflow-wrap: anywhere; text-align: right; }
+/* Detail sheets attached to a list row stay flat; standalone ones read as panels like the surfaces around them. */
+.product-sheet[data-presentation="detail"]:not(:is(.product-guest-row, .record-row, .account-row, tr) *) { border: 1px solid var(--app-border-subtle); border-radius: var(--app-radius-panel); }
