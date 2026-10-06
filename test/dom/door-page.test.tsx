@@ -7,6 +7,7 @@ import { AppRouterContext } from "next/dist/shared/lib/app-router-context.shared
 import { PathnameContext } from "next/dist/shared/lib/hooks-client-context.shared-runtime";
 import { AuthSessionProvider } from "@/components/AuthSessionProvider";
 import { RouteTransitionProvider } from "@/components/RouteTransitionProvider";
+import { ToastProvider } from "@/components/feedback/ToastProvider";
 import type { User } from "@/lib/auth";
 import messages from "@/messages/en.json";
 
@@ -14,9 +15,10 @@ const runtime = globalThis as typeof globalThis & {
   __doorPageTest: {
     venueReady: boolean; deleted: boolean; deleteCalls: number; deleteError: boolean; summaryError: boolean;
     reads: Array<{ date: string; venueId: string; eventId: string | null }>;
+    statuses: Record<string, string> | null; statusCalls: string[];
   };
 };
-const reset = () => { runtime.__doorPageTest = { venueReady: true, deleted: false, deleteCalls: 0, deleteError: false, summaryError: false, reads: [] }; };
+const reset = () => { runtime.__doorPageTest = { venueReady: true, deleted: false, deleteCalls: 0, deleteError: false, summaryError: false, reads: [], statuses: null, statusCalls: [] }; };
 reset();
 Object.defineProperty(globalThis, "self", { configurable: true, value: window });
 Object.defineProperty(globalThis, "localStorage", { configurable: true, value: window.localStorage });
@@ -24,12 +26,19 @@ document.getElementById("main-content")?.remove();
 
 const sources: Record<string, string> = {
   "lib/guest-snapshots/client": `export const fetchGuestOperationsSnapshot = async (date, venueId, eventId) => {
-    globalThis.__doorPageTest.reads.push({ date, venueId, eventId });
-    return { data: { guests: globalThis.__doorPageTest.deleted ? [] : [{ id: 'g1', name: 'Roster guest', status: 'pending', createdAt: '2026-09-15T10:00:00Z' }],
+    const state = globalThis.__doorPageTest;
+    state.reads.push({ date, venueId, eventId });
+    if (state.statuses) return { data: { guests: [['g1', 'Roster guest', '10:00'], ['g2', 'Second guest', '10:05']].map(([id, name, time]) =>
+      ({ id, name, status: state.statuses[id], createdAt: '2026-09-15T' + time + ':00Z' })),
+      users: [], externalLinks: [], failedSections: [], offlineRosterStatus: 'unavailable' }, error: null };
+    return { data: { guests: state.deleted ? [] : [{ id: 'g1', name: 'Roster guest', status: 'pending', createdAt: '2026-09-15T10:00:00Z' }],
       users: [], externalLinks: [], failedSections: [], offlineRosterStatus: 'unavailable' }, error: null };
   };`,
   "lib/guests/client": "export const fetchGuestsByDate = async () => ({ data: [], error: null });",
-  "lib/api/guests": `export const updateGuestStatus = async () => ({ data: null, error: 'UNEXPECTED_MUTATION' });
+  "lib/api/guests": `export const updateGuestStatus = async (id, status) => { const state = globalThis.__doorPageTest;
+      if (!state.statuses) return { data: null, error: 'UNEXPECTED_MUTATION' };
+      state.statuses[id] = status; state.statusCalls.push(id + ':' + status);
+      return { data: { id, name: id === 'g1' ? 'Roster guest' : 'Second guest', status, createdAt: '2026-09-15T10:00:00Z' }, error: null }; };
     export const deleteGuest = async () => { const state = globalThis.__doorPageTest; state.deleteCalls++;
       if (state.deleteError) return { data: null, error: 'UNAVAILABLE' };
       state.deleted = true; return { data: { id: 'g1', name: 'Roster guest', status: 'deleted' }, error: null }; };`,
@@ -80,7 +89,7 @@ const user: User = { id: "admin-1", name: "Admin", email: "admin@example.test", 
 function frame(account: User = user, admin = false) {
   return <AppRouterContext.Provider value={router}><PathnameContext.Provider value={admin ? "/admin" : "/door"}>
     <NextIntlClientProvider locale="en" messages={messages}><AuthSessionProvider initialUser={account}>
-      <RouteTransitionProvider>{admin ? <AdminPage /> : <DoorPage />}</RouteTransitionProvider>
+      <RouteTransitionProvider><ToastProvider>{admin ? <AdminPage /> : <DoorPage />}</ToastProvider></RouteTransitionProvider>
     </AuthSessionProvider></NextIntlClientProvider>
   </PathnameContext.Provider></AppRouterContext.Provider>;
 }
@@ -119,6 +128,22 @@ test("unified details retain finalized locks, draft deletion, and past-date corr
     assert.deepEqual(runtime.__doorPageTest.reads.at(-1), { date: "2026-09-15", venueId: "venue-1", eventId });
     cleanup();
   }
+});
+
+test("a check-in keeps its row until the undo toast closes and the toast can reverse it", async () => {
+  runtime.__doorPageTest.statuses = { g1: "pending", g2: "pending" };
+  location(); render(frame());
+  const rowNames = () => [...document.querySelectorAll(".product-guest-row strong")].map((name) => name.textContent);
+  await screen.findByRole("button", { name: "Second guest" });
+  await act(async () => {});
+  fireEvent.click(screen.getAllByRole("button", { name: messages.Common.checkIn })[0]);
+  const toast = await screen.findByText(messages.Door.checkedInToast.replace("{name}", "Roster guest"));
+  assert.deepEqual(runtime.__doorPageTest.statusCalls, ["g1:checked"]);
+  assert.deepEqual(rowNames(), ["Roster guest", "Second guest"]);
+  fireEvent.click(within(toast.closest(".app-toast") as HTMLElement).getByRole("button", { name: messages.Common.undo }));
+  await screen.findByText(messages.Door.checkInUndone.replace("{name}", "Roster guest"));
+  assert.deepEqual(runtime.__doorPageTest.statusCalls, ["g1:checked", "g1:pending"]);
+  await waitFor(() => assert.equal(screen.getAllByRole("button", { name: messages.Common.checkIn }).length, 2));
 });
 
 test("deletion fails closed without an attendance summary", async () => {

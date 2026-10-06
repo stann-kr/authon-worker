@@ -205,7 +205,7 @@ test("mobile all-menu traps focus, preserves input and exposes every permitted t
   const close = within(dialog).getByRole("button", { name: "Close" });
   assert.equal(document.activeElement === close, true);
   assert.ok(document.querySelector(".workspace-shell")?.closest("[inert]"));
-  assert.ok(within(dialog).getByRole("link", { name: "Accounts" }));
+  assert.ok(within(dialog).getByRole("link", { name: messages.Workspace.users }));
   assert.equal(within(dialog).queryByRole("link", { name: "Venues" }), null);
   const profile = within(dialog).getByRole("link", { name: "My account" });
   fireEvent.keyDown(close, { key: "Tab", shiftKey: true });
@@ -228,13 +228,13 @@ test("desktop categories remain expanded across task changes and expose pending 
   assert.ok(within(nav).getByRole("heading", { name: "Management" }));
   assert.ok(within(nav).getByRole("heading", { name: "Event preparation" }));
   assert.equal(within(nav).queryByRole("button", { name: "Management" }), null);
-  const accounts = within(nav).getByRole("link", { name: "Accounts" });
+  const accounts = within(nav).getByRole("link", { name: messages.Workspace.users });
   accounts.focus();
   assert.ok(within(nav).getByRole("link", { name: "Analytics" }));
   assert.ok(within(nav).getByLabelText("3 pending"));
   fireEvent.click(within(nav).getByRole("link", { name: "Events" }));
   assert.equal(within(nav).getByRole("link", { name: "Events" }).getAttribute("aria-current"), "page");
-  assert.equal(within(nav).getByRole("link", { name: "Accounts" }), accounts);
+  assert.equal(within(nav).getByRole("link", { name: messages.Workspace.users }), accounts);
   assert.ok(within(nav).getByRole("link", { name: "Analytics" }));
 });
 
@@ -331,7 +331,7 @@ test("sidebar collapse exposes named destinations and preserves the workspace ac
   assert.equal(expand.getAttribute("aria-expanded"), "false");
   assert.equal(document.activeElement === expand, true);
   assert.equal(window.localStorage.getItem("workspace:sidebarCollapsed"), "true");
-  assert.ok(screen.getByRole("link", { name: "Accounts" }));
+  assert.ok(screen.getByRole("link", { name: messages.Workspace.users }));
   assert.ok(screen.getByRole("link", { name: "Venues" }));
   resize(false);
   assert.equal(screen.queryByRole("button", { name: messages.Workspace.expandSidebar }) === null, true);
@@ -382,7 +382,7 @@ test("loading and loaded workspaces share one footer and the same role-filtered 
   assert.equal(within(view.container).getAllByRole("main").length, 1);
   assert.deepEqual(within(screen.getByRole("navigation", { name: "Main navigation" }))
     .getAllByRole("link").map((link) => link.getAttribute("href")), links);
-  assert.equal(screen.queryByRole("link", { name: "Accounts" }) === null, true);
+  assert.equal(screen.queryByRole("link", { name: messages.Workspace.users }) === null, true);
 });
 
 function routerRecorder(destinations: string[]): NextRouter {

@@ -2,7 +2,8 @@
 @media (max-width: 999px) {
   :root[data-keyboard-open="true"] .guest-bulk-entry textarea { min-height: 96px; max-height: max(96px, calc(var(--app-viewport-height, 100dvh) * 0.35)); }
 }
-.guest-bulk-entry > .disclosure-section > summary { padding-inline: 0; }
+/* The quota request sits beside the bulk-entry disclosures and shares their edge alignment. */
+:is(.guest-bulk-entry > .disclosure-section, .guest-request-disclosure) > summary { padding-inline: 0; }
 .guest-csv-import { display: grid; gap: 12px; padding-block: 4px 12px; }
 .guest-csv-import > .app-helper { margin-top: 0; }
 .guest-csv-file { display: block; width: 100%; min-width: 0; min-height: 44px; border: 0; border-radius: 0; background: transparent; color: var(--app-text-muted); font: inherit; font-size: 13px; }

@@ -635,8 +635,8 @@ export default function useAttendanceCounterController({
     };
   }, [loadSummaryForOwner, scope, syncQueue]);
 
-  const queueWalkIn = async () => {
-    if (!scope || !canRecord) return;
+  const queueWalkIn = async (): Promise<boolean> => {
+    if (!scope || !canRecord) return false;
     const scopeOwner = scopeOwnerRef.current;
     try {
       await dependencies.enqueueAttendanceMutation({
@@ -648,21 +648,23 @@ export default function useAttendanceCounterController({
         setNotice(null);
         setAnnouncement(translate("recordedAnnouncement"));
       }
+      return scopeOwnerRef.current === scopeOwner;
     } catch {
       if (scopeOwnerRef.current === scopeOwner) {
         setIsStorageAvailable(false);
         setNotice("queueFailed");
       }
+      return false;
     }
   };
 
-  const queueUndo = async () => {
-    if (!scope || !canRecord || !undoableKey) return;
+  const queueUndo = async (): Promise<boolean> => {
+    if (!scope || !canRecord || !undoableKey) return false;
     const targetKey = scopeKey(scope);
     if (
       undoingRef.current ||
       activeUndoOperationsRef.current.has(targetKey)
-    ) return;
+    ) return false;
     const scopeOwner = scopeOwnerRef.current;
     const undoOperationId = ++nextUndoOperationIdRef.current;
     activeUndoOperationsRef.current.set(targetKey, undoOperationId);
@@ -679,11 +681,13 @@ export default function useAttendanceCounterController({
         setNotice(null);
         setAnnouncement(translate("undoneAnnouncement"));
       }
+      return scopeOwnerRef.current === scopeOwner;
     } catch {
       if (scopeOwnerRef.current === scopeOwner) {
         setIsStorageAvailable(false);
         setNotice("queueFailed");
       }
+      return false;
     } finally {
       if (
         activeUndoOperationsRef.current.get(targetKey) === undoOperationId

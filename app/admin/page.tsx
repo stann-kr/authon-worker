@@ -151,7 +151,7 @@ function AdminPageContent() {
     () =>
       [
         { id: "guest-requests", group: "guests", label: t("requests") },
-        { id: "event-manage", group: "events", label: t("eventManagement") },
+        { id: "event-manage", group: "events", label: t("events") },
         { id: "link-create", group: "links", label: linkT("createLink") },
         { id: "link-manage", group: "links", label: linkT("manageLinks") },
         { id: "user-create", group: "users", label: userT("createUser") },
@@ -162,7 +162,7 @@ function AdminPageContent() {
           label: t("passwordRequests"),
           badgeCount: pendingPasswordResetCount,
         },
-        { id: "analytics", group: "analytics", label: t("guestAnalytics") },
+        { id: "analytics", group: "analytics", label: t("analytics") },
         ...(isSuperAdmin
           ? [
               {
@@ -201,14 +201,17 @@ function AdminPageContent() {
     taskOptions.find((option) => option.id === activeTask)?.label ?? t("title");
   const hasPageForm = activeTask === "link-create" || activeTask === "user-create" || activeTask === "venue-create";
   const activeGroup = taskOptions.find((option) => option.id === activeTask)?.group;
-  const contextTasks = ["links", "users", "venues"].includes(activeGroup ?? "")
+  // Create pages already return to their list from the form header.
+  const contextTasks = !hasPageForm && ["links", "users", "venues"].includes(activeGroup ?? "")
     ? taskOptions.filter((option) => option.group === activeGroup && option.id !== activeTask && option.id !== "password-requests")
     : [];
 
-  const eventScopeSelector = (controls: ReactNode, disabled = false) => <EventScopeSelector venueId={venueId} businessDate={selectedDate}
+  // Inline scopes belong to a form that already owns the date field, so they skip the date summary.
+  const eventScopeSelector = (controls: ReactNode, disabled = false, inline = false) => <EventScopeSelector venueId={venueId} businessDate={selectedDate}
     value={selectedEventId} onChange={setSelectedEventId} reloadKey={eventRefreshKey} disabled={disabled}
-    renderScope={(selector, label) => <OperationsScope venueName={currentVenue?.brandName || currentVenue?.name}
-      date={selectedDate} label={label} disabled={disabled}>{controls}{selector}</OperationsScope>} />;
+    renderScope={(selector, label) => inline ? <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">{controls}{selector}</div>
+      : <OperationsScope venueName={currentVenue?.brandName || currentVenue?.name}
+        date={selectedDate} label={label} disabled={disabled}>{controls}{selector}</OperationsScope>} />;
 
   return (
     <WorkspaceShell contentClassName="gap-4 pb-8" title={activeTaskLabel}

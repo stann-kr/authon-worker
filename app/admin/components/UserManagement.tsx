@@ -371,6 +371,12 @@ export default function UserManagement({
                 </div>
               </Sheet>}
 
+              <PanelHeader
+                title={t("userList")}
+                count={filteredUsers.length}
+                onRefresh={loadUsers}
+                isLoading={isCurrentScopeLoading}
+              />
               <div className="account-filters">
                 <div>
                   <label htmlFor="user-search" className="sr-only">
@@ -447,12 +453,6 @@ export default function UserManagement({
                     <option value="deleted">{t("deletedAccounts")}</option>
                   </select>
                 </div>
-                <PanelHeader
-                  title={t("userList")}
-                  count={filteredUsers.length}
-                  onRefresh={loadUsers}
-                  isLoading={isCurrentScopeLoading}
-                />
               </div>
 
               {listState === "loading" ? (

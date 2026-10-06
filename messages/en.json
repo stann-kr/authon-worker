@@ -10,15 +10,15 @@
     "links": "Guest links",
     "requests": "Quota requests",
     "analytics": "Analytics",
-    "users": "Accounts",
-    "passwordRequests": "Reset requests",
+    "users": "Users",
+    "passwordRequests": "Password requests",
     "venues": "Venues",
     "profile": "My account",
     "navigation": "Main navigation",
     "collapseSidebar": "Collapse sidebar",
     "expandSidebar": "Expand sidebar",
     "allMenu": "All menus",
-    "more": "More",
+    "more": "Menu",
     "close": "Close",
     "actions": "Current page actions",
     "pendingCount": "{count} pending",
@@ -95,7 +95,8 @@
     "notFoundTitle": "Page not found",
     "notFoundDescription": "The requested {brand} workspace does not exist or is no longer available.",
     "goHome": "Go home",
-    "deleteGuestConfirm": "Delete guest “{name}”?"
+    "deleteGuestConfirm": "Delete guest “{name}”?",
+    "dismissNotice": "Dismiss"
   },
   "Auth": {
     "signInTitle": "Sign in",
@@ -237,7 +238,7 @@
     "guestOwner": "DJ",
     "event": "Event",
     "venue": "Venue",
-    "operationalDate": "Operational date",
+    "operationalDate": "Date",
     "addGuest": "Add guest",
     "remaining": "Remaining",
     "guestName": "Guest name",
@@ -270,7 +271,8 @@
     "selfRsvpCheckedHelp": "You cannot change or cancel your RSVP after check-in.",
     "doorQrCode": "Check-in QR code",
     "doorQrCodeHelp": "Show this code at check-in.",
-    "doorQrCodeUnavailable": "The code could not be displayed. Give your name at the door."
+    "doorQrCodeUnavailable": "The code could not be displayed. Give your name at the door.",
+    "invitedBy": "Invited by"
   },
   "BulkGuestEntry": {
     "title": "Paste multiple names",
@@ -348,13 +350,14 @@
     "requestsEmpty": "No requests are waiting.",
     "requestsRetryHint": "Some requests could not be loaded. Refresh or open the request list.",
     "quickLinks": "Operations shortcuts",
-    "registrationInfo": "Registration details",
+    "registrationInfo": "My details",
     "defaultGuestLimit": "Default guest limit",
     "guestLimitCount": "{count} guests",
     "unlimited": "Unlimited",
     "doorAccess": "Door access",
     "allowed": "Enabled",
-    "notAllowed": "Disabled"
+    "notAllowed": "Disabled",
+    "accountSettings": "Account settings"
   },
   "GuestOperations": {
     "hideEntry": "Close entry",
@@ -441,7 +444,7 @@
       "title": "Attendance counter",
       "checkedInGuests": "Checked-in guests",
       "walkIns": "Walk-ins",
-      "addWalkIn": "Walk-in entry",
+      "addWalkIn": "Walk-in",
       "undoLast": "Undo last walk-in",
       "pending": "{count} pending",
       "syncing": "Syncing…",
@@ -484,8 +487,13 @@
         "saving": "Confirming…",
         "cancel": "Cancel",
         "review": "Review final total"
-      }
-    }
+      },
+      "totalShort": "Total {count}",
+      "walkInToast": "Walk-in added · {total} total",
+      "walkInUndone": "Last walk-in removed"
+    },
+    "checkedInToast": "{name} checked in",
+    "checkInUndone": "Check-in undone for {name}"
   },
   "AdminNav": {
     "title": "Admin",
@@ -493,7 +501,7 @@
     "guests": "Guests",
     "guestSections": "Guest management sections",
     "guestList": "Manage roster",
-    "requests": "Requests",
+    "requests": "Quota requests",
     "activeTaskAnnouncement": "Current task: {task}",
     "links": "Links",
     "users": "Users",
@@ -525,7 +533,7 @@
       "next": "Next period",
       "inProgress": "In progress",
       "loading": "Preparing period",
-      "comparison": "Compared with {start}–{end}"
+      "comparison": "compared with {start}–{end}"
     },
     "comparison": {
       "notCalculable": "Comparison unavailable",
@@ -556,7 +564,7 @@
     },
     "coverage": {
       "title": "Data details",
-      "summary": "Guest registrations on {days} days",
+      "summary": "{days} days with guest registrations",
       "partial": "Finalized event totals do not match contributor totals. Review the affected event closeout reports.",
       "confirmed": "Finalized events",
       "operatingDays": "Included operating days",
@@ -607,7 +615,7 @@
   },
   "EventScope": {
     "label": "Event",
-    "generalRoster": "General date roster",
+    "generalRoster": "Default list",
     "loadFailed": "Events could not be loaded.",
     "retry": "Retry",
     "state": {
@@ -732,7 +740,7 @@
     "reactivateFailed": "Failed to reactivate the link.",
     "createLink": "Create link",
     "createDescription": "Generate a new access code",
-    "manageLinks": "Manage links",
+    "manageLinks": "Guest links",
     "manageDescription": "View and manage codes",
     "section": "Section",
     "create": "Create",
@@ -749,7 +757,7 @@
     "total": "Total",
     "active": "Active",
     "attention": "Attention",
-    "createAccessLink": "Create access link",
+    "createAccessLink": "Create guest link",
     "createAccessDescription": "Generate a new guest code for an external DJ",
     "date": "Date",
     "djName": "DJ name",
@@ -777,7 +785,7 @@
     "autoHelp": "Uses the visitor's language.",
     "generating": "Generating…",
     "generateLink": "Generate link",
-    "generatedAccessLink": "Generated access link",
+    "generatedAccessLink": "Generated guest link",
     "max": "Max",
     "language": "Language",
     "guestUrl": "Guest URL",
@@ -973,7 +981,7 @@
     "roleDj": "DJ",
     "roleSharedAccount": "Shared account",
     "statusFilter": "Status filter",
-    "currentAccounts": "Current accounts",
+    "currentAccounts": "All statuses",
     "createdAt": "Created",
     "lastLoginAt": "Last sign-in",
     "never": "No record",

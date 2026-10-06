@@ -64,6 +64,7 @@ import {
 } from "../../lib/door/offline-store";
 import type { Guest } from "@/lib/guests/types";
 import { useLocale, useTranslations } from "next-intl";
+import { useToast } from "@/components/feedback/ToastProvider";
 
 const DOOR_ROSTER_DEPENDENCIES: DoorRosterDependencies = Object.freeze({
   fetchGuestsByDate,
@@ -133,6 +134,9 @@ function DoorPageContent() {
     "door:prioritizeWaiting",
     true,
   );
+  const showToast = useToast();
+  // Recently checked-in guests keep their row and tab while their undo toast is visible.
+  const [heldGuestIds, setHeldGuestIds] = useState<ReadonlySet<string>>(() => new Set());
   const {
     displayData,
     feedback,
@@ -247,13 +251,16 @@ function DoorPageContent() {
   const scopeCheckedInGuests = displayData.guests.filter(
     (guest) => guest.status === "checked",
   ).length;
-  const sortedGuests = orderGuestDisplayList(filteredGuests, {
-    sortMode,
-    locale: locale === "ko" ? "ko-KR" : "en-US",
-    prioritizeWaiting,
-  });
+  const isHeld = (guest: Guest) => guest.status === "checked" && heldGuestIds.has(guest.id);
+  const guestsById = new Map(filteredGuests.map((guest) => [guest.id, guest]));
+  const sortedGuests = orderGuestDisplayList(
+    filteredGuests.map((guest) => isHeld(guest) ? { ...guest, status: "pending" as const } : guest), {
+      sortMode,
+      locale: locale === "ko" ? "ko-KR" : "en-US",
+      prioritizeWaiting,
+    }).map((guest) => guestsById.get(guest.id) ?? guest);
   const displayGuests = sortedGuests.filter((guest) =>
-    (rosterStatus === "all" || guest.status === rosterStatus) &&
+    (rosterStatus === "all" || guest.status === rosterStatus || (rosterStatus === "pending" && isHeld(guest))) &&
     [guest.name, guest.registeredByName, getContributor(guest).name].some((value) =>
       value?.toLocaleLowerCase().includes(searchQuery.trim().toLocaleLowerCase())));
   const listState = deriveAsyncListState({
@@ -263,6 +270,25 @@ function DoorPageContent() {
     hasError: loadOutcome === "error",
     isPartial: loadOutcome === "partial",
   });
+
+  const releaseHeldGuest = (id: string) => setHeldGuestIds((current) => {
+    if (!current.has(id)) return current;
+    const next = new Set(current);
+    next.delete(id);
+    return next;
+  });
+  const checkInGuest = async (guest: Guest) => {
+    if (!await handleStatusChange(guest.id, "checked", "check")) return;
+    setHeldGuestIds((current) => new Set(current).add(guest.id));
+    showToast({
+      message: t("checkedInToast", { name: guest.name }),
+      actionLabel: commonT("undo"),
+      onAction: () => void handleStatusChange(guest.id, "pending", "undo").then((undone) => {
+        if (undone) showToast({ message: t("checkInUndone", { name: guest.name }), tone: "neutral" });
+      }),
+      onClose: () => releaseHeldGuest(guest.id),
+    });
+  };
 
   // Only show users/links who registered guests on the selected date
   const activeUserIds = new Set(
@@ -539,9 +565,7 @@ function DoorPageContent() {
                       deleteError={deleteFailure?.guestId === guest.id ? deleteFailure.message : undefined}
                       deleteDisabledReason={isOfflineMode || isOfflineSyncing || offlineQueueCounts.queued > 0 ? t("deleteRequiresOnline") : undefined}
                       isDeleteDisabled={deletionLocked || isCurrentScopeFetching || isOfflineMode || isOfflineSyncing || hasPendingGuestMutations}
-                      onCheck={() =>
-                        handleStatusChange(guest.id, "checked", "check")
-                      }
+                      onCheck={() => void checkInGuest(guest)}
                       onUndo={() =>
                         handleStatusChange(guest.id, "pending", "undo")
                       }

@@ -70,7 +70,7 @@ const LINK_MANAGE_ACTIONS: LinkManageControllerActions = Object.freeze({
 export type LinkManagementSection = "create" | "manage";
 
 interface LinkManagementProps {
-  scopeSelector?: (controls: ReactNode, disabled?: boolean) => ReactNode;
+  scopeSelector?: (controls: ReactNode, disabled?: boolean, inline?: boolean) => ReactNode;
   selectedDate: string;
   onDateChange: (date: string) => void;
   businessDate: string;
@@ -288,7 +288,7 @@ export default function LinkManagement({
           <Sheet id="link-create-panel" presentation="page" headingLevel={2} title={t("createAccessLink")}
             busy={isGenerating || isGeneratedLinkActionPending} dirty={create.hasDraft}
             onClose={() => { create.resetDraft(); setActiveTab("manage"); }}>
-          {scopeSelector ? scopeSelector(scopeControls, isGenerating) : isSuperAdmin && <div className="operations-scope">{scopeControls}</div>}
+          {scopeSelector ? scopeSelector(scopeControls, isGenerating, true) : isSuperAdmin && <div className="operations-scope">{scopeControls}</div>}
           <div className="record-form space-y-6">
             <div className="app-panel record-form-panel">
 
@@ -773,9 +773,10 @@ export default function LinkManagement({
                             <span className="record-value">{link.usedGuests}/{link.maxGuests}</span>
                             <span className={`record-status ${primaryStatus.tone}`}>{primaryStatus.label}</span>
                           </button>
-                          <div hidden={pendingDeleteLink?.id === link.id}><Button variant="secondary" size="sm" onClick={() => shareOrCopyManagedLink(guestPageUrl, link.id)} isLoading={loadingStates[`share_${link.id}`]}>
+                          {/* Expired or disabled links cannot register guests, so the list does not offer them for sharing. */}
+                          {!status.expired && !status.inactive && <div hidden={pendingDeleteLink?.id === link.id}><Button variant="secondary" size="sm" onClick={() => shareOrCopyManagedLink(guestPageUrl, link.id)} isLoading={loadingStates[`share_${link.id}`]}>
                             {completedLinkAction === "shared" ? t("shared") : completedLinkAction === "copied" ? t("copied") : nativeShareAvailable ? t("shareLink") : t("copyLink")}
-                          </Button></div>
+                          </Button></div>}
                         </div>
                         {isLinkVisible && <Sheet labelledBy={`link-label-${link.id}`} id={`link-detail-${link.id}`} title={link.djName} presentation="detail" onClose={() => { setPendingDeleteLink(null); setVisibleLinkId(null); }} busy={Boolean(lifecycleBusyIds[link.id])}>
                           {scopedManageError && <Alert type="error" message={scopedManageError} />}

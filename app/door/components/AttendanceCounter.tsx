@@ -5,6 +5,7 @@ import WorkspaceAction from "@/components/workspace/WorkspaceAction";
 import { fetchDoorAttendanceSummary } from "@/lib/attendance/client";
 
 import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { useToast } from "@/components/feedback/ToastProvider";
 import { useTranslations } from "next-intl";
 import { useAuthSession } from "@/components/AuthSessionProvider";
 import {
@@ -61,6 +62,8 @@ export default function AttendanceCounter({
   dependencies = ATTENDANCE_COUNTER_DEPENDENCIES,
 }: AttendanceCounterProps) {
   const t = useTranslations("Door.attendance");
+  const commonT = useTranslations("Common");
+  const showToast = useToast();
   const { user } = useAuthSession();
   const [detailsOpen, setDetailsOpen] = useState(false);
   const reconciliationStatusRef = useRef<HTMLParagraphElement>(null);
@@ -145,13 +148,32 @@ export default function AttendanceCounter({
     reconciliationStatusRef.current?.focus({ preventScroll: true });
   }, [isReconciliationFormVisible]);
 
+  // The toast's undo runs after the walk-in render, so it must use the latest undo target.
+  const queueUndoRef = useRef(queueUndo);
+  useLayoutEffect(() => { queueUndoRef.current = queueUndo; });
+  const totalAttendance = displayedCheckedInGuests + walkIns;
+  const addWalkIn = async () => {
+    if (!canRecord) return;
+    const total = totalAttendance + 1;
+    if (!await queueWalkIn()) return;
+    // The controller already announces the recorded walk-in for assistive technology.
+    showToast({
+      message: t("walkInToast", { total }),
+      announce: false,
+      actionLabel: commonT("undo"),
+      onAction: () => void queueUndoRef.current().then((undone) => {
+        if (undone) showToast({ message: t("walkInUndone"), tone: "neutral", announce: false });
+      }),
+    });
+  };
   const actions = <>
-    <WorkspaceAction icon="add" onClick={() => void queueWalkIn()}
+    <WorkspaceAction icon="add" onClick={() => void addWalkIn()}
       disabled={!canRecord} aria-describedby={unavailableText ? "attendance-counter-unavailable" : undefined}>
       {t("addWalkIn")} +1
     </WorkspaceAction>
-    <WorkspaceAction icon="chart-line" tone="muted" onClick={() => detailsOpen ? requestSheetClose("attendance-detail-panel") : setDetailsOpen(true)} aria-expanded={detailsOpen} aria-controls={detailsOpen ? "attendance-detail-panel" : undefined}>
-      {t("title")} · {isLoading ? "—" : displayedCheckedInGuests + walkIns}
+    <WorkspaceAction icon="chart-line" tone="muted" onClick={() => detailsOpen ? requestSheetClose("attendance-detail-panel") : setDetailsOpen(true)} aria-expanded={detailsOpen} aria-controls={detailsOpen ? "attendance-detail-panel" : undefined}
+      aria-label={`${t("title")} · ${t("totalShort", { count: isLoading ? "—" : totalAttendance })}`}>
+      {t("totalShort", { count: isLoading ? "—" : totalAttendance })}
     </WorkspaceAction>
   </>;
   const details = <>

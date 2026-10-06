@@ -57,7 +57,7 @@ export default function AnalyticsPeriodBar({
 
   return (
     <div className="context-bar analytics-period-bar">
-      <div className="grid gap-3 xl:grid-cols-[auto_minmax(16rem,1fr)_auto] xl:items-end">
+      <div className="grid gap-3 xl:grid-cols-[auto_minmax(16rem,1fr)] xl:items-end">
         <fieldset className="min-w-0">
           <legend className="type-context-title">{t("period.granularity")}</legend>
           <div className="grid grid-cols-3 gap-2">
@@ -81,7 +81,8 @@ export default function AnalyticsPeriodBar({
 
         <div className="min-w-0">
           <span className="type-context-title">{t("period.selected")}</span>
-          <div className="grid grid-cols-[2.75rem_minmax(0,1fr)_2.75rem] rounded-control border border-border-default bg-canvas">
+          <div className="flex gap-2">
+          <div className="grid min-w-0 flex-1 grid-cols-[2.75rem_minmax(0,1fr)_2.75rem] rounded-control border border-border-default bg-canvas">
             <button
               type="button"
               aria-label={t("period.previous")}
@@ -116,18 +117,19 @@ export default function AnalyticsPeriodBar({
               <Icon name="chevron-right" size={18} />
             </button>
           </div>
+          <Button
+            variant="secondary"
+            onClick={onRefresh}
+            disabled={!view}
+            isLoading={isLoading}
+            aria-label={t("refresh")}
+            title={t("refresh")}
+            className="w-11 shrink-0 px-0"
+          >
+            {!isLoading && <Icon name="refresh" size={16} />}
+          </Button>
+          </div>
         </div>
-
-        <Button
-          variant="secondary"
-          onClick={onRefresh}
-          disabled={!view}
-          isLoading={isLoading}
-          leftIcon={<Icon name="refresh" size={16} />}
-          className="w-full xl:w-auto"
-        >
-          {t("refresh")}
-        </Button>
       </div>
       {view && (
         <p className="text-xs leading-relaxed text-text-muted" aria-live="polite">

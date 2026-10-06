@@ -43,6 +43,7 @@ export default function GuestLimitRequestPanel({
     <>
       <DisclosureSection
         key={requestScopeKey}
+        className="guest-request-disclosure"
         title={t("requestExtra")}
         summaryElementRef={(element) =>
           setRequestSummaryElement(requestScopeKey, element)

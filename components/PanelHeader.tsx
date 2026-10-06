@@ -81,10 +81,9 @@ export default function PanelHeader({
               disabled={isLoading}
               aria-label={t("refresh")}
               title={t("refresh")}
-              className="collection-refresh-button pressable flex min-h-11 touch-manipulation items-center justify-center gap-1.5 rounded-control border border-border-default bg-surface-raised px-3 py-2 text-xs font-medium text-text-muted hover:border-border-strong hover:text-text-heading disabled:opacity-50"
+              className="collection-refresh-button pressable flex min-h-11 min-w-11 touch-manipulation items-center justify-center rounded-control border border-border-subtle bg-transparent p-2 text-text-muted hover:border-border-strong hover:text-text-heading disabled:opacity-50"
             >
               <Icon name="refresh" size={16} className={isLoading ? "animate-spin" : ""} />
-              <span className="collection-refresh-label">{t("refresh")}</span>
             </button>
           )}
         </div>
