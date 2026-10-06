@@ -5,15 +5,15 @@
 .home-heading h1 { color: var(--app-text); font-size: 30px; line-height: 1.25; font-weight: 600; letter-spacing: -0.8px; }
 .home-workbench { display: grid; grid-template-columns: minmax(0, 1fr); align-items: start; gap: 28px; }
 .home-tasks { min-width: 0; }
-.home-primary-task { display: flex; flex-direction: column; align-items: flex-start; min-width: 0; padding: 28px; border: 1px solid var(--app-border); border-radius: 16px; background: var(--app-surface); }
+.home-primary-task { display: flex; flex-direction: column; align-items: flex-start; min-width: 0; padding: 28px; border: 1px solid var(--app-border); border-radius: var(--app-radius-panel); background: var(--app-surface); }
 .home-primary-label { display: flex; justify-content: space-between; align-items: center; gap: 16px; width: 100%; color: var(--app-text-muted); font-size: 12px; }
 .home-primary-label > span { display: flex; align-items: center; gap: 10px; }
 .home-primary-label svg { color: var(--app-action); }
-.home-tasks kbd { display: grid; place-items: center; flex-shrink: 0; width: 24px; height: 24px; border: 1px solid var(--app-border); border-radius: 5px; color: var(--app-text-muted); font-size: 11px; font-weight: 400; }
+.home-tasks kbd { display: grid; place-items: center; flex-shrink: 0; width: 24px; height: 24px; border: 1px solid var(--app-border); border-radius: var(--app-radius-inner); color: var(--app-text-muted); font-size: 11px; font-weight: 400; }
 .home-primary-copy { margin-block: 28px 24px; }
 .home-primary-copy h2 { color: var(--app-text); font-size: 32px; line-height: 1.3; font-weight: 500; letter-spacing: -0.7px; overflow-wrap: anywhere; }
 .home-primary-copy p { margin-top: 10px; color: var(--app-text-muted); font-size: 14px; line-height: 1.7; }
-.home-primary-action { display: inline-flex; justify-content: space-between; align-items: center; gap: 28px; min-height: 46px; padding: 12px 18px; border-radius: 10px; background: var(--app-action); color: var(--app-action-text); font-size: 14px; font-weight: 600; }
+.home-primary-action { display: inline-flex; justify-content: space-between; align-items: center; gap: 28px; min-height: 46px; padding: 12px 18px; border-radius: var(--app-radius-control); background: var(--app-action); color: var(--app-action-text); font-size: 14px; font-weight: 600; }
 .home-primary-action > svg { flex-shrink: 0; }
 .home-secondary-tasks { margin-top: 12px; }
 .home-secondary-task { display: flex; align-items: center; gap: 16px; min-height: 88px; padding: 18px 12px; border-bottom: 1px solid var(--app-border-subtle); border-radius: 0; color: var(--app-text-muted); }
@@ -21,7 +21,7 @@
 .home-secondary-copy { flex: 1; min-width: 0; }
 .home-secondary-copy h2 { color: var(--app-text); font-size: 15px; line-height: 1.5; font-weight: 500; }
 .home-secondary-copy p { margin-top: 4px; font-size: 12px; line-height: 1.6; }
-.home-account-panel { min-width: 0; padding: 20px; border: 1px solid var(--app-border-subtle); border-radius: 16px; background: var(--app-surface-secondary); }
+.home-account-panel { min-width: 0; padding: 20px; border: 1px solid var(--app-border-subtle); border-radius: var(--app-radius-panel); background: var(--app-surface-secondary); }
 .home-account-panel h2, .home-shortcuts h2 { color: var(--app-text-body); font-size: 14px; font-weight: 500; }
 .home-account-identity { margin-top: 16px; }
 .home-account-identity strong { display: block; color: var(--app-text); font-size: 16px; font-weight: 500; overflow-wrap: anywhere; }
@@ -30,7 +30,7 @@
 .home-account-panel dl > div { display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: 8px 16px; padding-block: 14px; border-bottom: 1px solid var(--app-border-subtle); }
 .home-account-panel dt { color: var(--app-text-muted); font-size: 13px; }
 .home-account-panel dd { color: var(--app-text-body); font-size: 16px; font-weight: 500; font-variant-numeric: tabular-nums; }
-.home-account-link { display: flex; align-items: center; justify-content: space-between; gap: 16px; min-height: 44px; margin-top: 12px; border-radius: 6px; color: var(--app-text-body); font-size: 13px; }
+.home-account-link { display: flex; align-items: center; justify-content: space-between; gap: 16px; min-height: 44px; margin-top: 12px; border-radius: var(--app-radius-inner); color: var(--app-text-body); font-size: 13px; }
 .home-shortcuts { margin-top: 40px; }
 .home-shortcuts > h2 { margin-bottom: 12px; color: var(--app-text-muted); }
 .home-shortcuts > div { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 24px; }

@@ -40,8 +40,9 @@ module.exports = {
         }
       },
       borderRadius: {
-        control: "10px",
-        panel: "12px",
+        control: "var(--app-radius-control)",
+        inner: "var(--app-radius-inner)",
+        panel: "var(--app-radius-panel)",
       },
       boxShadow: {
         panel: "none",

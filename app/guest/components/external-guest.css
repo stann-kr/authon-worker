@@ -4,7 +4,7 @@
 .external-guest-header-inner, .external-guest-workspace .page-container { width: 100%; max-width: 1040px; margin-inline: auto; padding-inline: max(24px, env(safe-area-inset-left)) max(24px, env(safe-area-inset-right)); }
 .external-guest-workspace[data-rsvp="true"] :is(.external-guest-header-inner, .page-container) { max-width: 640px; }
 .external-guest-brand { min-width: 0; font-size: 18px; line-height: 1.4; font-weight: 500; letter-spacing: -0.4px; overflow-wrap: anywhere; }
-.external-guest-header button { min-width: 44px; border-radius: 6px; }
+.external-guest-header button { min-width: 44px; border-radius: var(--app-radius-control); }
 .external-guest-header [role="group"] { border: 0; background: transparent; padding: 0; }
 .external-guest-body { display: flex; flex: 1; flex-direction: column; min-width: 0; padding-top: 24px; }
 .external-guest-workspace .page-container { padding-bottom: 24px; }

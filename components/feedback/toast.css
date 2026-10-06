@@ -18,7 +18,7 @@
   min-height: 52px;
   padding: 6px 6px 6px 14px;
   border: 1px solid var(--app-border);
-  border-radius: 14px;
+  border-radius: var(--app-radius-panel);
   background: #232326;
   color: var(--app-text);
   box-shadow: 0 10px 30px rgb(0 0 0 / 0.45), 0 1px 0 rgb(255 255 255 / 0.04) inset;
@@ -50,7 +50,7 @@
   min-height: 40px;
   padding: 8px 12px;
   border: 0;
-  border-radius: 9px;
+  border-radius: var(--app-radius-control);
   background: transparent;
   color: var(--app-action);
   font-size: 14px;
@@ -63,7 +63,7 @@
   min-width: 40px;
   min-height: 40px;
   border: 0;
-  border-radius: 9px;
+  border-radius: var(--app-radius-control);
   background: transparent;
   color: var(--app-text-muted);
 }
