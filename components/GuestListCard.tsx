@@ -1,4 +1,4 @@
-import React, { useContext, useEffect, useId, useRef, useState } from "react";
+import React, { useContext, useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import Button from "./Button";
 import Icon from "./Icon";
 import StatusLabel from "./StatusLabel";
@@ -80,6 +80,9 @@ const GuestListCard: React.FC<GuestListCardProps> = ({
   const [deleteConfirmation, setDeleteConfirmation] = useState<string | null>(null);
   const rowRef = useRef<HTMLElement>(null);
   const restoreFocusAfterDeleteRef = useRef(false);
+  const actionsRef = useRef<HTMLDivElement>(null);
+  // Set while focus belongs to a row action that loading or a status change may replace.
+  const keepActionFocusRef = useRef(false);
   const detailId = useId();
   const disclosureRef = useRef<HTMLButtonElement>(null);
   const confirmationKey = `${guest.id}:${guest.status}`;
@@ -101,6 +104,16 @@ const GuestListCard: React.FC<GuestListCardProps> = ({
       }
     }
   }, [confirmationKey, deleteConfirmation, isDetailOpen, onDelete, undoConfirmation]);
+
+  // Check-in swaps the focused action for a disabled spinner and then the undo button;
+  // keep keyboard focus in this row instead of dropping it to the document.
+  useLayoutEffect(() => {
+    if (!keepActionFocusRef.current) return;
+    const active = document.activeElement;
+    if (active && active !== document.body && active !== rowRef.current && active.isConnected) return;
+    const nextAction = actionsRef.current?.querySelector<HTMLElement>("button:not(:disabled)");
+    (nextAction ?? rowRef.current)?.focus({ preventScroll: true });
+  }, [guest.status, isCheckLoading, isUndoLoading]);
 
   useEffect(() => () => {
     if (!restoreFocusAfterDeleteRef.current || document.activeElement !== document.body) return;
@@ -144,7 +157,13 @@ const GuestListCard: React.FC<GuestListCardProps> = ({
           </span>
         </div>
 
-        <div className="product-guest-actions">
+        <div className="product-guest-actions" ref={actionsRef}
+          onFocus={() => { keepActionFocusRef.current = true; }}
+          onBlur={(event) => {
+            // Moving elsewhere ends the claim; a disabled or removed action loses focus without a target.
+            const target: Element = event.target;
+            keepActionFocusRef.current = !event.relatedTarget && (!target.isConnected || target.matches(":disabled"));
+          }}>
           {guest.status === "pending" && (
             <>
               <span className="sr-only">{t("waitingStatus")}</span>

@@ -152,6 +152,7 @@ function DoorPageContent() {
   const [highlightedGuestId, setHighlightedGuestId] = useState<string | null>(null);
   const revealGuestIdRef = useRef<string | null>(null);
   const codeInputRef = useRef<HTMLInputElement>(null);
+  const guestListRef = useRef<HTMLElement>(null);
   const {
     displayData,
     feedback,
@@ -557,7 +558,9 @@ function DoorPageContent() {
         }
       >
             <section
-              className="min-w-0"
+              ref={guestListRef}
+              tabIndex={-1}
+              className="min-w-0 outline-none"
               aria-label={t("guestList")}
               aria-busy={isCurrentScopeFetching}
             >
@@ -632,7 +635,11 @@ function DoorPageContent() {
                 <EmptyState
                   icon="warning"
                   message={t("loadFailed")}
-                  action={<Button variant="outline" size="sm" onClick={() => void loadData()}>{commonT("retry")}</Button>}
+                  action={<Button variant="outline" size="sm" onClick={() => {
+                    // The retry action is replaced by the loading list, so keep focus on the list itself.
+                    guestListRef.current?.focus({ preventScroll: true });
+                    void loadData();
+                  }}>{commonT("retry")}</Button>}
                 />
               ) : displayGuests.length === 0 ? (
                 <EmptyState

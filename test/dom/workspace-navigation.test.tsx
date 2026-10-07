@@ -463,6 +463,51 @@ for (const desktop of [true, false]) {
   });
 }
 
+test("loading that settles as the overlay is revealed drops it before paint, while a painted overlay keeps its minimum", async () => {
+  // Drive animation frames by hand so "revealed but not yet painted" is a real, observable state.
+  const frames = new Map<number, FrameRequestCallback>();
+  let nextFrame = 0;
+  const realFrame = window.requestAnimationFrame;
+  const realCancel = window.cancelAnimationFrame;
+  window.requestAnimationFrame = (callback) => { frames.set(++nextFrame, callback); return nextFrame; };
+  window.cancelAnimationFrame = (id) => { frames.delete(id); };
+  const paint = () => act(() => {
+    const due = [...frames.values()];
+    frames.clear();
+    for (const callback of due) callback(performance.now());
+  });
+  try {
+    viewport(true);
+    let transition!: ReturnType<typeof useRouteTransition>;
+    render(<Providers pathname="/admin"><AdminShellHarness capture={(value) => { transition = value; }} /></Providers>);
+    const overlay = () => document.querySelector(".route-transition-overlay");
+    const pastShowDelay = () => act(async () => { await new Promise((resolve) => setTimeout(resolve, 140)); });
+
+    let release!: () => void;
+    act(() => { release = transition.registerRouteLoadingTask(); });
+    await pastShowDelay();
+    assert.ok(overlay(), "slow work reveals the overlay");
+    // The page became ready before the overlay reached the screen: no flash over it.
+    act(() => release());
+    const coveredReadyPage = overlay() !== null;
+    const settle = () => act(async () => { await new Promise((resolve) => setTimeout(resolve, 400)); });
+    await settle();
+    assert.equal(coveredReadyPage, false);
+
+    act(() => { release = transition.registerRouteLoadingTask(); });
+    await pastShowDelay();
+    paint(); paint();
+    act(() => release());
+    assert.ok(overlay(), "a painted overlay stays for its minimum visible time");
+    // Minimum visible time plus the exit fade.
+    await settle();
+    assert.equal(overlay(), null);
+  } finally {
+    window.requestAnimationFrame = realFrame;
+    window.cancelAnimationFrame = realCancel;
+  }
+});
+
 test("choosing the current admin task cancels a pending route without abandoning its data request", async () => {
   viewport(true);
   window.history.replaceState(null, "", "/admin?tab=events&view=manage");

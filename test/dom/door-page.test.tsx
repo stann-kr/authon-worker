@@ -141,10 +141,15 @@ test("a check-in keeps its row until the undo toast closes and the toast can rev
   const rowNames = () => [...document.querySelectorAll(".product-guest-row strong")].map((name) => name.textContent);
   await screen.findByRole("button", { name: "Second guest" });
   await act(async () => {});
-  fireEvent.click(screen.getAllByRole("button", { name: messages.Common.checkIn })[0]);
+  const checkIn = screen.getAllByRole("button", { name: messages.Common.checkIn })[0];
+  checkIn.focus();
+  fireEvent.click(checkIn);
   const toast = await screen.findByText(messages.Door.checkedInToast.replace("{name}", "Roster guest"));
   assert.deepEqual(runtime.__doorPageTest.statusCalls, ["g1:checked"]);
   assert.deepEqual(rowNames(), ["Roster guest", "Second guest"]);
+  // Keyboard focus moves to the row's replacement action instead of falling to the page.
+  await waitFor(() => assert.equal(document.activeElement?.getAttribute("aria-label"),
+    messages.Common.undoCheckIn.replace("{name}", "Roster guest")));
   fireEvent.click(within(toast.closest(".app-toast") as HTMLElement).getByRole("button", { name: messages.Common.undo }));
   await screen.findByText(messages.Door.checkInUndone.replace("{name}", "Roster guest"));
   assert.deepEqual(runtime.__doorPageTest.statusCalls, ["g1:checked", "g1:pending"]);
@@ -190,9 +195,12 @@ test("a failed roster load shows a retryable error in the list instead of an emp
   assert.ok(screen.getByText(messages.Door.loadFailed));
   assert.equal(screen.queryByText(messages.Door.noGuestsForDate), null);
   runtime.__doorPageTest.loadError = false;
+  retry.focus();
   fireEvent.click(retry);
   await screen.findByRole("button", { name: "Roster guest" });
   assert.equal(screen.queryByText(messages.Door.loadFailed), null);
+  // The replaced retry action hands focus to the list it reloads.
+  assert.equal(document.activeElement, screen.getByRole("region", { name: messages.Door.guestList }));
 });
 
 test("an empty status tab names its cause and offers a way back to every guest", async () => {

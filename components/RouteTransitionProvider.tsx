@@ -55,6 +55,9 @@ export function RouteTransitionProvider({ children }: { children: ReactNode }) {
   const previousPathnameRef = useRef(pathname);
   const phaseRef = useRef<TransitionPhase>("idle");
   const visibleAtRef = useRef(0);
+  // A delayed overlay counts as shown only after the browser has painted it.
+  const overlayPaintedRef = useRef(false);
+  const paintFrameRef = useRef<number | null>(null);
   const finishPerformanceRef = useRef<ReturnType<typeof beginBrowserLoading> | null>(null);
   const didTransitionTimeoutRef = useRef(false);
   const completionTimerRef = useRef<number | null>(null);
@@ -94,11 +97,19 @@ export function RouteTransitionProvider({ children }: { children: ReactNode }) {
     [],
   );
 
+  const clearPaintFrame = useCallback(() => {
+    if (paintFrameRef.current !== null) {
+      window.cancelAnimationFrame(paintFrameRef.current);
+      paintFrameRef.current = null;
+    }
+  }, []);
+
   const clearTimers = useCallback(() => {
     for (const timerRef of [completionTimerRef, exitTimerRef, safetyTimerRef, revealTimerRef]) {
       clearTimer(timerRef);
     }
-  }, [clearTimer]);
+    clearPaintFrame();
+  }, [clearPaintFrame, clearTimer]);
 
   const clearFocusFrame = useCallback(() => {
     if (focusFrameRef.current !== null) {
@@ -195,10 +206,23 @@ export function RouteTransitionProvider({ children }: { children: ReactNode }) {
 
   const revealOverlay = useCallback((fade?: boolean) => {
     clearTimer(revealTimerRef);
+    clearPaintFrame();
     if (fade !== undefined) setFadesIn(fade);
     visibleAtRef.current = performance.now();
+    // Only the delayed reveal starts unpainted; the hydration spinner and a
+    // re-shown leaving overlay are already on screen.
+    overlayPaintedRef.current = fade !== true;
+    if (fade === true) {
+      // The first frame paints the overlay; the second runs after that paint.
+      paintFrameRef.current = window.requestAnimationFrame(() => {
+        paintFrameRef.current = window.requestAnimationFrame(() => {
+          paintFrameRef.current = null;
+          overlayPaintedRef.current = true;
+        });
+      });
+    }
     updatePhase("visible");
-  }, [clearTimer, updatePhase]);
+  }, [clearPaintFrame, clearTimer, updatePhase]);
 
   const showLoading = useCallback(() => {
     clearTimer(completionTimerRef);
@@ -241,6 +265,14 @@ export function RouteTransitionProvider({ children }: { children: ReactNode }) {
     if (phaseRef.current !== "visible") return;
 
     clearTimer(completionTimerRef);
+    if (!overlayPaintedRef.current) {
+      // Work settled as the reveal timer fired: drop the overlay before its first
+      // paint instead of covering the ready page for the minimum visible time.
+      clearPaintFrame();
+      finishPerformance();
+      updatePhase("idle");
+      return;
+    }
     const elapsed = performance.now() - visibleAtRef.current;
     const completionDelay = getRouteLoadingCompletionDelay(
       elapsed,
@@ -256,7 +288,7 @@ export function RouteTransitionProvider({ children }: { children: ReactNode }) {
         finishTransition();
       }
     }, completionDelay);
-  }, [clearTimer, finishPerformance, finishTransition, loadingTracker, updatePhase]);
+  }, [clearPaintFrame, clearTimer, finishPerformance, finishTransition, loadingTracker, updatePhase]);
 
   const reconcileLoading = useCallback(() => {
     if (loadingTracker.hasPendingWork()) {
