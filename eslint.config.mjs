@@ -196,6 +196,7 @@ const eslintConfig = [
   {
     ignores: [
       "**/.worktrees/**",
+      ".docs/**",
       ".next/**",
       ".open-next/**",
       ".wrangler/**",
