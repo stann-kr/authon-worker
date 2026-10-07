@@ -50,7 +50,7 @@ afterEach(() => {
 const navigation: string[] = [];
 let refreshCount = 0;
 const router = {
-  back() {}, forward() {}, refresh() { refreshCount += 1; }, hmrRefresh() {},
+  bfcacheId: "test", back() {}, forward() {}, refresh() { refreshCount += 1; }, hmrRefresh() {},
   push(href: string) { navigation.push(href); },
   replace() {}, prefetch() {},
 };

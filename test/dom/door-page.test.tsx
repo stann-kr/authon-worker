@@ -89,7 +89,7 @@ before(async () => {
 after(() => hooks.deregister());
 afterEach(() => { cleanup(); reset(); window.localStorage.clear(); destinations.length = 0; });
 const destinations: string[] = [];
-const router = { back() {}, forward() {}, refresh() {}, hmrRefresh() {}, push() {}, replace(href: string) { destinations.push(href); }, prefetch() {} };
+const router = { bfcacheId: "test", back() {}, forward() {}, refresh() {}, hmrRefresh() {}, push() {}, replace(href: string) { destinations.push(href); }, prefetch() {} };
 const user: User = { id: "admin-1", name: "Admin", email: "admin@example.test", role: "venue_admin", account_kind: "personal", door_access_enabled: false, venue_id: "venue-1", guest_limit: null };
 function frame(account: User = user, admin = false) {
   return <AppRouterContext.Provider value={router}><PathnameContext.Provider value={admin ? "/admin" : "/door"}>
