@@ -20,7 +20,10 @@ import { formatDateDisplay, formatVenueDateTime } from "@/lib/date";
 import {
   createEvent,
   transitionEventState,
+  updateEvent,
 } from "@/lib/api/events";
+import { EVENT_FORM_ERROR_KEYS, selectDomainMessageKey } from "@/lib/api/domain-error";
+import { canEditEventDetails } from "@/lib/events/domain";
 import type { Event, EventState } from "@/lib/events/types";
 import { useLatestRequestGuard } from "@/lib/hooks";
 import { deriveAsyncListState, shouldShowEmptyState } from "@/lib/ui/async-list-state";
@@ -43,6 +46,33 @@ const EVENT_STATE_TONES: Record<EventState, RecordStatusTone> = {
   closed: "neutral",
   archived: "inactive",
 };
+
+type EventFormField = "name" | "capacity" | "target";
+type EventFieldValues = { name: string; capacity: string; targetGuests: string };
+interface EventActionError {
+  target: string;
+  message: string;
+  field?: EventFormField;
+}
+
+// Validation failures mark their field; any other failure stays a form-level message.
+const EVENT_ERROR_FIELDS: Partial<Record<string, EventFormField>> = {
+  INVALID_EVENT_NAME: "name",
+  INVALID_CAPACITY: "capacity",
+  INVALID_TARGET: "target",
+  TARGET_EXCEEDS_CAPACITY: "target",
+};
+
+const exceedsCapacity = ({ capacity, targetGuests }: EventFieldValues) =>
+  capacity !== "" && targetGuests !== "" && Number(targetGuests) > Number(capacity);
+const toOptionalNumber = (value: string) => value === "" ? null : Number(value);
+const toFieldValues = (event: Event): EventFieldValues => ({
+  name: event.name,
+  capacity: event.capacity?.toString() ?? "",
+  targetGuests: event.targetGuests?.toString() ?? "",
+});
+const editTarget = (eventId: string) => `edit:${eventId}`;
+const fieldIdPrefix = (target: string) => target === "create" ? "event" : `event-${target.replace(":", "-")}`;
 
 export default function EventManagement({
   scopeSelector,
@@ -85,7 +115,10 @@ export default function EventManagement({
   const [targetGuests, setTargetGuests] = useState("");
   const [templateSourceEventId, setTemplateSourceEventId] = useState<string | null>(null);
   // Success is announced through the global toast; failures stay where the action happened.
-  const [actionError, setActionError] = useState<{ target: "create" | string; message: string } | null>(null);
+  const [actionError, setActionError] = useState<EventActionError | null>(null);
+  const [detailsDraft, setDetailsDraft] = useState<(EventFieldValues & { scope: string; eventId: string }) | null>(null);
+  const pendingFieldFocusRef = useRef(false);
+  const editFocusEventIdRef = useRef<string | null>(null);
   const requestGuard = useLatestRequestGuard();
   const scope = `${venueId ?? ""}:${selectedDate}`;
 
@@ -120,7 +153,29 @@ export default function EventManagement({
     setActionError(null);
     setTemplateSourceEventId(null);
     setPendingTransition(null);
+    setDetailsDraft(null);
   }, [scope]);
+
+  // Fields are disabled while a request runs, so move to the invalid one once the form unlocks.
+  useEffect(() => {
+    if (busyId || !actionError?.field || !pendingFieldFocusRef.current) return;
+    pendingFieldFocusRef.current = false;
+    document.getElementById(`${fieldIdPrefix(actionError.target)}-${actionError.field}`)?.focus();
+  }, [actionError, busyId]);
+
+  // The edit trigger leaves with the click that opens the form, so start keyboard users in its first field.
+  useEffect(() => {
+    const eventId = editFocusEventIdRef.current;
+    if (!eventId || detailsDraft?.eventId !== eventId) return;
+    editFocusEventIdRef.current = null;
+    document.getElementById(`event-edit-${eventId}-name`)?.focus();
+  }, [detailsDraft]);
+
+  const showActionError = (target: string, code: string | null | undefined, fallback: "createFailed" | "updateFailed") => {
+    const field = code ? EVENT_ERROR_FIELDS[code] : undefined;
+    pendingFieldFocusRef.current = Boolean(field);
+    setActionError({ target, field, message: t(selectDomainMessageKey(code, EVENT_FORM_ERROR_KEYS, fallback)) });
+  };
 
   useEffect(() => { setDetailId(selectedEventId); }, [selectedEventId, scope]);
 
@@ -140,6 +195,10 @@ export default function EventManagement({
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!venueId || busyId || isMutatingRef.current) return;
+    if (exceedsCapacity({ name, capacity, targetGuests })) {
+      showActionError("create", "TARGET_EXCEEDS_CAPACITY", "createFailed");
+      return;
+    }
     isMutatingRef.current = true;
     const draft = {
       venueId,
@@ -154,7 +213,7 @@ export default function EventManagement({
     try {
       const response = await createEvent(draft);
       if (response.error || !response.data) {
-        setActionError({ target: "create", message: t("createFailed") });
+        showActionError("create", response.error, "createFailed");
       } else {
         setName("");
         setCapacity("");
@@ -171,8 +230,55 @@ export default function EventManagement({
         onEventsChanged();
       }
     } catch {
-      setActionError({ target: "create", message: t("createFailed") });
+      showActionError("create", null, "createFailed");
     } finally {
+      isMutatingRef.current = false;
+      setBusyId(null);
+    }
+  };
+
+  const isDetailsDraftDirty = (event: Event) => {
+    if (detailsDraft?.eventId !== event.id) return false;
+    const saved = toFieldValues(event);
+    return detailsDraft.name !== saved.name || detailsDraft.capacity !== saved.capacity ||
+      detailsDraft.targetGuests !== saved.targetGuests;
+  };
+
+  const saveDetails = async (formEvent: FormEvent<HTMLFormElement>, event: Event) => {
+    formEvent.preventDefault();
+    const draft = detailsDraft;
+    if (!draft || draft.scope !== scope || draft.eventId !== event.id || busyId || isMutatingRef.current) return;
+    const target = editTarget(event.id);
+    if (exceedsCapacity(draft)) {
+      showActionError(target, "TARGET_EXCEEDS_CAPACITY", "updateFailed");
+      return;
+    }
+    isMutatingRef.current = true;
+    setBusyId(target);
+    setActionError(null);
+    try {
+      const response = await updateEvent(event.id, {
+        name: draft.name,
+        capacity: toOptionalNumber(draft.capacity),
+        targetGuests: toOptionalNumber(draft.targetGuests),
+      });
+      if (response.error || !response.data) {
+        showActionError(target, response.error, "updateFailed");
+      } else {
+        setDetailsDraft(null);
+        showToast({ message: t("updated") });
+        await loadEvents();
+        onEventsChanged();
+      }
+    } catch {
+      showActionError(target, null, "updateFailed");
+    } finally {
+      // The form leaves after a save, so keep focus inside the record.
+      window.requestAnimationFrame(() => {
+        if (document.activeElement === document.body) {
+          eventCardRefs.current.get(event.id)?.focus({ preventScroll: true });
+        }
+      });
       isMutatingRef.current = false;
       setBusyId(null);
     }
@@ -232,6 +338,9 @@ export default function EventManagement({
       ? pendingTransition
       : null;
     const eventError = actionError?.target === event.id ? actionError.message : null;
+    const editError = actionError?.target === editTarget(event.id) ? actionError : null;
+    const canEdit = canEditEventDetails(event.state);
+    const isEditing = canEdit && detailsDraft?.scope === scope && detailsDraft.eventId === event.id;
     const nextStates: EventState[] =
       event.state === "draft"
         ? ["open", "archived"]
@@ -248,7 +357,7 @@ export default function EventManagement({
           <time className="text-sm text-text-muted" dateTime={event.businessDate}>{formatDateDisplay(event.businessDate, locale)}</time>
         </div>
         <span className="shrink-0 font-mono text-xs text-text-muted">
-          {t("capacity")} {event.capacity ?? "—"}
+          {t("capacity")} {event.capacity ?? "—"} · {t("target")} {event.targetGuests ?? "—"}
         </span>
       </div>
       {(event.doorOpensAt || event.guestCutoffAt) && (
@@ -278,11 +387,29 @@ export default function EventManagement({
         >
           {isSelected ? t("selected") : t("useForOperations")}
         </Button>
+        {canEdit && !isEditing && (
+          <Button
+            id={`event-edit-trigger-${event.id}`}
+            size="sm"
+            variant="outline"
+            onClick={() => {
+              setActionError(null);
+              setPendingTransition(null);
+              editFocusEventIdRef.current = event.id;
+              setDetailsDraft({ ...toFieldValues(event), scope, eventId: event.id });
+            }}
+            disabled={isBusy}
+          >
+            {t("editDetails")}
+          </Button>
+        )}
         <Button
           size="sm"
           variant="outline"
           onClick={() => {
-            if (createOpen && !confirmWorkspaceNavigation()) return;
+            // Covers both an open create form and unsaved detail edits.
+            if (!confirmWorkspaceNavigation()) return;
+            setDetailsDraft(null);
             setDetailId(null);
             setActionError(null);
             setCreateOpen(true);
@@ -323,6 +450,30 @@ export default function EventManagement({
           </Button>
         ))}
       </div>
+      {isEditing && detailsDraft && (
+        <form className="grid gap-4 border-t border-border-subtle pt-4" aria-labelledby={`event-edit-title-${event.id}`}
+          onSubmit={(formEvent) => void saveDetails(formEvent, event)}>
+          <h3 id={`event-edit-title-${event.id}`} className="type-panel-title">{t("editTitle")}</h3>
+          {editError && <Alert id={`event-edit-${event.id}-error`} type="error" message={editError.message} />}
+          <fieldset disabled={isBusy} className="grid gap-4">
+            <EventFields idPrefix={`event-edit-${event.id}`} values={detailsDraft}
+              invalidField={editError?.field} errorId={`event-edit-${event.id}-error`}
+              onChange={(values) => setDetailsDraft((current) => current && { ...current, ...values })} />
+            <div className="flex flex-wrap gap-3">
+              <Button type="submit" isLoading={busyId === editTarget(event.id)} disabled={!detailsDraft.name.trim()}>
+                {busyId === editTarget(event.id) ? t("saving") : t("save")}
+              </Button>
+              <Button variant="outline" onClick={() => {
+                setDetailsDraft(null);
+                setActionError(null);
+                window.requestAnimationFrame(() => document.getElementById(`event-edit-trigger-${event.id}`)?.focus());
+              }}>
+                {t("cancel")}
+              </Button>
+            </div>
+          </fieldset>
+        </form>
+      )}
       <ConfirmDialog
         open={Boolean(eventTransition)}
         title={eventTransition ? t(`transition.${eventTransition.nextState}`) : ""}
@@ -362,50 +513,16 @@ export default function EventManagement({
         setCreateOpen(false); setName(""); setCapacity(""); setTargetGuests(""); setTemplateSourceEventId(null);
       }} dirty={Boolean(name || capacity || targetGuests)} busy={Boolean(busyId)}>
         <p className="text-sm text-text-muted">{currentVenue?.brandName || currentVenue?.name} · {commonT("operationalDate")} <time dateTime={selectedDate}>{formatDateDisplay(selectedDate, locale)}</time></p>
-        {actionError?.target === "create" && <Alert type="error" message={actionError.message} />}
+        {actionError?.target === "create" && <Alert id="event-create-error" type="error" message={actionError.message} />}
         <form onSubmit={submit}>
           <fieldset disabled={Boolean(busyId) || !venueId} className="grid gap-4">
-            <div>
-              <label htmlFor="event-name" className="app-label">{t("name")}</label>
-              <input
-                id="event-name"
-                name="event-name"
-                value={name}
-                onChange={(event) => setName(event.target.value)}
-                maxLength={120}
-                required
-                autoComplete="off"
-                className="app-field"
-              />
-            </div>
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div>
-                <label htmlFor="event-capacity" className="app-label">{t("capacity")}</label>
-                <input
-                  id="event-capacity"
-                  name="event-capacity"
-                  type="number"
-                  min="1"
-                  max="100000"
-                  value={capacity}
-                  onChange={(event) => setCapacity(event.target.value)}
-                  className="app-field"
-                />
-              </div>
-              <div>
-                <label htmlFor="event-target" className="app-label">{t("target")}</label>
-                <input
-                  id="event-target"
-                  name="event-target"
-                  type="number"
-                  min="0"
-                  max="100000"
-                  value={targetGuests}
-                  onChange={(event) => setTargetGuests(event.target.value)}
-                  className="app-field"
-                />
-              </div>
-            </div>
+            <EventFields idPrefix="event" values={{ name, capacity, targetGuests }}
+              invalidField={actionError?.target === "create" ? actionError.field : undefined} errorId="event-create-error"
+              onChange={(values) => {
+                if (values.name !== undefined) setName(values.name);
+                if (values.capacity !== undefined) setCapacity(values.capacity);
+                if (values.targetGuests !== undefined) setTargetGuests(values.targetGuests);
+              }} />
             {templateSourceEventId && (
               <p className="app-helper" role="status">
                 {t("templateSelected")}
@@ -437,13 +554,18 @@ export default function EventManagement({
             <div className="record-list">
               {explicitEvents.map((event) => <article key={event.id} className="record-row">
                 <div className="record-summary">
-                  <button type="button" className="record-open" onClick={() => { setActionError(null); setDetailId(detailId === event.id ? null : event.id); setPendingTransition(null); }} disabled={Boolean(busyId)} aria-expanded={detailId === event.id} aria-controls={detailId === event.id ? `event-detail-${event.id}` : undefined}>
+                  <button type="button" className="record-open" onClick={() => {
+                    if (detailId === event.id) { requestSheetClose(`event-detail-${event.id}`); return; }
+                    // Switching records closes the open detail, so it must not drop unsaved edits silently.
+                    if (detailId && !confirmWorkspaceNavigation()) return;
+                    setActionError(null); setDetailsDraft(null); setDetailId(event.id); setPendingTransition(null);
+                  }} disabled={Boolean(busyId)} aria-expanded={detailId === event.id} aria-controls={detailId === event.id ? `event-detail-${event.id}` : undefined}>
                     <span className="record-identity"><strong id={`event-label-${event.id}`}>{event.name}</strong><small>{formatDateDisplay(event.businessDate, locale)}{selectedEventId === event.id ? ` · ${t("selected")}` : ""}</small></span>
                     <span className="record-value">{t("capacity")} {event.capacity ?? "—"}</span>
                     <RecordStatus tone={EVENT_STATE_TONES[event.state]}>{t(`state.${event.state}`)}</RecordStatus>
                   </button>
                 </div>
-                {detailId === event.id && <Sheet labelledBy={`event-label-${event.id}`} id={`event-detail-${event.id}`} title={event.name} presentation="detail" size="record" onClose={() => { setDetailId(null); setPendingTransition(null); setActionError(null); }} busy={Boolean(busyId)}>
+                {detailId === event.id && <Sheet labelledBy={`event-label-${event.id}`} id={`event-detail-${event.id}`} title={event.name} presentation="detail" size="record" onClose={() => { setDetailId(null); setPendingTransition(null); setActionError(null); setDetailsDraft(null); }} busy={Boolean(busyId)} dirty={isDetailsDraftDirty(event)}>
                   {renderDetails(event)}
                 </Sheet>}
               </article>)}
@@ -456,4 +578,63 @@ export default function EventManagement({
 
     </div>
   );
+}
+
+/** Name, capacity and target fields shared by the create and edit forms. */
+function EventFields({ idPrefix, values, onChange, invalidField, errorId }: {
+  idPrefix: string;
+  values: EventFieldValues;
+  onChange: (values: Partial<EventFieldValues>) => void;
+  invalidField?: EventFormField;
+  errorId: string;
+}) {
+  const t = useTranslations("EventAdmin");
+  const describedBy = (field: EventFormField) =>
+    invalidField === field ? { "aria-invalid": true, "aria-describedby": errorId } : {};
+  return <>
+    <div>
+      <label htmlFor={`${idPrefix}-name`} className="app-label">{t("name")}</label>
+      <input
+        id={`${idPrefix}-name`}
+        name="event-name"
+        value={values.name}
+        onChange={(event) => onChange({ name: event.target.value })}
+        maxLength={120}
+        required
+        autoComplete="off"
+        className="app-field"
+        {...describedBy("name")}
+      />
+    </div>
+    <div className="grid gap-4 sm:grid-cols-2">
+      <div>
+        <label htmlFor={`${idPrefix}-capacity`} className="app-label">{t("capacity")}</label>
+        <input
+          id={`${idPrefix}-capacity`}
+          name="event-capacity"
+          type="number"
+          min="1"
+          max="100000"
+          value={values.capacity}
+          onChange={(event) => onChange({ capacity: event.target.value })}
+          className="app-field"
+          {...describedBy("capacity")}
+        />
+      </div>
+      <div>
+        <label htmlFor={`${idPrefix}-target`} className="app-label">{t("target")}</label>
+        <input
+          id={`${idPrefix}-target`}
+          name="event-target"
+          type="number"
+          min="0"
+          max="100000"
+          value={values.targetGuests}
+          onChange={(event) => onChange({ targetGuests: event.target.value })}
+          className="app-field"
+          {...describedBy("target")}
+        />
+      </div>
+    </div>
+  </>;
 }

@@ -12,9 +12,11 @@ interface AlertProps {
   type: 'error' | 'success';
   message: string;
   className?: string;
+  /** Lets a field reference this message through aria-describedby. */
+  id?: string;
 }
 
-export default function Alert({ type, message, className = '' }: AlertProps) {
+export default function Alert({ type, message, className = '', id }: AlertProps) {
   if (!message) return null;
 
   const styles = {
@@ -24,6 +26,7 @@ export default function Alert({ type, message, className = '' }: AlertProps) {
 
   return (
     <div
+      id={id}
       className={`rounded-control border p-4 ${styles[type]} ${className}`}
       role={type === 'error' ? 'alert' : 'status'}
       aria-live={type === 'error' ? 'assertive' : 'polite'}

@@ -22,6 +22,7 @@ import type {
   EventState,
 } from "@/lib/events/types";
 import {
+  canEditEventDetails,
   canTransitionEventState,
   isBusinessDate,
   isEventState,
@@ -289,6 +290,9 @@ export async function updateEvent(
     const actor = await requireAccess("admin");
     const db = getDb();
     const current = await requireManagedEvent(db, actor, eventId);
+    if (!canEditEventDetails(current.state)) {
+      return { data: null, error: "EVENT_LOCKED" };
+    }
     if (current.state !== "draft" && updates.businessDate !== undefined) {
       return { data: null, error: "EVENT_DATE_LOCKED" };
     }

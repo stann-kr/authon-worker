@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { registerHooks } from "node:module";
 import { afterEach, before, test } from "node:test";
 import { NextIntlClientProvider } from "next-intl";
-import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import messages from "@/messages/en.json";
 import { ToastProvider } from "@/components/feedback/ToastProvider";
 import type { Event } from "@/lib/events/types";
@@ -13,7 +13,12 @@ if (!window.requestAnimationFrame) {
 }
 
 const runtime = globalThis as typeof globalThis & {
-  eventAdminView: { events: Partial<Event>[]; transitions: string[] };
+  eventAdminView: {
+    events: Partial<Event>[];
+    transitions: string[];
+    updates?: Array<Record<string, unknown>>;
+    updateError?: string;
+  };
 };
 
 registerHooks({
@@ -31,6 +36,13 @@ registerHooks({
           globalThis.eventAdminView.transitions.push(state);
           globalThis.eventAdminView.events = globalThis.eventAdminView.events.map((event) => event.id === id ? { ...event, state } : event);
           return { data: { id, state }, error: null };
+        };
+        export const updateEvent = async (id, updates) => {
+          const view = globalThis.eventAdminView;
+          (view.updates ??= []).push({ id, ...updates });
+          if (view.updateError) return { data: null, error: view.updateError };
+          view.events = view.events.map((event) => event.id === id ? { ...event, ...updates } : event);
+          return { data: view.events.find((event) => event.id === id), error: null };
         };`,
       "lib/api/closeout": 'export const fetchEventCloseout = async () => ({ data: null, error: "UNAVAILABLE" }); export const confirmEventCloseout = fetchEventCloseout;',
       "components/VenueSelector": 'export const useVenueSelector = () => ({ venueId: "venue-1", venues: [], selectedVenueId: "venue-1", currentVenue: {}, isSuperAdmin: false }); export default function VenueSelector() { return null; }',
@@ -79,4 +91,52 @@ test("closing an event waits for confirmation", async () => {
   assert.deepEqual(runtime.eventAdminView.transitions, ["closed"]);
   assert.ok(screen.getByText(messages.EventAdmin.stateChanged).closest('[role="status"]'));
   assert.equal(within(details).queryByRole("group", { name: messages.EventAdmin.transition.closed }), null);
+});
+
+test("event details can be corrected, with field errors before and after the server check", async () => {
+  runtime.eventAdminView = {
+    events: [{ ...baseEvent, id: "event-1", name: "Test night", state: "open", compatibilityKey: null }],
+    transitions: [],
+    updateError: "INVALID_EVENT_NAME",
+  };
+  render(view());
+  fireEvent.click(await screen.findByRole("button", { name: /Test night/ }));
+  const details = screen.getByRole("region", { name: "Test night" });
+  fireEvent.click(within(details).getByRole("button", { name: messages.EventAdmin.editDetails }));
+  const form = within(details).getByRole("form", { name: messages.EventAdmin.editTitle });
+  const name = within(form).getByLabelText(messages.EventAdmin.name) as HTMLInputElement;
+  const target = within(form).getByLabelText(messages.EventAdmin.target) as HTMLInputElement;
+  assert.equal(document.activeElement, name);
+
+  // A target above capacity is caught before any request and points at its field.
+  fireEvent.change(target, { target: { value: "150" } });
+  fireEvent.submit(form);
+  assert.ok(within(form).getByText(messages.EventAdmin.targetExceedsCapacity));
+  assert.equal(target.getAttribute("aria-invalid"), "true");
+  assert.equal(document.activeElement, target);
+  assert.equal(runtime.eventAdminView.updates?.length ?? 0, 0);
+
+  fireEvent.change(target, { target: { value: "80" } });
+  fireEvent.change(name, { target: { value: "Late night" } });
+  await act(async () => fireEvent.submit(form));
+  await waitFor(() => assert.ok(within(form).getByText(messages.EventAdmin.invalidName)));
+  assert.equal(name.getAttribute("aria-invalid"), "true");
+
+  runtime.eventAdminView.updateError = undefined;
+  await act(async () => fireEvent.submit(form));
+  assert.deepEqual(runtime.eventAdminView.updates?.at(-1), { id: "event-1", name: "Late night", capacity: 100, targetGuests: 80 });
+  assert.ok(await screen.findByText(messages.EventAdmin.updated));
+  assert.ok(await screen.findByRole("button", { name: /Late night/ }));
+  assert.equal(within(details).queryByRole("form", { name: messages.EventAdmin.editTitle }), null);
+});
+
+test("archived events stay read-only", async () => {
+  runtime.eventAdminView = {
+    events: [{ ...baseEvent, id: "event-2", name: "Old night", state: "archived", compatibilityKey: null }],
+    transitions: [],
+  };
+  render(view());
+  fireEvent.click(await screen.findByRole("button", { name: /Old night/ }));
+  const details = screen.getByRole("region", { name: "Old night" });
+  assert.equal(within(details).queryByRole("button", { name: messages.EventAdmin.editDetails }), null);
 });
