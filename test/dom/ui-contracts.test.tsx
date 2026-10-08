@@ -425,7 +425,7 @@ test("task and section controls expose current state and respect busy locks", ()
 test("analytics period controls expose selection and keyboard-native navigation", () => {
   let previousAnchor = "";
   let nextGranularity = "";
-  render(
+  const periodBar = (isLoading: boolean) => (
     <NextIntlClientProvider
       locale="en"
       messages={{
@@ -452,7 +452,8 @@ test("analytics period controls expose selection and keyboard-native navigation"
       <AnalyticsPeriodBar
         granularity="month"
         view={EMPTY_ANALYTICS_DTO_FIXTURE}
-        isLoading={false}
+        isLoading={isLoading}
+        anchorDate="2026-09-01"
         onGranularityChange={(value) => {
           nextGranularity = value;
         }}
@@ -461,8 +462,9 @@ test("analytics period controls expose selection and keyboard-native navigation"
         }}
         onRefresh={() => {}}
       />
-    </NextIntlClientProvider>,
+    </NextIntlClientProvider>
   );
+  const { rerender } = render(periodBar(false));
 
   assert.equal(
     screen.getByRole("button", { name: "Month" }).getAttribute("aria-pressed"),
@@ -473,6 +475,12 @@ test("analytics period controls expose selection and keyboard-native navigation"
   fireEvent.click(screen.getByRole("button", { name: "Previous period" }));
   assert.equal(previousAnchor, "2026-07-01");
   assert.ok(screen.getByText(/Compared with Jul 1, 2026-Jul 31, 2026/));
+
+  // While another period loads, the old comparison range would contradict the new label.
+  rerender(periodBar(true));
+  assert.ok(screen.getByText("September 2026"));
+  assert.equal(screen.queryByText(/Compared with/), null);
+  assert.ok(screen.getByText("Preparing period"));
 });
 
 test("attendance analytics keeps KPIs and its empty state visible", () => {

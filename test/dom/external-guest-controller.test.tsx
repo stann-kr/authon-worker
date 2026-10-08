@@ -1044,9 +1044,18 @@ test("a confirmed duplicate resubmits only the reviewed name with an explicit ov
   await act(async () => {
     controller?.handleGuestNameChange("guest a");
   });
-  await act(async () => {
-    await controller?.handleSave();
-  });
+  // A duplicate is an expected answer that the screen explains, so it is not logged as a failure.
+  const loggedErrors: unknown[] = [];
+  const originalError = console.error;
+  console.error = (...args: unknown[]) => { loggedErrors.push(args); };
+  try {
+    await act(async () => {
+      await controller?.handleSave();
+    });
+  } finally {
+    console.error = originalError;
+  }
+  assert.deepEqual(loggedErrors, []);
   assert.equal(
     screen.getByTestId("error").textContent,
     "duplicateRequiresConfirmation",

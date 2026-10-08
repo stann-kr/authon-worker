@@ -147,14 +147,20 @@ export default function AnalyticsPeriodBar({
         </div>
       </div>
       {view && (
-        <p className={`text-xs leading-relaxed text-text-muted ${isLoading ? "opacity-50" : ""}`} aria-live="polite">
-          {t("coverage.summary", {
-            days: view.coverage.operatingDays,
-          })}{" · "}
-          {t("period.comparison", {
-            start: formatDate(view.comparisonPeriod.startDate),
-            end: formatDate(inclusiveEndDate(view.comparisonPeriod.endDateExclusive)),
-          })}
+        // The previous period's coverage would contradict the new label, so a refetch shows its own status.
+        // Each fact wraps as a unit so a narrow screen never splits a count from its unit.
+        <p className={`break-keep text-xs leading-relaxed text-text-muted ${isLoading ? "opacity-50" : ""}`} aria-live="polite">
+          {isLoading ? t("period.loading") : <>
+            <span className="inline-block">
+              {t("coverage.summary", { days: view.coverage.operatingDays })}
+            </span>{" · "}
+            <span className="inline-block">
+              {t("period.comparison", {
+                start: formatDate(view.comparisonPeriod.startDate),
+                end: formatDate(inclusiveEndDate(view.comparisonPeriod.endDateExclusive)),
+              })}
+            </span>
+          </>}
         </p>
       )}
     </div>

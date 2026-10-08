@@ -187,7 +187,6 @@ export default function useExternalGuestController({
         await dependencies.validateExternalToken(token, ownerKey);
       if (!isLatestRequest()) return "stale" as const;
       if (validationError) {
-        console.error("Invalid external guest link:", validationError);
         if (getExternalLinkValidationDisposition(validationError) === "invalid") {
           const activeElement = document.activeElement;
           const focusIsInsideView = Boolean(
@@ -208,6 +207,8 @@ export default function useExternalGuestController({
           setVenueInfo(null);
           setGuests([]);
         } else {
+          // An invalid or expired link is an expected answer; only an unavailable check is a failure.
+          console.error("External guest link could not be checked:", validationError);
           setHasValidationError(false);
           setError("refreshFailed");
         }
@@ -232,7 +233,7 @@ export default function useExternalGuestController({
       return "failed" as const;
     } catch (validationError) {
       if (!isLatestRequest()) return "stale" as const;
-      console.error("Invalid external guest link:", validationError);
+      console.error("External guest link could not be checked:", validationError);
       setHasValidationError(false);
       setError("refreshFailed");
       return "failed" as const;
@@ -353,7 +354,6 @@ export default function useExternalGuestController({
             });
 
       if (createError) {
-        console.error("Failed to register guest:", createError);
         actionFeedback =
           createError === "RATE_LIMITED"
             ? "rateLimited"
@@ -364,6 +364,10 @@ export default function useExternalGuestController({
             : createError === "DUPLICATE_REQUIRES_CONFIRMATION"
               ? "duplicateRequiresConfirmation"
               : "registerResultUnknown";
+        // Duplicates, full links and rate limits are answers the screen explains, not failures to log.
+        if (actionFeedback === "registerResultUnknown") {
+          console.error("Failed to register guest:", createError);
+        }
       } else if (data) {
         if (isSelfRsvp) {
           setGuests([data]);

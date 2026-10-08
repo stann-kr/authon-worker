@@ -361,14 +361,16 @@ export default function AuthenticatedGuestView({ user }: AuthenticatedGuestViewP
       if (createError === "DUPLICATE_REQUIRES_CONFIRMATION") {
         duplicateCandidate = submittedName;
       } else if (createError) {
-        console.error("Failed to create guest:", createError);
-        actionFeedback = t(
-          selectDomainMessageKey(
-            createError,
-            GUEST_CREATE_ERROR_KEYS,
-            "registerResultUnknown",
-          ),
+        const feedbackKey = selectDomainMessageKey(
+          createError,
+          GUEST_CREATE_ERROR_KEYS,
+          "registerResultUnknown",
         );
+        // Known domain answers such as a reached limit are explained on screen, not logged as failures.
+        if (feedbackKey === "registerResultUnknown") {
+          console.error("Failed to create guest:", createError);
+        }
+        actionFeedback = t(feedbackKey);
       } else if (data) {
         setGuests((prev) => [...prev, data]);
         setGuestName("");
@@ -774,13 +776,21 @@ export default function AuthenticatedGuestView({ user }: AuthenticatedGuestViewP
               {listState === "loading" ? (
                 <Skeleton rows={5} />
               ) : shouldShowEmptyState(listState) ? (
+                // Name the narrowest active filter and offer its way back, as the Door roster does.
                 <EmptyState
                   icon="user-add"
                   message={
-                    searchQuery || rosterStatus !== "all"
+                    searchQuery.trim()
                       ? t("noSearchResults")
-                      : t("noGuestsForDate")
+                      : rosterStatus !== "all"
+                        ? t(rosterStatus === "pending" ? "noWaitingGuests" : "noCheckedGuests")
+                        : t("noGuestsForDate")
                   }
+                  action={searchQuery.trim()
+                    ? <Button variant="outline" size="sm" onClick={() => setSearchQuery("")}>{commonT("clearSearch")}</Button>
+                    : rosterStatus !== "all"
+                      ? <Button variant="outline" size="sm" onClick={() => setRosterStatus("all")}>{t("showAllGuests")}</Button>
+                      : undefined}
                 />
               ) : (
                 <div
