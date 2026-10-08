@@ -116,6 +116,7 @@
     "confirmPassword": "비밀번호 확인",
     "signIn": "로그인",
     "passwordChangedSignIn": "비밀번호가 변경되었습니다. 새 비밀번호로 다시 로그인해주세요.",
+    "sessionExpiredSignIn": "로그인이 만료되었습니다. 다시 로그인해주세요.",
     "setPasswordAndSignIn": "비밀번호 설정 후 로그인",
     "backToSignIn": "로그인으로 돌아가기",
     "setupCodePageTitle": "설정 코드로 비밀번호 만들기",

@@ -38,6 +38,7 @@ const AUTH_ERROR_FIELD_IDS: Partial<Record<AuthErrorTarget, string>> = {
 // 로그인 화면으로 돌아온 이유. 허용된 값만 안내하며 다른 값은 무시합니다.
 const LOGIN_NOTICE_KEYS = {
   "password-changed": "passwordChangedSignIn",
+  "session-expired": "sessionExpiredSignIn",
 } as const;
 
 function readLoginNoticeKey() {
@@ -261,9 +262,14 @@ export default function LoginPage() {
             className="auth-login-form"
             aria-busy={isLoading}
           >
-            {noticeKey && mode === "login" && (
+            {noticeKey && mode === "login" && (noticeKey === "sessionExpiredSignIn" ? (
+              // An expired session is a reason to sign in again, not a completed action.
+              <p className="border-l-2 border-status-waiting bg-status-waiting/10 px-3 py-2 text-sm leading-relaxed text-text-body" role="status">
+                {t(noticeKey)}
+              </p>
+            ) : (
               <Alert type="success" message={t(noticeKey)} />
-            )}
+            ))}
 
             {mode === "setup" && (
               <p className="text-sm text-text-muted" role="note">

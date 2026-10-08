@@ -116,6 +116,7 @@
     "confirmPassword": "Confirm password",
     "signIn": "Sign in",
     "passwordChangedSignIn": "Your password was changed. Sign in with your new password.",
+    "sessionExpiredSignIn": "Your sign-in has expired. Please sign in again.",
     "setPasswordAndSignIn": "Set password & sign in",
     "backToSignIn": "Back to sign in",
     "setupCodePageTitle": "Create a password with a setup code",
