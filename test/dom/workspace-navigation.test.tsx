@@ -612,6 +612,19 @@ test("Events stays out of the mobile dock even while active and remains in the f
   assert.equal(screen.queryByRole("link", { name: messages.Workspace.events }) === null, true);
 });
 
+test("the mobile menu button announces pending work for items outside the dock", () => {
+  viewport(false);
+  const view = render(<Providers><MenuHarness initial="door" /></Providers>);
+  const trigger = screen.getByRole("button", { name: messages.Workspace.allMenu });
+  const count = document.getElementById(trigger.getAttribute("aria-describedby") ?? "");
+  assert.equal(count?.textContent, "3");
+  assert.equal(count?.getAttribute("aria-label"), messages.Workspace.pendingCount.replace("{count}", "3"));
+  view.unmount();
+  // Once the pending item is active it joins the dock with its own badge, so the menu button stays plain.
+  render(<Providers><MenuHarness initial="password-requests" /></Providers>);
+  assert.equal(screen.getByRole("button", { name: messages.Workspace.allMenu }).hasAttribute("aria-describedby"), false);
+});
+
 test("mobile menu closes from its own control and restores the dock trigger", async () => {
   viewport(false);
   render(<Providers><MenuHarness initial="door" /></Providers>);
