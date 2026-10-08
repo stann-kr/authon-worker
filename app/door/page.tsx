@@ -42,6 +42,7 @@ import useDoorCodeLookup, {
   type DoorCodeLookupGuest,
 } from "./useDoorCodeLookup";
 import { getBusinessDate } from "../../lib/date";
+import { FULL_CALENDAR_DATE, formatCalendarDate } from "../../lib/ui/date-format";
 import { orderGuestDisplayList } from "../../lib/guests/display-order";
 import { deriveAsyncListState } from "../../lib/ui/async-list-state";
 import {
@@ -347,7 +348,7 @@ function DoorPageContent() {
     retry: () => void,
   ) => showDoorToast({
     message: result.message,
-    tone: "error",
+    tone: result.conflict ? "warning" : "error",
     durationMs: 10_000,
     ...(result.retryable ? { actionLabel: commonT("retry"), onAction: retry } : {}),
   });
@@ -355,6 +356,8 @@ function DoorPageContent() {
     const result = await handleStatusChange(guest.id, "checked", "check");
     if (result.status === "skipped") return;
     if (result.status === "failed") {
+      // A guest checked in elsewhere keeps its row in place like a local check-in while the roster refreshes.
+      if (result.conflict) setHeldGuestIds((current) => new Set(current).add(guest.id));
       showStatusFailure(result, () => void checkInGuest(guest));
       return;
     }
@@ -539,6 +542,18 @@ function DoorPageContent() {
                 {selector}
               </OperationsScope>} />
 
+                {/* A saved date survives re-entry, so say when the roster is not today's before anyone searches it. */}
+                {currentVenue && selectedDate !== businessDate && (
+                  <div className="flex flex-wrap items-center justify-between gap-2 border-l-2 border-status-waiting bg-status-waiting/10 px-3 py-2">
+                    <p className="min-w-0 text-xs leading-relaxed text-text-muted" role="status">
+                      {t("viewingOtherDate", { date: formatCalendarDate(locale, selectedDate, FULL_CALENDAR_DATE) })}
+                    </p>
+                    <Button variant="outline" size="sm" className="shrink-0"
+                      onClick={() => { setSelectedDate(businessDate); setSelectedEventId(null); }}>
+                      {t("goToToday")}
+                    </Button>
+                  </div>
+                )}
                 {!isOnline && (
                   <p className="border-l-2 border-status-waiting bg-status-waiting/10 px-3 py-2 text-xs leading-relaxed text-text-muted" role="status">
                     {t(offlineScope ? "offlineEventScope" : "offlineGeneralScope")}

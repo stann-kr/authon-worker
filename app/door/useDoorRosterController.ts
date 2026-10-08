@@ -111,13 +111,14 @@ export interface DoorRosterDependencies {
 
 /**
  * applied: the server confirmed the change. queued: saved on this device for a later sync.
- * failed: nothing changed; check-in and undo callers own the visible message.
+ * failed: nothing changed; check-in and undo callers own the visible message. conflict marks a
+ * guest whose status already changed elsewhere, so the roster refreshes instead of offering a retry.
  * skipped: the scope or permission no longer allows the change, so callers stay silent.
  */
 export type DoorStatusChangeResult =
   | { status: "applied" }
   | { status: "queued" }
-  | { status: "failed"; message: string; retryable: boolean }
+  | { status: "failed"; message: string; retryable: boolean; conflict?: boolean }
   | { status: "skipped" };
 
 const SKIPPED: DoorStatusChangeResult = { status: "skipped" };
@@ -909,10 +910,16 @@ export default function useDoorRosterController({
         refreshOwner.queued ??= "background";
         return { status: "applied" };
       }
+      if (error === "ATTENDANCE_SCOPE_CLOSED") {
+        return reportFailure(translate("attendanceScopeClosed"), false);
+      }
+      if (error === "GUEST_ACTIVITY_REJECTED" && newStatus !== "deleted") {
+        // Another device changed this guest first; a retry cannot apply, so read the current roster.
+        refreshOwner.queued ??= "background";
+        return { status: "failed", message: translate("statusChangedElsewhere"), retryable: false, conflict: true };
+      }
       console.error("Failed to update guest status:", error);
-      return error === "ATTENDANCE_SCOPE_CLOSED"
-        ? reportFailure(translate("attendanceScopeClosed"), false)
-        : reportFailure(translate("updateFailed"));
+      return reportFailure(translate("updateFailed"));
     } catch (error) {
       if (!operation.isCurrent(currentScopeKeyRef.current)) return SKIPPED;
       console.error("Failed to update guest status:", error);

@@ -9,16 +9,18 @@ import { AuthSessionProvider } from "@/components/AuthSessionProvider";
 import { RouteTransitionProvider } from "@/components/RouteTransitionProvider";
 import { ToastProvider } from "@/components/feedback/ToastProvider";
 import type { User } from "@/lib/auth";
+import { getBusinessDate } from "@/lib/date";
+import { FULL_CALENDAR_DATE, formatCalendarDate } from "@/lib/ui/date-format";
 import messages from "@/messages/en.json";
 
 const runtime = globalThis as typeof globalThis & {
   __doorPageTest: {
     venueReady: boolean; deleted: boolean; deleteCalls: number; deleteError: boolean; summaryError: boolean;
     reads: Array<{ date: string; venueId: string; eventId: string | null }>;
-    statuses: Record<string, string> | null; statusCalls: string[]; statusFailures: number; loadError: boolean;
+    statuses: Record<string, string> | null; statusCalls: string[]; statusFailures: number; statusRejections: number; loadError: boolean;
   };
 };
-const reset = () => { runtime.__doorPageTest = { venueReady: true, deleted: false, deleteCalls: 0, deleteError: false, summaryError: false, reads: [], statuses: null, statusCalls: [], statusFailures: 0, loadError: false }; };
+const reset = () => { runtime.__doorPageTest = { venueReady: true, deleted: false, deleteCalls: 0, deleteError: false, summaryError: false, reads: [], statuses: null, statusCalls: [], statusFailures: 0, statusRejections: 0, loadError: false }; };
 reset();
 Object.defineProperty(globalThis, "self", { configurable: true, value: window });
 Object.defineProperty(globalThis, "localStorage", { configurable: true, value: window.localStorage });
@@ -41,6 +43,8 @@ const sources: Record<string, string> = {
       if (!state.statuses) return { data: null, error: 'UNEXPECTED_MUTATION' };
       state.statusCalls.push(id + ':' + status);
       if (state.statusFailures > 0) { state.statusFailures--; return { data: null, error: 'UNAVAILABLE' }; }
+      // Another device applies the same change first, so the server rejects this stale request.
+      if (state.statusRejections > 0) { state.statusRejections--; state.statuses[id] = status; return { data: null, error: 'GUEST_ACTIVITY_REJECTED' }; }
       state.statuses[id] = status;
       const [name, time] = { g1: ['Roster guest', '10:00'], g2: ['Second guest', '10:05'], g3: ['Third guest', '10:10'] }[id];
       return { data: { id, name, status, createdAt: '2026-09-15T' + time + ':00Z' }, error: null }; };
@@ -186,6 +190,34 @@ test("a failed check-in explains itself in an error toast whose retry applies th
   fireEvent.click(within(failure).getByRole("button", { name: messages.Common.retry }));
   await screen.findByText(messages.Door.checkedInToast.replace("{name}", "Roster guest"));
   assert.deepEqual(runtime.__doorPageTest.statusCalls, ["g1:checked", "g1:checked"]);
+});
+
+test("a check-in already applied on another device warns once and shows the refreshed row in place", async () => {
+  runtime.__doorPageTest.statuses = { g1: "pending", g2: "pending" };
+  runtime.__doorPageTest.statusRejections = 1;
+  location(); render(frame());
+  const rowNames = () => [...document.querySelectorAll(".product-guest-row strong")].map((name) => name.textContent);
+  await screen.findByRole("button", { name: "Second guest" });
+  await act(async () => {});
+  fireEvent.click(screen.getAllByRole("button", { name: messages.Common.checkIn })[0]);
+  const warning = (await screen.findByText(messages.Door.statusChangedElsewhere)).closest(".app-toast") as HTMLElement;
+  assert.equal(warning.getAttribute("data-tone"), "warning");
+  // Repeating a rejected change cannot apply, so the toast offers no retry.
+  assert.equal(within(warning).queryByRole("button", { name: messages.Common.retry }), null);
+  await screen.findByRole("button", { name: messages.Common.undoCheckIn.replace("{name}", "Roster guest") });
+  assert.deepEqual(rowNames(), ["Roster guest", "Second guest"]);
+  assert.deepEqual(runtime.__doorPageTest.statusCalls, ["g1:checked"]);
+});
+
+test("a roster for another operating date says so and returns to today", async () => {
+  location(); render(frame());
+  await screen.findByRole("button", { name: "Roster guest" });
+  const today = getBusinessDate({ timezone: "Asia/Seoul" });
+  const notice = messages.Door.viewingOtherDate.replace("{date}", formatCalendarDate("en", "2026-09-15", FULL_CALENDAR_DATE));
+  assert.ok(screen.getByText(notice));
+  fireEvent.click(screen.getByRole("button", { name: messages.Door.goToToday }));
+  await waitFor(() => assert.equal(runtime.__doorPageTest.reads.at(-1)?.date, today));
+  assert.equal(screen.queryByText(notice), null);
 });
 
 test("a failed roster load shows a retryable error in the list instead of an empty roster", async () => {
