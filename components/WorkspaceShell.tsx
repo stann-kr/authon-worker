@@ -30,6 +30,7 @@ interface WorkspaceShellProps {
     onTaskChange: (task: AdminTask) => void;
     disabled?: boolean;
     pendingPasswordResetCount?: number;
+    pendingGuestLimitRequestCount?: number;
   };
 }
 
@@ -153,7 +154,10 @@ function ReadyWorkspaceShell({
           accountName={user.name} accountRole={<RoleLabel role={user.account_kind === "shared" ? "shared" : user.role} />}
           collapsed={sidebarCollapsed} onToggleSidebar={toggleSidebar}
           disabled={adminNavigation?.disabled}
-          counts={{ "password-requests": adminNavigation?.pendingPasswordResetCount ?? 0 }}
+          counts={{
+            "password-requests": adminNavigation?.pendingPasswordResetCount ?? 0,
+            requests: adminNavigation?.pendingGuestLimitRequestCount ?? 0,
+          }}
           actions={actions} onSelect={selectItem} />}
       </div>
 

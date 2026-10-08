@@ -35,10 +35,11 @@ const request: GuestLimitRequestView = {
   status: "pending", decidedByUserId: null, decidedAt: null, decisionNote: null,
   createdAt: "2026-09-18T00:00:00Z", updatedAt: "2026-09-18T00:00:00Z",
 };
-function view(date = request.date) {
+function view(date = request.date, onPendingCountChange?: (count: number) => void) {
   return <NextIntlClientProvider locale="en" messages={messages}>
     <ToastProvider>
-      <GuestLimitRequestManagement eventId={null} selectedDate={date} onDateChange={() => {}} businessDate={request.date} />
+      <GuestLimitRequestManagement eventId={null} selectedDate={date} onDateChange={() => {}} businessDate={request.date}
+        onPendingCountChange={onPendingCountChange} />
     </ToastProvider>
   </NextIntlClientProvider>;
 }
@@ -139,4 +140,18 @@ test("background refresh receives incoming work without replacing an approval dr
   assert.ok(screen.getByText(messages.GuestLimitAdmin.loadFailed));
   assert.ok(screen.getByText("Incoming staff"));
   assert.equal(input.value, "2");
+});
+
+test("the navigation badge follows the inbox after each successful load and decision", async () => {
+  const counts: number[] = [];
+  runtime.guestLimitAdminActions.fetch = async () => ({ data: [request, { ...request, id: "approved", status: "approved" }], error: null });
+  runtime.guestLimitAdminActions.decide = async () => {
+    runtime.guestLimitAdminActions.fetch = async () => ({ data: [{ ...request, status: "approved" }], error: null });
+    return { error: null };
+  };
+  render(view(request.date, (count) => counts.push(count)));
+  const approve = await screen.findByRole("button", { name: messages.GuestLimitAdmin.approve });
+  await act(async () => fireEvent.click(approve));
+  await waitFor(() => assert.equal(counts.at(-1), 0));
+  assert.equal(counts[0], 1);
 });

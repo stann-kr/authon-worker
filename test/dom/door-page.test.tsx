@@ -69,6 +69,7 @@ const sources: Record<string, string> = {
   "lib/events/client": `export const fetchEvents = async () => ({ data: ['active', 'draft', 'closed', 'finalized'].map(id => ({
     id, name: id, state: id === 'finalized' ? 'closed' : id === 'active' ? 'open' : id, compatibilityKey: null })), error: null });`,
   "lib/api/password-reset-requests": "export const fetchPendingPasswordResetRequestCount = async () => ({data: 0, error: null});",
+  "lib/api/guest-limits": "export const fetchPendingGuestLimitRequestCount = async () => ({data: 0, error: null});",
   "components/VenueSelector": `const currentVenue = { id: 'venue-1', name: 'Test venue', timezone: 'Asia/Seoul' };
     export const useVenueSelector = () => ({ currentVenue: globalThis.__doorPageTest.venueReady ? currentVenue : null, venueId: 'venue-1', venues: [], selectedVenueId: 'venue-1', isSuperAdmin: false });
     export default function VenueSelector() { return null; }`,

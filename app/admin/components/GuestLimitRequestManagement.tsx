@@ -39,12 +39,15 @@ export default function GuestLimitRequestManagement({
   onDateChange,
   businessDate,
   scopeSelector,
+  onPendingCountChange,
 }: {
   eventId: string | null;
   selectedDate: string;
   onDateChange: (date: string) => void;
   businessDate: string;
   scopeSelector?: (controls: ReactNode, disabled?: boolean) => ReactNode;
+  /** Receives the venue-wide pending count after each successful load, for the navigation badge. */
+  onPendingCountChange?: (count: number) => void;
 }) {
   const t = useTranslations("GuestLimitAdmin");
   const commonT = useTranslations("Common");
@@ -116,6 +119,7 @@ export default function GuestLimitRequestManagement({
       } else {
         const nextRequests = data ?? [];
         setRequests(nextRequests);
+        onPendingCountChange?.(nextRequests.filter((request) => request.status === "pending").length);
         setApprovedAmounts(current => Object.fromEntries(nextRequests.map((request) => [
           request.id, current[request.id] ?? String(request.requestedExtra),
         ])));
@@ -135,7 +139,7 @@ export default function GuestLimitRequestManagement({
         setIsLoading(false);
       }
     }
-  }, [selectedDate, eventId, requestGuard, t, venueId, scope]);
+  }, [selectedDate, eventId, onPendingCountChange, requestGuard, t, venueId, scope]);
 
   useEffect(() => {
     loadRequests();
