@@ -1,4 +1,5 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useSyncExternalStore } from "react";
+import { getBusinessDate, type VenueTimeSettings } from "./date";
 import {
   createLatestRequestGuard,
   createScopedOperationGuard,
@@ -56,6 +57,24 @@ export function useLocalStorage<T>(key: string, initialValue: T) {
   );
 
   return [storedValue, setValue] as const;
+}
+
+function subscribeToBusinessDayClock(onChange: () => void) {
+  const interval = window.setInterval(onChange, 60_000);
+  document.addEventListener("visibilitychange", onChange);
+  return () => {
+    window.clearInterval(interval);
+    document.removeEventListener("visibilitychange", onChange);
+  };
+}
+
+/**
+ * 베뉴의 오늘 영업일을 반환합니다.
+ * 1분마다, 그리고 화면이 다시 보일 때 다시 읽어 마감 시각을 넘긴 화면도 다음 영업일로 넘어갑니다.
+ */
+export function useBusinessDate(settings: VenueTimeSettings | null | undefined): string {
+  const read = () => getBusinessDate(settings ?? {});
+  return useSyncExternalStore(subscribeToBusinessDayClock, read, read);
 }
 
 /**

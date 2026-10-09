@@ -10,7 +10,7 @@ import { fetchGuestsByDate } from "@/lib/guests/client";
 import { fetchOfflineDoorRoster } from "@/lib/door/client";
 
 import { useState, useEffect, useMemo, useRef, useCallback, useSyncExternalStore } from "react";
-import { useLocalStorage } from "../../lib/hooks";
+import { useBusinessDate, useLocalStorage } from "../../lib/hooks";
 import { useAuthSession } from "@/components/AuthSessionProvider";
 import { hasAccess } from "@/lib/auth";
 import { isBusinessDate } from "@/lib/events/domain";
@@ -41,7 +41,7 @@ import useDoorCodeLookup, {
   type DoorCodeLookupDependencies,
   type DoorCodeLookupGuest,
 } from "./useDoorCodeLookup";
-import { getBusinessDate } from "../../lib/date";
+import { restoreOperatingDate, type SavedOperatingDate } from "../../lib/date";
 import { FULL_CALENDAR_DATE, formatCalendarDate } from "../../lib/ui/date-format";
 import { orderGuestDisplayList } from "../../lib/guests/display-order";
 import { deriveAsyncListState } from "../../lib/ui/async-list-state";
@@ -123,14 +123,14 @@ function DoorPageContent() {
     venueLoadError,
     refreshVenues,
   } = useVenueSelector();
-  const businessDate = getBusinessDate(currentVenue ?? {});
-  const [savedDate, setSavedDate] = useLocalStorage<{ venueId: string; date: string } | string | null>(
-    "door:selectedDate", null,
+  const businessDate = useBusinessDate(currentVenue);
+  // A chosen date lasts for the business day it was chosen in; the next business day opens on today.
+  const [savedDate, setSavedDate] = useLocalStorage<SavedOperatingDate | null>("door:selectedDate", null);
+  const selectedDate = restoreOperatingDate(savedDate, venueId, currentVenue ?? {}) ?? businessDate;
+  const setSelectedDate = useCallback(
+    (date: string) => setSavedDate({ venueId, date, selectedAt: Date.now() }),
+    [setSavedDate, venueId],
   );
-  const selectedDate = isBusinessDate(savedDate) ? savedDate
-    : savedDate && typeof savedDate === "object" && savedDate.venueId === venueId && isBusinessDate(savedDate.date)
-      ? savedDate.date : businessDate;
-  const setSelectedDate = useCallback((date: string) => setSavedDate({ venueId, date }), [setSavedDate, venueId]);
   const [tool, setTool] = useState<"code" | "offline" | null>(null);
   const [selectedDJ, setSelectedDJ] = useState<string>("all");
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
@@ -205,14 +205,6 @@ function DoorPageContent() {
     if (matchesVenue) setSelectedDate(date!);
     setSelectedEventId(matchesVenue ? search.get("eventId") : null);
   }, [currentVenue, setSelectedDate, venueId]);
-
-  useEffect(() => {
-    if (!currentVenue || !isBusinessDate(savedDate)) return;
-    const search = new URLSearchParams(window.location.search);
-    const requestedDate = search.get("date");
-    const hasRequestedDate = search.get("venue") === venueId && isBusinessDate(requestedDate);
-    setSelectedDate(hasRequestedDate ? requestedDate! : savedDate);
-  }, [currentVenue, savedDate, setSelectedDate, venueId]);
 
   useEffect(() => {
     setSelectedDJ("all");

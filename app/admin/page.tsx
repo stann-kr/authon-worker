@@ -24,7 +24,7 @@ import type { AdminTaskOption } from "./components/AdminTaskSwitcher";
 import AuthGuard from "../../components/AuthGuard";
 import WorkspaceShell from "../../components/WorkspaceShell";
 import VenueLoadNotice from "../../components/VenueLoadNotice";
-import { getBusinessDate } from "../../lib/date";
+import { useBusinessDate } from "../../lib/hooks";
 import { useTranslations } from "next-intl";
 import { useAuthSession } from "../../components/AuthSessionProvider";
 import { useVenueSelector } from "../../components/VenueSelector";
@@ -87,7 +87,7 @@ function AdminPageContent() {
     venueLoadError,
     refreshVenues,
   } = useVenueSelector();
-  const businessDate = getBusinessDate(currentVenue ?? {});
+  const businessDate = useBusinessDate(currentVenue);
   const [eventRefreshKey, setEventRefreshKey] = useState(0);
   const isSuperAdmin = user?.role === "super_admin";
   const {
@@ -106,6 +106,7 @@ function AdminPageContent() {
     isRouteTransitionActive,
     isSuperAdmin,
     venueId,
+    venueTime: currentVenue,
   });
   useEffect(() => {
     if (!isRoleReady || activeTask !== "guest-list" || !currentVenue) return;

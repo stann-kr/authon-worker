@@ -279,7 +279,7 @@ test("a failed deletion keeps the detail available and a confirmed retry removes
 
 test("legacy admin roster URLs forward a saved or explicit valid scope to check-in", async () => {
   for (const query of ["", "?tab=guests&view=list", "?tab=guests&view=list&venue=venue-1&date=2026-09-15&eventId=active"]) {
-    window.localStorage.setItem("admin:selectedDate", JSON.stringify({ venueId: "venue-1", date: "2026-09-12" }));
+    window.localStorage.setItem("admin:selectedDate", JSON.stringify({ venueId: "venue-1", date: "2026-09-12", selectedAt: Date.now() }));
     window.history.replaceState(null, "", `/admin${query}`);
     render(frame(user, true));
     await waitFor(() => assert.ok(destinations.length));
@@ -307,6 +307,31 @@ test("the unified roster retains its operating date after returning home and rej
   render(frame());
   await openGuest();
   assert.deepEqual(runtime.__doorPageTest.reads.at(-1), { date: "2026-09-15", venueId: "venue-1", eventId: null });
+});
+
+
+test("a chosen roster date lasts until the business day changes, on reopening or while left open", async (t) => {
+  // 23:00 KST on 2026-09-15 belongs to that business day under the default 06:00 closing.
+  t.mock.timers.enable({ apis: ["Date"], now: Date.parse("2026-09-15T14:00:00.000Z") });
+  const choose = (selectedAt: number) => window.localStorage.setItem("door:selectedDate",
+    JSON.stringify({ venueId: "venue-1", date: "2026-09-10", selectedAt }));
+  window.history.replaceState(null, "", "/door");
+  choose(Date.now() - 24 * 60 * 60 * 1000);
+  render(frame());
+  await screen.findByRole("button", { name: "Roster guest" });
+  await act(async () => {});
+  assert.ok(runtime.__doorPageTest.reads.every(({ date }) => date === "2026-09-15"));
+  cleanup();
+
+  choose(Date.now());
+  render(frame());
+  await waitFor(() => assert.equal(runtime.__doorPageTest.reads.at(-1)?.date, "2026-09-10"));
+  assert.ok(await screen.findByRole("button", { name: messages.Door.goToToday }));
+  // 06:30 KST the next morning is past closing; showing the page again moves to the new business day.
+  t.mock.timers.setTime(Date.parse("2026-09-15T21:30:00.000Z"));
+  act(() => { document.dispatchEvent(new Event("visibilitychange")); });
+  await waitFor(() => assert.equal(runtime.__doorPageTest.reads.at(-1)?.date, "2026-09-16"));
+  assert.equal(screen.queryByRole("button", { name: messages.Door.goToToday }), null);
 });
 
 

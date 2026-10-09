@@ -1,3 +1,5 @@
+import { isBusinessDate } from "./events/domain.ts";
+
 /** 베뉴 시간 설정의 기존 데이터 및 신규 생성 기본값. */
 export const DEFAULT_VENUE_TIMEZONE = "Asia/Seoul";
 export const DEFAULT_OPENING_TIME = "22:00";
@@ -153,6 +155,39 @@ export function getBusinessDate(
   return crossesMidnight && localMinutes < closingMinutes
     ? previousYmd(local)
     : padYmd(local);
+}
+
+/** An operating date chosen in a workspace, with the instant that places the choice in a business day. */
+export interface SavedOperatingDate {
+  venueId: string;
+  date: string;
+  selectedAt: number;
+}
+
+/**
+ * Restores a chosen operating date only during the venue business day it was chosen in,
+ * so the next business day opens on today again. Both instants use the same settings,
+ * so venue settings that finish loading after the choice cannot expire it early.
+ */
+export function restoreOperatingDate(
+  saved: unknown,
+  venueId: string,
+  settings: VenueTimeSettings = {},
+  now: Date = new Date(),
+): string | null {
+  if (!saved || typeof saved !== "object") return null;
+  const { venueId: savedVenueId, date, selectedAt } = saved as Partial<SavedOperatingDate>;
+  if (
+    savedVenueId !== venueId ||
+    !isBusinessDate(date) ||
+    typeof selectedAt !== "number" ||
+    !Number.isFinite(selectedAt)
+  ) {
+    return null;
+  }
+  return getBusinessDate(settings, new Date(selectedAt)) === getBusinessDate(settings, now)
+    ? date
+    : null;
 }
 
 /**
