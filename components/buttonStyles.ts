@@ -22,11 +22,11 @@ const variantClasses: Record<ButtonVariant, string> = {
   primary:
     "border border-action-primary bg-action-primary font-semibold text-action-text",
   secondary:
-    "border border-border-subtle bg-surface-raised font-medium text-text-heading",
+    "border border-transparent bg-surface-raised font-medium text-text-heading",
   outline:
     "border border-border-default bg-transparent font-medium text-text-heading",
   danger:
-    "border border-status-danger/70 bg-status-danger/10 font-semibold text-status-danger",
+    "border border-transparent bg-status-danger/15 font-semibold text-status-danger",
   confirm: "border font-semibold",
   ghost:
     "border border-transparent bg-transparent font-medium text-text-muted",

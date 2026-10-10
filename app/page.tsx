@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { logout, hasAccess } from "../lib/auth";
 import RouteLoadingFallback from "@/components/RouteLoadingFallback";
 import RoleLabel from "@/components/RoleLabel";
-import Icon, { type IconName } from "@/components/Icon";
+import Icon from "@/components/Icon";
 import TransitionLink from "@/components/TransitionLink";
 import { useRouteTransition } from "@/components/RouteTransitionProvider";
 import WorkspaceShell from "@/components/WorkspaceShell";
@@ -20,7 +20,6 @@ interface MenuItem {
   title: string;
   description: string;
   action: string;
-  icon: IconName;
   href: string;
   requiredAccess: import("@/lib/users/policy").AccessScope[];
 }
@@ -40,7 +39,6 @@ export default function Home() {
       title: t("guestTitle"),
       description: t("guestDescription"),
       action: t("guestAction"),
-      icon: "user-add",
       href: "/guest",
       requiredAccess: ["guest"],
     },
@@ -50,7 +48,6 @@ export default function Home() {
       title: t("doorTitle"),
       description: t("doorDescription"),
       action: t("doorAction"),
-      icon: "login",
       href: "/door",
       requiredAccess: ["door"],
     },
@@ -129,7 +126,6 @@ export default function Home() {
   const quickLinks = getWorkspaceItems({
     role: user.role, accountKind: user.account_kind, doorAccessEnabled: user.door_access_enabled,
   }).filter((item) => ["events", "links", "users", "analytics"].includes(item.id));
-  const quickIcons: Record<string, IconName> = { events: "calendar", links: "link", users: "users", analytics: "chart-line" };
 
   return (
     <WorkspaceShell contentClassName="home-page">
@@ -164,7 +160,7 @@ export default function Home() {
         {quickLinks.length > 0 && <nav className="home-shortcuts" aria-label={t("quickLinks")}>
           <h2>{t("quickLinks")}</h2>
           <div>{quickLinks.map((item) => <TransitionLink key={item.id} href={item.href} className="home-shortcut pressable">
-            <Icon name={quickIcons[item.id]} size={20} /><span>{workspaceT(item.label)}</span><Icon name="chevron-right" size={16} />
+            <span>{workspaceT(item.label)}</span><Icon name="chevron-right" size={16} />
           </TransitionLink>)}</div>
         </nav>}
       </div>
@@ -188,11 +184,10 @@ function WorkspaceLink({
       className={`${primary ? "home-primary-task" : "home-secondary-task"} pressable`}
     >
       {primary ? <>
-        <div className="home-primary-label"><span><Icon name={item.icon} size={22} />{item.category}</span><kbd aria-hidden="true">{index + 1}</kbd></div>
+        <div className="home-primary-label"><span>{item.category}</span><kbd aria-hidden="true">{index + 1}</kbd></div>
         <div className="home-primary-copy"><h2>{item.title}</h2><p>{item.description}</p></div>
         <span className="home-primary-action">{item.action}<Icon name="arrow-right" size={18} /></span>
       </> : <>
-        <Icon name={item.icon} size={22} />
         <div className="home-secondary-copy"><h2>{item.title}</h2><p>{item.description}</p></div>
         <kbd aria-hidden="true">{index + 1}</kbd><Icon name="chevron-right" size={16} />
       </>}

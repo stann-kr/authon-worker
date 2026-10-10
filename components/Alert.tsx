@@ -20,8 +20,8 @@ export default function Alert({ type, message, className = '', id }: AlertProps)
   if (!message) return null;
 
   const styles = {
-    error: "border-status-danger/70 bg-status-danger/10 text-status-danger",
-    success: "border-status-checked/70 bg-status-checked/10 text-status-checked",
+    error: "border-transparent bg-status-danger/10 text-status-danger",
+    success: "border-transparent bg-status-checked/10 text-status-checked",
   };
 
   return (

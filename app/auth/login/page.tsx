@@ -264,7 +264,7 @@ export default function LoginPage() {
           >
             {noticeKey && mode === "login" && (noticeKey === "sessionExpiredSignIn" ? (
               // An expired session is a reason to sign in again, not a completed action.
-              <p className="border-l-2 border-status-waiting bg-status-waiting/10 px-3 py-2 text-sm leading-relaxed text-text-body" role="status">
+              <p className="rounded-control border border-transparent bg-status-waiting/10 px-3 py-2 text-sm leading-relaxed text-text-body" role="status">
                 {t(noticeKey)}
               </p>
             ) : (

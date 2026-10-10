@@ -32,7 +32,7 @@ export default function RegisterPage() {
             <LanguageSwitcher compact />
           </div>
           <div className="mb-8">
-            <div className="mx-auto mb-5 grid h-12 w-12 place-items-center rounded-panel border border-border-default bg-surface-raised text-text-muted">
+            <div className="mx-auto mb-5 grid h-12 w-12 place-items-center rounded-panel bg-surface-raised text-text-muted">
               <Icon name="locked" size={22} />
             </div>
 

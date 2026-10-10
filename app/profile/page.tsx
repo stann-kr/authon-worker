@@ -140,7 +140,7 @@ export default function ProfilePage() {
           {error && <div id="profile-error"><Alert type="error" message={error} className="mb-6" /></div>}
 
           <div className="app-panel overflow-hidden">
-            <div className="space-y-4 border-b border-border-default p-4">
+            <div className="space-y-4 border-b border-border-subtle p-4">
               <div>
                 <h2 className="text-sm font-semibold text-text-heading">
                   {t("accountSettings")}
@@ -176,7 +176,7 @@ export default function ProfilePage() {
             </div>
 
             <div hidden={activeSection !== "profile"}>
-                <div className="border-b border-border-default p-4">
+                <div className="border-b border-border-subtle p-4">
                   <h3 className="text-xs font-semibold text-text-heading sm:text-sm">
                     {t("editProfile")}
                   </h3>
@@ -225,7 +225,7 @@ export default function ProfilePage() {
                   role="group"
                   aria-labelledby="profile-language-label"
                   aria-describedby="profile-language-help"
-                  className="border-t border-border-default p-4 sm:p-6"
+                  className="border-t border-border-subtle p-4 sm:p-6"
                 >
                   <p id="profile-language-label" className="app-label">
                     {t("preferredLanguage")}
@@ -237,7 +237,7 @@ export default function ProfilePage() {
                 </div>
               </div>
               <div hidden={activeSection !== "security"}>
-                <div className="border-b border-border-default p-4">
+                <div className="border-b border-border-subtle p-4">
                   <h3 className="text-xs font-semibold text-text-heading sm:text-sm">
                     {t("changePassword")}
                   </h3>

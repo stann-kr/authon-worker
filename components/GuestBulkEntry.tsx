@@ -53,12 +53,12 @@ interface FeedbackState {
 
 function feedbackClasses(tone: FeedbackTone): string {
   if (tone === "success") {
-    return "border-status-checked/70 bg-status-checked/10 text-status-checked";
+    return "border-transparent bg-status-checked/10 text-status-checked";
   }
   if (tone === "warning") {
-    return "border-status-waiting/70 bg-status-waiting/10 text-status-waiting";
+    return "border-transparent bg-status-waiting/10 text-status-waiting";
   }
-  return "border-status-danger/70 bg-status-danger/10 text-status-danger";
+  return "border-transparent bg-status-danger/10 text-status-danger";
 }
 
 export default function GuestBulkEntry({
@@ -451,7 +451,7 @@ export default function GuestBulkEntry({
             {preview.overflowCount > 0 && (
               <div
                 id={overflowWarningId}
-                className="mb-2 border-l-2 border-status-waiting bg-status-waiting/10 px-3 py-2 text-xs leading-relaxed text-status-waiting"
+                className="mb-2 rounded-control border border-transparent bg-status-waiting/10 px-3 py-2 text-xs leading-relaxed text-status-waiting"
               >
                 {t("pasteLimit", { count: preview.overflowCount })}
               </div>
@@ -459,7 +459,7 @@ export default function GuestBulkEntry({
             {heldForCapacity > 0 && (
               <div
                 id={capacityWarningId}
-                className="mb-2 border-l-2 border-status-waiting bg-status-waiting/10 px-3 py-2 text-xs leading-relaxed text-status-waiting"
+                className="mb-2 rounded-control border border-transparent bg-status-waiting/10 px-3 py-2 text-xs leading-relaxed text-status-waiting"
               >
                 {t("capacityHold", { count: heldForCapacity })}
               </div>
@@ -543,7 +543,7 @@ export default function GuestBulkEntry({
         {feedback && (
           <div
             id={feedbackId}
-            className={`mt-3 border px-3 py-2 text-sm leading-relaxed ${feedbackClasses(feedback.tone)}`}
+            className={`mt-3 rounded-control border px-3 py-2 text-sm leading-relaxed ${feedbackClasses(feedback.tone)}`}
             role={feedback.tone === "error" ? "alert" : "status"}
             aria-live={feedback.tone === "error" ? "assertive" : "polite"}
             aria-atomic="true"

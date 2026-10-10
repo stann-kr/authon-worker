@@ -84,7 +84,7 @@ export default function AttendanceReconciliationForm({
         <p
           ref={reconciliationStatusRef}
           tabIndex={-1}
-          className="mt-3 border-l-2 border-status-checked bg-status-checked/10 px-3 py-2 text-xs leading-relaxed text-text-muted outline-none"
+          className="mt-3 rounded-control border border-transparent bg-status-checked/10 px-3 py-2 text-xs leading-relaxed text-text-muted outline-none"
           role="status"
         >
           {t("adjustment.finalized")}
@@ -93,7 +93,7 @@ export default function AttendanceReconciliationForm({
         <p
           ref={reconciliationStatusRef}
           tabIndex={-1}
-          className="mt-3 border-l-2 border-status-waiting bg-status-waiting/10 px-3 py-2 text-xs leading-relaxed text-text-muted outline-none"
+          className="mt-3 rounded-control border border-transparent bg-status-waiting/10 px-3 py-2 text-xs leading-relaxed text-text-muted outline-none"
           role="status"
         >
           {t("adjustment.eventMustBeClosed")}
@@ -186,7 +186,7 @@ export default function AttendanceReconciliationForm({
             <button
               type="button"
               onClick={() => void loadSummary(scope)}
-              className="pressable min-h-11 border border-border-default bg-surface-raised px-3 py-2 text-xs font-medium text-text-heading"
+              className="pressable min-h-11 border border-transparent bg-surface-raised px-3 py-2 text-xs font-medium text-text-heading"
             >
               {t("adjustment.reload")}
             </button>

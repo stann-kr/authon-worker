@@ -369,13 +369,13 @@ export default function InviteUser({ onClose }: { onClose?: () => void } = {}) {
             </div>
           </fieldset>
           ) : (
-            <div className="rounded-control border border-border-subtle bg-surface-raised p-3 text-sm text-text-body">
+            <div className="rounded-control bg-surface-raised p-3 text-sm text-text-body">
               <RoleLabel role="shared" />
             </div>
           )}
 
           {formData.account_kind === "shared" && (
-            <label className="flex min-h-11 items-start gap-3 rounded-control border border-border-default bg-surface-raised p-3">
+            <label className="flex min-h-11 items-start gap-3 rounded-control border border-transparent bg-surface-raised p-3">
               <input
                 name="door-access-enabled"
                 type="checkbox"
@@ -459,7 +459,7 @@ export default function InviteUser({ onClose }: { onClose?: () => void } = {}) {
           {success && createdInvitation && (
             <div
               ref={invitationPanelRef}
-              className="space-y-3 rounded-panel border border-status-waiting/70 bg-status-waiting/10 p-4 outline-none"
+              className="space-y-3 rounded-panel border border-transparent bg-status-waiting/10 p-4 outline-none"
               role="region"
               aria-labelledby="created-invitation-title"
               tabIndex={-1}

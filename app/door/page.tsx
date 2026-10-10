@@ -403,7 +403,7 @@ function DoorPageContent() {
       actions={<>
         {offlineScope && <WorkspaceAction icon="search" onClick={() => setTool(tool === "code" ? null : "code")} disabled={isDoorCodeLoading || isOfflineSyncing} aria-expanded={tool === "code"} aria-controls={tool === "code" ? "door-code-panel" : undefined}>{t("guestCodeLookup")}</WorkspaceAction>}
         {attendanceActions}
-        {offlineScope && <WorkspaceAction icon="refresh" tone="muted" onClick={() => setTool(tool === "offline" ? null : "offline")} disabled={isDoorCodeLoading || isOfflineSyncing} aria-expanded={tool === "offline"} aria-controls={tool === "offline" ? "door-offline-panel" : undefined}>{t("offlineOperations")} {offlineQueueCounts.queued > 0 ? offlineQueueCounts.queued : ""}</WorkspaceAction>}
+        {offlineScope && <WorkspaceAction icon="refresh" tone="muted" compact badge={offlineQueueCounts.queued > 0 ? offlineQueueCounts.queued : undefined} onClick={() => setTool(tool === "offline" ? null : "offline")} disabled={isDoorCodeLoading || isOfflineSyncing} aria-expanded={tool === "offline"} aria-controls={tool === "offline" ? "door-offline-panel" : undefined}>{t("offlineOperations")}</WorkspaceAction>}
       </>}
     >
       {venueLoadError && (
@@ -482,7 +482,7 @@ function DoorPageContent() {
                           type="button"
                           onClick={() => void syncOfflineQueue()}
                           disabled={isOfflineSyncing || offlineQueueCounts.queued === 0}
-                          className="pressable min-h-11 border border-border-default bg-surface-raised px-3 py-2 text-xs font-medium text-text-heading disabled:cursor-not-allowed disabled:opacity-50"
+                          className="pressable min-h-11 border border-transparent bg-surface-raised px-3 py-2 text-xs font-medium text-text-heading disabled:cursor-not-allowed disabled:opacity-50"
                         >
                           {t("retryOfflineSync")}
                         </button>
@@ -490,7 +490,7 @@ function DoorPageContent() {
                           <button
                             type="button"
                             onClick={() => void handleClearResolvedOfflineMutations()}
-                            className="pressable min-h-11 border border-border-default bg-canvas px-3 py-2 text-xs font-medium text-text-muted hover:text-text-heading"
+                            className="pressable min-h-11 border border-transparent bg-transparent px-3 py-2 text-xs font-medium text-text-muted hover:bg-surface-hover hover:text-text-heading"
                           >
                             {t("clearOfflineResults")}
                           </button>
@@ -506,10 +506,10 @@ function DoorPageContent() {
                     </dl>
                     {offlineNotice && (
                       <p
-                        className={`border-l-2 px-3 py-2 text-xs ${
+                        className={`rounded-control border border-transparent px-3 py-2 text-xs ${
                           offlineNotice === "syncFailed" || offlineNotice === "scopeClosed"
-                            ? "border-status-danger bg-status-danger/10 text-status-danger"
-                            : "border-status-waiting bg-status-waiting/10 text-text-muted"
+                            ? "bg-status-danger/10 text-status-danger"
+                            : "bg-status-waiting/10 text-text-muted"
                         }`}
                         role={offlineNotice === "syncFailed" || offlineNotice === "scopeClosed" ? "alert" : "status"}
                       >
@@ -536,7 +536,7 @@ function DoorPageContent() {
 
                 {/* A saved date survives re-entry, so say when the roster is not today's before anyone searches it. */}
                 {currentVenue && selectedDate !== businessDate && (
-                  <div className="flex flex-wrap items-center justify-between gap-2 border-l-2 border-status-waiting bg-status-waiting/10 px-3 py-2">
+                  <div className="flex flex-wrap items-center justify-between gap-2 rounded-control border border-transparent bg-status-waiting/10 px-3 py-2">
                     <p className="min-w-0 text-xs leading-relaxed text-text-muted" role="status">
                       {t("viewingOtherDate", { date: formatCalendarDate(locale, selectedDate, FULL_CALENDAR_DATE) })}
                     </p>
@@ -547,7 +547,7 @@ function DoorPageContent() {
                   </div>
                 )}
                 {!isOnline && (
-                  <p className="border-l-2 border-status-waiting bg-status-waiting/10 px-3 py-2 text-xs leading-relaxed text-text-muted" role="status">
+                  <p className="rounded-control border border-transparent bg-status-waiting/10 px-3 py-2 text-xs leading-relaxed text-text-muted" role="status">
                     {t(offlineScope ? "offlineEventScope" : "offlineGeneralScope")}
                   </p>
                 )}
@@ -626,7 +626,7 @@ function DoorPageContent() {
                     type="button"
                     aria-pressed={prioritizeWaiting}
                     onClick={() => setPrioritizeWaiting((current) => !current)}
-                    className="collection-toggle-button pressable min-h-11 whitespace-nowrap border border-border-default bg-surface-raised px-3 py-2 text-xs font-medium text-text-muted"
+                    className="collection-toggle-button pressable min-h-11 whitespace-nowrap border border-transparent bg-surface-raised px-3 py-2 text-xs font-medium text-text-muted"
                   >
                     <Icon name="check" size={14} className={prioritizeWaiting ? "" : "invisible"} />
                     {t("prioritizeWaiting")}

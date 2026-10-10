@@ -198,7 +198,7 @@ export default function AdminAnalytics({
           aria-busy={isScopeLoading}
         >
           {hasCloseoutIntegrityWarning && (
-            <aside className="rounded-panel border border-status-waiting/70 bg-status-waiting/10 p-4 text-sm leading-relaxed text-status-waiting" role="status">
+            <aside className="rounded-panel border border-transparent bg-status-waiting/10 p-4 text-sm leading-relaxed text-status-waiting" role="status">
               {t("coverage.partial")}
             </aside>
           )}

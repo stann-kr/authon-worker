@@ -68,7 +68,7 @@ export default function PanelHeader({
               onClick={onSortToggle}
               aria-pressed={sortMode === "alpha"}
               aria-label={sortMode === "alpha" ? t("sortByCreationTime") : t("sortAlphabetically")}
-              className="collection-sort-button pressable min-h-11 touch-manipulation whitespace-nowrap rounded-control border border-border-default bg-surface-raised px-3 py-2 text-center text-xs font-medium text-text-muted hover:border-border-strong hover:text-text-heading"
+              className="collection-sort-button pressable min-h-11 touch-manipulation whitespace-nowrap rounded-control border border-transparent bg-surface-raised px-3 py-2 text-center text-xs font-medium text-text-muted hover:bg-surface-hover hover:text-text-heading"
             >
               {sortMode === "alpha" ? "A-Z" : t("created")}
             </button>
@@ -81,7 +81,7 @@ export default function PanelHeader({
               disabled={isLoading}
               aria-label={t("refresh")}
               title={t("refresh")}
-              className="collection-refresh-button pressable flex min-h-11 min-w-11 touch-manipulation items-center justify-center rounded-control border border-border-subtle bg-transparent p-2 text-text-muted hover:border-border-strong hover:text-text-heading disabled:opacity-50"
+              className="collection-refresh-button pressable flex min-h-11 min-w-11 touch-manipulation items-center justify-center rounded-control border border-transparent bg-transparent p-2 text-text-muted hover:bg-surface-hover hover:text-text-heading disabled:opacity-50"
             >
               <Icon name="refresh" size={16} className={isLoading ? "animate-spin" : ""} />
             </button>

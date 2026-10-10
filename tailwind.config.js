@@ -28,9 +28,9 @@ module.exports = {
           text: "var(--app-action-text)",
         },
         status: {
-          checked: "#34d399",
-          waiting: "#d5b479",
-          danger: "#fb7185",
+          checked: "rgb(var(--app-status-checked-rgb) / <alpha-value>)",
+          waiting: "rgb(var(--app-status-waiting-rgb) / <alpha-value>)",
+          danger: "rgb(var(--app-status-danger-rgb) / <alpha-value>)",
         },
         text: {
           muted: "var(--app-text-muted)",

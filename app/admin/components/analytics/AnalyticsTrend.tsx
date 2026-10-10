@@ -84,7 +84,7 @@ export default function AnalyticsTrend({ points }: { points: AnalyticsTrendPoint
           </ResponsiveContainer>
         </div>
         <DisclosureSection title={t("trend.tableTitle")}>
-          <div className="overflow-x-auto rounded-control border border-border-subtle">
+          <div className="overflow-x-auto rounded-control">
             <table className="w-full border-collapse text-left text-xs">
               <caption className="sr-only">{t("trend.tableTitle")}</caption>
               <thead className="bg-canvas text-text-dim">

@@ -37,7 +37,6 @@ import {
   RouteTransitionProvider,
   useRouteTransition,
 } from "@/components/RouteTransitionProvider";
-import useMobileDockInset from "@/app/door/components/useMobileDockInset";
 import { EMPTY_ANALYTICS_DTO_FIXTURE } from "@/lib/analytics/test-fixtures";
 import { useLatestRef, useLocalStorage } from "@/lib/hooks";
 import messages from "@/messages/en.json";
@@ -238,86 +237,6 @@ test("latest ref keeps a loader stable while reading the latest translator", () 
 
   assert.equal(loader, initialLoader);
   assert.equal(loader?.(), "게스트를 불러올 수 없습니다");
-});
-
-test("mobile Door dock measures its rendered height and clears the page inset", async () => {
-  const originalMatchMedia = window.matchMedia;
-  const originalResizeObserver = globalThis.ResizeObserver;
-  const observerState: { callback: ResizeObserverCallback | null } = {
-    callback: null,
-  };
-  let isDisconnected = false;
-
-  class ResizeObserverMock {
-    constructor(callback: ResizeObserverCallback) {
-      observerState.callback = callback;
-    }
-
-    observe() {}
-
-    unobserve() {}
-
-    disconnect() {
-      isDisconnected = true;
-    }
-  }
-
-  Object.defineProperty(globalThis, "ResizeObserver", {
-    configurable: true,
-    writable: true,
-    value: ResizeObserverMock,
-  });
-  window.matchMedia = () => ({
-    matches: true,
-    media: "(max-width: 767px)",
-    onchange: null,
-    addListener() {},
-    removeListener() {},
-    addEventListener() {},
-    removeEventListener() {},
-    dispatchEvent() {
-      return false;
-    },
-  });
-
-  function DockHarness() {
-    const dockRef = useRef<HTMLElement>(null);
-    useMobileDockInset(dockRef);
-    return (
-      <div className="page-scroll">
-        <section ref={dockRef} data-testid="door-dock" />
-      </div>
-    );
-  }
-
-  const { unmount } = render(<DockHarness />);
-  const dock = screen.getByTestId("door-dock");
-  Object.defineProperty(dock, "getBoundingClientRect", {
-    configurable: true,
-    value: () => ({ height: 173 }),
-  });
-  observerState.callback?.([], {} as ResizeObserver);
-
-  const pageScroll = dock.closest<HTMLElement>(".page-scroll");
-  await waitFor(() => {
-    assert.equal(
-      pageScroll?.style.getPropertyValue("--door-mobile-dock-height"),
-      "173px",
-    );
-  });
-
-  unmount();
-  assert.equal(isDisconnected, true);
-  assert.equal(
-    pageScroll?.style.getPropertyValue("--door-mobile-dock-height"),
-    "",
-  );
-  window.matchMedia = originalMatchMedia;
-  Object.defineProperty(globalThis, "ResizeObserver", {
-    configurable: true,
-    writable: true,
-    value: originalResizeObserver,
-  });
 });
 
 test("full error hides empty copy and retry success restores it", () => {

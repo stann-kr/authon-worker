@@ -322,7 +322,7 @@ export default function UserManagement({
                 {actionError && <Alert type="error" message={actionError.message} />}
                 <div
                   ref={passwordLinkPanelRef}
-                  className="mb-4 rounded-panel border border-status-waiting/70 bg-status-waiting/10 p-4 outline-none"
+                  className="mb-4 rounded-panel border border-transparent bg-status-waiting/10 p-4 outline-none"
                   role="region"
                   aria-labelledby="managed-password-link-title"
                   tabIndex={-1}
@@ -960,7 +960,7 @@ export function UserCard({
           )}
 
           {canEditRole && editData.accountKind === "shared" && (
-            <label className="flex min-h-11 items-start gap-3 rounded-control border border-border-default bg-surface-raised p-3">
+            <label className="flex min-h-11 items-start gap-3 rounded-control border border-transparent bg-surface-raised p-3">
               <input
                 name={`user-door-access-${user.id}`}
                 type="checkbox"

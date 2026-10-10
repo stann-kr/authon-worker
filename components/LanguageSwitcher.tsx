@@ -50,7 +50,7 @@ export default function LanguageSwitcher({
       <div
         role="group"
         aria-label={t("language")}
-        className="inline-flex gap-1 rounded-control border border-border-default bg-canvas p-1"
+        className="inline-flex gap-1 rounded-control border border-transparent bg-surface-secondary p-1"
       >
         {(["en", "ko"] as const).map((locale) => (
           <button

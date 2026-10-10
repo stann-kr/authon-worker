@@ -336,7 +336,7 @@ export default function PasswordResetRequestManagement({
               role="status"
               aria-live="polite"
               aria-atomic="true"
-              className="border border-status-waiting/70 bg-status-waiting/10 p-4 outline-none"
+              className="rounded-panel border border-transparent bg-status-waiting/10 p-4 outline-none"
             >
               <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                 <div className="min-w-0">
@@ -524,7 +524,7 @@ export default function PasswordResetRequestManagement({
                               ] as const).map((method) => (
                                 <label
                                   key={method}
-                                  className="flex min-h-11 cursor-pointer items-start gap-3 rounded-control border border-border-default bg-surface-raised p-3"
+                                  className="flex min-h-11 cursor-pointer items-start gap-3 rounded-control border border-transparent bg-surface-raised p-3"
                                 >
                                   <input
                                     ref={method === "in_person" ? verificationMethodRef : undefined}
@@ -595,7 +595,7 @@ export default function PasswordResetRequestManagement({
                             </p>
                           </div>
 
-                          <label className="flex min-h-11 cursor-pointer items-start gap-3 rounded-control border border-border-default bg-surface-raised p-3">
+                          <label className="flex min-h-11 cursor-pointer items-start gap-3 rounded-control border border-transparent bg-surface-raised p-3">
                             <input
                               ref={verificationAttestationRef}
                               type="checkbox"

@@ -19,7 +19,7 @@
   padding: 6px 6px 6px 14px;
   border: 1px solid var(--app-border);
   border-radius: var(--app-radius-panel);
-  background: #232326;
+  background: var(--app-surface-hover);
   color: var(--app-text);
   box-shadow: 0 10px 30px rgb(0 0 0 / 0.45), 0 1px 0 rgb(255 255 255 / 0.04) inset;
   pointer-events: auto;
@@ -32,13 +32,13 @@
   width: 22px;
   height: 22px;
   border-radius: 50%;
-  background: rgb(52 211 153 / 0.16);
-  color: #34d399;
+  background: rgb(var(--app-status-checked-rgb) / 0.16);
+  color: var(--app-status-checked);
 }
 .app-toast[data-tone="neutral"] .app-toast-icon { background: var(--app-surface-active); color: var(--app-text-muted); }
-.app-toast:is([data-tone="pending"], [data-tone="warning"]) .app-toast-icon { background: rgb(213 180 121 / 0.16); color: var(--app-status-waiting); }
-.app-toast[data-tone="error"] { border-color: rgb(251 113 133 / 0.45); }
-.app-toast[data-tone="error"] .app-toast-icon { background: rgb(251 113 133 / 0.16); color: #fb7185; }
+.app-toast:is([data-tone="pending"], [data-tone="warning"]) .app-toast-icon { background: rgb(var(--app-status-waiting-rgb) / 0.16); color: var(--app-status-waiting); }
+.app-toast[data-tone="error"] { border-color: rgb(var(--app-status-danger-rgb) / 0.45); }
+.app-toast[data-tone="error"] .app-toast-icon { background: rgb(var(--app-status-danger-rgb) / 0.16); color: var(--app-status-danger); }
 .app-toast-message {
   flex: 1;
   min-width: 0;

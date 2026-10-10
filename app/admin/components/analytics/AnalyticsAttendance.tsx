@@ -175,7 +175,7 @@ export default function AnalyticsAttendance({
             </div>
 
             <DisclosureSection title={t("attendance.tableTitle")}>
-              <div className="overflow-x-auto rounded-control border border-border-subtle">
+              <div className="overflow-x-auto rounded-control">
                 <table className="w-full min-w-[36rem] border-collapse text-left text-xs">
                   <caption className="sr-only">
                     {t("attendance.tableTitle")}

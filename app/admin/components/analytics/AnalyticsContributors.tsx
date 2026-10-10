@@ -99,7 +99,7 @@ export default function AnalyticsContributors({
           </button>
         </div>
         {sortedRows.map((row) => (
-          <article key={row.contributorId ?? `${row.source?.kind}:${row.source?.id}`} className="rounded-control border border-border-subtle bg-surface-raised p-3">
+          <article key={row.contributorId ?? `${row.source?.kind}:${row.source?.id}`} className="rounded-control bg-surface-raised p-3">
             <h4 className="text-sm font-semibold text-text-heading">{contributorLabel(row)}</h4>
             <dl className="mt-3 grid grid-cols-2 gap-3 text-xs">
               {(["registered", "checkedIn", "operatingDays"] as const).map((key) => (

@@ -18,7 +18,7 @@
 }
 .workspace-shell[data-sidebar-collapsed="true"] { --workspace-sidebar-width: 64px; }
 .workspace-shell > .page-scroll { min-width: 0; padding-top: var(--workspace-content-inset); }
-.workspace-shell--authenticated > .page-scroll { padding-bottom: calc(var(--workspace-dock-height, 140px) + var(--workspace-dock-offset, 0px) + var(--door-mobile-dock-height, 0px)); }
+.workspace-shell--authenticated > .page-scroll { padding-bottom: calc(var(--workspace-dock-height, 140px) + var(--workspace-dock-offset, 0px)); }
 .workspace-shell .page-container { min-width: 0; }
 .workspace-shell :is(#main-content, #admin-workspace) { scroll-margin-top: var(--workspace-content-inset); }
 .workspace-shell .workspace-content-wide { max-width: none; }
@@ -42,7 +42,7 @@
 .workspace-dock {
   position: fixed; z-index: var(--app-z-chrome);
   left: max(16px, env(safe-area-inset-left)); right: max(16px, env(safe-area-inset-right));
-  bottom: calc(var(--workspace-dock-offset, 12px) + var(--door-mobile-dock-height, 0px));
+  bottom: var(--workspace-dock-offset, 12px);
   max-width: 440px; margin-inline: auto;
   display: flex; flex-direction: column; align-items: stretch; gap: 8px;
   pointer-events: none; opacity: 1; visibility: visible;
@@ -67,7 +67,7 @@
 }
 .workspace-nav-icon { flex-shrink: 0; }
 .workspace-dock .workspace-nav-link {
-  flex: 1 1 0; flex-direction: column; gap: 3px; min-width: 0; min-height: 52px; padding: 6px 6px 4px;
+  flex: 1 1 0; flex-direction: column; gap: 3px; min-width: 0; min-height: 52px; padding: 6px 4px 4px;
   border: 0; border-radius: 999px; background: transparent; color: var(--workspace-dock-muted); font-size: 11px; font-weight: 500; line-height: 1.2;
 }
 .workspace-dock .workspace-nav-label { max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
@@ -81,8 +81,22 @@
 .workspace-nav-count { display: inline-flex; align-items: center; justify-content: center; min-width: 18px; border-radius: var(--app-radius-inner); padding: 1px 5px; color: var(--workspace-text); background: var(--app-border-strong); font-size: 11px; font-variant-numeric: tabular-nums; }
 /* Context actions float as their own controls above the tab bar, with no shared strip behind them. */
 .workspace-context-actions { display: flex; justify-content: center; gap: 8px; min-width: 0; pointer-events: auto; }
+/* Primary actions share the width; secondary ones keep their own size so neither collapses into an ellipsis. */
 .workspace-context-actions .workspace-action { flex: 1 1 0; min-width: 0; }
-.workspace-context-actions .workspace-action > span:last-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.workspace-context-actions .workspace-action[data-tone="muted"] { flex: 0 1 auto; }
+.workspace-context-actions .workspace-action-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+/* Three or more actions drop their icons and tighten so every label still fits a phone width. */
+.workspace-context-actions:has(> :nth-child(3)) { gap: 6px; }
+.workspace-context-actions:has(> :nth-child(3)) .workspace-action:not([data-compact]) .workspace-action-icon { display: none; }
+.workspace-dock .workspace-context-actions:has(> :nth-child(3)) .workspace-action { padding-inline: 10px; font-size: 13px; }
+.workspace-dock .workspace-action[data-compact] { position: relative; flex: 0 0 auto; }
+.workspace-dock .workspace-action[data-compact] .workspace-action-label {
+  position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;
+}
+.workspace-action-badge {
+  min-width: 18px; padding: 0 5px; border-radius: var(--app-radius-inner); background: var(--app-action); color: var(--app-action-text);
+  font-size: 11px; font-weight: 600; line-height: 18px; text-align: center; font-variant-numeric: tabular-nums;
+}
 .workspace-action { display: inline-flex; align-items: center; justify-content: center; gap: 10px; flex: 0 0 auto; min-height: 44px; padding: 10px 16px 10px 12px; border: 0; border-radius: var(--app-radius-control); background: var(--app-surface-raised); color: var(--workspace-text); font-size: 14px; font-weight: 500; line-height: 1.4; white-space: nowrap; }
 .workspace-action[aria-pressed="true"] { background: var(--workspace-active); border-color: var(--app-border-strong); }
 .workspace-action:disabled { opacity: 0.45; cursor: not-allowed; }
@@ -96,9 +110,6 @@
 .workspace-menu-panel .workspace-nav-link { justify-content: flex-start; border-radius: var(--app-radius-control); white-space: normal; overflow-wrap: anywhere; }
 .workspace-menu-panel .workspace-nav-count { margin-left: auto; }
 .workspace-menu-panel nav > .workspace-nav-link:last-child { margin-top: 12px; }
-@media (min-width: 768px) {
-  .workspace-shell--authenticated > .page-scroll { --door-mobile-dock-height: 0px; }
-}
 @media (min-width: 1000px) {
   .workspace-shell--authenticated { padding-left: var(--workspace-sidebar-width); --app-header-height: 56px; --workspace-content-gap: 24px; }
   .workspace-shell--authenticated .workspace-header { left: var(--workspace-sidebar-width); }
@@ -111,7 +122,7 @@
   .workspace-header-actions .workspace-action { min-height: var(--workspace-control-height); border: 1px solid transparent; border-radius: var(--app-radius-control); padding: 8px 12px; background: transparent; color: var(--app-text-muted); font-size: 13px; }
   .workspace-header-actions .workspace-action[aria-pressed="true"] { background: var(--app-surface-raised); border-color: var(--app-border); color: var(--app-text); }
   .workspace-header-actions .workspace-action[data-tone="accent"] { background: var(--app-action); color: var(--app-action-text); font-weight: 600; }
-  .workspace-sidebar { display: flex; position: fixed; inset: 0 auto 0 0; z-index: var(--app-z-chrome); width: var(--workspace-sidebar-width); flex-direction: column; border-right: 1px solid var(--workspace-line); padding: env(safe-area-inset-top) 12px calc(12px + env(safe-area-inset-bottom)); background: var(--workspace-secondary); }
+  .workspace-sidebar { display: flex; position: fixed; inset: 0 auto 0 0; z-index: var(--app-z-chrome); width: var(--workspace-sidebar-width); flex-direction: column; border-right: 1px solid transparent; padding: env(safe-area-inset-top) 12px calc(12px + env(safe-area-inset-bottom)); background: var(--workspace-secondary); }
   .workspace-sidebar-heading { display: flex; min-height: 56px; align-items: center; gap: 4px; }
   .workspace-brand { display: flex; align-items: center; min-width: 0; flex: 1; padding: 8px; color: var(--workspace-text); font-size: 18px; line-height: 1.4; font-weight: 500; letter-spacing: -0.5px; overflow-wrap: anywhere; }
   .workspace-sidebar-toggle { display: grid; place-items: center; flex-shrink: 0; width: 44px; min-width: 44px; color: var(--workspace-muted); border: 0; background: transparent; border-radius: var(--app-radius-control); }
@@ -154,6 +165,10 @@
   .workspace-sidebar :is(.workspace-nav-link, .workspace-sidebar-toggle) { min-height: 40px; }
   .workspace-sidebar-toggle { width: 36px; min-width: 36px; }
   .workspace-header :is(.workspace-action, .app-button), .workspace-header-account button { min-height: 40px; }
+  /* The dock keeps its translucent material under the pointer. */
+  .workspace-dock .workspace-nav-link:not([aria-current="page"]):hover { background: var(--workspace-dock-current); }
+  .workspace-dock .workspace-action:not(:disabled):not([data-tone="accent"]):hover { background-color: var(--workspace-dock-glass); border-color: var(--app-border-strong); }
+  .workspace-dock .workspace-action[data-tone="accent"]:not(:disabled):hover { background-color: var(--app-action-hover); }
 }
 @media (prefers-reduced-motion: reduce) {
   .workspace-dock { transition: none; }
@@ -172,11 +187,11 @@
   :root { --workspace-dock-offset: max(12px, calc(env(safe-area-inset-bottom) - 12px)); }
   .workspace-shell {
     --workspace-header-edge: 14px; --workspace-content-gap: 12px;
-    --workspace-glass-header: #0c0c0e;
+    --workspace-glass-header: #0a0a0b;
     --workspace-glass-filter: none;
     --workspace-glass-edge: rgb(255 255 255 / 0.09);
     /* Near-opaque until backdrop blur is available, so list text never reads through the dock. */
-    --workspace-dock-glass: rgb(30 30 32 / 0.96);
+    --workspace-dock-glass: rgb(28 28 30 / 0.96);
     --workspace-dock-filter: none;
     --workspace-dock-edge: rgb(255 255 255 / 0.12);
     --workspace-dock-current: rgb(255 255 255 / 0.12);
@@ -199,7 +214,7 @@
     mask-image: linear-gradient(#000 calc(100% - var(--workspace-header-edge)), transparent);
   }
   .workspace-heading { flex: 1; }
-  .workspace-title { font-size: 18px; line-height: 1.35; letter-spacing: -0.25px; }
+  .workspace-title { font-size: 20px; line-height: 1.3; font-weight: 700; letter-spacing: -0.02em; }
   .workspace-header-account .workspace-profile-link {
     width: 44px; height: 44px; min-height: 44px; border: 1px solid var(--workspace-glass-edge);
     border-radius: 50%; background: rgb(255 255 255 / 0.06); color: var(--workspace-text);
@@ -217,6 +232,7 @@
   .workspace-dock .workspace-action .workspace-action-icon { width: 18px; height: 18px; background: none; color: inherit; }
   .workspace-dock .workspace-action[data-tone="accent"] {
     border-color: transparent; background-color: var(--app-action); color: var(--app-action-text); font-weight: 600;
+    -webkit-backdrop-filter: none; backdrop-filter: none;
   }
   .workspace-dock .workspace-action[aria-pressed="true"] {
     border-color: var(--app-border-strong); background-color: var(--app-surface-active); color: var(--app-text);
@@ -231,9 +247,9 @@
 @supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
   @media (max-width: 999px) {
     .workspace-shell {
-      --workspace-glass-header: rgb(12 12 14 / 0.88);
+      --workspace-glass-header: rgb(10 10 11 / 0.88);
       --workspace-glass-filter: blur(16px) saturate(110%);
-      --workspace-dock-glass: rgb(30 30 32 / 0.74);
+      --workspace-dock-glass: rgb(28 28 30 / 0.74);
       --workspace-dock-filter: blur(20px) saturate(160%);
     }
   }
@@ -241,7 +257,7 @@
 @media (max-width: 999px) and (prefers-reduced-transparency: reduce),
        (max-width: 999px) and (prefers-contrast: more) {
   .workspace-shell {
-    --workspace-glass-header: #0c0c0e;
+    --workspace-glass-header: #0a0a0b;
     --workspace-glass-filter: none;
     --workspace-header-edge: 0px;
     --workspace-glass-edge: #8e8e93;
