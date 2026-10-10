@@ -6,7 +6,7 @@ import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { and, asc, desc, eq, isNull, ne } from "drizzle-orm";
 import { reportServerError } from "@/lib/observability/structured-log";
 import { requireAccess, requireAuth, type SessionUser } from "@/lib/auth/server";
-import { getDb } from "@/lib/db/client";
+import { getD1Database, getDb } from "@/lib/db/client";
 import {
   eventContributorLimits,
   events,
@@ -29,6 +29,7 @@ import {
   prepareEventDraft,
   type EventDraftInput,
 } from "@/lib/events/domain";
+import { updateEventDetailsGuarded } from "@/lib/events/detail-persistence";
 import { loadEventById, toEvent } from "@/lib/events/server";
 import { buildEventTemplateClonePlan } from "@/lib/events/template";
 
@@ -318,17 +319,22 @@ export async function updateEvent(
     if (prepared.error || !prepared.draft) {
       return { data: null, error: prepared.error ?? "INVALID_EVENT" };
     }
-    const now = new Date().toISOString();
-    const [updated] = await db
-      .update(events)
-      .set({
-        ...prepared.draft,
-        updatedByUserId: actor.id,
-        updatedAt: now,
-      })
-      .where(and(eq(events.id, eventId), eq(events.venueId, current.venueId)))
-      .returning();
-    return { data: updated ? toEvent(updated) : null, error: updated ? null : "EVENT_NOT_FOUND" };
+    // An archive or another admin's save between the read above and this write must not be overwritten.
+    const applied = await updateEventDetailsGuarded(getD1Database(), {
+      eventId,
+      venueId: current.venueId,
+      expectedState: current.state,
+      expectedUpdatedAt: current.updatedAt,
+      values: prepared.draft,
+      actorUserId: actor.id,
+      updatedAt: new Date().toISOString(),
+    });
+    const latest = await loadEventById(db, eventId);
+    if (!latest || latest.venueId !== current.venueId) return { data: null, error: "EVENT_NOT_FOUND" };
+    if (!applied) {
+      return { data: null, error: canEditEventDetails(latest.state) ? "EVENT_CHANGED" : "EVENT_LOCKED" };
+    }
+    return { data: latest, error: null };
   } catch (error: unknown) {
     await reportServerError("event.update", error);
     return { data: null, error: "EVENT_UPDATE_FAILED" };

@@ -680,6 +680,7 @@
     "invalidTarget": "Enter a guest target between 0 and 100,000, or leave it blank.",
     "targetExceedsCapacity": "The guest target cannot be larger than the capacity.",
     "eventLocked": "Archived events cannot be edited.",
+    "eventChanged": "This event was changed elsewhere first. Review the latest details and save again.",
     "loadFailed": "Events could not be loaded.",
     "transitionFailed": "The event state could not be changed.",
     "stateChanged": "Event state updated.",

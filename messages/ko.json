@@ -680,6 +680,7 @@
     "invalidTarget": "게스트 목표는 0~100,000 사이 정수로 입력하거나 비워두세요.",
     "targetExceedsCapacity": "게스트 목표는 수용 인원보다 클 수 없습니다.",
     "eventLocked": "보관된 행사는 수정할 수 없습니다.",
+    "eventChanged": "다른 곳에서 이 행사가 먼저 바뀌었습니다. 최신 내용을 확인한 뒤 다시 저장하세요.",
     "loadFailed": "행사 목록을 불러오지 못했습니다.",
     "transitionFailed": "행사 상태를 변경하지 못했습니다.",
     "stateChanged": "행사 상태를 변경했습니다.",

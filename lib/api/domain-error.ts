@@ -16,6 +16,7 @@ export const EVENT_FORM_ERROR_KEYS = {
   INVALID_TARGET: "invalidTarget",
   TARGET_EXCEEDS_CAPACITY: "targetExceedsCapacity",
   EVENT_LOCKED: "eventLocked",
+  EVENT_CHANGED: "eventChanged",
 } as const;
 
 export const USER_CREATE_ERROR_KEYS = {

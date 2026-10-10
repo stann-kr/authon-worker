@@ -130,6 +130,33 @@ test("event details can be corrected, with field errors before and after the ser
   assert.equal(within(details).queryByRole("form", { name: messages.EventAdmin.editTitle }), null);
 });
 
+test("a save that loses a race says why: a newer save keeps the draft, an archive closes the form", async () => {
+  runtime.eventAdminView = {
+    events: [{ ...baseEvent, id: "event-1", name: "Test night", state: "closed", compatibilityKey: null }],
+    transitions: [],
+    updateError: "EVENT_CHANGED",
+  };
+  render(view());
+  fireEvent.click(await screen.findByRole("button", { name: /Test night/ }));
+  const details = screen.getByRole("region", { name: "Test night" });
+  fireEvent.click(within(details).getByRole("button", { name: messages.EventAdmin.editDetails }));
+  const form = within(details).getByRole("form", { name: messages.EventAdmin.editTitle });
+  const name = within(form).getByLabelText(messages.EventAdmin.name) as HTMLInputElement;
+  fireEvent.change(name, { target: { value: "Late night" } });
+
+  // Another admin saved first: the draft stays so it can be checked against the latest values.
+  await act(async () => fireEvent.submit(form));
+  await waitFor(() => assert.ok(within(form).getByText(messages.EventAdmin.eventChanged)));
+  assert.equal(name.value, "Late night");
+
+  // Archived meanwhile: the form closes and the event itself explains why.
+  runtime.eventAdminView.updateError = "EVENT_LOCKED";
+  runtime.eventAdminView.events = runtime.eventAdminView.events.map((event) => ({ ...event, state: "archived" }));
+  await act(async () => fireEvent.submit(form));
+  await waitFor(() => assert.ok(within(details).getByText(messages.EventAdmin.eventLocked)));
+  assert.equal(within(details).queryByRole("form", { name: messages.EventAdmin.editTitle }), null);
+});
+
 test("archived events stay read-only", async () => {
   runtime.eventAdminView = {
     events: [{ ...baseEvent, id: "event-2", name: "Old night", state: "archived", compatibilityKey: null }],

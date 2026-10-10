@@ -262,8 +262,15 @@ export default function EventManagement({
         capacity: toOptionalNumber(draft.capacity),
         targetGuests: toOptionalNumber(draft.targetGuests),
       });
-      if (response.error || !response.data) {
+      if (response.error === "EVENT_LOCKED") {
+        // Archived meanwhile: the form cannot stay open, so explain on the event itself.
+        setDetailsDraft(null);
+        setActionError({ target: event.id, message: t("eventLocked") });
+        await loadEvents();
+      } else if (response.error || !response.data) {
         showActionError(target, response.error, "updateFailed");
+        // Another admin saved first: keep this draft and show the latest saved values beside it.
+        if (response.error === "EVENT_CHANGED") await loadEvents();
       } else {
         setDetailsDraft(null);
         showToast({ message: t("updated") });
