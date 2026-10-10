@@ -23,7 +23,7 @@
 .auth-login-options { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 4px 16px; margin-block: -4px; }
 .auth-login-remember { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; font-size: 13px; color: var(--app-text-body); cursor: pointer; }
 .auth-login-link { display: inline-flex; align-items: center; min-height: 44px; font-size: 13px; color: var(--app-text-muted); }
-.auth-login-secondary { display: flex; align-items: center; justify-content: center; min-width: 0; min-height: 44px; padding: 8px 12px; border: 1px solid var(--app-border-subtle); border-radius: var(--app-radius-control); color: var(--app-text-body); font-size: 13px; text-align: center; overflow-wrap: anywhere; }
+.auth-login-secondary { display: flex; align-items: center; justify-content: center; min-width: 0; min-height: 44px; padding: 8px 12px; border: 1px solid transparent; border-radius: var(--app-radius-control); background: var(--app-surface-raised); color: var(--app-text-body); font-size: 13px; text-align: center; overflow-wrap: anywhere; }
 .auth-login-secondary:disabled { opacity: 0.5; }
 .auth-login-page footer > div { margin-top: 24px; padding-block: 16px 0; border: 0; }
 .auth-login-page footer p { font-size: 11px; }

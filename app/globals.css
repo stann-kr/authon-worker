@@ -212,11 +212,11 @@ input[type="date"] {
   }
 
   .main-content-panel {
-    @apply flex min-h-0 flex-col overflow-hidden rounded-panel border border-border-subtle bg-surface;
+    @apply flex min-h-0 flex-col overflow-hidden rounded-panel border border-transparent bg-surface;
   }
 
   .app-panel {
-    @apply rounded-panel border border-border-subtle bg-surface;
+    @apply rounded-panel border border-transparent bg-surface;
   }
 
   .context-bar {
@@ -242,7 +242,7 @@ input[type="date"] {
   }
 
   .operational-date-quick > button {
-    border: 1px solid var(--app-border);
+    border: 1px solid transparent;
   }
 
   .context-filter-grid {
@@ -372,7 +372,7 @@ input[type="date"] {
   }
 
   .app-button[data-variant="danger"] {
-    --app-press-background: rgb(204 119 112 / 0.26);
+    --app-press-background: rgb(251 113 133 / 0.3);
   }
 
   @media (hover: hover) and (pointer: fine) {
@@ -394,7 +394,7 @@ input[type="date"] {
     }
 
     .app-button[data-variant="danger"]:not(:disabled):hover {
-      background-color: rgb(204 119 112 / 0.2);
+      background-color: rgb(251 113 133 / 0.22);
     }
 
     .app-button[data-variant="ghost"]:not(:disabled):hover {
