@@ -16,14 +16,14 @@ export default function VenueLoadNotice({
   return (
     <div
       role="alert"
-      className="flex flex-col gap-3 border border-status-danger/70 bg-status-danger/10 px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
+      className="flex flex-col gap-3 rounded-panel border border-status-danger/70 bg-status-danger/10 px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
     >
       <p className="text-sm text-status-danger">{t("venueLoadFailed")}</p>
       <button
         type="button"
         disabled={isLoading}
         onClick={() => void onRetry()}
-        className="min-h-11 shrink-0 border border-status-danger/70 px-4 py-2 text-xs font-semibold text-status-danger disabled:opacity-50"
+        className="pressable min-h-11 shrink-0 rounded-control border border-status-danger/70 px-4 py-2 text-xs font-semibold text-status-danger hover:bg-status-danger/20 disabled:cursor-not-allowed disabled:opacity-50"
       >
         {t("refresh")}
       </button>

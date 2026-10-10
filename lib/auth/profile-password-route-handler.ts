@@ -14,6 +14,22 @@ import {
   type RateLimitResult,
 } from "./rate-limit.ts";
 
+/**
+ * Stable machine-readable codes for `/api/profile/password` failures.
+ * `error` remains a human-readable diagnostic; clients map `code` to UI copy.
+ */
+export type ProfilePasswordErrorCode =
+  | "FORBIDDEN_ORIGIN"
+  | "RATE_LIMITED"
+  | "VALIDATION"
+  | "PASSWORD_POLICY"
+  | "USER_NOT_FOUND"
+  | "PASSWORD_MISMATCH"
+  | "ACCOUNT_STATE_CHANGED"
+  | "UNAUTHORIZED"
+  | "FORBIDDEN"
+  | "SERVER_ERROR";
+
 function getAuthErrorStatus(error: unknown): number | null {
   if (!(error instanceof Error)) return null;
   if (error.message === "Unauthorized" || error.message === "Session expired") return 401;
@@ -95,20 +111,35 @@ export function createProfilePasswordPutHandler<Environment>(
       );
 
       if (result.status === "missing") {
-        return NextResponse.json({ error: "Passwords are required" }, { status: 400 });
+        return NextResponse.json(
+          { code: "VALIDATION", error: "Passwords are required" },
+          { status: 400 },
+        );
       }
       if (result.status === "policy_error") {
-        return NextResponse.json({ error: result.error }, { status: 400 });
+        return NextResponse.json(
+          { code: "PASSWORD_POLICY", error: result.error },
+          { status: 400 },
+        );
       }
       if (result.status === "user_not_found") {
-        return NextResponse.json({ error: "User not found" }, { status: 404 });
+        return NextResponse.json(
+          { code: "USER_NOT_FOUND", error: "User not found" },
+          { status: 404 },
+        );
       }
       if (result.status === "password_mismatch") {
-        return NextResponse.json({ error: "비밀번호가 일치하지 않습니다." }, { status: 400 });
+        return NextResponse.json(
+          { code: "PASSWORD_MISMATCH", error: "비밀번호가 일치하지 않습니다." },
+          { status: 400 },
+        );
       }
       if (result.status === "conflict") {
         return NextResponse.json(
-          { error: "계정 상태가 변경되었습니다. 다시 로그인한 뒤 시도해주세요." },
+          {
+            code: "ACCOUNT_STATE_CHANGED",
+            error: "계정 상태가 변경되었습니다. 다시 로그인한 뒤 시도해주세요.",
+          },
           { status: 409 },
         );
       }
@@ -162,9 +193,18 @@ export function createProfilePasswordPutHandler<Environment>(
       await reportError("auth.profile_password", error, { requestId });
       const authStatus = getAuthErrorStatus(error);
       if (authStatus) {
-        return NextResponse.json({ error: "Unauthorized" }, { status: authStatus });
+        return NextResponse.json(
+          {
+            code: authStatus === 403 ? "FORBIDDEN" : "UNAUTHORIZED",
+            error: "Unauthorized",
+          },
+          { status: authStatus },
+        );
       }
-      return NextResponse.json({ error: "비밀번호 변경 중 오류가 발생했습니다." }, { status: 500 });
+      return NextResponse.json(
+        { code: "SERVER_ERROR", error: "비밀번호 변경 중 오류가 발생했습니다." },
+        { status: 500 },
+      );
     }
   };
 }

@@ -5,6 +5,7 @@ import {
   useEffect,
   useId,
   useMemo,
+  useRef,
   useState,
   type KeyboardEvent,
 } from "react";
@@ -48,6 +49,7 @@ const ExternalDjCombobox = forwardRef<HTMLInputElement, ExternalDjComboboxProps>
     const statusId = useId();
     const [isOpen, setIsOpen] = useState(false);
     const [activeIndex, setActiveIndex] = useState(0);
+    const listboxRef = useRef<HTMLUListElement>(null);
     const filteredSuggestions = useMemo(
       () =>
         isDirectoryEnabled
@@ -75,6 +77,14 @@ const ExternalDjCombobox = forwardRef<HTMLInputElement, ExternalDjComboboxProps>
     useEffect(() => {
       setActiveIndex(0);
     }, [suggestions, value]);
+
+    // Keep the keyboard-active option visible inside the scrollable listbox.
+    useEffect(() => {
+      if (!isOpen) return;
+      listboxRef.current
+        ?.querySelector<HTMLElement>(`[id="${listboxId}-option-${activeIndex}"]`)
+        ?.scrollIntoView?.({ block: "nearest" });
+    }, [activeIndex, isOpen, listboxId]);
 
     useEffect(() => {
       if (!isDirectoryEnabled || disabled) setIsOpen(false);
@@ -178,6 +188,7 @@ const ExternalDjCombobox = forwardRef<HTMLInputElement, ExternalDjComboboxProps>
 
         {isOpen && (
           <ul
+            ref={listboxRef}
             id={listboxId}
             role="listbox"
             aria-label={t("djSuggestions")}
@@ -210,9 +221,13 @@ const ExternalDjCombobox = forwardRef<HTMLInputElement, ExternalDjComboboxProps>
           <p
             id={statusId}
             className={
-              !isDirectoryLoading && !directoryError && value
+              !isDirectoryLoading && !directoryError && value && !selectedSuggestion
                 ? "sr-only"
-                : "mt-1 text-xs text-text-dim"
+                : directoryError && !isDirectoryLoading
+                  ? "mt-1 text-xs text-status-danger"
+                  : selectedSuggestion && !isDirectoryLoading
+                    ? "mt-1 text-xs text-text-muted"
+                    : "mt-1 text-xs text-text-dim"
             }
             role="status"
             aria-live="polite"

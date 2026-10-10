@@ -154,8 +154,8 @@ export default function AttendanceCounter({
   const totalAttendance = displayedCheckedInGuests + walkIns;
   const addWalkIn = async () => {
     if (!canRecord) return;
-    const total = totalAttendance + 1;
-    if (!await queueWalkIn()) return;
+    const total = await queueWalkIn();
+    if (total === null) return;
     // The controller already announces the recorded walk-in for assistive technology.
     showToast({
       message: t("walkInToast", { total }),
@@ -221,6 +221,7 @@ export default function AttendanceCounter({
           changeReconciliationTarget={changeReconciliationTarget}
           changeAdjustmentReason={changeAdjustmentReason}
           loadSummary={loadSummary}
+          isSummaryLoading={isLoading}
           submitAdjustment={submitAdjustment}
           reconciliationStatusRef={reconciliationStatusRef}
           markReconciliationFormFocused={() => {

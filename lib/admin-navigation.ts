@@ -19,6 +19,13 @@ export type AdminTaskGroup =
   | "analytics"
   | "venues";
 
+/** An Admin task with the navigation group and label the workspace shows for it. */
+export interface AdminTaskOption {
+  id: AdminTask;
+  group: AdminTaskGroup;
+  label: string;
+}
+
 const SUPER_ADMIN_TASKS = new Set<AdminTask>([
   "venue-list",
   "venue-create",

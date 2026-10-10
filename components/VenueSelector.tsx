@@ -217,7 +217,7 @@ export default function VenueSelector({
           onChange={(e) => onVenueChange(e.target.value)}
           className="app-field appearance-none pr-10 disabled:cursor-not-allowed disabled:opacity-60"
         >
-          <option value="">{placeholder ?? t("selectVenue")}</option>
+          <option value="" disabled hidden>{placeholder ?? t("selectVenue")}</option>
           {venues.map((v) => (
             <option key={v.id} value={v.id}>
               {v.name}

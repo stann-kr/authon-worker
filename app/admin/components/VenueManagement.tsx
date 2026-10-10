@@ -3,11 +3,12 @@
 import { confirmWorkspaceNavigation } from "@/components/overlays/navigation-guard";
 
 import Sheet, { requestSheetClose } from "@/components/overlays/Sheet";
-import RecordList, { useRecordDetail } from "@/components/records/RecordList";
+import RecordList, { RecordStatus, useRecordDetail } from "@/components/records/RecordList";
+import { useToast } from "@/components/feedback/ToastProvider";
 
 import { fetchVenues } from "@/lib/venues/client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import {
   createVenue,
   updateVenue,
@@ -146,6 +147,12 @@ export default function VenueManagement({
     nameInputRef,
     handleCreate,
   } = create;
+  const showToast = useToast();
+  useEffect(() => {
+    if (formSuccess) showToast({ message: formSuccess });
+  }, [formSuccess, showToast]);
+  const [selectedVenueId, setSelectedVenueId] = useState<string | null>(null);
+  const detailOpen = Boolean(selectedVenueId && venues.some((venue) => venue.id === selectedVenueId));
   const directoryError = listError || (venueLoadError ? t("loadFailed") : "");
   const isRefreshing = isLoading || isLoadingVenues;
   const countsUnavailable = listState === "error";
@@ -456,8 +463,6 @@ export default function VenueManagement({
                   </div>
                 )}
 
-                {formSuccess && <Alert type="success" message={formSuccess} />}
-
                 <Button
                   type="submit"
                   isLoading={isSubmitting}
@@ -482,13 +487,15 @@ export default function VenueManagement({
               isLoading={isRefreshing}
             />
             <div className="record-collection-body">
-              {directoryError && <Alert type="error" message={directoryError} className="mb-4" />}
+              {/* An open record shows directory errors itself, so the message appears in one place. */}
+              {directoryError && !(detailOpen && listError) && <Alert type="error" message={directoryError} className="mb-4" />}
               {listState === "loading" ? (
                 <Skeleton rows={4} />
               ) : shouldShowEmptyState(listState) ? (
                 <EmptyState icon="store" message={t("noVenues")} />
               ) : (
                 <RecordList
+                  selection={{ id: selectedVenueId, onChange: setSelectedVenueId }}
                   aria-busy={isLoading}
                   className={`${
                     isLoading ? "pointer-events-none" : ""
@@ -574,6 +581,7 @@ export function VenueCard({
     private: t("typePrivate"),
   };
   const detail = useRecordDetail(venue.id);
+  const showToast = useToast();
   const [isEditing, setIsEditing] = useState(false);
   const [editData, setEditData] = useState(() => createVenueEditData(venue));
   const [editNameError, setEditNameError] = useState("");
@@ -622,7 +630,8 @@ export function VenueCard({
     setIsEditing(false);
   };
 
-  const handleSave = async () => {
+  const handleSave = async (event?: FormEvent<HTMLFormElement>) => {
+    event?.preventDefault();
     if (actionsDisabled || saveOperationOwnerRef.current) return;
     const draft = captureImmutableDraft(editData);
     if (!draft.name.trim()) {
@@ -651,6 +660,7 @@ export function VenueCard({
       if (result.status === "applied") {
         shouldRestoreEditButtonFocusRef.current = true;
         setIsEditing(false);
+        showToast({ message: t("updated", { name: draft.name }) });
       }
     } finally {
       if (saveOperationOwnerRef.current === owner) {
@@ -669,6 +679,9 @@ export function VenueCard({
     try {
       const result = await onToggleActive(venue);
       if (result.status === "busy") shouldCloseConfirmation = false;
+      if (result.status === "applied") {
+        showToast({ message: venue.active ? t("deactivated", { name: venue.name }) : t("activated", { name: venue.name }) });
+      }
     } finally {
       if (toggleOperationOwnerRef.current === owner) {
         toggleOperationOwnerRef.current = null;
@@ -685,7 +698,7 @@ export function VenueCard({
           <button type="button" className="record-open" onClick={() => detail.open ? requestSheetClose(`venue-detail-${venue.id}`) : detail.show()} disabled={actionsDisabled} aria-expanded={detail.open} aria-controls={detail.open ? `venue-detail-${venue.id}` : undefined}>
             <span className="record-identity"><strong id={`venue-label-${venue.id}`}>{venue.name}</strong><small>{venue.primaryDomain || venue.address || venueTypeLabels[venue.type]}</small></span>
             <span className="record-value">{venueTypeLabels[venue.type]}</span>
-            <span className="record-status">{venue.active ? t("active") : t("inactive")}</span>
+            <RecordStatus tone={venue.active ? "ok" : "inactive"}>{venue.active ? t("active") : t("inactive")}</RecordStatus>
           </button>
         </div>
       {detail.open && <Sheet labelledBy={`venue-label-${venue.id}`} id={`venue-detail-${venue.id}`} title={venue.name} presentation="detail" size="record" onClose={() => { handleCancelEdit(); detail.close(); }}
@@ -706,8 +719,8 @@ export function VenueCard({
             <p className="mt-1 break-all font-mono text-xs text-text-muted">
               {venue.primaryDomain || t("noDomain")}
             </p>
-            <p className="mt-1 font-mono text-xs uppercase text-text-dim">
-              {t("defaultLanguage")}: {venue.defaultLocale || "en"}
+            <p className="mt-1 text-xs text-text-dim">
+              {t("defaultLanguage")}: {venue.defaultLocale === "ko" ? commonT("korean") : commonT("english")}
             </p>
           </div>
           <div className="grid grid-cols-2 gap-4 border-b border-border-subtle pb-4">
@@ -715,11 +728,9 @@ export function VenueCard({
               <p className="text-xs text-text-dim mb-1">
                 {t("status")}
               </p>
-              <p
-                className={`font-mono text-xs sm:text-sm ${venue.active ? "text-text-heading" : "text-status-danger"}`}
-              >
+              <RecordStatus tone={venue.active ? "ok" : "inactive"} className="inline-block">
                 {venue.active ? t("active") : t("inactive")}
-              </p>
+              </RecordStatus>
             </div>
             <div>
               <p className="text-xs text-text-dim mb-1">
@@ -769,6 +780,7 @@ export function VenueCard({
           </div>
         </div>
       ) : (
+        <form onSubmit={(event) => void handleSave(event)} noValidate>
         <fieldset
           disabled={isSaving || actionsDisabled}
           className="record-form space-y-4"
@@ -1006,8 +1018,7 @@ export function VenueCard({
 
           <div className="grid grid-cols-2 gap-3">
             <Button
-              type="button"
-              onClick={handleSave}
+              type="submit"
               isLoading={isSaving}
               size="sm"
               fullWidth
@@ -1025,6 +1036,7 @@ export function VenueCard({
             </Button>
           </div>
         </fieldset>
+        </form>
       )}
       <ConfirmDialog
         open={isDeactivateConfirmOpen}

@@ -99,10 +99,10 @@ Client
 | `/api/auth/claim-account` | 공개 API | 검증된 1회용 설정 코드 또는 요청 브라우저의 유효한 관리자 승인으로 비밀번호 설정 |
 | `/api/internal/sync-guest` | 내부 API | shared secret과 필수 `terminalRequestId`를 검증하는 terminal 게스트 동기화 |
 | `/guest?token=...` | 공개 링크 | 외부 DJ 게스트 등록 |
-| `/` | 인증 필요 | 역할별 대시보드와 Venue Admin의 미처리 추가 게스트 요청 알림 |
+| `/` | 인증 필요 | 역할별 작업 카드, 계정 정보와 관리자 바로가기 |
 | `/guest` | 인증 필요 | 게스트 등록/관리 |
 | `/door` | 인증 필요 | 게스트 체크인, 워크인 기록과 관리자 마감 수기 합계 반영 |
-| `/admin` | 관리자 | 게스트 목록·추가 한도 요청을 포함한 게스트 운영과 링크·사용자·베뉴 관리 |
+| `/admin` | 관리자 | 행사, 추가 한도 요청, 링크·사용자·비밀번호 요청·베뉴 관리와 통계. 미처리 요청 건수는 navigation badge로 표시 |
 | `/profile` | 인증 필요 | 프로필과 비밀번호 변경 |
 
 ## 인증과 세션 원칙
@@ -190,7 +190,7 @@ Client
 | 도메인/브랜드 | host resolver, venue domain mapping, metadata, email/link canonical URL |
 | 게스트 등록 | external link flow, 공용 계정 입력자, 기본·승인 추가 한도의 원자적 적용, date/status 계산 |
 | Door 입장 기록 | Guest 체크인 포함 범위, attendance queue·idempotency·device sequence, 관리자 target reconciliation CAS |
-| 베뉴 시간 기준 | IANA timezone 검증, 자정 통과 운영시간, Guest·Door·Admin 기본 영업일 계산 |
+| 베뉴 시간 기준 | IANA timezone 검증, 자정 통과 운영시간, Guest·Door·Admin 기본 영업일 계산, Door·Admin 선택 운영일의 영업일 단위 만료 |
 | D1 schema | Drizzle schema, migration files, affected queries |
 | 배포 runtime | OpenNext compatibility, Worker build result |
 | 비밀번호 재설정 | 공개 요청 응답 균일성, Admin 결정 권한, 승인 만료·일회성 소비, 기존 token 호환 |

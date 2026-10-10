@@ -31,6 +31,8 @@ interface GuestBulkEntryProps {
   ) => Promise<ApiResponse<GuestBulkSubmissionResult>>;
   onSubmissionComplete?: () => Promise<void> | void;
   onSubmittingChange?: (isSubmitting: boolean) => void;
+  /** 제출 직전 상위 입력(예: 공용 계정 입력자)을 확인합니다. false면 제출하지 않습니다. */
+  validateBeforeSubmit?: () => boolean;
 }
 
 interface GuestBulkSubmissionResult {
@@ -66,6 +68,7 @@ export default function GuestBulkEntry({
   onSubmitChunk,
   onSubmissionComplete,
   onSubmittingChange,
+  validateBeforeSubmit,
 }: GuestBulkEntryProps) {
   const t = useTranslations("BulkGuestEntry");
   const fieldId = useId();
@@ -220,6 +223,7 @@ export default function GuestBulkEntry({
 
   const handleSubmit = async () => {
     if (submittableLines.length === 0 || isSubmittingRef.current || disabled) return;
+    if (validateBeforeSubmit && !validateBeforeSubmit()) return;
 
     isSubmittingRef.current = true;
     textareaRef.current?.focus();
@@ -461,7 +465,7 @@ export default function GuestBulkEntry({
               </div>
             )}
 
-            <ol className="divide-y divide-border-subtle border-y border-border-default lg:max-h-56 lg:overflow-y-auto">
+            <ol className="max-h-48 divide-y divide-border-subtle overflow-y-auto overscroll-contain border-y border-border-default lg:max-h-56">
               {preview.lines.filter((line) => line.inPasteLimit).map((line) => {
                 const isDuplicate =
                   line.isDuplicateExisting || line.isDuplicateInInput;

@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useRef, useState, type HTMLAttributes } from "react";
+import { createContext, useContext, useRef, useState, type HTMLAttributes, type ReactNode } from "react";
 
 import { requestSheetClose } from "../overlays/Sheet";
 
@@ -33,4 +33,11 @@ export function useRecordDetail(id: string) {
     show: () => selection ? selection.select(id) : setLocalOpen(true),
     close: () => selection ? selection.select(null) : setLocalOpen(false),
   };
+}
+
+export type RecordStatusTone = "ok" | "waiting" | "inactive" | "danger" | "neutral";
+
+/** Text-first status chip; the tone only reinforces the visible label. */
+export function RecordStatus({ tone, children, className = "" }: { tone: RecordStatusTone; children: ReactNode; className?: string }) {
+  return <span className={`record-status ${className}`} data-tone={tone}>{children}</span>;
 }

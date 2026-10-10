@@ -81,3 +81,4 @@
 .account-table .account-detail-row > td { padding: 0; }
 
 .account-detail-row { --disclosure-background: var(--app-surface-hover); background: var(--app-surface-hover); }
+.account-detail-actions > .account-action-help { flex-basis: 100%; margin: 0; }

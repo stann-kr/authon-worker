@@ -8,7 +8,10 @@ export const TOAST_DURATION_MS = 6000;
 
 export interface ToastOptions {
   message: string;
-  tone?: "success" | "neutral";
+  /** success: applied; neutral: reversed; pending: saved locally, awaiting sync; warning: needs attention; error: not applied. */
+  tone?: "success" | "neutral" | "pending" | "warning" | "error";
+  /** Overrides the default visible time, for example to keep a failure readable longer. */
+  durationMs?: number;
   /** Set false when the owner already announces the same result through its own live region. */
   announce?: boolean;
   actionLabel?: string;
@@ -55,7 +58,8 @@ export function ToastProvider({ children }: { children: ReactNode }) {
 
   return <ToastContext.Provider value={show}>
     {children}
-    <div className="app-toast-region" role="status" aria-live={toast?.announce === false ? "off" : "polite"} aria-atomic="true">
+    <div className="app-toast-region" role="status" aria-atomic="true"
+      aria-live={toast?.announce === false ? "off" : toast?.tone === "error" ? "assertive" : "polite"}>
       {toast && <Toast key={toast.id} toast={toast} onClose={close} />}
     </div>
   </ToastContext.Provider>;
@@ -64,7 +68,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
 function Toast({ toast, onClose: closeToast }: { toast: ToastEntry; onClose: (id: number) => void }) {
   const t = useTranslations("Common");
   const [paused, setPaused] = useState(false);
-  const remaining = useRef(TOAST_DURATION_MS);
+  const remaining = useRef(toast.durationMs ?? TOAST_DURATION_MS);
   const startedAt = useRef(0);
   const { id } = toast;
   const onClose = useCallback(() => closeToast(id), [closeToast, id]);
@@ -86,8 +90,10 @@ function Toast({ toast, onClose: closeToast }: { toast: ToastEntry; onClose: (id
     onBlur: () => setPaused(false),
   }), []);
 
-  return <div className="app-toast" data-tone={toast.tone ?? "success"} {...pause}>
-    <span className="app-toast-icon" aria-hidden="true"><Icon name="check" size={14} /></span>
+  const tone = toast.tone ?? "success";
+  const icon = tone === "pending" ? "time" : tone === "warning" || tone === "error" ? "warning" : "check";
+  return <div className="app-toast" data-tone={tone} {...pause}>
+    <span className="app-toast-icon" aria-hidden="true"><Icon name={icon} size={14} /></span>
     <p className="app-toast-message">{toast.message}</p>
     {toast.actionLabel && toast.onAction && <button type="button" className="app-toast-action"
       onClick={() => { toast.onAction?.(); onClose(); }}>{toast.actionLabel}</button>}

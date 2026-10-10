@@ -9,6 +9,8 @@ import { useLocale, useTranslations } from "next-intl";
 import { useVenueSelector } from "../../../components/VenueSelector";
 import Button from "../../../components/Button";
 import Sheet from "@/components/overlays/Sheet";
+import { useToast } from "@/components/feedback/ToastProvider";
+import { formatVenueDateTime } from "@/lib/date";
 import { captureImmutableDraft } from "../../../lib/forms/immutable-draft";
 import { shareUrl, toUrlShareData } from "../../../lib/share/url";
 import {
@@ -19,11 +21,24 @@ import {
 interface CreatedInvitation {
   expiresAt: string;
   url: string;
+  timeZone?: string | null;
 }
+
+type InviteField = "venue" | "guestLimit";
 
 export default function InviteUser({ onClose }: { onClose?: () => void } = {}) {
   const t = useTranslations("UserAdmin");
+  const venueT = useTranslations("VenueAdmin");
+  const commonT = useTranslations("Common");
   const locale = useLocale();
+  const showToast = useToast();
+  const venueTypeLabels = {
+    club: venueT("typeClub"),
+    bar: venueT("typeBar"),
+    lounge: venueT("typeLounge"),
+    festival: venueT("typeFestival"),
+    private: venueT("typePrivate"),
+  } as const;
   const [formData, setFormData] = useState({
     email: "",
     name: "",
@@ -36,13 +51,16 @@ export default function InviteUser({ onClose }: { onClose?: () => void } = {}) {
   });
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
+  const [fieldError, setFieldError] = useState<{ field: InviteField; message: string } | null>(null);
+  const venueSelectRef = useRef<HTMLSelectElement>(null);
+  const guestLimitInputRef = useRef<HTMLInputElement>(null);
   const [success, setSuccess] = useState("");
   const [createdInvitation, setCreatedInvitation] =
     useState<CreatedInvitation | null>(null);
   const [invitationActionMessage, setInvitationActionMessage] = useState("");
   const [isInvitationActionPending, setIsInvitationActionPending] = useState(false);
   const invitationPanelRef = useRef<HTMLDivElement>(null);
-  const { venues, user: currentUser } = useVenueSelector();
+  const { venues, user: currentUser, currentVenue } = useVenueSelector();
 
   useEffect(() => {
     // Set default venue_id from current user
@@ -83,27 +101,27 @@ export default function InviteUser({ onClose }: { onClose?: () => void } = {}) {
     e.preventDefault();
     if (isLoading) return;
     const draft = captureImmutableDraft(formData);
-    setIsLoading(true);
     setError("");
+    setFieldError(null);
     setSuccess("");
     setCreatedInvitation(null);
     setInvitationActionMessage("");
 
+    // 필드 단위로 검증하고 첫 번째로 잘못된 필드에 포커스한다.
     if (!draft.venue_id) {
-      setError(t("venueRequired"));
-      setIsLoading(false);
+      setFieldError({ field: "venue", message: t("venueRequired") });
+      venueSelectRef.current?.focus();
       return;
     }
-
-    // guest_limit 유효성 검사
     if (draft.role !== "venue_admin") {
       const limitVal = parseInt(String(draft.guest_limit));
       if (isNaN(limitVal) || limitVal < 0) {
-        setError(t("guestLimitInvalid"));
-        setIsLoading(false);
+        setFieldError({ field: "guestLimit", message: t("guestLimitInvalid") });
+        guestLimitInputRef.current?.focus();
         return;
       }
     }
+    setIsLoading(true);
 
     try {
       const { data, error: createError } = await createUserViaEdge({
@@ -141,6 +159,7 @@ export default function InviteUser({ onClose }: { onClose?: () => void } = {}) {
         setCreatedInvitation({
           expiresAt: data.expiresAt,
           url: data.invitationUrl,
+          timeZone: venues.find((venue) => venue.id === draft.venue_id)?.timezone ?? currentVenue?.timezone,
         });
         setFormData((prev) => ({
           ...prev,
@@ -183,9 +202,9 @@ export default function InviteUser({ onClose }: { onClose?: () => void } = {}) {
     });
 
     if (result === "shared") {
-      setInvitationActionMessage(t("invitationLinkShared"));
+      showToast({ message: t("invitationLinkShared") });
     } else if (result === "copied") {
-      setInvitationActionMessage(t("invitationLinkCopied"));
+      showToast({ message: t("invitationLinkCopied") });
     } else if (result === "failed") {
       setInvitationActionMessage(t("invitationLinkCopyFailed"));
     }
@@ -216,25 +235,34 @@ export default function InviteUser({ onClose }: { onClose?: () => void } = {}) {
               </label>
               <div className="relative">
                 <select
+                  ref={venueSelectRef}
                   id="invite-venue"
                   name="venue-id"
                   value={formData.venue_id}
                   autoComplete="off"
-                  onChange={(e) =>
-                    setFormData({ ...formData, venue_id: e.target.value })
-                  }
+                  onChange={(e) => {
+                    setFormData({ ...formData, venue_id: e.target.value });
+                    if (fieldError?.field === "venue") setFieldError(null);
+                  }}
                   className="app-field appearance-none pr-10"
                   required
+                  aria-invalid={fieldError?.field === "venue" || undefined}
+                  aria-describedby={fieldError?.field === "venue" ? "invite-venue-error" : undefined}
                 >
                   <option value="">{t("selectVenue")}</option>
                   {venues.map((venue) => (
                     <option key={venue.id} value={venue.id}>
-                      {venue.name} ({venue.type})
+                      {venue.name} ({venueTypeLabels[venue.type] ?? venue.type})
                     </option>
                   ))}
                 </select>
                 <Icon name="chevron-down" size={18} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-text-muted" />
               </div>
+              {fieldError?.field === "venue" && (
+                <p id="invite-venue-error" className="mt-1 text-xs text-status-danger" role="alert">
+                  {fieldError.message}
+                </p>
+              )}
             </div>
           )}
 
@@ -372,9 +400,10 @@ export default function InviteUser({ onClose }: { onClose?: () => void } = {}) {
           {formData.role !== "venue_admin" && (
             <div>
               <label htmlFor="invite-guest-limit" className="app-label">
-                {t("guestLimit")}
+                {t("guestLimit")} <span className="text-text-dim">({t("required")})</span>
               </label>
               <input
+                ref={guestLimitInputRef}
                 id="invite-guest-limit"
                 name="guest-limit"
                 type="text"
@@ -384,11 +413,20 @@ export default function InviteUser({ onClose }: { onClose?: () => void } = {}) {
                 onChange={(e) => {
                   const val = e.target.value.replace(/[^0-9]/g, "");
                   setFormData({ ...formData, guest_limit: val });
+                  if (fieldError?.field === "guestLimit") setFieldError(null);
                 }}
                 className="app-field"
                 placeholder={t("guestLimitPlaceholder")}
                 autoComplete="off"
+                aria-required="true"
+                aria-invalid={fieldError?.field === "guestLimit" || undefined}
+                aria-describedby={fieldError?.field === "guestLimit" ? "invite-guest-limit-error" : undefined}
               />
+              {fieldError?.field === "guestLimit" && (
+                <p id="invite-guest-limit-error" className="mt-1 text-xs text-status-danger" role="alert">
+                  {fieldError.message}
+                </p>
+              )}
             </div>
           )}
 
@@ -410,8 +448,8 @@ export default function InviteUser({ onClose }: { onClose?: () => void } = {}) {
               className="app-field"
             >
               <option value="auto">{t("automaticLanguage")}</option>
-              <option value="en">English</option>
-              <option value="ko">한국어</option>
+              <option value="en">{commonT("english")}</option>
+              <option value="ko">{commonT("korean")}</option>
             </select>
             <p className="app-helper">{t("preferredLanguageHelp")}</p>
           </div>
@@ -445,10 +483,10 @@ export default function InviteUser({ onClose }: { onClose?: () => void } = {}) {
               </a>
               <p className="text-xs text-text-muted">
                 {t("invitationExpiresAt", {
-                  expiresAt: new Intl.DateTimeFormat(locale, {
-                    dateStyle: "medium",
-                    timeStyle: "short",
-                  }).format(new Date(createdInvitation.expiresAt)),
+                  expiresAt: formatVenueDateTime(createdInvitation.expiresAt, {
+                    locale: locale === "ko" ? "ko-KR" : "en-US",
+                    timeZone: createdInvitation.timeZone,
+                  }) ?? "—",
                 })}
               </p>
               <div className="grid grid-cols-2 gap-3">
@@ -477,7 +515,7 @@ export default function InviteUser({ onClose }: { onClose?: () => void } = {}) {
                 </Button>
               </div>
               {invitationActionMessage && (
-                <p className="text-xs text-text-muted" role="status">
+                <p className="text-xs text-status-danger" role="alert">
                   {invitationActionMessage}
                 </p>
               )}

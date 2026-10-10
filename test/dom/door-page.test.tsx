@@ -9,16 +9,18 @@ import { AuthSessionProvider } from "@/components/AuthSessionProvider";
 import { RouteTransitionProvider } from "@/components/RouteTransitionProvider";
 import { ToastProvider } from "@/components/feedback/ToastProvider";
 import type { User } from "@/lib/auth";
+import { getBusinessDate } from "@/lib/date";
+import { FULL_CALENDAR_DATE, formatCalendarDate } from "@/lib/ui/date-format";
 import messages from "@/messages/en.json";
 
 const runtime = globalThis as typeof globalThis & {
   __doorPageTest: {
     venueReady: boolean; deleted: boolean; deleteCalls: number; deleteError: boolean; summaryError: boolean;
     reads: Array<{ date: string; venueId: string; eventId: string | null }>;
-    statuses: Record<string, string> | null; statusCalls: string[];
+    statuses: Record<string, string> | null; statusCalls: string[]; statusFailures: number; statusRejections: number; loadError: boolean;
   };
 };
-const reset = () => { runtime.__doorPageTest = { venueReady: true, deleted: false, deleteCalls: 0, deleteError: false, summaryError: false, reads: [], statuses: null, statusCalls: [] }; };
+const reset = () => { runtime.__doorPageTest = { venueReady: true, deleted: false, deleteCalls: 0, deleteError: false, summaryError: false, reads: [], statuses: null, statusCalls: [], statusFailures: 0, statusRejections: 0, loadError: false }; };
 reset();
 Object.defineProperty(globalThis, "self", { configurable: true, value: window });
 Object.defineProperty(globalThis, "localStorage", { configurable: true, value: window.localStorage });
@@ -28,7 +30,9 @@ const sources: Record<string, string> = {
   "lib/guest-snapshots/client": `export const fetchGuestOperationsSnapshot = async (date, venueId, eventId) => {
     const state = globalThis.__doorPageTest;
     state.reads.push({ date, venueId, eventId });
-    if (state.statuses) return { data: { guests: [['g1', 'Roster guest', '10:00'], ['g2', 'Second guest', '10:05']].map(([id, name, time]) =>
+    if (state.loadError) return { data: null, error: 'UNAVAILABLE' };
+    if (state.statuses) return { data: { guests: [['g1', 'Roster guest', '10:00'], ['g2', 'Second guest', '10:05'], ['g3', 'Third guest', '10:10']]
+      .filter(([id]) => id in state.statuses).map(([id, name, time]) =>
       ({ id, name, status: state.statuses[id], createdAt: '2026-09-15T' + time + ':00Z' })),
       users: [], externalLinks: [], failedSections: [], offlineRosterStatus: 'unavailable' }, error: null };
     return { data: { guests: state.deleted ? [] : [{ id: 'g1', name: 'Roster guest', status: 'pending', createdAt: '2026-09-15T10:00:00Z' }],
@@ -37,8 +41,13 @@ const sources: Record<string, string> = {
   "lib/guests/client": "export const fetchGuestsByDate = async () => ({ data: [], error: null });",
   "lib/api/guests": `export const updateGuestStatus = async (id, status) => { const state = globalThis.__doorPageTest;
       if (!state.statuses) return { data: null, error: 'UNEXPECTED_MUTATION' };
-      state.statuses[id] = status; state.statusCalls.push(id + ':' + status);
-      return { data: { id, name: id === 'g1' ? 'Roster guest' : 'Second guest', status, createdAt: '2026-09-15T10:00:00Z' }, error: null }; };
+      state.statusCalls.push(id + ':' + status);
+      if (state.statusFailures > 0) { state.statusFailures--; return { data: null, error: 'UNAVAILABLE' }; }
+      // Another device applies the same change first, so the server rejects this stale request.
+      if (state.statusRejections > 0) { state.statusRejections--; state.statuses[id] = status; return { data: null, error: 'GUEST_ACTIVITY_REJECTED' }; }
+      state.statuses[id] = status;
+      const [name, time] = { g1: ['Roster guest', '10:00'], g2: ['Second guest', '10:05'], g3: ['Third guest', '10:10'] }[id];
+      return { data: { id, name, status, createdAt: '2026-09-15T' + time + ':00Z' }, error: null }; };
     export const deleteGuest = async () => { const state = globalThis.__doorPageTest; state.deleteCalls++;
       if (state.deleteError) return { data: null, error: 'UNAVAILABLE' };
       state.deleted = true; return { data: { id: 'g1', name: 'Roster guest', status: 'deleted' }, error: null }; };`,
@@ -60,6 +69,7 @@ const sources: Record<string, string> = {
   "lib/events/client": `export const fetchEvents = async () => ({ data: ['active', 'draft', 'closed', 'finalized'].map(id => ({
     id, name: id, state: id === 'finalized' ? 'closed' : id === 'active' ? 'open' : id, compatibilityKey: null })), error: null });`,
   "lib/api/password-reset-requests": "export const fetchPendingPasswordResetRequestCount = async () => ({data: 0, error: null});",
+  "lib/api/guest-limits": "export const fetchPendingGuestLimitRequestCount = async () => ({data: 0, error: null});",
   "components/VenueSelector": `const currentVenue = { id: 'venue-1', name: 'Test venue', timezone: 'Asia/Seoul' };
     export const useVenueSelector = () => ({ currentVenue: globalThis.__doorPageTest.venueReady ? currentVenue : null, venueId: 'venue-1', venues: [], selectedVenueId: 'venue-1', isSuperAdmin: false });
     export default function VenueSelector() { return null; }`,
@@ -84,7 +94,7 @@ before(async () => {
 after(() => hooks.deregister());
 afterEach(() => { cleanup(); reset(); window.localStorage.clear(); destinations.length = 0; });
 const destinations: string[] = [];
-const router = { back() {}, forward() {}, refresh() {}, hmrRefresh() {}, push() {}, replace(href: string) { destinations.push(href); }, prefetch() {} };
+const router = { bfcacheId: "test", back() {}, forward() {}, refresh() {}, hmrRefresh() {}, push() {}, replace(href: string) { destinations.push(href); }, prefetch() {} };
 const user: User = { id: "admin-1", name: "Admin", email: "admin@example.test", role: "venue_admin", account_kind: "personal", door_access_enabled: false, venue_id: "venue-1", guest_limit: null };
 function frame(account: User = user, admin = false) {
   return <AppRouterContext.Provider value={router}><PathnameContext.Provider value={admin ? "/admin" : "/door"}>
@@ -136,14 +146,105 @@ test("a check-in keeps its row until the undo toast closes and the toast can rev
   const rowNames = () => [...document.querySelectorAll(".product-guest-row strong")].map((name) => name.textContent);
   await screen.findByRole("button", { name: "Second guest" });
   await act(async () => {});
-  fireEvent.click(screen.getAllByRole("button", { name: messages.Common.checkIn })[0]);
+  const checkIn = screen.getAllByRole("button", { name: messages.Common.checkIn })[0];
+  checkIn.focus();
+  fireEvent.click(checkIn);
   const toast = await screen.findByText(messages.Door.checkedInToast.replace("{name}", "Roster guest"));
   assert.deepEqual(runtime.__doorPageTest.statusCalls, ["g1:checked"]);
   assert.deepEqual(rowNames(), ["Roster guest", "Second guest"]);
+  // Keyboard focus moves to the row's replacement action instead of falling to the page.
+  await waitFor(() => assert.equal(document.activeElement?.getAttribute("aria-label"),
+    messages.Common.undoCheckIn.replace("{name}", "Roster guest")));
   fireEvent.click(within(toast.closest(".app-toast") as HTMLElement).getByRole("button", { name: messages.Common.undo }));
   await screen.findByText(messages.Door.checkInUndone.replace("{name}", "Roster guest"));
   assert.deepEqual(runtime.__doorPageTest.statusCalls, ["g1:checked", "g1:pending"]);
   await waitFor(() => assert.equal(screen.getAllByRole("button", { name: messages.Common.checkIn }).length, 2));
+});
+
+test("consecutive check-ins keep every held row in place until the last toast closes", async () => {
+  runtime.__doorPageTest.statuses = { g1: "pending", g2: "pending", g3: "pending" };
+  location(); render(frame());
+  const rowNames = () => [...document.querySelectorAll(".product-guest-row strong")].map((name) => name.textContent);
+  await screen.findByRole("button", { name: "Third guest" });
+  await act(async () => {});
+  fireEvent.click(screen.getAllByRole("button", { name: messages.Common.checkIn })[0]);
+  await screen.findByText(messages.Door.checkedInToast.replace("{name}", "Roster guest"));
+  // The first held row now offers undo, so the first check-in button belongs to the second guest.
+  fireEvent.click(screen.getAllByRole("button", { name: messages.Common.checkIn })[0]);
+  const toast = await screen.findByText(messages.Door.checkedInToast.replace("{name}", "Second guest"));
+  assert.deepEqual(runtime.__doorPageTest.statusCalls, ["g1:checked", "g2:checked"]);
+  assert.deepEqual(rowNames(), ["Roster guest", "Second guest", "Third guest"]);
+  fireEvent.click(within(toast.closest(".app-toast") as HTMLElement).getByRole("button", { name: messages.Common.dismissNotice }));
+  await waitFor(() => assert.deepEqual(rowNames(), ["Third guest", "Roster guest", "Second guest"]));
+});
+
+test("a failed check-in explains itself in an error toast whose retry applies the check-in", async () => {
+  runtime.__doorPageTest.statuses = { g1: "pending", g2: "pending" };
+  runtime.__doorPageTest.statusFailures = 1;
+  location(); render(frame());
+  await screen.findByRole("button", { name: "Second guest" });
+  await act(async () => {});
+  fireEvent.click(screen.getAllByRole("button", { name: messages.Common.checkIn })[0]);
+  const failure = (await screen.findByText(messages.Door.updateFailed)).closest(".app-toast") as HTMLElement;
+  assert.equal(failure.getAttribute("data-tone"), "error");
+  assert.equal(runtime.__doorPageTest.statuses.g1, "pending");
+  fireEvent.click(within(failure).getByRole("button", { name: messages.Common.retry }));
+  await screen.findByText(messages.Door.checkedInToast.replace("{name}", "Roster guest"));
+  assert.deepEqual(runtime.__doorPageTest.statusCalls, ["g1:checked", "g1:checked"]);
+});
+
+test("a check-in already applied on another device warns once and shows the refreshed row in place", async () => {
+  runtime.__doorPageTest.statuses = { g1: "pending", g2: "pending" };
+  runtime.__doorPageTest.statusRejections = 1;
+  location(); render(frame());
+  const rowNames = () => [...document.querySelectorAll(".product-guest-row strong")].map((name) => name.textContent);
+  await screen.findByRole("button", { name: "Second guest" });
+  await act(async () => {});
+  fireEvent.click(screen.getAllByRole("button", { name: messages.Common.checkIn })[0]);
+  const warning = (await screen.findByText(messages.Door.statusChangedElsewhere)).closest(".app-toast") as HTMLElement;
+  assert.equal(warning.getAttribute("data-tone"), "warning");
+  // Repeating a rejected change cannot apply, so the toast offers no retry.
+  assert.equal(within(warning).queryByRole("button", { name: messages.Common.retry }), null);
+  await screen.findByRole("button", { name: messages.Common.undoCheckIn.replace("{name}", "Roster guest") });
+  assert.deepEqual(rowNames(), ["Roster guest", "Second guest"]);
+  assert.deepEqual(runtime.__doorPageTest.statusCalls, ["g1:checked"]);
+});
+
+test("a roster for another operating date says so and returns to today", async () => {
+  location(); render(frame());
+  await screen.findByRole("button", { name: "Roster guest" });
+  const today = getBusinessDate({ timezone: "Asia/Seoul" });
+  const notice = messages.Door.viewingOtherDate.replace("{date}", formatCalendarDate("en", "2026-09-15", FULL_CALENDAR_DATE));
+  assert.ok(screen.getByText(notice));
+  fireEvent.click(screen.getByRole("button", { name: messages.Door.goToToday }));
+  await waitFor(() => assert.equal(runtime.__doorPageTest.reads.at(-1)?.date, today));
+  assert.equal(screen.queryByText(notice), null);
+});
+
+test("a failed roster load shows a retryable error in the list instead of an empty roster", async () => {
+  runtime.__doorPageTest.loadError = true;
+  location(); render(frame());
+  const retry = await screen.findByRole("button", { name: messages.Common.retry });
+  assert.ok(screen.getByText(messages.Door.loadFailed));
+  assert.equal(screen.queryByText(messages.Door.noGuestsForDate), null);
+  runtime.__doorPageTest.loadError = false;
+  retry.focus();
+  fireEvent.click(retry);
+  await screen.findByRole("button", { name: "Roster guest" });
+  assert.equal(screen.queryByText(messages.Door.loadFailed), null);
+  // The replaced retry action hands focus to the list it reloads.
+  assert.equal(document.activeElement, screen.getByRole("region", { name: messages.Door.guestList }));
+});
+
+test("an empty status tab names its cause and offers a way back to every guest", async () => {
+  runtime.__doorPageTest.statuses = { g1: "checked", g2: "checked" };
+  location(); render(frame());
+  await screen.findByRole("button", { name: "Second guest" });
+  fireEvent.click(screen.getByRole("button", { name: /^Waiting/ }));
+  assert.ok(await screen.findByText(messages.Door.noWaitingGuests));
+  assert.equal(screen.queryByText(messages.Door.noSearchResults), null);
+  fireEvent.click(screen.getByRole("button", { name: messages.Door.showAllGuests }));
+  await screen.findByRole("button", { name: "Second guest" });
 });
 
 test("deletion fails closed without an attendance summary", async () => {
@@ -178,7 +279,7 @@ test("a failed deletion keeps the detail available and a confirmed retry removes
 
 test("legacy admin roster URLs forward a saved or explicit valid scope to check-in", async () => {
   for (const query of ["", "?tab=guests&view=list", "?tab=guests&view=list&venue=venue-1&date=2026-09-15&eventId=active"]) {
-    window.localStorage.setItem("admin:selectedDate", JSON.stringify({ venueId: "venue-1", date: "2026-09-12" }));
+    window.localStorage.setItem("admin:selectedDate", JSON.stringify({ venueId: "venue-1", date: "2026-09-12", selectedAt: Date.now() }));
     window.history.replaceState(null, "", `/admin${query}`);
     render(frame(user, true));
     await waitFor(() => assert.ok(destinations.length));
@@ -206,6 +307,31 @@ test("the unified roster retains its operating date after returning home and rej
   render(frame());
   await openGuest();
   assert.deepEqual(runtime.__doorPageTest.reads.at(-1), { date: "2026-09-15", venueId: "venue-1", eventId: null });
+});
+
+
+test("a chosen roster date lasts until the business day changes, on reopening or while left open", async (t) => {
+  // 23:00 KST on 2026-09-15 belongs to that business day under the default 06:00 closing.
+  t.mock.timers.enable({ apis: ["Date"], now: Date.parse("2026-09-15T14:00:00.000Z") });
+  const choose = (selectedAt: number) => window.localStorage.setItem("door:selectedDate",
+    JSON.stringify({ venueId: "venue-1", date: "2026-09-10", selectedAt }));
+  window.history.replaceState(null, "", "/door");
+  choose(Date.now() - 24 * 60 * 60 * 1000);
+  render(frame());
+  await screen.findByRole("button", { name: "Roster guest" });
+  await act(async () => {});
+  assert.ok(runtime.__doorPageTest.reads.every(({ date }) => date === "2026-09-15"));
+  cleanup();
+
+  choose(Date.now());
+  render(frame());
+  await waitFor(() => assert.equal(runtime.__doorPageTest.reads.at(-1)?.date, "2026-09-10"));
+  assert.ok(await screen.findByRole("button", { name: messages.Door.goToToday }));
+  // 06:30 KST the next morning is past closing; showing the page again moves to the new business day.
+  t.mock.timers.setTime(Date.parse("2026-09-15T21:30:00.000Z"));
+  act(() => { document.dispatchEvent(new Event("visibilitychange")); });
+  await waitFor(() => assert.equal(runtime.__doorPageTest.reads.at(-1)?.date, "2026-09-16"));
+  assert.equal(screen.queryByRole("button", { name: messages.Door.goToToday }), null);
 });
 
 

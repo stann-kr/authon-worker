@@ -20,11 +20,11 @@ import type { VenueManagementSection } from "./components/VenueManagement";
 import Skeleton from "@/components/Skeleton";
 import EventScopeSelector from "@/components/EventScopeSelector";
 import OperationsScope from "@/components/operations/OperationsScope";
-import type { AdminTaskOption } from "./components/AdminTaskSwitcher";
+import type { AdminTaskOption } from "@/lib/admin-navigation";
 import AuthGuard from "../../components/AuthGuard";
 import WorkspaceShell from "../../components/WorkspaceShell";
 import VenueLoadNotice from "../../components/VenueLoadNotice";
-import { getBusinessDate } from "../../lib/date";
+import { useBusinessDate } from "../../lib/hooks";
 import { useTranslations } from "next-intl";
 import { useAuthSession } from "../../components/AuthSessionProvider";
 import { useVenueSelector } from "../../components/VenueSelector";
@@ -33,6 +33,7 @@ import {
   useRouteTransition,
 } from "../../components/RouteTransitionProvider";
 import { fetchPendingPasswordResetRequestCount } from "@/lib/api/password-reset-requests";
+import { fetchPendingGuestLimitRequestCount } from "@/lib/api/guest-limits";
 import useAdminWorkspaceNavigation, {
   focusAdminWorkspaceAfterTaskChange,
 } from "./useAdminWorkspaceNavigation";
@@ -86,7 +87,7 @@ function AdminPageContent() {
     venueLoadError,
     refreshVenues,
   } = useVenueSelector();
-  const businessDate = getBusinessDate(currentVenue ?? {});
+  const businessDate = useBusinessDate(currentVenue);
   const [eventRefreshKey, setEventRefreshKey] = useState(0);
   const isSuperAdmin = user?.role === "super_admin";
   const {
@@ -105,6 +106,7 @@ function AdminPageContent() {
     isRouteTransitionActive,
     isSuperAdmin,
     venueId,
+    venueTime: currentVenue,
   });
   useEffect(() => {
     if (!isRoleReady || activeTask !== "guest-list" || !currentVenue) return;
@@ -121,6 +123,7 @@ function AdminPageContent() {
   }, [activeTask, currentVenue, isRoleReady, router, selectedDate, selectedEventId, venueId]);
 
   const [pendingPasswordResetCount, setPendingPasswordResetCount] = useState(0);
+  const [pendingGuestLimitRequestCount, setPendingGuestLimitRequestCount] = useState(0);
   const workspaceRef = useRef<HTMLElement>(null);
   useRouteLoadingTask(!isRoleReady);
 
@@ -147,10 +150,32 @@ function AdminPageContent() {
     };
   }, [activeTask, isRoleReady]);
 
+  // Extra-guest requests belong to the selected venue's inbox, so the badge follows the venue too.
+  useEffect(() => {
+    if (!isRoleReady || activeTask === "guest-list") return;
+    if (!venueId) {
+      setPendingGuestLimitRequestCount(0);
+      return;
+    }
+    let cancelled = false;
+    fetchPendingGuestLimitRequestCount(venueId).then(({ data, error }) => {
+      if (!cancelled && !error) setPendingGuestLimitRequestCount(data ?? 0);
+    }, () => {
+      // A missing badge never blocks the request inbox itself.
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [activeTask, isRoleReady, venueId]);
+
   const taskOptions = useMemo<AdminTaskOption[]>(
     () =>
       [
-        { id: "guest-requests", group: "guests", label: t("requests") },
+        {
+          id: "guest-requests",
+          group: "guests",
+          label: t("requests"),
+        },
         { id: "event-manage", group: "events", label: t("events") },
         { id: "link-create", group: "links", label: linkT("createLink") },
         { id: "link-manage", group: "links", label: linkT("manageLinks") },
@@ -160,7 +185,6 @@ function AdminPageContent() {
           id: "password-requests",
           group: "users",
           label: t("passwordRequests"),
-          badgeCount: pendingPasswordResetCount,
         },
         { id: "analytics", group: "analytics", label: t("analytics") },
         ...(isSuperAdmin
@@ -178,7 +202,7 @@ function AdminPageContent() {
             ]
           : []),
       ],
-    [isSuperAdmin, linkT, pendingPasswordResetCount, t, userT, venueT],
+    [isSuperAdmin, linkT, t, userT, venueT],
   );
 
 
@@ -216,7 +240,7 @@ function AdminPageContent() {
   return (
     <WorkspaceShell contentClassName="gap-4 pb-8" title={activeTaskLabel}
       adminNavigation={{ activeTask, onTaskChange: changeTask,
-        disabled: !isRoleReady, pendingPasswordResetCount }}
+        disabled: !isRoleReady, pendingPasswordResetCount, pendingGuestLimitRequestCount }}
       actions={contextTasks.length > 0 && activeTask !== "password-requests" ? contextTasks.map((task) => (
         <WorkspaceAction key={task.id} icon={task.id.endsWith("create") ? "add" : "view"} tone={task.id.endsWith("create") ? "accent" : "muted"}
           disabled={!isRoleReady || isRouteTransitionActive}
@@ -260,6 +284,7 @@ function AdminPageContent() {
             selectedDate={selectedDate}
             onDateChange={setSelectedDate}
             businessDate={businessDate}
+            onPendingCountChange={setPendingGuestLimitRequestCount}
           />
         )}
         {activeTask === "event-manage" && (

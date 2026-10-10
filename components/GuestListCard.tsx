@@ -1,4 +1,4 @@
-import React, { useContext, useEffect, useId, useRef, useState } from "react";
+import React, { useContext, useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import Button from "./Button";
 import Icon from "./Icon";
 import StatusLabel from "./StatusLabel";
@@ -38,6 +38,8 @@ interface GuestListCardProps {
   isDeleteDisabled?: boolean;
   deleteDisabledReason?: string;
   deleteError?: string;
+  /** Marks the row a guest-code lookup resolved to. */
+  highlighted?: boolean;
 }
 
 const GuestListCard: React.FC<GuestListCardProps> = ({
@@ -59,6 +61,7 @@ const GuestListCard: React.FC<GuestListCardProps> = ({
   isDeleteDisabled = false,
   deleteDisabledReason,
   deleteError,
+  highlighted = false,
 }) => {
   const t = useTranslations("Common");
   const rosterT = useTranslations("Roster");
@@ -77,6 +80,9 @@ const GuestListCard: React.FC<GuestListCardProps> = ({
   const [deleteConfirmation, setDeleteConfirmation] = useState<string | null>(null);
   const rowRef = useRef<HTMLElement>(null);
   const restoreFocusAfterDeleteRef = useRef(false);
+  const actionsRef = useRef<HTMLDivElement>(null);
+  // Set while focus belongs to a row action that loading or a status change may replace.
+  const keepActionFocusRef = useRef(false);
   const detailId = useId();
   const disclosureRef = useRef<HTMLButtonElement>(null);
   const confirmationKey = `${guest.id}:${guest.status}`;
@@ -98,6 +104,16 @@ const GuestListCard: React.FC<GuestListCardProps> = ({
       }
     }
   }, [confirmationKey, deleteConfirmation, isDetailOpen, onDelete, undoConfirmation]);
+
+  // Check-in swaps the focused action for a disabled spinner and then the undo button;
+  // keep keyboard focus in this row instead of dropping it to the document.
+  useLayoutEffect(() => {
+    if (!keepActionFocusRef.current) return;
+    const active = document.activeElement;
+    if (active && active !== document.body && active !== rowRef.current && active.isConnected) return;
+    const nextAction = actionsRef.current?.querySelector<HTMLElement>("button:not(:disabled)");
+    (nextAction ?? rowRef.current)?.focus({ preventScroll: true });
+  }, [guest.status, isCheckLoading, isUndoLoading]);
 
   useEffect(() => () => {
     if (!restoreFocusAfterDeleteRef.current || document.activeElement !== document.body) return;
@@ -123,6 +139,8 @@ const GuestListCard: React.FC<GuestListCardProps> = ({
       data-status={guest.status}
       data-selected={isDetailOpen}
       data-mode={mode}
+      data-guest-id={guest.id}
+      data-highlighted={highlighted || undefined}
     >
       <div className="product-guest-line">
         {/* A stretched disclosure and separate raised actions avoid nested buttons. */}
@@ -131,13 +149,21 @@ const GuestListCard: React.FC<GuestListCardProps> = ({
           aria-controls={detailId} aria-expanded={isDetailOpen} aria-disabled={isDeleteLoading} />
         <div className="product-guest-identity">
           <span className="product-guest-index" aria-hidden="true">{String(index + 1).padStart(2, "0")}</span>
+          {mode === "operations" && guest.status === "checked" &&
+            <span className="product-guest-checked-mark text-status-checked" aria-hidden="true"><Icon name="check" size={14} /></span>}
           <span className="product-guest-name">
             <strong id={`${detailId}-label`}>{guest.name}</strong>
             {(djName || registeredByName) && <small>{djName || registeredByName}</small>}
           </span>
         </div>
 
-        <div className="product-guest-actions">
+        <div className="product-guest-actions" ref={actionsRef}
+          onFocus={() => { keepActionFocusRef.current = true; }}
+          onBlur={(event) => {
+            // Moving elsewhere ends the claim; a disabled or removed action loses focus without a target.
+            const target: Element = event.target;
+            keepActionFocusRef.current = !event.relatedTarget && (!target.isConnected || target.matches(":disabled"));
+          }}>
           {guest.status === "pending" && (
             <>
               <span className="sr-only">{t("waitingStatus")}</span>
@@ -146,9 +172,10 @@ const GuestListCard: React.FC<GuestListCardProps> = ({
                   onClick={onCheck}
                   disabled={isEntryDisabled || isDeleteLoading}
                   isLoading={isCheckLoading}
-                  variant="confirm"
+                  variant="primary"
                   size="md"
                   className="min-w-16"
+                  aria-describedby={`${detailId}-label`}
                 >
                   {t("checkIn")}
                 </Button>

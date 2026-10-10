@@ -79,7 +79,7 @@ function DoorCodeLookupHarness({
     scope,
     guests,
     isOfflineMode,
-    onGuestFound: setFoundName,
+    onGuestFound: (guest) => setFoundName(`${guest.name}#${guest.id}`),
     dependencies,
   });
 
@@ -126,7 +126,9 @@ test("online lookup publishes the matched guest", async () => {
   assert.deepEqual(calls, [
     { ...SCOPE_A, code: "AUTHON:guest-0001" },
   ]);
-  assert.equal(screen.getByTestId("found-name").textContent, "Guest Alpha");
+  assert.equal(screen.getByTestId("found-name").textContent, "Guest Alpha#guest-0001");
+  // The next scan starts from an empty field.
+  assert.equal((screen.getByRole("textbox", { name: "Guest code" }) as HTMLInputElement).value, "");
 });
 
 test("offline lookup finds a cached guest without calling the API", async () => {
@@ -148,7 +150,7 @@ test("offline lookup finds a cached guest without calling the API", async () => 
     assert.equal(screen.getByTestId("feedback").textContent, "found"),
   );
   assert.equal(calls, 0);
-  assert.equal(screen.getByTestId("found-name").textContent, "Guest Alpha");
+  assert.equal(screen.getByTestId("found-name").textContent, "Guest Alpha#guest-0001");
 });
 
 test("offline lookup reports a cache miss without calling the API", async () => {
@@ -193,7 +195,7 @@ test("a delayed colliding-scope result cannot replace the newer result", async (
     await resultB.promise;
   });
   await waitFor(() =>
-    assert.equal(screen.getByTestId("found-name").textContent, "Guest Beta"),
+    assert.equal(screen.getByTestId("found-name").textContent, "Guest Beta#guest-0002"),
   );
 
   await act(async () => {
@@ -202,7 +204,7 @@ test("a delayed colliding-scope result cannot replace the newer result", async (
   });
   await waitFor(() => {
     assert.equal(screen.getByTestId("feedback").textContent, "found");
-    assert.equal(screen.getByTestId("found-name").textContent, "Guest Beta");
+    assert.equal(screen.getByTestId("found-name").textContent, "Guest Beta#guest-0002");
   });
 });
 

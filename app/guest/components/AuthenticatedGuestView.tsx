@@ -94,6 +94,12 @@ export default function AuthenticatedGuestView({ user }: AuthenticatedGuestViewP
   const [quota, setQuota] = useState<GuestQuota | null>(null);
   const [verifiedQuotaScopeKey, setVerifiedQuotaScopeKey] = useState("");
   const [registeredByName, setRegisteredByName] = useState("");
+  const [operatorError, setOperatorError] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [lastAddedName, setLastAddedName] = useState<string | null>(null);
+  const [duplicateName, setDuplicateName] = useState<string | null>(null);
+  const guestNameInputRef = useRef<HTMLInputElement>(null);
+  const operatorInputRef = useRef<HTMLInputElement>(null);
   const [sortMode, setSortMode] = useLocalStorage<"default" | "alpha">(
     "guest:sortMode",
     "default",
@@ -275,7 +281,54 @@ export default function AuthenticatedGuestView({ user }: AuthenticatedGuestViewP
     dependencies: GUEST_LIMIT_REQUEST_ACTIONS,
   });
 
-  const handleSave = async () => {
+  const isSharedAccount = user?.account_kind === "shared";
+
+  /** 공용 계정은 단건·여러 이름 등록 모두 현재 입력자 이름이 있어야 합니다. */
+  const requireOperatorName = () => {
+    if (!isSharedAccount || registeredByName.trim()) return true;
+    setOperatorError(true);
+    operatorInputRef.current?.focus();
+    return false;
+  };
+
+  const createSingleGuest = async (
+    name: string,
+    allowDuplicate: boolean,
+  ): Promise<{ data: Guest | null; error: string | null }> => {
+    const params = {
+      venueId: effectiveVenueId,
+      name,
+      date: selectedDate,
+      eventId: selectedEventId,
+      registeredByName: isSharedAccount ? registeredByName.trim() : null,
+    };
+    if (!allowDuplicate) return createGuest(params);
+
+    // 사용자가 중복을 확인한 단건은 여러 이름 등록과 같은 명시적 중복 허용 경로를 씁니다.
+    const response = await createGuests({
+      venueId: params.venueId,
+      date: params.date,
+      eventId: params.eventId,
+      registeredByName: params.registeredByName,
+      items: [{ name, allowDuplicate: true }],
+    });
+    if (response.error || !response.data) {
+      return { data: null, error: response.error };
+    }
+    const [result] = response.data.items;
+    if (result?.status === "created" && result.guest) {
+      return { data: result.guest, error: null };
+    }
+    if (result?.status === "limit_reached") {
+      return { data: null, error: "GUEST_LIMIT_REACHED" };
+    }
+    if (result?.status === "invalid_name") {
+      return { data: null, error: "INVALID_GUEST_NAME" };
+    }
+    return { data: null, error: "Unable to create guest right now." };
+  };
+
+  const handleSave = async (allowDuplicate = false) => {
     if (!guestName.trim() || isLoading || isBulkSubmitting) return;
 
     const operationScopeKey = requestScopeKey;
@@ -287,40 +340,41 @@ export default function AuthenticatedGuestView({ user }: AuthenticatedGuestViewP
       return;
     }
 
+    if (!requireOperatorName()) return;
+
     setIsLoading(true);
     setError(null);
+    setDuplicateName(null);
+    setLastAddedName(null);
 
-    if (user?.account_kind === "shared" && !registeredByName.trim()) {
-      setError(t("registeredByRequired"));
-      setIsLoading(false);
-      return;
-    }
-
+    const submittedName = guestName.trim().toUpperCase();
     let actionFeedback: string | null = null;
+    let duplicateCandidate: string | null = null;
     try {
-      const { data, error: createError } = await createGuest({
-        venueId: effectiveVenueId,
-        name: guestName.trim().toUpperCase(),
-        date: selectedDate,
-        eventId: selectedEventId,
-        registeredByName:
-          user?.account_kind === "shared" ? registeredByName.trim() : null,
-      });
+      const { data, error: createError } = await createSingleGuest(
+        submittedName,
+        allowDuplicate,
+      );
 
       if (currentScopeKeyRef.current !== operationScopeKey) return;
 
-      if (createError) {
-        console.error("Failed to create guest:", createError);
-        actionFeedback = t(
-          selectDomainMessageKey(
-            createError,
-            GUEST_CREATE_ERROR_KEYS,
-            "registerResultUnknown",
-          ),
+      if (createError === "DUPLICATE_REQUIRES_CONFIRMATION") {
+        duplicateCandidate = submittedName;
+      } else if (createError) {
+        const feedbackKey = selectDomainMessageKey(
+          createError,
+          GUEST_CREATE_ERROR_KEYS,
+          "registerResultUnknown",
         );
+        // Known domain answers such as a reached limit are explained on screen, not logged as failures.
+        if (feedbackKey === "registerResultUnknown") {
+          console.error("Failed to create guest:", createError);
+        }
+        actionFeedback = t(feedbackKey);
       } else if (data) {
         setGuests((prev) => [...prev, data]);
         setGuestName("");
+        setLastAddedName(data.name);
       } else {
         actionFeedback = t("registerResultUnknown");
       }
@@ -333,8 +387,15 @@ export default function AuthenticatedGuestView({ user }: AuthenticatedGuestViewP
       if (currentScopeKeyRef.current === operationScopeKey) {
         const refreshed = await loadGuests({ silent: true });
         if (refreshed === true && actionFeedback) setError(actionFeedback);
+        if (refreshed === true && duplicateCandidate) {
+          setDuplicateName(duplicateCandidate);
+        }
       }
       setIsLoading(false);
+      if (currentScopeKeyRef.current === operationScopeKey) {
+        // 추가 버튼이 잠시 비활성화되어 focus를 잃으므로 다음 이름 입력으로 되돌립니다.
+        window.requestAnimationFrame(() => guestNameInputRef.current?.focus());
+      }
     }
   };
 
@@ -342,6 +403,7 @@ export default function AuthenticatedGuestView({ user }: AuthenticatedGuestViewP
     const operationScopeKey = requestScopeKey;
     pollingGuard.invalidateRequests();
     setIsLoading(true);
+    setDeletingId(id);
     setError(null);
 
     let actionFeedback: string | null = null;
@@ -369,6 +431,7 @@ export default function AuthenticatedGuestView({ user }: AuthenticatedGuestViewP
         if (refreshed === true && actionFeedback) setError(actionFeedback);
       }
       setIsLoading(false);
+      setDeletingId(null);
     }
   };
 
@@ -382,8 +445,7 @@ export default function AuthenticatedGuestView({ user }: AuthenticatedGuestViewP
       return { data: null, error: "VENUE_REQUIRED" };
     }
 
-    if (user?.account_kind === "shared" && !registeredByName.trim()) {
-      setError(t("registeredByRequired"));
+    if (!requireOperatorName()) {
       return { data: null, error: "REGISTERED_BY_REQUIRED" };
     }
 
@@ -426,6 +488,7 @@ export default function AuthenticatedGuestView({ user }: AuthenticatedGuestViewP
 
   const handleOperatorChange = (value: string) => {
     setRegisteredByName(value);
+    if (value.trim()) setOperatorError(false);
     if (!user) return;
     if (value.trim()) {
       window.sessionStorage.setItem(`shared-operator:${user.id}`, value);
@@ -467,23 +530,36 @@ export default function AuthenticatedGuestView({ user }: AuthenticatedGuestViewP
     isPartial: loadOutcome === "partial",
   });
 
+  const resetEntryFeedback = () => {
+    setDuplicateName(null);
+    setLastAddedName(null);
+    setOperatorError(false);
+  };
+
+  const handleGuestNameChange = (value: string) => {
+    setGuestName(value);
+    // 중복 확인은 확인한 이름에만 적용되므로 이름이 바뀌면 해제합니다.
+    setDuplicateName(null);
+  };
+
   const changeRegistrationScope = (change: () => void) => {
     if (!confirmWorkspaceNavigation()) return;
     setEntryOpen(false);
     setGuestName("");
+    resetEntryFeedback();
     guestLimitRequestController.updateRequestDraft({ requestedExtra: "1", requestReason: "" });
     change();
   };
 
   const renderGuestEntry = (scopeLabel: string) => (
       <Sheet id="guest-entry-panel" presentation="inline" size="form" revealOnOpen open={entryOpen} title={t("addGuest")} onClose={() => {
-        setEntryOpen(false); setGuestName("");
+        setEntryOpen(false); setGuestName(""); resetEntryFeedback();
         guestLimitRequestController.updateRequestDraft({ requestedExtra: "1", requestReason: "" });
       }}
         busy={isLoading || isBulkSubmitting || guestLimitRequestController.isRequestingExtra} protectEdits dirty={Boolean(guestName.trim())}>
                   <div className="guest-entry-context">
                   <dl className="guest-entry-scope" aria-label={t("registrationContext")}>
-                    <div><dt>{commonT("operationalDate")}</dt><dd><time dateTime={selectedDate}>{formatDateDisplay(selectedDate, locale)}</time></dd></div>
+                    <div><dt>{t("date")}</dt><dd><time dateTime={selectedDate}>{formatDateDisplay(selectedDate, locale)}</time></dd></div>
                     <div><dt>{commonT("venue")}</dt><dd>{currentVenue?.brandName || currentVenue?.name || "—"}</dd></div>
                     <div><dt>{eventScopeT("label")}</dt><dd>{scopeLabel}</dd></div>
                   </dl>
@@ -497,12 +573,13 @@ export default function AuthenticatedGuestView({ user }: AuthenticatedGuestViewP
 
                   <div className="space-y-4">
                     {error && <Alert type="error" message={error} />}
-                    {user?.account_kind === "shared" && (
+                    {isSharedAccount && (
                       <div className="mb-3">
                         <label htmlFor="shared-operator-name" className="app-label">
                           {t("registeredBy")}
                         </label>
                         <input
+                          ref={operatorInputRef}
                           id="shared-operator-name"
                           name="shared-operator-name"
                           data-preserve-on-close
@@ -513,10 +590,24 @@ export default function AuthenticatedGuestView({ user }: AuthenticatedGuestViewP
                           maxLength={80}
                           autoComplete="off"
                           aria-required="true"
-                          aria-describedby="shared-operator-help"
+                          aria-invalid={operatorError || undefined}
+                          aria-describedby={
+                            operatorError
+                              ? "shared-operator-error shared-operator-help"
+                              : "shared-operator-help"
+                          }
                           disabled={isBulkSubmitting}
                           className="app-field"
                         />
+                        {operatorError && (
+                          <p
+                            id="shared-operator-error"
+                            role="alert"
+                            className="mt-2 text-xs leading-relaxed text-status-danger"
+                          >
+                            {t("registeredByRequired")}
+                          </p>
+                        )}
                         <p id="shared-operator-help" className="app-helper">
                           {t("registeredByHelp")}
                         </p>
@@ -524,11 +615,12 @@ export default function AuthenticatedGuestView({ user }: AuthenticatedGuestViewP
                     )}
 
                     {!isAtLimit ? (
+                      <>
                       <form
                         className="guest-entry-form"
                         onSubmit={(event) => {
                           event.preventDefault();
-                          handleSave();
+                          void handleSave();
                         }}
                       >
                         <div className="min-w-0 flex-1">
@@ -536,16 +628,25 @@ export default function AuthenticatedGuestView({ user }: AuthenticatedGuestViewP
                             {t("guestName")}
                           </label>
                           <input
+                            ref={guestNameInputRef}
                             id="authenticated-guest-name"
                             name="guest-name"
                             type="text"
                             value={guestName}
-                            onChange={(event) => setGuestName(event.target.value)}
+                            onChange={(event) => handleGuestNameChange(event.target.value)}
                             placeholder={t("enterFullName")}
                             maxLength={100}
                             autoComplete="off"
-                            disabled={isLoading || isBulkSubmitting}
-                            className="app-field min-h-11"
+                            autoCorrect="off"
+                            autoCapitalize="characters"
+                            spellCheck={false}
+                            enterKeyHint="done"
+                            // 저장 중에도 focus를 유지하도록 disabled 대신 readOnly로 잠급니다.
+                            readOnly={isLoading || isBulkSubmitting}
+                            aria-describedby={
+                              duplicateName ? "authenticated-guest-duplicate" : undefined
+                            }
+                            className="app-field min-h-11 read-only:opacity-70"
                           />
                         </div>
                         <Button
@@ -558,6 +659,26 @@ export default function AuthenticatedGuestView({ user }: AuthenticatedGuestViewP
                           {t("addGuest")}
                         </Button>
                       </form>
+                      {duplicateName && (
+                        <div
+                          id="authenticated-guest-duplicate"
+                          role="alert"
+                          className="flex flex-col gap-2 border-l-2 border-status-waiting bg-status-waiting/10 px-3 py-2 text-sm text-status-waiting sm:flex-row sm:items-center sm:justify-between"
+                        >
+                          <p className="leading-relaxed">{t("duplicateRequiresConfirmation")}</p>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="shrink-0"
+                            disabled={isLoading || isBulkSubmitting}
+                            onClick={() => void handleSave(true)}
+                          >
+                            {t("addDuplicateAnyway")}
+                          </Button>
+                        </div>
+                      )}
+                      </>
                     ) : (
                       <div className="border-l-2 border-status-danger bg-status-danger/10 px-3 py-2 text-sm text-status-danger">
                         {t("limitReached", {
@@ -566,17 +687,17 @@ export default function AuthenticatedGuestView({ user }: AuthenticatedGuestViewP
                         })}
                       </div>
                     )}
+                    {/* 한도에 도달해 입력란이 사라져도 마지막 등록 결과를 안내합니다. */}
+                    <p role="status" aria-live="polite" aria-atomic="true" className="app-helper text-status-checked">
+                      {lastAddedName ? t("guestAdded", { name: lastAddedName }) : ""}
+                    </p>
 
                     <GuestBulkEntry
                       key={requestScopeKey}
                       existingNames={filteredGuests.map((guest) => guest.name)}
                       remaining={remaining}
-                      disabled={
-                        isLoading ||
-                        !effectiveVenueId ||
-                        (user?.account_kind === "shared" &&
-                          !registeredByName.trim())
-                      }
+                      disabled={isLoading || !effectiveVenueId}
+                      validateBeforeSubmit={requireOperatorName}
                       onSubmitChunk={handleBulkSave}
                       onSubmissionComplete={async () => {
                         if (currentScopeKeyRef.current === requestScopeKey) {
@@ -620,7 +741,8 @@ export default function AuthenticatedGuestView({ user }: AuthenticatedGuestViewP
                     {selector}
                   </OperationsScope>{renderGuestEntry(label)}</>} />
 
-                {error && <Alert type="error" message={error} />}
+                {/* 입력 패널이 열려 있으면 오류를 패널 안에서만 한 번 표시합니다. */}
+                {error && !entryOpen && <Alert type="error" message={error} />}
 
           </>
         }
@@ -654,13 +776,21 @@ export default function AuthenticatedGuestView({ user }: AuthenticatedGuestViewP
               {listState === "loading" ? (
                 <Skeleton rows={5} />
               ) : shouldShowEmptyState(listState) ? (
+                // Name the narrowest active filter and offer its way back, as the Door roster does.
                 <EmptyState
                   icon="user-add"
                   message={
-                    searchQuery || rosterStatus !== "all"
+                    searchQuery.trim()
                       ? t("noSearchResults")
-                      : t("noGuestsForDate")
+                      : rosterStatus !== "all"
+                        ? t(rosterStatus === "pending" ? "noWaitingGuests" : "noCheckedGuests")
+                        : t("noGuestsForDate")
                   }
+                  action={searchQuery.trim()
+                    ? <Button variant="outline" size="sm" onClick={() => setSearchQuery("")}>{commonT("clearSearch")}</Button>
+                    : rosterStatus !== "all"
+                      ? <Button variant="outline" size="sm" onClick={() => setRosterStatus("all")}>{t("showAllGuests")}</Button>
+                      : undefined}
                 />
               ) : (
                 <div
@@ -682,8 +812,8 @@ export default function AuthenticatedGuestView({ user }: AuthenticatedGuestViewP
                           ? () => handleDelete(guest.id)
                           : undefined
                       }
-                      isDeleteLoading={isLoading}
-                      isDeleteDisabled={isBulkSubmitting}
+                      isDeleteLoading={deletingId === guest.id}
+                      isDeleteDisabled={isBulkSubmitting || isLoading}
                     />
                   ))}
                 </div>

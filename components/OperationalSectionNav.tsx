@@ -34,14 +34,16 @@ export default function OperationalSectionNav<T extends string>({
               key={item.id}
               type="button"
               disabled={disabled}
-              aria-pressed={isActive}
+              aria-current={isActive ? "page" : undefined}
               onClick={() => onChange(item.id)}
-              className={`flex min-h-11 w-full items-center gap-2 border border-border-default p-3 text-left text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
+              className={`relative flex min-h-11 w-full items-center gap-2 overflow-hidden rounded-control border p-3 text-left text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
                 isActive
-                  ? "border-l-2 border-l-action-primary bg-surface-raised text-text-heading"
-                  : "bg-surface-raised text-text-muted hover:border-border-strong hover:text-text-heading"
+                  ? "border-border-strong bg-surface-active text-text-heading"
+                  : "border-border-default bg-surface-raised text-text-muted hover:border-border-strong hover:text-text-heading"
               }`}
             >
+              {/* A straight inset bar keeps the accent from bending around the rounded corner. */}
+              {isActive && <span aria-hidden="true" className="absolute inset-y-2 left-0 w-0.5 rounded-r-full bg-action-primary" />}
               <Icon name={item.icon} size={17} />
               <span>{item.label}</span>
             </button>

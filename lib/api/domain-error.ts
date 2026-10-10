@@ -10,6 +10,15 @@ export const GUEST_CREATE_ERROR_KEYS = {
   INVALID_GUEST_NAME: "registerFailed",
 } as const;
 
+export const EVENT_FORM_ERROR_KEYS = {
+  INVALID_EVENT_NAME: "invalidName",
+  INVALID_CAPACITY: "invalidCapacity",
+  INVALID_TARGET: "invalidTarget",
+  TARGET_EXCEEDS_CAPACITY: "targetExceedsCapacity",
+  EVENT_LOCKED: "eventLocked",
+  EVENT_CHANGED: "eventChanged",
+} as const;
+
 export const USER_CREATE_ERROR_KEYS = {
   EMAIL_ALREADY_EXISTS: "emailAlreadyExists",
   FORBIDDEN: "forbiddenAction",

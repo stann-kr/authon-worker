@@ -161,6 +161,11 @@ export function canCheckInToEvent(state: EventState): boolean {
   return state === "open";
 }
 
+/** Archived events are final; earlier states may still correct their name, capacity and target. */
+export function canEditEventDetails(state: EventState): boolean {
+  return state !== "archived";
+}
+
 export function getCompatibilityEventKey(
   venueId: string,
   businessDate: string,

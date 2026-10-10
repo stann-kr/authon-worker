@@ -14,6 +14,7 @@ import {
 
 import messages from "@/messages/en.json";
 import { RouteTransitionProvider } from "@/components/RouteTransitionProvider";
+import { ToastProvider } from "@/components/feedback/ToastProvider";
 import type { User } from "@/lib/users/types";
 import type { PasswordResetRequestView } from "@/lib/auth/password-reset-request-types";
 
@@ -165,7 +166,7 @@ test("password approval keeps its proof form and rejection confirms inline with 
   render(
     <NextIntlClientProvider locale="en" messages={messages}>
       <RouteTransitionProvider>
-        <PasswordResetRequestManagement />
+        <ToastProvider><PasswordResetRequestManagement /></ToastProvider>
       </RouteTransitionProvider>
     </NextIntlClientProvider>,
   );
@@ -463,6 +464,9 @@ test("UserCard moves focus across edit subtree replacement", async () => {
   const saveButton = screen.getByRole("button", {
     name: messages.UserAdmin.save,
   });
+  assert.equal((saveButton as HTMLButtonElement).disabled, true);
+  fireEvent.change(nameInput, { target: { value: "Renamed account" } });
+  assert.equal((saveButton as HTMLButtonElement).disabled, false);
   saveButton.focus();
   await act(async () => {
     fireEvent.click(saveButton);
@@ -472,6 +476,36 @@ test("UserCard moves focus across edit subtree replacement", async () => {
     name: messages.UserAdmin.edit,
   });
   assert.equal(document.activeElement === editButton, true);
+});
+
+test("UserCard editor submits as a form and keeps invalid drafts on the field", async () => {
+  const updates: object[] = [];
+  await renderUserCard({ onUpdate: async (_id, update) => { updates.push(update); return true; } });
+  fireEvent.click(screen.getByRole("button", { name: messages.UserAdmin.edit }));
+  const nameInput = screen.getByLabelText(messages.UserAdmin.name) as HTMLInputElement;
+  const limitInput = screen.getByLabelText(messages.UserAdmin.guestLimit) as HTMLInputElement;
+  const form = nameInput.closest("form")!;
+
+  fireEvent.change(nameInput, { target: { value: "   " } });
+  fireEvent.submit(form);
+  assert.equal(updates.length, 0);
+  assert.equal(nameInput.getAttribute("aria-invalid"), "true");
+  assert.equal(document.getElementById(nameInput.getAttribute("aria-describedby")!)?.textContent, messages.UserAdmin.nameRequired);
+  assert.equal(document.activeElement === nameInput, true);
+
+  fireEvent.change(nameInput, { target: { value: "Renamed account" } });
+  fireEvent.change(limitInput, { target: { value: "-1" } });
+  fireEvent.submit(form);
+  assert.equal(updates.length, 0);
+  assert.equal(limitInput.getAttribute("aria-invalid"), "true");
+  assert.equal(document.activeElement === limitInput, true);
+
+  fireEvent.change(limitInput, { target: { value: "5" } });
+  await act(async () => { fireEvent.submit(form); });
+  const [saved] = updates as Array<{ name?: string; guestLimit?: number | null }>;
+  assert.equal(updates.length, 1);
+  assert.equal(saved.name, "Renamed account");
+  assert.equal(saved.guestLimit, 5);
 });
 
 test("UserCard does not steal focus moved outside while save is pending", async () => {
@@ -487,6 +521,7 @@ test("UserCard does not steal focus moved outside while save is pending", async 
     });
     editButton.focus();
     fireEvent.click(editButton);
+    fireEvent.change(screen.getByLabelText(messages.UserAdmin.name), { target: { value: "Renamed account" } });
     const saveButton = screen.getByRole("button", {
       name: messages.UserAdmin.save,
     });

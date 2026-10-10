@@ -5,7 +5,7 @@ import { createPortal } from "react-dom";
 import { useTranslations } from "next-intl";
 import Button from "../Button";
 import Icon from "../Icon";
-import { useIsRouteTransitionActive } from "../RouteTransitionProvider";
+import { useIsRouteOverlayVisible, useIsRouteTransitionActive } from "../RouteTransitionProvider";
 import { lockModalBackground } from "./modal-lock";
 import { restoreOverlayFocus } from "./restore-focus";
 import { useKeyboardOpen } from "../viewport/ViewportProvider";
@@ -72,8 +72,12 @@ export default function Sheet({ id, open = true, title, children, onClose, prese
   const t = useTranslations("Sheet");
   const keyboardOpen = useKeyboardOpen();
   const routeTransitionActive = useIsRouteTransitionActive();
+  const routeOverlayVisible = useIsRouteOverlayVisible();
   const transitioning = blockDuringRouteTransition && routeTransitionActive;
   const modal = presentation === "modal";
+  // Modals leave at once; in-page panels stay painted (but locked) until the overlay covers them,
+  // so a fast route never blinks the page layout.
+  const hiddenByRoute = transitioning && (modal || routeOverlayVisible);
   const Heading = (headingLevel ?? (presentation === "page" ? 1 : 2)) === 1 ? "h1" : "h2";
   const [host] = useState(() => typeof document === "undefined" ? null : document.createElement("div"));
   const anchorRef = useRef<HTMLDivElement>(null);
@@ -280,7 +284,7 @@ export default function Sheet({ id, open = true, title, children, onClose, prese
   if (!open || !host) return null;
   const isBackdrop = (target: EventTarget) => target === layerRef.current || target === layerRef.current?.firstElementChild;
   const content = (
-    <div ref={layerRef} className="product-sheet-layer" data-modal={modal} data-transitioning={transitioning} inert={transitioning || undefined} hidden={transitioning}
+    <div ref={layerRef} className="product-sheet-layer" data-modal={modal} data-transitioning={transitioning} inert={transitioning || undefined} hidden={hiddenByRoute}
       onPointerDown={(event) => {
         backdropDismissedKeyboard.current = modal && keyboardOpen && isBackdrop(event.target);
         if (!backdropDismissedKeyboard.current) return;

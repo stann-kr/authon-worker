@@ -79,9 +79,36 @@ textarea {
   transition: opacity var(--app-duration-fast) var(--app-ease-out);
 }
 
+.route-transition-overlay[data-enter="fade"] {
+  animation: route-overlay-enter var(--app-duration-fast) var(--app-ease-out);
+}
+
 .route-transition-overlay[data-state="leaving"] {
   pointer-events: none;
   opacity: 0;
+}
+
+/* Hard-load spinners sit where the route overlay will later appear: below the
+   workspace header and beside the desktop sidebar. */
+.route-loading-frame {
+  position: fixed;
+  inset: calc(60px + env(safe-area-inset-top)) 0 0 0;
+  background: var(--app-canvas);
+}
+
+@media (min-width: 1000px) {
+  .route-loading-frame {
+    inset: 56px 0 0 224px;
+  }
+}
+
+@keyframes route-overlay-enter {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
 .route-transition-overlay .animate-spin {
@@ -496,6 +523,12 @@ main[tabindex="-1"]:is([data-route-focus="true"], [data-overlay-focus="true"]):f
   button:active:not(:disabled),
   .pressable:active:not(:disabled) {
     transform: none !important;
+  }
+
+  /* Loading must still read as active: keep spinners turning, slowly. */
+  .animate-spin {
+    animation-duration: 1.6s !important;
+    animation-iteration-count: infinite !important;
   }
 
   .skip-link {

@@ -26,8 +26,16 @@ export type ExternalGuestFeedbackKey =
   | "duplicateRequiresConfirmation"
   | "rateLimited"
   | "rsvpFull"
+  | "linkFull"
   | "deleteFailed"
   | "deleteResultUnknown";
+
+export interface ExternalGuestNotice {
+  key: "guestAdded" | "rsvpRegistered" | "rsvpUpdated";
+  name: string;
+}
+
+const LINK_LIMIT_REACHED_ERROR = "Guest limit reached for this link.";
 
 export interface ExternalGuestControllerDependencies {
   validateExternalToken: (
@@ -90,6 +98,7 @@ export default function useExternalGuestController({
   const [isBulkSubmitting, setIsBulkSubmitting] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [error, setError] = useState<ExternalGuestFeedbackKey | null>(null);
+  const [notice, setNotice] = useState<ExternalGuestNotice | null>(null);
   const [requiresReconciliation, setRequiresReconciliation] = useState(false);
   const [isReconciling, setIsReconciling] = useState(false);
   const [guests, setGuests] = useState<ExternalLinkPublicGuest[]>([]);
@@ -101,6 +110,7 @@ export default function useExternalGuestController({
   const retryHeadingRef = useRef<HTMLHeadingElement>(null);
   const reconciliationHeadingRef = useRef<HTMLHeadingElement>(null);
   const contentHeadingRef = useRef<HTMLHeadingElement>(null);
+  const guestNameInputRef = useRef<HTMLInputElement>(null);
   const validationGuard = useLatestRequestGuard();
   const { requestFocusRestore } = useRouteTransition();
   const showRetryPanel =
@@ -139,6 +149,10 @@ export default function useExternalGuestController({
   const handleGuestNameChange = (value: string) => {
     guestNameRevisionRef.current += 1;
     setGuestName(value);
+    // 중복 확인은 확인한 이름에만 적용되므로 이름이 바뀌면 해제합니다.
+    setError((current) =>
+      current === "duplicateRequiresConfirmation" ? null : current,
+    );
   };
 
   useEffect(() => {
@@ -173,7 +187,6 @@ export default function useExternalGuestController({
         await dependencies.validateExternalToken(token, ownerKey);
       if (!isLatestRequest()) return "stale" as const;
       if (validationError) {
-        console.error("Invalid external guest link:", validationError);
         if (getExternalLinkValidationDisposition(validationError) === "invalid") {
           const activeElement = document.activeElement;
           const focusIsInsideView = Boolean(
@@ -194,6 +207,8 @@ export default function useExternalGuestController({
           setVenueInfo(null);
           setGuests([]);
         } else {
+          // An invalid or expired link is an expected answer; only an unavailable check is a failure.
+          console.error("External guest link could not be checked:", validationError);
           setHasValidationError(false);
           setError("refreshFailed");
         }
@@ -218,7 +233,7 @@ export default function useExternalGuestController({
       return "failed" as const;
     } catch (validationError) {
       if (!isLatestRequest()) return "stale" as const;
-      console.error("Invalid external guest link:", validationError);
+      console.error("External guest link could not be checked:", validationError);
       setHasValidationError(false);
       setError("refreshFailed");
       return "failed" as const;
@@ -280,11 +295,34 @@ export default function useExternalGuestController({
     }
   };
 
-  const handleSave = async () => {
+  const createWithDuplicateOverride = async (
+    name: string,
+    date: string,
+  ): Promise<{ data: ExternalLinkPublicGuest | null; error: string | null }> => {
+    const response = await dependencies.createGuestsViaExternalLink({
+      token,
+      date,
+      items: [{ name, allowDuplicate: true }],
+    });
+    if (response.error || !response.data) {
+      return { data: null, error: response.error ?? "UNKNOWN_ERROR" };
+    }
+    const [result] = response.data.items;
+    if (result?.status === "created" && result.guest) {
+      return { data: result.guest, error: null };
+    }
+    if (result?.status === "limit_reached") {
+      return { data: null, error: LINK_LIMIT_REACHED_ERROR };
+    }
+    return { data: null, error: "UNKNOWN_ERROR" };
+  };
+
+  const submitGuest = async (allowDuplicate: boolean) => {
     if (
       !guestName.trim() ||
       !linkInfo ||
       (linkInfo.kind === "self_rsvp" && !ownerKey) ||
+      (allowDuplicate && linkInfo.kind === "self_rsvp") ||
       isSelfRsvpLocked ||
       requiresReconciliation ||
       activeOperationRef.current
@@ -293,7 +331,10 @@ export default function useExternalGuestController({
     if (!lease) return;
     setIsLoading(true);
     setError(null);
+    setNotice(null);
     let actionFeedback: ExternalGuestFeedbackKey | null = null;
+    let successNotice: ExternalGuestNotice | null = null;
+    const submittedName = guestName.trim().toUpperCase();
 
     try {
       const { data, error: createError } = ownedGuest
@@ -301,37 +342,49 @@ export default function useExternalGuestController({
             token,
             ownerKey: ownerKey ?? "",
             guestId: ownedGuest.id,
-            guestName: guestName.trim().toUpperCase(),
+            guestName: submittedName,
           })
-        : await dependencies.createGuestViaExternalLink({
-            token,
-            ownerKey,
-            guestName: guestName.trim().toUpperCase(),
-            date: linkInfo.date || "",
-          });
+        : allowDuplicate
+          ? await createWithDuplicateOverride(submittedName, linkInfo.date || "")
+          : await dependencies.createGuestViaExternalLink({
+              token,
+              ownerKey,
+              guestName: submittedName,
+              date: linkInfo.date || "",
+            });
 
       if (createError) {
-        console.error("Failed to register guest:", createError);
         actionFeedback =
           createError === "RATE_LIMITED"
             ? "rateLimited"
-            : createError === "Guest limit reached for this link."
-              ? "rsvpFull"
+            : createError === LINK_LIMIT_REACHED_ERROR
+              ? isSelfRsvp
+                ? "rsvpFull"
+                : "linkFull"
             : createError === "DUPLICATE_REQUIRES_CONFIRMATION"
               ? "duplicateRequiresConfirmation"
               : "registerResultUnknown";
+        // Duplicates, full links and rate limits are answers the screen explains, not failures to log.
+        if (actionFeedback === "registerResultUnknown") {
+          console.error("Failed to register guest:", createError);
+        }
       } else if (data) {
         if (isSelfRsvp) {
           setGuests([data]);
           if (guestNameRevisionRef.current === lease.guestNameRevision) {
             setGuestName(data.name);
           }
+          successNotice = {
+            key: ownedGuest ? "rsvpUpdated" : "rsvpRegistered",
+            name: data.name,
+          };
         } else {
           setGuests((prev) => [...prev, data]);
           setGuestName("");
           setLinkInfo((prev) =>
             prev ? { ...prev, usedGuests: prev.usedGuests + 1 } : prev,
           );
+          successNotice = { key: "guestAdded", name: data.name };
         }
       } else {
         actionFeedback = "registerResultUnknown";
@@ -340,6 +393,7 @@ export default function useExternalGuestController({
       console.error("Failed to register guest:", createError);
       actionFeedback = "registerResultUnknown";
     } finally {
+      let shouldRestoreFocus = false;
       try {
         const refreshed = await loadExternalData(
           false,
@@ -347,14 +401,26 @@ export default function useExternalGuestController({
         );
         if (refreshed !== "applied") {
           setRequiresReconciliation(true);
-        } else if (actionFeedback) {
-          setError(actionFeedback);
+        } else {
+          shouldRestoreFocus = true;
+          if (actionFeedback) setError(actionFeedback);
+          if (successNotice) setNotice(successNotice);
         }
       } finally {
-        if (releaseOperation(lease)) setIsLoading(false);
+        if (releaseOperation(lease)) {
+          setIsLoading(false);
+          // 저장 버튼이 잠시 비활성화되어 focus를 잃으므로 다음 입력을 위해 되돌립니다.
+          if (shouldRestoreFocus) {
+            window.requestAnimationFrame(() => guestNameInputRef.current?.focus());
+          }
+        }
       }
     }
   };
+
+  const handleSave = () => submitGuest(false);
+
+  const handleConfirmDuplicate = () => submitGuest(true);
 
   const handleDelete = async (guestId: string) => {
     if (requiresReconciliation || activeOperationRef.current) return;
@@ -362,6 +428,7 @@ export default function useExternalGuestController({
     if (!lease) return;
     setDeletingId(guestId);
     setError(null);
+    setNotice(null);
     let actionFeedback: ExternalGuestFeedbackKey | null = null;
 
     try {
@@ -410,6 +477,7 @@ export default function useExternalGuestController({
     if (!lease) return { data: null, error: "SELF_RSVP_BULK_UNSUPPORTED" };
     setIsBulkSubmitting(true);
     setError(null);
+    setNotice(null);
     try {
       const response = await dependencies.createGuestsViaExternalLink({
         token,
@@ -450,7 +518,9 @@ export default function useExternalGuestController({
     externalViewRootRef,
     guests,
     guestName,
+    guestNameInputRef,
     handleBulkSave,
+    handleConfirmDuplicate,
     handleDelete,
     handleInitialRetry,
     handleReconciliationRetry,
@@ -465,6 +535,7 @@ export default function useExternalGuestController({
     isSelfRsvpLocked,
     isValidating,
     linkInfo,
+    notice,
     ownedGuest,
     ownerKey,
     reconciliationHeadingRef,

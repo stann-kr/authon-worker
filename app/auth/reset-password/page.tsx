@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useCallback, useEffect, useState } from "react";
+import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Footer from "@/components/Footer";
 import { useVenueBrand } from "@/components/VenueBrandProvider";
@@ -63,6 +63,19 @@ function ResetPasswordContent() {
   const [checkingApproval, setCheckingApproval] = useState(true);
   const [resetKind, setResetKind] = useState<ResetKind>("token");
   const [step, setStep] = useState<"request" | "reset" | "requestSent" | "resetComplete">("request");
+  // 대기 중인 관리자 요청을 지우는 동작이므로 한 번 더 확인합니다.
+  const [isConfirmingRestart, setIsConfirmingRestart] = useState(false);
+  const restartTriggerRef = useRef<HTMLButtonElement>(null);
+  const restartConfirmRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    if (isConfirmingRestart) restartConfirmRef.current?.focus();
+  }, [isConfirmingRestart]);
+
+  const cancelRestartRequest = () => {
+    setIsConfirmingRestart(false);
+    window.requestAnimationFrame(() => restartTriggerRef.current?.focus());
+  };
 
   useEffect(() => {
     const extracted = extractResetTokenFromUrl(window.location.href);
@@ -342,6 +355,7 @@ function ResetPasswordContent() {
       setMessage(null);
       setResetKind("token");
       setStep("request");
+      setIsConfirmingRestart(false);
       setLoading(false);
     }
   };
@@ -574,16 +588,53 @@ function ResetPasswordContent() {
                 <ButtonLink href="/auth/setup-password" variant="outline" fullWidth size="lg">
                   {t("useSetupCode")}
                 </ButtonLink>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  fullWidth
-                  size="sm"
-                  disabled={loading}
-                  onClick={() => void handleRestartRequest()}
-                >
-                  {t("restartRequest")}
-                </Button>
+                {isConfirmingRestart ? (
+                  <div
+                    role="group"
+                    aria-labelledby="restart-request-confirm"
+                    className="space-y-2 rounded-panel border border-status-waiting/70 bg-status-waiting/10 p-4 text-left"
+                  >
+                    <p
+                      id="restart-request-confirm"
+                      className="text-sm leading-relaxed text-text-heading"
+                    >
+                      {t("restartRequestConfirm")}
+                    </p>
+                    <Button
+                      ref={restartConfirmRef}
+                      type="button"
+                      variant="danger"
+                      fullWidth
+                      size="sm"
+                      isLoading={loading}
+                      onClick={() => void handleRestartRequest()}
+                    >
+                      {t("restartRequestConfirmAction")}
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      fullWidth
+                      size="sm"
+                      disabled={loading}
+                      onClick={cancelRestartRequest}
+                    >
+                      {t("restartRequestKeep")}
+                    </Button>
+                  </div>
+                ) : (
+                  <Button
+                    ref={restartTriggerRef}
+                    type="button"
+                    variant="ghost"
+                    fullWidth
+                    size="sm"
+                    disabled={loading}
+                    onClick={() => setIsConfirmingRestart(true)}
+                  >
+                    {t("restartRequest")}
+                  </Button>
+                )}
               </div>
             </div>
           )}

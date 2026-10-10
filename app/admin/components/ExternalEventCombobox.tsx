@@ -5,6 +5,7 @@ import {
   useEffect,
   useId,
   useMemo,
+  useRef,
   useState,
   type KeyboardEvent,
 } from "react";
@@ -68,6 +69,7 @@ const ExternalEventCombobox = forwardRef<
   const statusId = useId();
   const [isOpen, setIsOpen] = useState(false);
   const [activeIndex, setActiveIndex] = useState(0);
+  const listboxRef = useRef<HTMLUListElement>(null);
   const filteredSuggestions = useMemo(
     () => filterEventSuggestions(suggestions, value),
     [suggestions, value],
@@ -81,6 +83,14 @@ const ExternalEventCombobox = forwardRef<
   useEffect(() => {
     setActiveIndex(0);
   }, [suggestions, value]);
+
+  // Keep the keyboard-active option visible inside the scrollable listbox.
+  useEffect(() => {
+    if (!isOpen) return;
+    listboxRef.current
+      ?.querySelector<HTMLElement>(`[id="${listboxId}-option-${activeIndex}"]`)
+      ?.scrollIntoView?.({ block: "nearest" });
+  }, [activeIndex, isOpen, listboxId]);
 
   useEffect(() => {
     if (disabled) setIsOpen(false);
@@ -156,6 +166,7 @@ const ExternalEventCombobox = forwardRef<
 
       {isOpen && filteredSuggestions.length > 0 && (
         <ul
+          ref={listboxRef}
           id={listboxId}
           role="listbox"
           aria-label={t("eventSuggestions")}
@@ -186,7 +197,7 @@ const ExternalEventCombobox = forwardRef<
 
       <p
         id={statusId}
-        className="mt-1 text-xs text-text-dim"
+        className={`mt-1 text-xs ${!isLoading && directoryError ? "text-status-danger" : "text-text-dim"}`}
         role="status"
         aria-live="polite"
         aria-atomic="true"

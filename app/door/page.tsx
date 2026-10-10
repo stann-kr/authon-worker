@@ -9,8 +9,8 @@ import RosterView, { type RosterStatus } from "@/components/guests/RosterView";
 import { fetchGuestsByDate } from "@/lib/guests/client";
 import { fetchOfflineDoorRoster } from "@/lib/door/client";
 
-import { useState, useEffect, useMemo, useRef, useCallback } from "react";
-import { useLocalStorage } from "../../lib/hooks";
+import { useState, useEffect, useMemo, useRef, useCallback, useSyncExternalStore } from "react";
+import { useBusinessDate, useLocalStorage } from "../../lib/hooks";
 import { useAuthSession } from "@/components/AuthSessionProvider";
 import { hasAccess } from "@/lib/auth";
 import { isBusinessDate } from "@/lib/events/domain";
@@ -29,21 +29,22 @@ import EmptyState from "../../components/EmptyState";
 import Alert from "../../components/Alert";
 import Icon from "../../components/Icon";
 import Skeleton from "../../components/Skeleton";
+import Button from "../../components/Button";
 import OperationsLayout from "../../components/OperationsLayout";
 import EventScopeSelector from "../../components/EventScopeSelector";
 import AttendanceCounter from "./components/AttendanceCounter";
 import useDoorRosterController, {
   type DoorRosterDependencies,
+  type DoorStatusChangeResult,
 } from "./useDoorRosterController";
 import useDoorCodeLookup, {
   type DoorCodeLookupDependencies,
+  type DoorCodeLookupGuest,
 } from "./useDoorCodeLookup";
-import { getBusinessDate } from "../../lib/date";
+import { restoreOperatingDate, type SavedOperatingDate } from "../../lib/date";
+import { FULL_CALENDAR_DATE, formatCalendarDate } from "../../lib/ui/date-format";
 import { orderGuestDisplayList } from "../../lib/guests/display-order";
-import {
-  deriveAsyncListState,
-  shouldShowEmptyState,
-} from "../../lib/ui/async-list-state";
+import { deriveAsyncListState } from "../../lib/ui/async-list-state";
 import {
   updateGuestStatus,
   deleteGuest,
@@ -64,7 +65,7 @@ import {
 } from "../../lib/door/offline-store";
 import type { Guest } from "@/lib/guests/types";
 import { useLocale, useTranslations } from "next-intl";
-import { useToast } from "@/components/feedback/ToastProvider";
+import { useToast, type ToastOptions } from "@/components/feedback/ToastProvider";
 
 const DOOR_ROSTER_DEPENDENCIES: DoorRosterDependencies = Object.freeze({
   fetchGuestsByDate,
@@ -86,6 +87,15 @@ const DOOR_ROSTER_DEPENDENCIES: DoorRosterDependencies = Object.freeze({
 const DOOR_CODE_LOOKUP_DEPENDENCIES: DoorCodeLookupDependencies = Object.freeze({
   findDoorGuestByCode,
 });
+
+function subscribeToConnectivity(onChange: () => void) {
+  window.addEventListener("online", onChange);
+  window.addEventListener("offline", onChange);
+  return () => {
+    window.removeEventListener("online", onChange);
+    window.removeEventListener("offline", onChange);
+  };
+}
 
 export default function DoorPage() {
   return (
@@ -113,14 +123,14 @@ function DoorPageContent() {
     venueLoadError,
     refreshVenues,
   } = useVenueSelector();
-  const businessDate = getBusinessDate(currentVenue ?? {});
-  const [savedDate, setSavedDate] = useLocalStorage<{ venueId: string; date: string } | string | null>(
-    "door:selectedDate", null,
+  const businessDate = useBusinessDate(currentVenue);
+  // A chosen date lasts for the business day it was chosen in; the next business day opens on today.
+  const [savedDate, setSavedDate] = useLocalStorage<SavedOperatingDate | null>("door:selectedDate", null);
+  const selectedDate = restoreOperatingDate(savedDate, venueId, currentVenue ?? {}) ?? businessDate;
+  const setSelectedDate = useCallback(
+    (date: string) => setSavedDate({ venueId, date, selectedAt: Date.now() }),
+    [setSavedDate, venueId],
   );
-  const selectedDate = isBusinessDate(savedDate) ? savedDate
-    : savedDate && typeof savedDate === "object" && savedDate.venueId === venueId && isBusinessDate(savedDate.date)
-      ? savedDate.date : businessDate;
-  const setSelectedDate = useCallback((date: string) => setSavedDate({ venueId, date }), [setSavedDate, venueId]);
   const [tool, setTool] = useState<"code" | "offline" | null>(null);
   const [selectedDJ, setSelectedDJ] = useState<string>("all");
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
@@ -135,8 +145,15 @@ function DoorPageContent() {
     true,
   );
   const showToast = useToast();
-  // Recently checked-in guests keep their row and tab while their undo toast is visible.
+  const isOnline = useSyncExternalStore(subscribeToConnectivity, () => navigator.onLine, () => true);
+  // Recently checked-in guests keep their row and tab until the last Door toast leaves,
+  // so consecutive check-ins never move rows under the operator's finger.
   const [heldGuestIds, setHeldGuestIds] = useState<ReadonlySet<string>>(() => new Set());
+  const holdTokenRef = useRef(0);
+  const [highlightedGuestId, setHighlightedGuestId] = useState<string | null>(null);
+  const revealGuestIdRef = useRef<string | null>(null);
+  const codeInputRef = useRef<HTMLInputElement>(null);
+  const guestListRef = useRef<HTMLElement>(null);
   const {
     displayData,
     feedback,
@@ -190,16 +207,51 @@ function DoorPageContent() {
   }, [currentVenue, setSelectedDate, venueId]);
 
   useEffect(() => {
-    if (!currentVenue || !isBusinessDate(savedDate)) return;
-    const search = new URLSearchParams(window.location.search);
-    const requestedDate = search.get("date");
-    const hasRequestedDate = search.get("venue") === venueId && isBusinessDate(requestedDate);
-    setSelectedDate(hasRequestedDate ? requestedDate! : savedDate);
-  }, [currentVenue, savedDate, setSelectedDate, venueId]);
+    setSelectedDJ("all");
+    setHighlightedGuestId(null);
+    revealGuestIdRef.current = null;
+  }, [requestScopeKey]);
 
   useEffect(() => {
+    if (tool === "code") codeInputRef.current?.focus({ preventScroll: true });
+  }, [tool]);
+
+  // A guest-code match is revealed once its row has rendered and the lookup sheet has closed.
+  useEffect(() => {
+    const guestId = revealGuestIdRef.current;
+    if (!guestId || tool) return;
+    const row = [...document.querySelectorAll<HTMLElement>(".product-guest-row")]
+      .find((element) => element.dataset.guestId === guestId);
+    if (!row) return;
+    revealGuestIdRef.current = null;
+    row.scrollIntoView?.({ block: "center" });
+    row.focus({ preventScroll: true });
+  });
+
+  const claimHold = () => ++holdTokenRef.current;
+  const releaseHeldGuestsIfLatest = (token: number) => {
+    if (holdTokenRef.current !== token) return;
+    setHeldGuestIds((current) => current.size === 0 ? current : new Set());
+  };
+  const showDoorToast = (options: ToastOptions) => {
+    const token = claimHold();
+    showToast({ ...options, onClose: () => releaseHeldGuestsIfLatest(token) });
+  };
+  const changeSearch = (value: string) => {
+    setSearchQuery(value);
+    setHighlightedGuestId(null);
+  };
+  const revealFoundGuest = (guest: DoorCodeLookupGuest) => {
+    setSearchQuery(guest.name);
     setSelectedDJ("all");
-  }, [requestScopeKey]);
+    setRosterStatus("all");
+    setTool(null);
+    setHighlightedGuestId(guest.id);
+    revealGuestIdRef.current = guest.id;
+    if (guest.status === "checked") {
+      showDoorToast({ message: t("guestCodeAlreadyCheckedIn", { name: guest.name }), tone: "warning" });
+    }
+  };
 
   const {
     code: doorCode,
@@ -211,7 +263,7 @@ function DoorPageContent() {
     scope: offlineScope,
     guests,
     isOfflineMode,
-    onGuestFound: (name) => { setSearchQuery(name); setSelectedDJ("all"); setRosterStatus("all"); setTool(null); },
+    onGuestFound: revealFoundGuest,
     dependencies: DOOR_CODE_LOOKUP_DEPENDENCIES,
   });
 
@@ -227,7 +279,7 @@ function DoorPageContent() {
       const link = displayData.externalLinks.find(
         (l) => l.id === guest.externalLinkId,
       );
-      return { name: link ? `${link.djName} (EXT)` : undefined, accountKind: "personal" };
+      return { name: link ? `${link.djName} (${t("external")})` : undefined, accountKind: "personal" };
     }
     return { accountKind: "personal" };
   };
@@ -270,24 +322,58 @@ function DoorPageContent() {
     hasError: loadOutcome === "error",
     isPartial: loadOutcome === "partial",
   });
+  // Explain the narrowest active cause of an empty list and offer the matching way out.
+  const emptyRoster: { message: string; action?: { label: string; run: () => void } } =
+    searchQuery.trim()
+      ? { message: t("noSearchResults"), action: { label: commonT("clearSearch"), run: () => changeSearch("") } }
+      : rosterStatus !== "all"
+        ? {
+            message: t(rosterStatus === "pending" ? "noWaitingGuests" : "noCheckedGuests"),
+            action: { label: t("showAllGuests"), run: () => { setRosterStatus("all"); setSelectedDJ("all"); } },
+          }
+        : selectedDJ !== "all"
+          ? { message: t("noOwnerGuests"), action: { label: t("clearOwnerFilter"), run: () => setSelectedDJ("all") } }
+          : { message: t("noGuestsForDate") };
 
-  const releaseHeldGuest = (id: string) => setHeldGuestIds((current) => {
-    if (!current.has(id)) return current;
-    const next = new Set(current);
-    next.delete(id);
-    return next;
+  const showStatusFailure = (
+    result: Extract<DoorStatusChangeResult, { status: "failed" }>,
+    retry: () => void,
+  ) => showDoorToast({
+    message: result.message,
+    tone: result.conflict ? "warning" : "error",
+    durationMs: 10_000,
+    ...(result.retryable ? { actionLabel: commonT("retry"), onAction: retry } : {}),
   });
   const checkInGuest = async (guest: Guest) => {
-    if (!await handleStatusChange(guest.id, "checked", "check")) return;
+    const result = await handleStatusChange(guest.id, "checked", "check");
+    if (result.status === "skipped") return;
+    if (result.status === "failed") {
+      // A guest checked in elsewhere keeps its row in place like a local check-in while the roster refreshes.
+      if (result.conflict) setHeldGuestIds((current) => new Set(current).add(guest.id));
+      showStatusFailure(result, () => void checkInGuest(guest));
+      return;
+    }
+    const queued = result.status === "queued";
     setHeldGuestIds((current) => new Set(current).add(guest.id));
-    showToast({
-      message: t("checkedInToast", { name: guest.name }),
+    setHighlightedGuestId((current) => current === guest.id ? null : current);
+    showDoorToast({
+      message: t(queued ? "checkedInQueuedToast" : "checkedInToast", { name: guest.name }),
+      tone: queued ? "pending" : "success",
       actionLabel: commonT("undo"),
-      onAction: () => void handleStatusChange(guest.id, "pending", "undo").then((undone) => {
-        if (undone) showToast({ message: t("checkInUndone", { name: guest.name }), tone: "neutral" });
-      }),
-      onClose: () => releaseHeldGuest(guest.id),
+      // The undo claims the hold so rows stay put until its own result toast closes.
+      onAction: () => void undoCheckIn(guest, claimHold()),
     });
+  };
+  const undoCheckIn = async (guest: Guest, holdToken?: number) => {
+    const result = await handleStatusChange(guest.id, "pending", "undo");
+    if (result.status === "failed") showStatusFailure(result, () => void undoCheckIn(guest));
+    else if (result.status !== "skipped") {
+      const queued = result.status === "queued";
+      showDoorToast({
+        message: t(queued ? "checkInUndoneQueued" : "checkInUndone", { name: guest.name }),
+        tone: queued ? "pending" : "neutral",
+      });
+    } else if (holdToken !== undefined) releaseHeldGuestsIfLatest(holdToken);
   };
 
   // Only show users/links who registered guests on the selected date
@@ -337,6 +423,7 @@ function DoorPageContent() {
                   </label>
                   <div className="flex flex-col gap-2 sm:flex-row">
                     <input
+                      ref={codeInputRef}
                       id="door-guest-code"
                       name="door-guest-code"
                       value={doorCode}
@@ -447,7 +534,25 @@ function DoorPageContent() {
                 {selector}
               </OperationsScope>} />
 
-                {feedback && <Alert type="error" message={feedback} />}
+                {/* A saved date survives re-entry, so say when the roster is not today's before anyone searches it. */}
+                {currentVenue && selectedDate !== businessDate && (
+                  <div className="flex flex-wrap items-center justify-between gap-2 border-l-2 border-status-waiting bg-status-waiting/10 px-3 py-2">
+                    <p className="min-w-0 text-xs leading-relaxed text-text-muted" role="status">
+                      {t("viewingOtherDate", { date: formatCalendarDate(locale, selectedDate, FULL_CALENDAR_DATE) })}
+                    </p>
+                    <Button variant="outline" size="sm" className="shrink-0"
+                      onClick={() => { setSelectedDate(businessDate); setSelectedEventId(null); }}>
+                      {t("goToToday")}
+                    </Button>
+                  </div>
+                )}
+                {!isOnline && (
+                  <p className="border-l-2 border-status-waiting bg-status-waiting/10 px-3 py-2 text-xs leading-relaxed text-text-muted" role="status">
+                    {t(offlineScope ? "offlineEventScope" : "offlineGeneralScope")}
+                  </p>
+                )}
+                {/* A full load failure is explained in the list itself, next to its retry action. */}
+                {feedback && loadOutcome !== "error" && <Alert type="error" message={feedback} />}
 
                 {attendanceDetails}
                 {(isOfflineMode || offlineQueueCounts.queued > 0 || hasResolvedOfflineMutations || offlineNotice) &&
@@ -460,10 +565,16 @@ function DoorPageContent() {
         }
       >
             <section
-              className="min-w-0"
+              ref={guestListRef}
+              tabIndex={-1}
+              className="min-w-0 outline-none"
               aria-label={t("guestList")}
               aria-busy={isCurrentScopeFetching}
             >
+              <p className="sr-only" role="status" aria-live="polite" aria-atomic="true">
+                {searchQuery.trim() && listState !== "loading" && listState !== "error"
+                  ? t("searchResultCount", { count: displayGuests.length }) : ""}
+              </p>
               <RosterView variant="operations" filtersActive={selectedDJ !== "all" || sortMode !== "default" || !prioritizeWaiting} filters={
                     <div className="min-w-0">
                       <label htmlFor="door-user-filter" className="sr-only">
@@ -501,7 +612,7 @@ function DoorPageContent() {
                 title={t("guestList")}
                 headingLevel={2}
                 headingId="door-guest-list-title"
-                count={displayGuests.length}
+                count={loadOutcome === "error" ? undefined : displayGuests.length}
                 sortMode={sortMode}
                 onSortToggle={() =>
                   setSortMode((prev) =>
@@ -521,27 +632,31 @@ function DoorPageContent() {
                     {t("prioritizeWaiting")}
                   </button>
                 }
-              />} query={searchQuery} onQueryChange={setSearchQuery}
+              />} query={searchQuery} onQueryChange={changeSearch}
             status={rosterStatus} onStatusChange={setRosterStatus}
-            loading={!hasCurrentScopeData} counts={{ all: filteredGuests.length, pending: pendingGuests.length, checked: checkedGuests.length }}>
+            loading={!hasCurrentScopeData || loadOutcome === "error"} counts={{ all: filteredGuests.length, pending: pendingGuests.length, checked: checkedGuests.length }}>
 
               {listState === "loading" ? (
                 <Skeleton rows={6} />
-              ) : shouldShowEmptyState(listState) ? (
+              ) : listState === "error" ? (
+                <EmptyState
+                  icon="warning"
+                  message={t("loadFailed")}
+                  action={<Button variant="outline" size="sm" onClick={() => {
+                    // The retry action is replaced by the loading list, so keep focus on the list itself.
+                    guestListRef.current?.focus({ preventScroll: true });
+                    void loadData();
+                  }}>{commonT("retry")}</Button>}
+                />
+              ) : displayGuests.length === 0 ? (
                 <EmptyState
                   icon="user"
-                  message={
-                    searchQuery || rosterStatus !== "all"
-                      ? t("noSearchResults")
-                      : t("noGuestsForDate")
-                  }
+                  message={emptyRoster.message}
+                  action={emptyRoster.action && <Button variant="outline" size="sm" onClick={emptyRoster.action.run}>{emptyRoster.action.label}</Button>}
                 />
               ) : (
-                <div
-                  className={`product-roster-rows ${
-                    isCurrentScopeFetching ? "pointer-events-none" : ""
-                  }`}
-                >
+                // Existing rows stay visible but dimmed and inert while a foreground refresh settles.
+                <div className="product-roster-rows" aria-busy={isCurrentScopeFetching}>
                   {displayGuests.map((guest, index) => {
                     const contributor = getContributor(guest);
                     return <GuestListCard
@@ -560,18 +675,17 @@ function DoorPageContent() {
                       accountKind={contributor.accountKind}
                       registeredByName={guest.registeredByName}
                       showRegisteredAt
-                      onDelete={canManageGuests ? () => handleStatusChange(guest.id, "deleted", "remove") : undefined}
+                      onDelete={canManageGuests ? () => void handleStatusChange(guest.id, "deleted", "remove") : undefined}
                       isDeleteLoading={loadingStates[`${guest.id}_remove`]}
                       deleteError={deleteFailure?.guestId === guest.id ? deleteFailure.message : undefined}
                       deleteDisabledReason={isOfflineMode || isOfflineSyncing || offlineQueueCounts.queued > 0 ? t("deleteRequiresOnline") : undefined}
                       isDeleteDisabled={deletionLocked || isCurrentScopeFetching || isOfflineMode || isOfflineSyncing || hasPendingGuestMutations}
                       onCheck={() => void checkInGuest(guest)}
-                      onUndo={() =>
-                        handleStatusChange(guest.id, "pending", "undo")
-                      }
+                      onUndo={() => void undoCheckIn(guest)}
                       isCheckLoading={loadingStates[`${guest.id}_check`]}
                       isUndoLoading={loadingStates[`${guest.id}_undo`]}
                       isEntryDisabled={entryLocked}
+                      highlighted={guest.id === highlightedGuestId}
                     />;
                   })}
                 </div>

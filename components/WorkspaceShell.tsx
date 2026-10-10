@@ -30,6 +30,7 @@ interface WorkspaceShellProps {
     onTaskChange: (task: AdminTask) => void;
     disabled?: boolean;
     pendingPasswordResetCount?: number;
+    pendingGuestLimitRequestCount?: number;
   };
 }
 
@@ -47,8 +48,8 @@ export default function WorkspaceShell(props: WorkspaceShellProps) {
   // The authenticated frame needs viewport and saved navigation preferences.
   // Keep the server output and first client render on the same loading screen.
   if (user && !hydrated) {
-    return <main id="main-content" tabIndex={-1} aria-busy="true">
-      <Spinner mode="fullscreen" text={t("loading")} />
+    return <main id="main-content" tabIndex={-1} aria-busy="true" className="route-loading-frame">
+      <Spinner mode="content" text={t("loading")} />
     </main>;
   }
   return <ReadyWorkspaceShell {...props} />;
@@ -153,7 +154,10 @@ function ReadyWorkspaceShell({
           accountName={user.name} accountRole={<RoleLabel role={user.account_kind === "shared" ? "shared" : user.role} />}
           collapsed={sidebarCollapsed} onToggleSidebar={toggleSidebar}
           disabled={adminNavigation?.disabled}
-          counts={{ "password-requests": adminNavigation?.pendingPasswordResetCount ?? 0 }}
+          counts={{
+            "password-requests": adminNavigation?.pendingPasswordResetCount ?? 0,
+            requests: adminNavigation?.pendingGuestLimitRequestCount ?? 0,
+          }}
           actions={actions} onSelect={selectItem} />}
       </div>
 

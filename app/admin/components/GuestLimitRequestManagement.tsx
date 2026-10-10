@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import Alert from "@/components/Alert";
+import Button from "@/components/Button";
+import ConfirmDialog from "@/components/ConfirmDialog";
 import DatePicker from "@/components/DatePicker";
 import DisclosureSection from "@/components/DisclosureSection";
 import EmptyState from "@/components/EmptyState";
@@ -9,19 +11,27 @@ import PanelHeader from "@/components/PanelHeader";
 import RoleLabel from "@/components/RoleLabel";
 import Skeleton from "@/components/Skeleton";
 import VenueSelector, { useVenueSelector } from "@/components/VenueSelector";
+import { useToast } from "@/components/feedback/ToastProvider";
 import {
   decideGuestLimitRequest,
   fetchGuestLimitRequests,
 } from "@/lib/api/guest-limits";
 import type { GuestLimitRequestView } from "@/lib/guest-limits/types";
 import { useGuestPolling, useLatestRequestGuard } from "@/lib/hooks";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
+import { formatDateDisplay, formatVenueDateTime } from "@/lib/date";
 import {
   deriveAsyncListState,
   shouldShowEmptyState,
 } from "@/lib/ui/async-list-state";
 
 const EMPTY_REQUESTS: GuestLimitRequestView[] = [];
+const HISTORY_LIMIT = 20;
+
+function isValidApprovedAmount(value: string | undefined, max: number): boolean {
+  const amount = Number(value);
+  return value !== undefined && value.trim() !== "" && Number.isInteger(amount) && amount >= 1 && amount <= max;
+}
 
 export default function GuestLimitRequestManagement({
   eventId,
@@ -29,20 +39,27 @@ export default function GuestLimitRequestManagement({
   onDateChange,
   businessDate,
   scopeSelector,
+  onPendingCountChange,
 }: {
   eventId: string | null;
   selectedDate: string;
   onDateChange: (date: string) => void;
   businessDate: string;
   scopeSelector?: (controls: ReactNode, disabled?: boolean) => ReactNode;
+  /** Receives the venue-wide pending count after each successful load, for the navigation badge. */
+  onPendingCountChange?: (count: number) => void;
 }) {
   const t = useTranslations("GuestLimitAdmin");
+  const commonT = useTranslations("Common");
+  const locale = useLocale() as "en" | "ko";
+  const showToast = useToast();
   const {
     venueId,
     venues,
     selectedVenueId,
     setSelectedVenueId,
     isSuperAdmin,
+    currentVenue,
   } = useVenueSelector();
   const [requests, setRequests] = useState<GuestLimitRequestView[]>([]);
   const [approvedAmounts, setApprovedAmounts] = useState<Record<string, string>>({});
@@ -54,10 +71,9 @@ export default function GuestLimitRequestManagement({
   const [loadError, setLoadError] = useState("");
   const scope = useMemo(() => ({ venueId, eventId, selectedDate }), [venueId, eventId, selectedDate]);
   const [loadedScope, setLoadedScope] = useState<typeof scope | null>(null);
-  const [feedback, setFeedback] = useState<{
-    type: "success" | "error";
-    message: string;
-  } | null>(null);
+  // Success goes to the global toast; a failed decision stays on the request that failed.
+  const [decisionError, setDecisionError] = useState<{ requestId: string; message: string } | null>(null);
+  const [pendingRejectId, setPendingRejectId] = useState<string | null>(null);
   const requestGuard = useLatestRequestGuard();
   const currentScopeRef = useRef(scope);
   const activeDecisionRef = useRef<symbol | null>(null);
@@ -65,7 +81,8 @@ export default function GuestLimitRequestManagement({
   useLayoutEffect(() => {
     currentScopeRef.current = scope;
     setLoadOutcome("idle");
-    setFeedback(null);
+    setDecisionError(null);
+    setPendingRejectId(null);
   }, [scope]);
   useEffect(() => () => { activeDecisionRef.current = null; }, []);
 
@@ -102,6 +119,7 @@ export default function GuestLimitRequestManagement({
       } else {
         const nextRequests = data ?? [];
         setRequests(nextRequests);
+        onPendingCountChange?.(nextRequests.filter((request) => request.status === "pending").length);
         setApprovedAmounts(current => Object.fromEntries(nextRequests.map((request) => [
           request.id, current[request.id] ?? String(request.requestedExtra),
         ])));
@@ -121,7 +139,7 @@ export default function GuestLimitRequestManagement({
         setIsLoading(false);
       }
     }
-  }, [selectedDate, eventId, requestGuard, t, venueId, scope]);
+  }, [selectedDate, eventId, onPendingCountChange, requestGuard, t, venueId, scope]);
 
   useEffect(() => {
     loadRequests();
@@ -149,13 +167,15 @@ export default function GuestLimitRequestManagement({
     decision: "approve" | "reject",
   ) => {
     if (activeDecisionRef.current || isCurrentScopeLoading || !pending.includes(request)) return;
-    const approvedExtra = Number(approvedAmounts[request.id]);
-    if (decision === "approve" && (!Number.isInteger(approvedExtra) || approvedExtra < 1 || approvedExtra > request.requestedExtra)) return;
+    const rawAmount = approvedAmounts[request.id] ?? String(request.requestedExtra);
+    const approvedExtra = Number(rawAmount);
+    if (decision === "approve" && !isValidApprovedAmount(rawAmount, request.requestedExtra)) return;
+    if (decision === "reject" && pendingRejectId !== request.id) return;
     const operation = Symbol();
     activeDecisionRef.current = operation;
     requestGuard.invalidateRequests();
     setBusyId(request.id);
-    setFeedback(null);
+    setDecisionError(null);
     try {
       const { error } = await decideGuestLimitRequest({
         requestId: request.id,
@@ -164,17 +184,15 @@ export default function GuestLimitRequestManagement({
       });
       if (activeDecisionRef.current !== operation || currentScopeRef.current !== scope) return;
       if (error) {
-        setFeedback({ type: "error", message: t("decisionFailed") });
+        setDecisionError({ requestId: request.id, message: t("decisionFailed") });
       } else {
-        setFeedback({
-          type: "success",
-          message: decision === "approve" ? t("approved") : t("rejected"),
-        });
+        setPendingRejectId(null);
+        showToast({ message: decision === "approve" ? t("approved") : t("rejected") });
         await loadRequests();
       }
     } catch {
       if (activeDecisionRef.current === operation && currentScopeRef.current === scope) {
-        setFeedback({ type: "error", message: t("decisionFailed") });
+        setDecisionError({ requestId: request.id, message: t("decisionFailed") });
       }
     } finally {
       if (activeDecisionRef.current === operation) {
@@ -207,7 +225,6 @@ export default function GuestLimitRequestManagement({
         <div className="record-collection-body space-y-4">
           <p className="app-helper">{t("pendingScopeHint")}</p>
           {loadError && <Alert type="error" message={loadError} />}
-          {feedback && <Alert type={feedback.type} message={feedback.message} />}
           {!venueId ? (
             <p className="py-4 text-sm text-text-muted">
               {t("selectVenue")}
@@ -218,13 +235,21 @@ export default function GuestLimitRequestManagement({
             <EmptyState icon="user" message={t("noPending")} />
           ) : (
             <div className="record-list">
-              {pending.map((request) => (
+              {pending.map((request) => {
+                const amountId = `approved-extra-${request.id}`;
+                const amountErrorId = `${amountId}-error`;
+                const amount = approvedAmounts[request.id] ?? String(request.requestedExtra);
+                const amountValid = isValidApprovedAmount(amount, request.requestedExtra);
+                const showAmountError = !amountValid && amount.trim() !== "";
+                const rowError = decisionError?.requestId === request.id ? decisionError.message : null;
+                const rowDisabled = isDeciding || isCurrentScopeLoading;
+                return (
                 <article key={request.id} className="record-review-row" aria-busy={busyId === request.id}>
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     <h3 className="type-row-title break-words">{request.userName}</h3>
                     <p className="mt-1 text-xs text-text-muted">
-                      <RoleLabel role={request.userRole} /> · {request.date}{request.eventName ? ` · ${request.eventName}` : ""}
+                      <RoleLabel role={request.userRole} /> · <time dateTime={request.date}>{formatDateDisplay(request.date, locale)}</time>{request.eventName ? ` · ${request.eventName}` : ""}
                     </p>
                   </div>
                   <span className="shrink-0 font-mono text-lg text-text-heading">
@@ -234,18 +259,19 @@ export default function GuestLimitRequestManagement({
                 <p className="mt-3 min-h-5 break-words text-sm text-text-body">
                   {request.reason || t("noReason")}
                 </p>
-                <div className="mt-4 grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto_auto]">
-                  <div>
-                    <label htmlFor={`approved-extra-${request.id}`} className="sr-only">
-                      {t("approvedCount")}
-                    </label>
+                <div className="mt-4">
+                  <label htmlFor={amountId} className="app-label">
+                    {t("approvedCount", { max: request.requestedExtra })}
+                  </label>
+                  <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto_auto]">
                     <input
-                      id={`approved-extra-${request.id}`}
-                      name={`approved-extra-${request.id}`}
+                      id={amountId}
+                      name={amountId}
                       type="number"
                       min="1"
                       max={request.requestedExtra}
-                      value={approvedAmounts[request.id] ?? String(request.requestedExtra)}
+                      step="1"
+                      value={amount}
                       onChange={(event) =>
                         setApprovedAmounts((current) => ({
                           ...current,
@@ -254,43 +280,74 @@ export default function GuestLimitRequestManagement({
                       }
                       className="app-field"
                       autoComplete="off"
-                      disabled={isDeciding || isCurrentScopeLoading}
+                      aria-invalid={showAmountError || undefined}
+                      aria-describedby={showAmountError ? amountErrorId : undefined}
+                      disabled={rowDisabled}
                     />
-                  </div>
-                  <button
-                    type="button"
+                  <Button
+                    size="sm"
                     onClick={() => handleDecision(request, "approve")}
-                    disabled={
-                      isDeciding || isCurrentScopeLoading ||
-                      !Number.isInteger(Number(approvedAmounts[request.id])) ||
-                      Number(approvedAmounts[request.id]) < 1 ||
-                      Number(approvedAmounts[request.id]) > request.requestedExtra
-                    }
-                    className="min-h-11 bg-action-primary px-4 py-2 text-xs font-semibold text-action-text disabled:opacity-50"
+                    isLoading={busyId === request.id && pendingRejectId !== request.id}
+                    disabled={rowDisabled || !amountValid || pendingRejectId === request.id}
                   >
                     {t("approve")}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleDecision(request, "reject")}
-                    disabled={isDeciding || isCurrentScopeLoading}
-                    className="min-h-11 border border-status-danger/70 bg-status-danger/10 px-4 py-2 text-xs font-semibold text-status-danger disabled:opacity-50"
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="danger"
+                    aria-expanded={pendingRejectId === request.id}
+                    onClick={() => { setDecisionError(null); setPendingRejectId(request.id); }}
+                    disabled={rowDisabled}
                   >
                     {t("reject")}
-                  </button>
+                  </Button>
+                  </div>
+                  {showAmountError && (
+                    <p id={amountErrorId} className="mt-1 text-xs text-status-danger">
+                      {t("approvedCountInvalid", { max: request.requestedExtra })}
+                    </p>
+                  )}
+                  {rowError && pendingRejectId !== request.id && <Alert type="error" message={rowError} className="mt-3" />}
+                <ConfirmDialog
+                  open={pendingRejectId === request.id}
+                  title={t("rejectTitle", { name: request.userName })}
+                  description={t("rejectDescription")}
+                  confirmLabel={t("reject")}
+                  cancelLabel={commonT("cancel")}
+                  onConfirm={() => void handleDecision(request, "reject")}
+                  onCancel={() => { setDecisionError(null); setPendingRejectId(null); }}
+                  isLoading={busyId === request.id}
+                >
+                  {rowError && <Alert type="error" message={rowError} />}
+                </ConfirmDialog>
                 </div>
                 </article>
-              ))}
+                );
+              })}
             </div>
           )}
 
           {decided.length > 0 && (
-            <DisclosureSection title={t("history", { count: decided.length })}>
+            <DisclosureSection title={decided.length > HISTORY_LIMIT
+              ? t("historyTruncated", { shown: HISTORY_LIMIT, total: decided.length })
+              : t("history", { count: decided.length })}>
             <div className="divide-y divide-border-subtle border-y border-border-subtle">
-              {decided.slice(0, 20).map((request) => (
+              {decided.slice(0, HISTORY_LIMIT).map((request) => {
+                const decidedAt = request.decidedAt
+                  ? formatVenueDateTime(request.decidedAt, {
+                      locale: locale === "ko" ? "ko-KR" : "en-US",
+                      timeZone: currentVenue?.timezone,
+                    })
+                  : null;
+                return (
                 <div key={request.id} className="flex items-start justify-between gap-3 p-3 text-xs">
                   <span className="min-w-0 break-words text-text-body">
-                    {request.userName} · {request.date}
+                    {request.userName} · <time dateTime={request.date}>{formatDateDisplay(request.date, locale)}</time>
+                    {decidedAt && request.decidedAt && (
+                      <span className="mt-1 block text-text-muted">
+                        {t("decidedAt")} <time dateTime={request.decidedAt}>{decidedAt}</time>
+                      </span>
+                    )}
                   </span>
                   <span className="shrink-0 text-right font-mono text-text-muted">
                     {request.status === "approved"
@@ -298,7 +355,8 @@ export default function GuestLimitRequestManagement({
                       : t("rejectedHistory")}
                   </span>
                 </div>
-              ))}
+                );
+              })}
             </div>
             </DisclosureSection>
           )}
