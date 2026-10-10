@@ -16,7 +16,6 @@ import {
 } from "@testing-library/react";
 
 import RouteError from "@/app/error";
-import AdminTaskSwitcher from "@/app/admin/components/AdminTaskSwitcher";
 import AnalyticsAttendance from "@/app/admin/components/analytics/AnalyticsAttendance";
 import AnalyticsContributors from "@/app/admin/components/analytics/AnalyticsContributors";
 import AnalyticsPeriodBar from "@/app/admin/components/analytics/AnalyticsPeriodBar";
@@ -347,62 +346,7 @@ test("full error hides empty copy and retry success restores it", () => {
   assert.ok(screen.getByText("EMPTY"));
 });
 
-test("task and section controls expose current state and respect busy locks", () => {
-  let nextTask = "";
-  const { rerender } = render(
-    <AdminTaskSwitcher
-      label="Admin sections"
-      groupLabels={{
-        guests: "Guests",
-        events: "Events",
-        links: "Links",
-        users: "Users",
-        analytics: "Analytics",
-        venues: "Venues",
-      }}
-      options={[
-        { id: "guest-list", group: "guests", label: "Guest list" },
-        { id: "link-create", group: "links", label: "Create link" },
-      ]}
-      value="guest-list"
-      onChange={(task) => {
-        nextTask = task;
-      }}
-    />,
-  );
-
-  const activeLinks = screen.getAllByRole("link", { name: /Guest list/i });
-  assert.ok(activeLinks.every((link) => link.getAttribute("aria-current") === "page"));
-  fireEvent.click(screen.getAllByRole("link", { name: /Create link/i })[0]);
-  assert.equal(nextTask, "link-create");
-
-  rerender(
-    <AdminTaskSwitcher
-      label="Admin sections"
-      groupLabels={{
-        guests: "Guests",
-        events: "Events",
-        links: "Links",
-        users: "Users",
-        analytics: "Analytics",
-        venues: "Venues",
-      }}
-      options={[
-        { id: "guest-list", group: "guests", label: "Guest list" },
-        { id: "link-create", group: "links", label: "Create link" },
-      ]}
-      value="guest-list"
-      onChange={() => {}}
-      disabled
-    />,
-  );
-  assert.ok(
-    screen
-      .getAllByRole("link")
-      .every((link) => link.getAttribute("aria-disabled") === "true"),
-  );
-
-  cleanup();
+test("section controls expose current state and respect busy locks", () => {
   render(
     <OperationalSectionNav
       label="Link section"

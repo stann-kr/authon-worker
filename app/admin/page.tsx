@@ -20,7 +20,7 @@ import type { VenueManagementSection } from "./components/VenueManagement";
 import Skeleton from "@/components/Skeleton";
 import EventScopeSelector from "@/components/EventScopeSelector";
 import OperationsScope from "@/components/operations/OperationsScope";
-import type { AdminTaskOption } from "./components/AdminTaskSwitcher";
+import type { AdminTaskOption } from "@/lib/admin-navigation";
 import AuthGuard from "../../components/AuthGuard";
 import WorkspaceShell from "../../components/WorkspaceShell";
 import VenueLoadNotice from "../../components/VenueLoadNotice";
@@ -175,7 +175,6 @@ function AdminPageContent() {
           id: "guest-requests",
           group: "guests",
           label: t("requests"),
-          badgeCount: pendingGuestLimitRequestCount,
         },
         { id: "event-manage", group: "events", label: t("events") },
         { id: "link-create", group: "links", label: linkT("createLink") },
@@ -186,7 +185,6 @@ function AdminPageContent() {
           id: "password-requests",
           group: "users",
           label: t("passwordRequests"),
-          badgeCount: pendingPasswordResetCount,
         },
         { id: "analytics", group: "analytics", label: t("analytics") },
         ...(isSuperAdmin
@@ -204,7 +202,7 @@ function AdminPageContent() {
             ]
           : []),
       ],
-    [isSuperAdmin, linkT, pendingGuestLimitRequestCount, pendingPasswordResetCount, t, userT, venueT],
+    [isSuperAdmin, linkT, t, userT, venueT],
   );
 
 
