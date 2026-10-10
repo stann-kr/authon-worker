@@ -10,10 +10,10 @@ interface StatusLabelProps {
 }
 
 const toneClasses: Record<StatusTone, string> = {
-  waiting: "border-status-waiting text-status-waiting",
-  checked: "border-status-checked text-status-checked",
-  danger: "border-status-danger text-status-danger",
-  neutral: "border-border-strong text-text-muted",
+  waiting: "text-status-waiting",
+  checked: "text-status-checked",
+  danger: "text-status-danger",
+  neutral: "text-text-muted",
 };
 
 const toneIcons: Record<StatusTone, IconName> = {
@@ -29,14 +29,14 @@ export default function StatusLabel({
   className = "",
   appearance = "bar",
 }: StatusLabelProps) {
-  const appearanceClasses =
-    appearance === "bar" ? "border-l-2 pl-2" : "";
-
   return (
     <span
-      className={`inline-flex min-h-7 items-center gap-1.5 text-xs font-semibold ${appearanceClasses} ${toneClasses[tone]} ${className}`}
+      className={`inline-flex min-h-7 items-center gap-1.5 text-xs font-semibold ${toneClasses[tone]} ${className}`}
     >
-      <Icon name={toneIcons[tone]} size={14} />
+      {/* The standalone status is a quiet dot; inline statuses keep the icon beside their action. */}
+      {appearance === "bar"
+        ? <span aria-hidden="true" className="h-1.5 w-1.5 shrink-0 rounded-full bg-current" />
+        : <Icon name={toneIcons[tone]} size={14} />}
       <span>{children}</span>
     </span>
   );
