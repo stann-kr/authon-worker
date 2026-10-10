@@ -99,8 +99,8 @@ Authon UI는 베뉴 현장에서 반복적으로 사용하는 운영 도구다. 
 - Door는 오늘이 아닌 운영일을 보는 동안 명단 위에 해당 날짜와 오늘 명단으로 돌아가는 action을 표시한다.
 - 중복 확인, 정원 초과, 요청 제한처럼 화면이 설명하는 예상 응답은 오류 로그로 남기지 않는다.
 - destructive action은 red semantic tone과 확인 단계를 함께 사용한다.
-- 상태는 색상만으로 전달하지 않는다. 목록 행은 2px 상태선을 기본 신호로 사용하고, 상태별로 가능한 행동이나 아이콘·텍스트를 함께 제공한다.
-- 입장 행동은 `CHECK IN`, 완료 상태는 `CHECKED IN`으로 구분한다. 모든 대기 행은 왼쪽 상태선과 현재 가능한 행동으로 표현하고 행 안에 `WAITING` label을 반복하지 않는다.
+- 상태는 색상만으로 전달하지 않는다. 목록 행은 상태별로 가능한 행동, 완료 표시 아이콘, 흐려진 이름과 상태 열의 텍스트를 함께 제공한다.
+- 입장 행동(입장 확인·Check in)과 완료 상태(입장 완료·Checked in)는 다른 문구로 구분한다. 대기 행은 현재 가능한 행동으로 표현하고 행 안에 대기 label을 반복하지 않는다.
 - 통계는 바깥 panel이 구획을 한 번만 담당하고, 개별 수치는 선 없는 quiet tile과 간격으로 묶는다. 목록 안에서는 `embedded` variant의 하단 구획선 하나만 추가한다.
 
 ## 모션
@@ -130,7 +130,7 @@ Authon UI는 베뉴 현장에서 반복적으로 사용하는 운영 도구다. 
 - `DisclosureSection`: 대량 입력과 추가 게스트 요청처럼 패널 안의 보조 작업을 같은 summary·meta·chevron·상단 구획선으로 단계적으로 노출한다. 날짜별 상태를 다시 읽는 동안에는 같은 summary 높이를 유지하고, 최신 한도 상태를 확인하기 전까지 제출만 잠근다.
 - `GuestCapacityIndicator`: 별도 카드 surface를 만들지 않고 게스트 추가 panel header 안에서 남은 인원과 전체 한도를 한 축으로 묶는다. header 하단 구획선 일부를 정원 사용률 상태선으로 공유하며, 잔여 비율이 25% 이하면 대기색, 정원 도달은 위험색을 사용한다. 숫자와 선 길이도 함께 바꿔 색상에만 의존하지 않는다.
 - `StatusLabel`: 상태별 텍스트와 색상 규칙을 통일한다. action 옆 inline 상태는 아이콘을, 단독 상태는 작은 점을 함께 쓴다.
-- `Alert`: error와 success를 live region으로 전달한다.
+- `Alert`와 상태 알림: error와 success를 live region으로 전달한다. 알림은 색 테두리나 왼쪽 막대 없이 상태색을 옅게 깐 둥근 면으로 표시한다.
 - `Skeleton`: list loading 중 레이아웃 공간을 예약한다.
 - `EmptyState`: icon, message, description, action을 조합한다.
 - `DatePicker`, `VenueSelector`, `GuestSearchInput`: 공통 field와 focus token을 사용한다.
@@ -142,9 +142,9 @@ Authon UI는 베뉴 현장에서 반복적으로 사용하는 운영 도구다. 
 - Links 관리는 기본 상태와 예외 상태를 한 번씩만 표시한다. 목록 범위는 날짜별 보기와 최근 생성 5개·10개 보기로 구분한다.
 - Links의 긴 URL은 기본 목록에 상시 노출하지 않는다. `VIEW` disclosure 안에서 읽기 전용 URL 선택과 새 탭 열기를 제공해 clipboard 실패 시에도 접근할 수 있게 한다.
 - Links의 `템플릿으로 사용`은 업무 설정만 생성 form에 채우고 credential은 복사하지 않는다. 공유 action은 Web Share 지원 여부에 따라 공유 또는 URL 복사 중 하나만 표시해 행의 action 밀도를 유지한다.
-- 반복되는 guest row는 안정적인 단일 neutral surface를 사용한다. waiting과 checked-in 상태는 각 행의 왼쪽 2px indicator를 공유하되, 모든 waiting 행은 중복 status label을 표시하지 않는다.
+- 반복되는 guest row는 단일 neutral surface와 은은한 교차 배경을 사용하고, 대기 행에는 중복 status label을 표시하지 않는다. 왼쪽 강조선은 방금 찾은 행처럼 일시적으로 강조할 때만 쓴다.
 - 되돌리기처럼 특정 guest 상태에 종속된 control은 전역 banner가 아니라 해당 guest 행 안에 표시한다.
-- guest row의 상태는 왼쪽 indicator와 metadata가 전달하고, 우측에는 현재 수행 가능한 action만 둔다. mobile에서도 action은 행 우측의 내용 폭 button으로 유지하며, `CHECK IN`과 `UNDO`는 동일한 위치와 최소 폭을 사용한다.
+- guest row의 상태는 완료 표시와 metadata가 전달하고, 우측에는 현재 수행 가능한 action만 둔다. mobile에서도 action은 행 우측의 내용 폭 button으로 유지하며, 입장 확인과 되돌리기는 동일한 위치와 최소 폭을 사용한다.
 - 등록자처럼 선택적인 metadata는 값이 없을 때 공간을 예약하지 않는다. 행 본문과 우측 action은 전체 행 높이를 기준으로 수직 중앙 정렬한다.
 - 추가 게스트 요청은 요청 수량을 주요 control로 두고 선택 사유임을 label과 helper text에서 명확히 표시한다. 승인 목록은 요청값, 승인값과 처리 상태를 함께 보여준다.
 - Door 목록의 `입장 대기 우선`은 기본 활성화하며 사용자가 끄면 입장 확인 뒤에도 등록 순서를 유지한다. 선택은 같은 브라우저에 보존한다.
