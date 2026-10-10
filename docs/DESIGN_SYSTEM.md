@@ -16,8 +16,8 @@ Authon UI는 베뉴 현장에서 반복적으로 사용하는 운영 도구다. 
 - 아이콘은 `@carbon/icons-react` 한 계열로 통일한다.
 - Tailwind CSS는 layout과 Authon semantic token 적용에 사용한다.
 - Carbon 전체 stylesheet는 불러오지 않는다. 실제 사용하는 token과 component style만 앱 CSS에 정의해 번들 크기를 제한한다.
-- panel과 card는 shadow 없이 `1px` 구획선으로만 계층을 나눈다. toast, popover, 접힌 sidebar tooltip처럼 떠 있는 요소만 짧은 그림자를 쓴다.
-- 반투명 재질은 1000px 미만의 header와 하단 dock에만 쓰고 backdrop blur를 지원할 때만 적용한다. 투명도 감소, 고대비, forced-colors 환경에서는 불투명 surface로 되돌린다.
+- panel과 card는 shadow 없이 `1px` 구획선으로만 계층을 나눈다. toast, popover, 접힌 sidebar tooltip, 모바일 하단 dock처럼 떠 있는 요소만 짧은 그림자를 쓴다.
+- 반투명 재질은 1000px 미만의 header와 하단 dock의 내비게이션·action에만 쓰고 backdrop blur를 지원할 때만 적용한다. blur를 지원하지 않으면 거의 불투명한 surface를 쓰고, 투명도 감소, 고대비, forced-colors 환경에서는 불투명 surface로 되돌린다.
 - 장식용 gradient, scanline과 noise texture는 사용하지 않는다. header 하단의 짧은 mask fade만 예외다.
 
 ## 색상 토큰
@@ -25,7 +25,7 @@ Authon UI는 베뉴 현장에서 반복적으로 사용하는 운영 도구다. 
 | 토큰 | 값 | 용도 |
 |---|---|---|
 | `canvas` | `#000000` | 페이지 배경 |
-| `surface-secondary` | `#0C0C0C` | 하단 dock과 보조 영역 |
+| `surface-secondary` | `#0C0C0C` | sidebar, sheet와 보조 영역 |
 | `surface` | `#141414` | 기본 패널 |
 | `surface-raised` | `#1C1C1C` | 입력, 보조 control, 반복 확인 action |
 | `surface-hover` | `#242424` | hover와 약한 강조 |
@@ -46,7 +46,7 @@ Authon UI는 베뉴 현장에서 반복적으로 사용하는 운영 도구다. 
 ## 형태와 간격
 
 - radius는 control(button, field, tab, 메뉴 항목) `10px`, control group 안의 segment와 작은 badge `6px`, surface(panel, card, popover, toast) `12px`, bottom sheet `16px` 네 단계만 사용한다.
-- spinner, avatar와 작은 상태 점처럼 원형 자체가 의미인 요소만 원형을 허용한다.
+- spinner, avatar와 작은 상태 점처럼 원형 자체가 의미인 요소만 원형을 허용한다. 1000px 미만의 떠 있는 하단 dock은 예외로 내비게이션과 action을 capsule로 만들고, 현재 메뉴 표시도 같은 중심의 capsule로 맞춘다.
 - 로그인한 작업 화면의 콘텐츠는 sidebar를 뺀 전체 폭을 쓰고, 공개 화면 콘텐츠는 최대 `1440px`다.
 - multi-column 화면은 좁은 container에서 단일 column으로 축소한다.
 - interactive control은 최소 `44px × 44px` touch target을 제공한다.
@@ -54,10 +54,11 @@ Authon UI는 베뉴 현장에서 반복적으로 사용하는 운영 도구다. 
 - form field와 선택 control은 `border-strong`을 사용해 인접 surface와 3:1 이상의 비텍스트 대비를 확보하고, panel 구획선은 `border-default` 또는 `border-subtle`을 사용한다.
 - Guest, Door와 Admin 하위 작업은 모든 폭에서 조회 범위(베뉴·운영일·행사)를 위에, 목록을 아래에 두는 stacked 배치를 사용한다. `1000px` 이상은 범위 control을 한 줄로 펼치고, 미만은 범위 요약 버튼이 범위 선택 sheet를 연다.
 - 로그인한 화면은 공통 workspace shell을 사용한다. header는 현재 화면 제목, 화면별 action과 계정 action만 둔다.
-- `1000px` 이상은 업무 그룹별 좌측 sidebar를 항상 보이고, 접으면 `64px` 아이콘 열로 줄인다. 미만은 홈과 운영 화면, 현재 메뉴를 담은 하단 dock과 전체 메뉴 sheet를 쓰며, 화면별 주요 action은 dock 위 action 줄에 둔다. software keyboard가 열린 동안에는 dock을 숨긴다.
+- `1000px` 이상은 업무 그룹별 좌측 sidebar를 항상 보이고, 접으면 `64px` 아이콘 열로 줄인다. 미만은 홈과 운영 화면, 현재 메뉴를 담은 하단 dock과 전체 메뉴 sheet를 쓰며, 화면별 주요 action은 dock 위에 각각 떠 있는 action으로 둔다. software keyboard가 열린 동안에는 dock을 숨긴다.
+- 하단 dock은 화면 좌우와 하단 가장자리에서 띄우고 폭을 최대 `440px`로 제한한다. 페이지는 dock 주변과 브라우저 툴바 아래까지 이어 보인다. iOS Safari 26은 하단 가장자리에 닿은 넓은 고정 요소의 색으로 툴바 영역을 채우므로, 하단 가장자리에 닿는 고정 막대를 두지 않는다. dock의 비선택 항목은 움직이는 콘텐츠 위에서도 읽히도록 `text-muted`보다 밝은 `#AEAEB2`를 쓴다.
 - 업무 전환은 선택 link와 현재 scroll 위치를 보존하고 작업 영역으로 강제 이동하지 않는다.
 - 날짜 입력은 viewport가 아니라 component container 폭을 기준으로 배치한다. 좁은 container에서는 날짜와 quick control을 두 줄로 표시한다.
-- 고정 또는 sticky 영역은 목록의 첫 행을 가리지 않아야 하며, 페이지 안에 불필요한 중첩 scroll container를 만들지 않는다. Door의 모바일 하단 도크는 실제 높이를 scroll 영역의 inset으로 반영하고 Footer·마지막 콘텐츠가 그 아래에 가려지지 않게 한다.
+- 고정 또는 sticky 영역은 목록의 첫 행을 가리지 않아야 하며, 페이지 안에 불필요한 중첩 scroll container를 만들지 않는다. 모바일 하단 dock은 실제 높이와 하단 간격을 scroll 영역의 inset과 toast 위치에 반영해 마지막 콘텐츠와 toast가 dock 아래에 가려지지 않게 한다.
 
 ## 타이포그래피
 

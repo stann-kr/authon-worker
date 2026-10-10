@@ -85,8 +85,8 @@ export default function WorkspaceNavigation({
       const height = Math.ceil(dock.getBoundingClientRect().height);
       if (height <= 0) return;
       scroll.style.setProperty("--workspace-dock-height", `${height + 16}px`);
-      // Page-level overlays such as toasts sit above the mobile dock.
-      root.style.setProperty("--app-bottom-chrome", `${height}px`);
+      // Page-level overlays such as toasts sit above the mobile dock, which floats above the bottom edge.
+      root.style.setProperty("--app-bottom-chrome", `calc(${height}px + var(--workspace-dock-offset, 0px))`);
     };
     measure();
     const observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(measure);
