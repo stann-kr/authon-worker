@@ -30,6 +30,7 @@ Client
 - `main` merge는 별도 production 승인을 거쳐 같은 gate를 통과한 뒤 production Worker에 자동 배포한다. development 승인과 migration·secret 변경을 production 권한으로 확대하지 않는다.
 - Worker code deploy와 D1 migration, secret·binding·route 변경은 서로 다른 운영 단계로 검증한다. 단, development application의 정상적인 product write는 공유 production D1에 기록되는 명시적 예외다.
 - 표준 개발·CI·Docker runtime은 Node 24 / npm 11이다. `npm run verify:release`가 lint, typecheck, 전체 회귀, EN/KO parity, 민감 asset 검사와 Next/OpenNext Worker build를 재현한다.
+- Next.js는 OpenNext Cloudflare가 Worker에서 실행할 수 있는 16.3.x로 고정한다. 16.4의 `preview-props.json` manifest를 OpenNext가 지원하기 전까지 올리지 않는다([트러블슈팅](TROUBLESHOOTING.md)).
 - 기본 Compose `web` 서비스는 production Cloudflare credential을 받지 않는다. production deploy와 remote D1 migration은 별도 `ops` profile, 명시적 `:prod`/`:remote` 명령과 `AUTHON_PRODUCTION_INTENT=1`을 함께 요구한다.
 - 적용된 `migrations/`의 manual D1 SQL이 migration authority다. Drizzle generator는 `.docs/generated-migrations/`의 disposable review output만 만들고, CI는 임시 SQLite에서 manual history와 현재 schema의 table·column·foreign key·index 호환성을 검증한다.
 - Worker/server 오류 로그는 event, request ID, actor 비식별 surrogate, venue ID, outcome, error kind만 허용한다. error message·stack·email·credential·SQL 원문은 출력하지 않는다.

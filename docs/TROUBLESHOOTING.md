@@ -45,6 +45,29 @@ Worker 로그에서 `event`와 `requestId`로 필터링합니다. middleware가 
 
 서버 진단은 계측된 호출마다 작은 구조화 로그 한 건을 남깁니다. SQL·bind 값·이름·token·URL query·등록 입력은 기록하지 않습니다. 브라우저도 고정 경로 분류와 수치만 출력합니다. 개발 Worker가 운영 DB를 공유하는 환경에서 실제 등록·삭제를 테스트하려면 해당 데이터 변경 권한을 별도로 확인해야 합니다.
 
+## 2026-10-11
+
+### Next.js 16.4로 올린 뒤 Worker 페이지가 1101 오류로 실패
+
+#### 증상
+
+- development Worker에서 middleware redirect(307)는 동작하지만 로그인·가입·비밀번호 재설정처럼 페이지를 렌더링하는 요청이 모두 500(`error code: 1101`)으로 실패한다.
+- Worker 로그에 `Error: Unexpected loadManifest(/.next/server/preview-props.json) call!`이 `NextNodeServer.getPreviewProps`에서 발생한다.
+
+#### 원인
+
+- Next.js 16.4는 preview props를 `prerender-manifest.json` 밖의 `.next/server/preview-props.json`으로 분리했다. OpenNext Cloudflare 1.20.x는 빌드 시 inline하는 manifest 목록에 이 파일이 없어, 서버 초기화에서 예외가 난다([opennextjs-cloudflare#1355](https://github.com/opennextjs/opennextjs-cloudflare/issues/1355)).
+- `npm run build:worker`의 route·asset 검사는 산출물만 확인하고 Worker를 실행하지 않아 이 실패를 잡지 못했다.
+
+#### 해결
+
+- `next`와 `eslint-config-next`를 보안 수정이 포함된 16.3.x(`~16.3.8`)로 고정한다. OpenNext가 이 manifest를 지원한 뒤에 16.4 이상으로 올린다.
+
+#### 검증
+
+- `npm run build:worker` 후 `npx opennextjs-cloudflare preview --env dev`로 local workerd에서 `/auth/login`이 200, 인증이 필요한 경로가 로그인으로 307인지 확인한다. 운영 route 설정으로 띄우면 local D1에 운영 도메인이 없어 404가 나므로 `--env dev`를 쓴다.
+- Next.js나 OpenNext를 올릴 때도 같은 local runtime 확인을 거친다.
+
 ## 2026-08-04
 
 ### 외부 게스트 링크 언어 변경 후 로딩이 종료되지 않음
