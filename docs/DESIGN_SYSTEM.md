@@ -69,7 +69,7 @@ Authon UI는 베뉴 현장에서 반복적으로 사용하는 운영 도구다. 
 
 | 역할 | 크기 | 굵기 | semantic class | 용도 |
 |---|---:|---:|---|---|
-| Page title | 24–30px | 600 | route별 heading | 로그인·오류처럼 독립된 화면의 제목 |
+| Page title | 24–32px | 600–700 | route별 heading | 홈·로그인·오류처럼 독립된 화면의 제목 |
 | Section title | 18px | 600 | `type-section-title` | Admin의 독립 form·migration section |
 | Panel title | 16px | 600 | `type-panel-title` | Door check-in, Guest list, Add guest 같은 panel heading |
 | Context title | 14px | 600 | `type-context-title` | Operational date, Guest owner, User filter, Section처럼 dashboard card의 맥락을 정의하는 제목 |
