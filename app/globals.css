@@ -30,7 +30,13 @@
   --app-action-confirm-active: var(--app-surface-hover);
   --app-focus: #b5b5ba;
   --app-field-focus: #8e8e93;
-  --app-status-waiting: #d5b479;
+  /* Status colors: green for checked-in and success, desaturated amber for waiting, red for errors. */
+  --app-status-checked-rgb: 52 211 153;
+  --app-status-waiting-rgb: 213 180 121;
+  --app-status-danger-rgb: 251 113 133;
+  --app-status-checked: rgb(var(--app-status-checked-rgb));
+  --app-status-waiting: rgb(var(--app-status-waiting-rgb));
+  --app-status-danger: rgb(var(--app-status-danger-rgb));
   /* Radius scale: controls (buttons, fields, tabs, menu items), segments nested inside a control group,
      surfaces (panels, cards, popovers, toasts) and bottom sheets. Avatars and status dots stay circular. */
   --app-radius-control: 10px;
@@ -297,7 +303,7 @@ input[type="date"] {
   }
 
   .app-field[aria-invalid="true"],
-  .app-field-frame:has(> [aria-invalid="true"]) > .app-field { border-color: #fb7185; }
+  .app-field-frame:has(> [aria-invalid="true"]) > .app-field { border-color: var(--app-status-danger); }
 
   .app-label {
     @apply mb-1.5 block text-xs font-medium leading-normal text-text-muted;
@@ -372,7 +378,7 @@ input[type="date"] {
   }
 
   .app-button[data-variant="danger"] {
-    --app-press-background: rgb(251 113 133 / 0.3);
+    --app-press-background: rgb(var(--app-status-danger-rgb) / 0.3);
   }
 
   @media (hover: hover) and (pointer: fine) {
@@ -394,7 +400,7 @@ input[type="date"] {
     }
 
     .app-button[data-variant="danger"]:not(:disabled):hover {
-      background-color: rgb(251 113 133 / 0.22);
+      background-color: rgb(var(--app-status-danger-rgb) / 0.22);
     }
 
     .app-button[data-variant="ghost"]:not(:disabled):hover {

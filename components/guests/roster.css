@@ -59,7 +59,7 @@
 .product-guest-actions .app-button[data-variant="ghost"] { min-width: 44px; }
 .product-guest-row[data-status="checked"] .product-guest-name strong { color: var(--app-text-muted); }
 /* Checked rows keep a visible mark wherever the status column is hidden. */
-.product-guest-checked-mark { display: none; flex-shrink: 0; place-items: center; width: 22px; height: 22px; border-radius: 50%; background: rgb(52 211 153 / 0.14); }
+.product-guest-checked-mark { display: none; flex-shrink: 0; place-items: center; width: 22px; height: 22px; border-radius: 50%; background: rgb(var(--app-status-checked-rgb) / 0.14); }
 .product-roster[data-columns="2"] .product-guest-checked-mark { display: grid; }
 .product-guest-row[data-highlighted="true"] { background: rgb(var(--app-action-rgb) / 0.08); box-shadow: inset 3px 0 0 var(--app-action); }
 .product-roster-rows { transition: opacity var(--app-duration-standard) var(--app-ease-out); }
