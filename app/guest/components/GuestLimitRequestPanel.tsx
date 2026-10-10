@@ -145,7 +145,7 @@ export default function GuestLimitRequestPanel({
           aria-live="polite"
           aria-atomic="true"
           tabIndex={-1}
-          className="mt-2 bg-status-waiting/10 px-3 py-3 text-xs leading-relaxed text-status-waiting"
+          className="mt-2 rounded-control bg-status-waiting/10 px-3 py-3 text-xs leading-relaxed text-status-waiting"
         >
           {t("requestPending", { count: pendingRequest.requestedExtra })}
         </div>

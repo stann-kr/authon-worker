@@ -506,10 +506,10 @@ function DoorPageContent() {
                     </dl>
                     {offlineNotice && (
                       <p
-                        className={`border-l-2 px-3 py-2 text-xs ${
+                        className={`rounded-control border border-transparent px-3 py-2 text-xs ${
                           offlineNotice === "syncFailed" || offlineNotice === "scopeClosed"
-                            ? "border-status-danger bg-status-danger/10 text-status-danger"
-                            : "border-status-waiting bg-status-waiting/10 text-text-muted"
+                            ? "bg-status-danger/10 text-status-danger"
+                            : "bg-status-waiting/10 text-text-muted"
                         }`}
                         role={offlineNotice === "syncFailed" || offlineNotice === "scopeClosed" ? "alert" : "status"}
                       >
@@ -536,7 +536,7 @@ function DoorPageContent() {
 
                 {/* A saved date survives re-entry, so say when the roster is not today's before anyone searches it. */}
                 {currentVenue && selectedDate !== businessDate && (
-                  <div className="flex flex-wrap items-center justify-between gap-2 border-l-2 border-status-waiting bg-status-waiting/10 px-3 py-2">
+                  <div className="flex flex-wrap items-center justify-between gap-2 rounded-control border border-transparent bg-status-waiting/10 px-3 py-2">
                     <p className="min-w-0 text-xs leading-relaxed text-text-muted" role="status">
                       {t("viewingOtherDate", { date: formatCalendarDate(locale, selectedDate, FULL_CALENDAR_DATE) })}
                     </p>
@@ -547,7 +547,7 @@ function DoorPageContent() {
                   </div>
                 )}
                 {!isOnline && (
-                  <p className="border-l-2 border-status-waiting bg-status-waiting/10 px-3 py-2 text-xs leading-relaxed text-text-muted" role="status">
+                  <p className="rounded-control border border-transparent bg-status-waiting/10 px-3 py-2 text-xs leading-relaxed text-text-muted" role="status">
                     {t(offlineScope ? "offlineEventScope" : "offlineGeneralScope")}
                   </p>
                 )}

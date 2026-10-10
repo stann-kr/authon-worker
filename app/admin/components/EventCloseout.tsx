@@ -164,7 +164,7 @@ export default function EventCloseout({ eventId, eventState, timeZone }: EventCl
             {report.ledger.untrackedGuestCount > 0 && (
               <p
                 role="alert"
-                className="border-l-2 border-status-waiting bg-status-waiting/10 px-3 py-2 text-sm text-status-waiting"
+                className="rounded-control border border-transparent bg-status-waiting/10 px-3 py-2 text-sm text-status-waiting"
               >
                 {t("untracked", { count: report.ledger.untrackedGuestCount })}
               </p>

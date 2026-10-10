@@ -663,7 +663,7 @@ export default function AuthenticatedGuestView({ user }: AuthenticatedGuestViewP
                         <div
                           id="authenticated-guest-duplicate"
                           role="alert"
-                          className="flex flex-col gap-2 border-l-2 border-status-waiting bg-status-waiting/10 px-3 py-2 text-sm text-status-waiting sm:flex-row sm:items-center sm:justify-between"
+                          className="flex flex-col gap-2 rounded-control border border-transparent bg-status-waiting/10 px-3 py-2 text-sm text-status-waiting sm:flex-row sm:items-center sm:justify-between"
                         >
                           <p className="leading-relaxed">{t("duplicateRequiresConfirmation")}</p>
                           <Button
@@ -680,7 +680,7 @@ export default function AuthenticatedGuestView({ user }: AuthenticatedGuestViewP
                       )}
                       </>
                     ) : (
-                      <div className="border-l-2 border-status-danger bg-status-danger/10 px-3 py-2 text-sm text-status-danger">
+                      <div className="rounded-control border border-transparent bg-status-danger/10 px-3 py-2 text-sm text-status-danger">
                         {t("limitReached", {
                           used: displayQuota?.used ?? activeGuestsCount,
                           max: effectiveLimit ?? 0,

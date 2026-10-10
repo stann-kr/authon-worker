@@ -336,7 +336,7 @@ export default function PasswordResetRequestManagement({
               role="status"
               aria-live="polite"
               aria-atomic="true"
-              className="border border-status-waiting/70 bg-status-waiting/10 p-4 outline-none"
+              className="rounded-panel border border-transparent bg-status-waiting/10 p-4 outline-none"
             >
               <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                 <div className="min-w-0">

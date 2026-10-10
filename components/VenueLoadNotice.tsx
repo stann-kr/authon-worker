@@ -16,7 +16,7 @@ export default function VenueLoadNotice({
   return (
     <div
       role="alert"
-      className="flex flex-col gap-3 rounded-panel border border-status-danger/70 bg-status-danger/10 px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
+      className="flex flex-col gap-3 rounded-panel border border-transparent bg-status-danger/10 px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
     >
       <p className="text-sm text-status-danger">{t("venueLoadFailed")}</p>
       <button

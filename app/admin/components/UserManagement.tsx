@@ -322,7 +322,7 @@ export default function UserManagement({
                 {actionError && <Alert type="error" message={actionError.message} />}
                 <div
                   ref={passwordLinkPanelRef}
-                  className="mb-4 rounded-panel border border-status-waiting/70 bg-status-waiting/10 p-4 outline-none"
+                  className="mb-4 rounded-panel border border-transparent bg-status-waiting/10 p-4 outline-none"
                   role="region"
                   aria-labelledby="managed-password-link-title"
                   tabIndex={-1}

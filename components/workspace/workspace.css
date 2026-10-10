@@ -232,6 +232,7 @@
   .workspace-dock .workspace-action .workspace-action-icon { width: 18px; height: 18px; background: none; color: inherit; }
   .workspace-dock .workspace-action[data-tone="accent"] {
     border-color: transparent; background-color: var(--app-action); color: var(--app-action-text); font-weight: 600;
+    -webkit-backdrop-filter: none; backdrop-filter: none;
   }
   .workspace-dock .workspace-action[aria-pressed="true"] {
     border-color: var(--app-border-strong); background-color: var(--app-surface-active); color: var(--app-text);

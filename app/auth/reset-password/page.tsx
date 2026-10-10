@@ -592,7 +592,7 @@ function ResetPasswordContent() {
                   <div
                     role="group"
                     aria-labelledby="restart-request-confirm"
-                    className="space-y-2 rounded-panel border border-status-waiting/70 bg-status-waiting/10 p-4 text-left"
+                    className="space-y-2 rounded-panel border border-transparent bg-status-waiting/10 p-4 text-left"
                   >
                     <p
                       id="restart-request-confirm"

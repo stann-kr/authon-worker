@@ -459,7 +459,7 @@ export default function InviteUser({ onClose }: { onClose?: () => void } = {}) {
           {success && createdInvitation && (
             <div
               ref={invitationPanelRef}
-              className="space-y-3 rounded-panel border border-status-waiting/70 bg-status-waiting/10 p-4 outline-none"
+              className="space-y-3 rounded-panel border border-transparent bg-status-waiting/10 p-4 outline-none"
               role="region"
               aria-labelledby="created-invitation-title"
               tabIndex={-1}

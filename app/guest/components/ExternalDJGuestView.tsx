@@ -142,7 +142,7 @@ export default function ExternalDJGuestView({ token }: ExternalDJGuestViewProps)
         {externalHeader}
         <main id="main-content" tabIndex={-1} className="external-guest-state">
           <div className="app-panel max-w-sm p-7 text-center">
-            <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center border border-status-danger/70 bg-status-danger/10">
+            <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-panel bg-status-danger/10">
               <Icon name="warning" size={24} className="text-status-danger" />
             </div>
             <h1
@@ -173,7 +173,7 @@ export default function ExternalDJGuestView({ token }: ExternalDJGuestViewProps)
             aria-describedby="external-load-error-description"
             aria-live="assertive"
           >
-            <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center border border-status-waiting/70 bg-status-waiting/10">
+            <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-panel bg-status-waiting/10">
               <Icon name="warning" size={24} className="text-status-waiting" />
             </div>
             <h1
@@ -256,7 +256,7 @@ export default function ExternalDJGuestView({ token }: ExternalDJGuestViewProps)
 
           {showReconciliationBanner && (
             <div
-              className="mb-4 border border-status-waiting/70 bg-status-waiting/10 p-4"
+              className="mb-4 rounded-panel border border-transparent bg-status-waiting/10 p-4"
               aria-labelledby="external-reconciliation-title"
               aria-describedby="external-reconciliation-description"
               aria-live="assertive"
@@ -407,7 +407,7 @@ export default function ExternalDJGuestView({ token }: ExternalDJGuestViewProps)
                     <div
                       id="external-guest-duplicate"
                       role="alert"
-                      className="mt-2 flex flex-col gap-2 border-l-2 border-status-waiting bg-status-waiting/10 px-3 py-2 text-sm text-status-waiting sm:flex-row sm:items-center sm:justify-between"
+                      className="mt-2 flex flex-col gap-2 rounded-control border border-transparent bg-status-waiting/10 px-3 py-2 text-sm text-status-waiting sm:flex-row sm:items-center sm:justify-between"
                     >
                       <p className="leading-relaxed">{t("duplicateRequiresConfirmation")}</p>
                       <Button
@@ -424,7 +424,7 @@ export default function ExternalDJGuestView({ token }: ExternalDJGuestViewProps)
                   )}
                 </>
               ) : (
-                <div className="border-l-2 border-status-danger bg-status-danger/10 px-3 py-2 text-sm text-status-danger">
+                <div className="rounded-control border border-transparent bg-status-danger/10 px-3 py-2 text-sm text-status-danger">
                   {t("guestLimitReached", {
                     used: linkInfo?.maxGuests ?? 0,
                     max: linkInfo?.maxGuests ?? 0,
