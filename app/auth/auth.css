@@ -3,20 +3,20 @@
 .auth-panel { padding: 12px 0; background: transparent; border: 0; }
 .auth-heading { margin-bottom: 26px; text-align: left; }
 .auth-brand { margin-bottom: 12px; color: var(--app-text-muted); font-size: 14px; overflow-wrap: anywhere; }
-.auth-heading h1 { font-size: 22px; line-height: 1.4; font-weight: 600; letter-spacing: -0.4px; overflow-wrap: anywhere; }
+.auth-heading h1 { font-size: 24px; line-height: 1.35; font-weight: 700; letter-spacing: -0.02em; overflow-wrap: anywhere; }
 .auth-panel form { min-width: 0; }
 .auth-panel .app-field { background: var(--app-surface-secondary); }
 
 /* Top-anchored so inline errors grow downward instead of shifting the form. */
 .auth-login-page { display: grid; align-items: start; padding-top: max(clamp(32px, 12vh, 120px), env(safe-area-inset-top)); background: var(--app-canvas); }
 .auth-login-page .auth-frame { max-width: 400px; }
-.auth-login-header { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px 20px; padding-bottom: 20px; border-bottom: 1px solid var(--app-border-subtle); }
-.auth-login-header .auth-brand { margin: 0; color: var(--app-text); font-size: 18px; font-weight: 500; letter-spacing: -0.4px; }
+.auth-login-header { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px 20px; padding-bottom: 12px; }
+.auth-login-header .auth-brand { margin: 0; color: var(--app-text); font-size: 18px; font-weight: 600; letter-spacing: -0.02em; }
 .auth-login-header [role="group"] { gap: 2px; padding: 0; border: 0; background: transparent; }
 .auth-login-header button { min-height: 44px; border-radius: var(--app-radius-control); }
 .auth-login-page .auth-panel { padding-top: 28px; padding-bottom: 0; }
 .auth-login-page .auth-heading { margin-bottom: 24px; }
-.auth-login-page .auth-heading h1 { font-size: 20px; font-weight: 500; }
+.auth-login-page .auth-heading h1 { font-size: 26px; font-weight: 700; }
 .auth-login-form { display: grid; gap: 20px; }
 .auth-login-page .app-field { border-radius: var(--app-radius-control); background: var(--app-surface-secondary); }
 .auth-login-form > .app-button { min-height: 46px; padding-block: 10px; border-radius: var(--app-radius-control); }

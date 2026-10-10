@@ -25,7 +25,7 @@ export default function RouteError({
   return (
     <main id="main-content" tabIndex={-1} className="flex min-h-[100dvh] items-center justify-center bg-canvas px-4 text-center">
       <div className="app-panel w-full max-w-md p-8 sm:p-10">
-        <div className="mx-auto mb-5 grid h-12 w-12 place-items-center rounded-panel border border-border-default bg-surface-raised text-text-muted">
+        <div className="mx-auto mb-5 grid h-12 w-12 place-items-center rounded-panel bg-surface-raised text-text-muted">
           <Icon name="warning" size={22} />
         </div>
         <h1 ref={headingRef} tabIndex={-1} className="text-2xl font-semibold text-text-heading outline-none">

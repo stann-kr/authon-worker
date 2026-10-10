@@ -526,7 +526,7 @@ function ResetPasswordContent() {
 
           {step === "requestSent" && (
             <div className="text-center space-y-6">
-              <div className="mx-auto grid h-14 w-14 place-items-center rounded-panel border border-border-strong bg-surface-raised text-text-heading">
+              <div className="mx-auto grid h-14 w-14 place-items-center rounded-panel bg-surface-raised text-text-heading">
                 <Icon name="user-admin" size={24} />
               </div>
 
@@ -553,7 +553,7 @@ function ResetPasswordContent() {
               </div>
 
               {requestChallenge && (
-                <div className="rounded-panel border border-border-subtle bg-surface-raised p-4 text-left">
+                <div className="rounded-panel bg-surface-raised p-4 text-left">
                   <p className="text-xs font-semibold text-text-heading">
                     {t("requestChallenge")}
                   </p>
@@ -641,7 +641,7 @@ function ResetPasswordContent() {
 
           {step === "resetComplete" && (
             <div className="text-center space-y-6">
-              <div className="mx-auto grid h-14 w-14 place-items-center rounded-panel border border-border-strong bg-surface-raised text-text-heading">
+              <div className="mx-auto grid h-14 w-14 place-items-center rounded-panel bg-surface-raised text-text-heading">
                 <Icon name="check" size={24} />
               </div>
 

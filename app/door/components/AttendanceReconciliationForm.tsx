@@ -186,7 +186,7 @@ export default function AttendanceReconciliationForm({
             <button
               type="button"
               onClick={() => void loadSummary(scope)}
-              className="pressable min-h-11 border border-border-default bg-surface-raised px-3 py-2 text-xs font-medium text-text-heading"
+              className="pressable min-h-11 border border-transparent bg-surface-raised px-3 py-2 text-xs font-medium text-text-heading"
             >
               {t("adjustment.reload")}
             </button>

@@ -482,7 +482,7 @@ function DoorPageContent() {
                           type="button"
                           onClick={() => void syncOfflineQueue()}
                           disabled={isOfflineSyncing || offlineQueueCounts.queued === 0}
-                          className="pressable min-h-11 border border-border-default bg-surface-raised px-3 py-2 text-xs font-medium text-text-heading disabled:cursor-not-allowed disabled:opacity-50"
+                          className="pressable min-h-11 border border-transparent bg-surface-raised px-3 py-2 text-xs font-medium text-text-heading disabled:cursor-not-allowed disabled:opacity-50"
                         >
                           {t("retryOfflineSync")}
                         </button>
@@ -490,7 +490,7 @@ function DoorPageContent() {
                           <button
                             type="button"
                             onClick={() => void handleClearResolvedOfflineMutations()}
-                            className="pressable min-h-11 border border-border-default bg-canvas px-3 py-2 text-xs font-medium text-text-muted hover:text-text-heading"
+                            className="pressable min-h-11 border border-transparent bg-transparent px-3 py-2 text-xs font-medium text-text-muted hover:bg-surface-hover hover:text-text-heading"
                           >
                             {t("clearOfflineResults")}
                           </button>
@@ -626,7 +626,7 @@ function DoorPageContent() {
                     type="button"
                     aria-pressed={prioritizeWaiting}
                     onClick={() => setPrioritizeWaiting((current) => !current)}
-                    className="collection-toggle-button pressable min-h-11 whitespace-nowrap border border-border-default bg-surface-raised px-3 py-2 text-xs font-medium text-text-muted"
+                    className="collection-toggle-button pressable min-h-11 whitespace-nowrap border border-transparent bg-surface-raised px-3 py-2 text-xs font-medium text-text-muted"
                   >
                     <Icon name="check" size={14} className={prioritizeWaiting ? "" : "invisible"} />
                     {t("prioritizeWaiting")}

@@ -57,7 +57,7 @@ export default function AnalyticsEvents({
       </div>
       <div className="grid gap-3 p-4 md:hidden">
         {rows.map((row) => (
-          <article key={row.eventId} className="rounded-control border border-border-subtle bg-surface-raised p-3">
+          <article key={row.eventId} className="rounded-control bg-surface-raised p-3">
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
                 <h4 className="break-words text-sm font-semibold text-text-heading">{row.name}</h4>

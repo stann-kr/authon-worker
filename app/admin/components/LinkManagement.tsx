@@ -902,7 +902,7 @@ export default function LinkManagement({
                             onClick={() => handleUseAsTemplate(link)}
                             variant="ghost"
                             size="sm"
-                            className="border border-border-default bg-surface"
+                            className="bg-surface-raised text-text-heading"
                           >
                             {t("useAsTemplate")}
                           </Button>
@@ -990,7 +990,7 @@ export default function LinkManagement({
                             onCancel={() => setPendingDeleteLink(null)}
                             isLoading={loadingStates[`delete_${pendingDeleteLink.id}`]}
                           >
-                            <div className="rounded-control border border-border-subtle bg-surface-raised p-3">
+                            <div className="rounded-control bg-surface-raised p-3">
                               <p className="break-words text-sm font-medium text-text-heading">
                                 {pendingDeleteLink.djName} / {pendingDeleteLink.event}
                               </p>
