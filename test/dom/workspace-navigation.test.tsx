@@ -13,6 +13,7 @@ import { RouteTransitionProvider, useRouteLoadingTask, useRouteTransition } from
 import WorkspaceShell from "@/components/WorkspaceShell";
 import RouteLoadingShell from "@/components/RouteLoadingShell";
 import WorkspaceNavigation from "@/components/workspace/WorkspaceNavigation";
+import WorkspaceAction from "@/components/workspace/WorkspaceAction";
 import ViewportProvider from "@/components/viewport/ViewportProvider";
 import OperationsScope from "@/components/operations/OperationsScope";
 import { getWorkspaceActiveId, getWorkspaceItems, getWorkspacePrimaryItems } from "@/components/workspace/navigation";
@@ -623,6 +624,12 @@ test("the mobile menu button announces pending work for items outside the dock",
   // Once the pending item is active it joins the dock with its own badge, so the menu button stays plain.
   render(<Providers><MenuHarness initial="password-requests" /></Providers>);
   assert.equal(screen.getByRole("button", { name: messages.Workspace.allMenu }).hasAttribute("aria-describedby"), false);
+});
+
+test("a compact dock action keeps its full name and pending count for assistive technology", () => {
+  render(<WorkspaceAction icon="refresh" tone="muted" compact badge={3}>{messages.Door.offlineOperations}</WorkspaceAction>);
+  const action = screen.getByRole("button", { name: `${messages.Door.offlineOperations} 3` });
+  assert.equal(action.dataset.compact, "true");
 });
 
 test("mobile menu closes from its own control and restores the dock trigger", async () => {

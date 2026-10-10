@@ -403,7 +403,7 @@ function DoorPageContent() {
       actions={<>
         {offlineScope && <WorkspaceAction icon="search" onClick={() => setTool(tool === "code" ? null : "code")} disabled={isDoorCodeLoading || isOfflineSyncing} aria-expanded={tool === "code"} aria-controls={tool === "code" ? "door-code-panel" : undefined}>{t("guestCodeLookup")}</WorkspaceAction>}
         {attendanceActions}
-        {offlineScope && <WorkspaceAction icon="refresh" tone="muted" onClick={() => setTool(tool === "offline" ? null : "offline")} disabled={isDoorCodeLoading || isOfflineSyncing} aria-expanded={tool === "offline"} aria-controls={tool === "offline" ? "door-offline-panel" : undefined}>{t("offlineOperations")} {offlineQueueCounts.queued > 0 ? offlineQueueCounts.queued : ""}</WorkspaceAction>}
+        {offlineScope && <WorkspaceAction icon="refresh" tone="muted" compact badge={offlineQueueCounts.queued > 0 ? offlineQueueCounts.queued : undefined} onClick={() => setTool(tool === "offline" ? null : "offline")} disabled={isDoorCodeLoading || isOfflineSyncing} aria-expanded={tool === "offline"} aria-controls={tool === "offline" ? "door-offline-panel" : undefined}>{t("offlineOperations")}</WorkspaceAction>}
       </>}
     >
       {venueLoadError && (
