@@ -172,11 +172,11 @@
   :root { --workspace-dock-offset: max(12px, calc(env(safe-area-inset-bottom) - 12px)); }
   .workspace-shell {
     --workspace-header-edge: 14px; --workspace-content-gap: 12px;
-    --workspace-glass-header: #0c0c0e;
+    --workspace-glass-header: #0a0a0b;
     --workspace-glass-filter: none;
     --workspace-glass-edge: rgb(255 255 255 / 0.09);
     /* Near-opaque until backdrop blur is available, so list text never reads through the dock. */
-    --workspace-dock-glass: rgb(30 30 32 / 0.96);
+    --workspace-dock-glass: rgb(28 28 30 / 0.96);
     --workspace-dock-filter: none;
     --workspace-dock-edge: rgb(255 255 255 / 0.12);
     --workspace-dock-current: rgb(255 255 255 / 0.12);
@@ -231,9 +231,9 @@
 @supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
   @media (max-width: 999px) {
     .workspace-shell {
-      --workspace-glass-header: rgb(12 12 14 / 0.88);
+      --workspace-glass-header: rgb(10 10 11 / 0.88);
       --workspace-glass-filter: blur(16px) saturate(110%);
-      --workspace-dock-glass: rgb(30 30 32 / 0.74);
+      --workspace-dock-glass: rgb(28 28 30 / 0.74);
       --workspace-dock-filter: blur(20px) saturate(160%);
     }
   }
@@ -241,7 +241,7 @@
 @media (max-width: 999px) and (prefers-reduced-transparency: reduce),
        (max-width: 999px) and (prefers-contrast: more) {
   .workspace-shell {
-    --workspace-glass-header: #0c0c0e;
+    --workspace-glass-header: #0a0a0b;
     --workspace-glass-filter: none;
     --workspace-header-edge: 0px;
     --workspace-glass-edge: #8e8e93;

@@ -5,7 +5,7 @@
 .auth-brand { margin-bottom: 12px; color: var(--app-text-muted); font-size: 14px; overflow-wrap: anywhere; }
 .auth-heading h1 { font-size: 22px; line-height: 1.4; font-weight: 600; letter-spacing: -0.4px; overflow-wrap: anywhere; }
 .auth-panel form { min-width: 0; }
-.auth-panel .app-field { background: #0c0c0c; }
+.auth-panel .app-field { background: var(--app-surface-secondary); }
 
 /* Top-anchored so inline errors grow downward instead of shifting the form. */
 .auth-login-page { display: grid; align-items: start; padding-top: max(clamp(32px, 12vh, 120px), env(safe-area-inset-top)); background: var(--app-canvas); }

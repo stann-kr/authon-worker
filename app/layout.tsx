@@ -34,6 +34,12 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+// Korean UI type. Unicode-range subsets load only the glyphs a page uses; the CSP already allows this CDN.
+const PRETENDARD_STYLESHEET =
+  "https://cdnjs.cloudflare.com/ajax/libs/pretendard/1.3.9/variable/pretendardvariable-dynamic-subset.min.css";
+const PRETENDARD_INTEGRITY =
+  "sha512-VGtW1JoZuvVenEODZQwMQ+8wtlI+W4MZ5rc3x+FLLbchLkNRGiqdBXmWrcygo1eLBwDFkRRWEk2a1l40VkkGLA==";
+
 export async function generateMetadata(): Promise<Metadata> {
   const { brand } = await getRequestTenantContext();
   return {
@@ -47,7 +53,7 @@ export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover",
-  themeColor: "#000000",
+  themeColor: "#0a0a0b",
 };
 
 export default async function RootLayout({
@@ -65,6 +71,11 @@ export default async function RootLayout({
 
   return (
     <html lang={locale} suppressHydrationWarning={true}>
+      <head>
+        <link rel="preconnect" href="https://cdnjs.cloudflare.com" crossOrigin="anonymous" />
+        <link rel="stylesheet" href={PRETENDARD_STYLESHEET} integrity={PRETENDARD_INTEGRITY}
+          crossOrigin="anonymous" referrerPolicy="no-referrer" />
+      </head>
       <body
         className={`${geistMono.variable} antialiased bg-canvas text-text-body`}
         style={{ minHeight: "100dvh" }}
