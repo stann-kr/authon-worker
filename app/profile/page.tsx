@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import RouteLoadingFallback from "@/components/RouteLoadingFallback";
 import Alert from "@/components/Alert";
@@ -13,7 +13,12 @@ import WorkspaceShell from "@/components/WorkspaceShell";
 import { useAuthSession } from "@/components/AuthSessionProvider";
 import { useTranslations } from "next-intl";
 import { updateUserProfile } from "@/lib/api/users";
+import { hasAccess } from "@/lib/auth";
 import { getPasswordPolicyErrorCode } from "@/lib/auth/password-policy";
+import {
+  selectProfilePasswordError,
+  type ProfilePasswordErrorTarget,
+} from "@/lib/auth/profile-password-feedback";
 
 export default function ProfilePage() {
   const t = useTranslations("Profile");
@@ -27,16 +32,28 @@ export default function ProfilePage() {
   );
 
   const [formData, setFormData] = useState({ name: user?.name ?? "" });
+  // 비밀번호 변경으로 세션이 끝난 경우 로그인 화면에서 결과를 안내합니다.
+  const [signedOutAfterPasswordChange, setSignedOutAfterPasswordChange] =
+    useState(false);
 
   const router = useRouter();
 
   useEffect(() => {
     if (!user) {
-      router.replace("/auth/login");
+      router.replace(
+        signedOutAfterPasswordChange
+          ? "/auth/login?reason=password-changed"
+          : "/auth/login",
+      );
       return;
     }
     setFormData({ name: user.name });
-  }, [router, user]);
+  }, [router, signedOutAfterPasswordChange, user]);
+
+  const handleReauthRequired = () => {
+    setSignedOutAfterPasswordChange(true);
+    setUser(null);
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -91,6 +108,9 @@ export default function ProfilePage() {
     return <RouteLoadingFallback />;
   }
 
+  const isAdmin = hasAccess(user, ["admin"]);
+  const hasProfileChanges = formData.name !== user.name;
+
   return (
     <WorkspaceShell width="narrow" contentClassName="gap-6">
       <h1 id="profile-page-title" className="sr-only">{t("title")}</h1>
@@ -103,8 +123,8 @@ export default function ProfilePage() {
           <div className="profile-identity"><span aria-hidden="true">{user.name.charAt(0)}</span><div><strong>{user.name}</strong><small>{user.email}</small></div></div>
           <dl className="profile-facts">
             <div><dt>{t("role")}</dt><dd><RoleLabel role={user.account_kind === "shared" ? "shared" : user.role} /></dd></div>
-            <div><dt>{t("guestLimit")}</dt><dd>{user.guest_limit === null ? t("unlimited") : user.guest_limit}</dd></div>
-            <div><dt>{t("status")}</dt><dd>{t("active")}</dd></div>
+            {/* Admin accounts do not register against a personal guest quota. */}
+            {!isAdmin && <div><dt>{t("guestLimit")}</dt><dd>{user.guest_limit === null ? t("unlimited") : t("guestLimitCount", { count: user.guest_limit })}</dd></div>}
           </dl>
         </section>
 
@@ -120,7 +140,7 @@ export default function ProfilePage() {
           {error && <div id="profile-error"><Alert type="error" message={error} className="mb-6" /></div>}
 
           <div className="app-panel overflow-hidden">
-            <div className="space-y-4 border-b border-border-default p-4">
+            <div className="space-y-4 border-b border-border-subtle p-4">
               <div>
                 <h2 className="text-sm font-semibold text-text-heading">
                   {t("accountSettings")}
@@ -156,7 +176,7 @@ export default function ProfilePage() {
             </div>
 
             <div hidden={activeSection !== "profile"}>
-                <div className="border-b border-border-default p-4">
+                <div className="border-b border-border-subtle p-4">
                   <h3 className="text-xs font-semibold text-text-heading sm:text-sm">
                     {t("editProfile")}
                   </h3>
@@ -188,16 +208,9 @@ export default function ProfilePage() {
                     />
                   </div>
 
-                  <div>
-                    <p className="app-label">{t("preferredLanguage")}</p>
-                    <LanguageSwitcher />
-                    <p className="app-helper">
-                      {t("preferredLanguageHelp")}
-                    </p>
-                  </div>
-
                   <Button
                     type="submit"
+                    disabled={!hasProfileChanges}
                     isLoading={isSaving}
                     fullWidth
                     size="lg"
@@ -206,14 +219,30 @@ export default function ProfilePage() {
                     {commonT("saveChanges")}
                   </Button>
                 </form>
+
+                {/* 언어는 저장 버튼과 무관하게 선택 즉시 적용되므로 폼 밖에 둡니다. */}
+                <div
+                  role="group"
+                  aria-labelledby="profile-language-label"
+                  aria-describedby="profile-language-help"
+                  className="border-t border-border-subtle p-4 sm:p-6"
+                >
+                  <p id="profile-language-label" className="app-label">
+                    {t("preferredLanguage")}
+                  </p>
+                  <LanguageSwitcher />
+                  <p id="profile-language-help" className="app-helper">
+                    {t("preferredLanguageHelp")}
+                  </p>
+                </div>
               </div>
               <div hidden={activeSection !== "security"}>
-                <div className="border-b border-border-default p-4">
+                <div className="border-b border-border-subtle p-4">
                   <h3 className="text-xs font-semibold text-text-heading sm:text-sm">
                     {t("changePassword")}
                   </h3>
                 </div>
-                <PasswordChangeForm />
+                <PasswordChangeForm onReauthRequired={handleReauthRequired} />
               </div>
           </div>
         </div>
@@ -222,51 +251,70 @@ export default function ProfilePage() {
   );
 }
 
-function PasswordChangeForm() {
+const PASSWORD_FIELD_IDS: Record<
+  Exclude<ProfilePasswordErrorTarget, "form">,
+  string
+> = {
+  currentPassword: "current-password",
+  newPassword: "new-password",
+  confirmPassword: "confirm-password",
+};
+
+function PasswordChangeForm({
+  onReauthRequired,
+}: {
+  onReauthRequired: () => void;
+}) {
   const t = useTranslations("Profile");
   const authT = useTranslations("Auth");
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [isUpdating, setIsUpdating] = useState(false);
-  const [isRedirecting, setIsRedirecting] = useState(false);
   const [passwordError, setPasswordError] = useState<{
     message: string;
-    target: "form" | "newPassword" | "confirmPassword";
+    target: ProfilePasswordErrorTarget;
   } | null>(null);
-  const [passwordSuccess, setPasswordSuccess] = useState("");
-  const router = useRouter();
-  const { setUser } = useAuthSession();
+  const pendingFocusRef = useRef<ProfilePasswordErrorTarget | null>(null);
+
+  // 입력란은 요청 중 disabled이므로, 활성화된 뒤에 오류 입력란으로 focus를 옮깁니다.
+  useEffect(() => {
+    const target = pendingFocusRef.current;
+    if (isUpdating || !target) return;
+    pendingFocusRef.current = null;
+    if (target === "form") return;
+    document.getElementById(PASSWORD_FIELD_IDS[target])?.focus();
+  }, [isUpdating, passwordError]);
+
+  const showPasswordError = (message: string, target: ProfilePasswordErrorTarget) => {
+    pendingFocusRef.current = target;
+    setPasswordError({ message, target });
+  };
 
   const handlePasswordChange = async (e: React.FormEvent) => {
     e.preventDefault();
     setPasswordError(null);
-    setPasswordSuccess("");
 
     const policyErrorCode = getPasswordPolicyErrorCode(newPassword);
     if (policyErrorCode) {
-      setPasswordError({
-        message: authT(
+      showPasswordError(
+        authT(
           policyErrorCode === "PASSWORD_TOO_SHORT"
             ? "passwordTooShort"
             : "passwordRequiresLettersAndNumbers",
         ),
-        target: "newPassword",
-      });
-      document.getElementById("new-password")?.focus();
+        "newPassword",
+      );
       return;
     }
 
     if (newPassword !== confirmPassword) {
-      setPasswordError({
-        message: t("passwordsDoNotMatch"),
-        target: "confirmPassword",
-      });
-      document.getElementById("confirm-password")?.focus();
+      showPasswordError(t("passwordsDoNotMatch"), "confirmPassword");
       return;
     }
 
     setIsUpdating(true);
+    let reauthRequired = false;
     try {
       const res = await fetch("/api/profile/password", {
         method: "PUT",
@@ -274,42 +322,40 @@ function PasswordChangeForm() {
         body: JSON.stringify({ currentPassword, newPassword }),
       });
 
-      const data = await res.json();
+      const data = (await res.json().catch(() => null)) as {
+        code?: unknown;
+      } | null;
       if (!res.ok) {
-        console.error("Failed to update password:", data.error);
-        throw new Error(t("passwordUpdateFailed"));
+        console.error("Failed to update password:", data?.code ?? res.status);
+        const { key, target } = selectProfilePasswordError(data?.code);
+        if (target === "currentPassword") setCurrentPassword("");
+        showPasswordError(t(key), target);
+        return;
       }
 
-      setPasswordSuccess(t("passwordUpdated"));
       setCurrentPassword("");
       setNewPassword("");
       setConfirmPassword("");
-
-      if (data.reauthRequired) {
-        setIsRedirecting(true);
-        setUser(null);
-        setTimeout(() => {
-          router.push("/auth/login");
-        }, 3000);
-      }
+      // 성공 응답은 항상 현재 세션을 만료시키므로 다시 로그인해야 합니다.
+      reauthRequired = true;
     } catch {
-      setPasswordError({
-        message: t("passwordUpdateFailed"),
-        target: "form",
-      });
+      showPasswordError(t("passwordUpdateFailed"), "form");
     } finally {
       setIsUpdating(false);
     }
+
+    // 서버가 세션을 이미 만료시켰으므로 클라이언트 세션도 비우고,
+    // 로그인 화면에서 변경 완료를 안내합니다.
+    if (reauthRequired) onReauthRequired();
   };
 
   return (
-    <form onSubmit={handlePasswordChange} className="p-4 sm:p-6 space-y-5" aria-busy={isUpdating || isRedirecting}>
+    <form onSubmit={handlePasswordChange} className="p-4 sm:p-6 space-y-5" aria-busy={isUpdating}>
       {passwordError && (
         <div id="profile-password-error" className="mb-4">
           <Alert type="error" message={passwordError.message} />
         </div>
       )}
-      {passwordSuccess && <Alert type="success" message={passwordSuccess} className="mb-4" />}
 
       <p id="password-warning-msg" className="text-sm leading-relaxed text-text-muted">
         {t("securityWarningText")}
@@ -325,9 +371,14 @@ function PasswordChangeForm() {
           value={currentPassword}
           onChange={(e) => setCurrentPassword(e.target.value)}
           autoComplete="current-password"
-          disabled={isUpdating || isRedirecting}
+          disabled={isUpdating}
           required
-          aria-describedby="password-warning-msg"
+          aria-describedby={`password-warning-msg${
+            passwordError?.target === "currentPassword"
+              ? " profile-password-error"
+              : ""
+          }`}
+          aria-invalid={passwordError?.target === "currentPassword" || undefined}
         />
       </div>
 
@@ -341,7 +392,7 @@ function PasswordChangeForm() {
           value={newPassword}
           onChange={(e) => setNewPassword(e.target.value)}
           autoComplete="new-password"
-          disabled={isUpdating || isRedirecting}
+          disabled={isUpdating}
           required
           placeholder={t("newPassword")}
           aria-describedby={`new-password-policy${
@@ -366,7 +417,7 @@ function PasswordChangeForm() {
           value={confirmPassword}
           onChange={(e) => setConfirmPassword(e.target.value)}
           autoComplete="new-password"
-          disabled={isUpdating || isRedirecting}
+          disabled={isUpdating}
           required
           placeholder={t("confirmNewPassword")}
           aria-describedby={
@@ -382,13 +433,12 @@ function PasswordChangeForm() {
 
       <Button
         type="submit"
-        disabled={isRedirecting}
-        isLoading={isUpdating || isRedirecting}
+        isLoading={isUpdating}
         fullWidth
         size="lg"
         leftIcon={<Icon name="key" size={17} />}
       >
-        {isRedirecting ? t("redirectingToLogin") : t("changePassword")}
+        {t("changePassword")}
       </Button>
     </form>
   );

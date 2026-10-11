@@ -3,8 +3,8 @@
 .external-guest-header-inner { display: flex; align-items: center; justify-content: space-between; gap: 16px; min-height: 68px; }
 .external-guest-header-inner, .external-guest-workspace .page-container { width: 100%; max-width: 1040px; margin-inline: auto; padding-inline: max(24px, env(safe-area-inset-left)) max(24px, env(safe-area-inset-right)); }
 .external-guest-workspace[data-rsvp="true"] :is(.external-guest-header-inner, .page-container) { max-width: 640px; }
-.external-guest-brand { min-width: 0; font-size: 18px; line-height: 1.4; font-weight: 500; letter-spacing: -0.4px; overflow-wrap: anywhere; }
-.external-guest-header button { min-width: 44px; border-radius: 6px; }
+.external-guest-brand { min-width: 0; font-size: 18px; line-height: 1.4; font-weight: 600; letter-spacing: -0.02em; overflow-wrap: anywhere; }
+.external-guest-header button { min-width: 44px; border-radius: var(--app-radius-control); }
 .external-guest-header [role="group"] { border: 0; background: transparent; padding: 0; }
 .external-guest-body { display: flex; flex: 1; flex-direction: column; min-width: 0; padding-top: 24px; }
 .external-guest-workspace .page-container { padding-bottom: 24px; }
@@ -14,7 +14,7 @@
 .external-guest-context dt { font-size: 12px; line-height: 1.5; color: var(--app-text-muted); }
 .external-guest-context dd { margin-top: 4px; font-size: 14px; line-height: 1.5; color: var(--app-text); overflow-wrap: anywhere; }
 .external-guest-entry-heading { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; }
-.external-guest-entry-heading h1 { font-size: 16px; line-height: 24px; font-weight: 500; }
+.external-guest-entry-heading h1 { font-size: 20px; line-height: 28px; font-weight: 700; letter-spacing: -0.02em; }
 .external-guest-entry { padding-block: 16px 28px; }
 .external-guest-workspace .external-guest-search { padding-inline: 0; background: transparent; }
 .external-guest-workspace .product-roster-rows { container: roster / inline-size; }
@@ -29,3 +29,6 @@
 @media (max-width: 359px) {
   .external-guest-header-inner, .external-guest-workspace .page-container { padding-inline: max(16px, env(safe-area-inset-left)) max(16px, env(safe-area-inset-right)); }
 }
+
+/* Counts stay in the reading font; tabular figures keep them aligned without a slashed-zero mono face. */
+.external-guest-workspace .font-mono { font-family: inherit; font-variant-numeric: tabular-nums; }

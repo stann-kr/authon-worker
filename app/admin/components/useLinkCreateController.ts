@@ -196,6 +196,13 @@ export function useLinkCreateController({
     setIsSuggestionsLoading(false);
     setIsGenerating(false);
     setIsGeneratedLinkActionPending(false);
+    setFormData((current) => EMPTY_FORM_DATA(current.date));
+    setGeneratedLink(null);
+    setGeneratedLinkScopeKey("");
+    setCreateError(null);
+    setCreateErrorScopeKey("");
+    setFormValidationError(null);
+    setTemplateNotice(null);
   }, [
     createOperationGuard,
     suggestionsRequestGuard,

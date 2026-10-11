@@ -30,7 +30,7 @@ const hooks = registerHooks({
   load(url, context, nextLoad) {
     if (!url.startsWith("mock:home-count:")) return nextLoad(url, context);
     const id = url.replace("mock:home-count:", "");
-    const name = id === "guests" ? "fetchMyVenuePendingGuestLimitRequestCount" : "fetchPendingPasswordResetRequestCount";
+    const name = id === "guests" ? "fetchPendingGuestLimitRequestCount" : "fetchPendingPasswordResetRequestCount";
     return { format: "module", shortCircuit: true,
       source: `export const ${name} = () => globalThis.__homeCounts.${id}();` };
   },
@@ -50,7 +50,7 @@ afterEach(() => {
 const navigation: string[] = [];
 let refreshCount = 0;
 const router = {
-  back() {}, forward() {}, refresh() { refreshCount += 1; }, hmrRefresh() {},
+  bfcacheId: "test", back() {}, forward() {}, refresh() { refreshCount += 1; }, hmrRefresh() {},
   push(href: string) { navigation.push(href); },
   replace() {}, prefetch() {},
 };

@@ -2,9 +2,9 @@
 .product-sheet-layer[hidden] { display: none; }
 .product-sheet-viewport { display: contents; }
 html[data-modal-open="true"], html[data-modal-open="true"] body { background-color: var(--app-surface); }
-.product-sheet-layer[data-modal="true"]:not([hidden]) { position: fixed; inset: 0; z-index: var(--app-z-dialog); background: rgb(0 0 0 / 0.6); }
+.product-sheet-layer[data-modal="true"]:not([hidden]) { position: fixed; inset: 0; z-index: var(--app-z-dialog); background: rgb(0 0 0 / 0.6); animation: product-sheet-backdrop-enter var(--app-duration-enter) var(--app-ease-out); }
 .product-sheet-layer[data-modal="true"] > .product-sheet-viewport { position: absolute; inset: var(--app-viewport-top, 0px) 0 auto; height: var(--app-viewport-height, 100dvh); display: flex; align-items: flex-end; justify-content: center; }
-.product-sheet-layer[data-modal="true"] > .product-sheet-viewport > .product-sheet { display: flex; flex-direction: column; width: min(100%, 560px); max-height: calc(100% - 16px); overflow: hidden; border: 0; border-radius: 20px 20px 0 0; padding: 0; background: var(--app-surface); }
+.product-sheet-layer[data-modal="true"] > .product-sheet-viewport > .product-sheet { display: flex; flex-direction: column; width: min(100%, 560px); max-height: calc(100% - 16px); overflow: hidden; border: 0; border-radius: var(--app-radius-sheet) var(--app-radius-sheet) 0 0; padding: 0; background: var(--app-surface); animation: product-sheet-rise var(--app-duration-enter) var(--app-ease-out); }
 .product-sheet-layer[data-modal="true"] > .product-sheet-viewport > .product-sheet > .product-sheet-header { flex-shrink: 0; padding-inline: max(20px, env(safe-area-inset-left)) max(20px, env(safe-area-inset-right)); border-bottom: 1px solid var(--app-border-subtle); background: var(--app-surface); }
 .product-sheet-layer[data-modal="true"] > .product-sheet-viewport > .product-sheet > .product-sheet-header h2 { font-size: 16px; }
 .product-sheet-layer[data-modal="true"] > .product-sheet-viewport > .product-sheet > :is(.product-sheet-body, .product-sheet-discard) { min-height: 0; overflow-y: auto; overscroll-behavior: contain; scroll-padding-block: 16px; padding: 16px max(22px, env(safe-area-inset-right)) max(20px, var(--app-safe-area-bottom, env(safe-area-inset-bottom))) max(22px, env(safe-area-inset-left)); }
@@ -15,7 +15,8 @@ html[data-modal-open="true"], html[data-modal-open="true"] body { background-col
 }
 @media (min-width: 1000px) {
   .product-sheet-layer[data-modal="true"] > .product-sheet-viewport { align-items: center; padding: 16px; }
-  .product-sheet-layer[data-modal="true"] > .product-sheet-viewport > .product-sheet { border-radius: 16px 16px 0 0; max-height: 100%; }
+  /* The centered dialog settles in place instead of rising from the screen edge. */
+  .product-sheet-layer[data-modal="true"] > .product-sheet-viewport > .product-sheet { border-radius: var(--app-radius-panel); max-height: 100%; animation-name: product-sheet-settle; }
   .product-sheet-layer[data-modal="true"] > .product-sheet-viewport > .product-sheet[data-wide="true"] { width: min(100%, 800px); }
 }
 .product-sheet { min-width: 0; width: 100%; padding: 0 16px; border-top: 1px solid var(--app-border-subtle); background: var(--disclosure-background, var(--app-surface-secondary)); color: var(--app-text); }
@@ -23,6 +24,14 @@ html[data-modal-open="true"], html[data-modal-open="true"] body { background-col
 .product-sheet-header h2 { min-width: 0; font-size: 14px; line-height: 22px; font-weight: 500; overflow-wrap: anywhere; }
 .product-sheet-body { container: sheet-content / inline-size; min-width: 0; display: grid; align-content: start; gap: 16px; padding-bottom: 20px; }
 .product-sheet-body[hidden] { display: none; }
+.product-sheet[aria-labelledby]:not(:has(> .product-sheet-header)) { padding-top: 16px; }
+.product-sheet[data-presentation="page"] { max-width: 760px; margin-inline: auto; padding: 0; border: 0; background: transparent; }
+/* The workspace header already names the page, so the form keeps its heading for assistive technology only. */
+.product-sheet[data-presentation="page"] > .product-sheet-header { flex-direction: row-reverse; justify-content: flex-end; padding: 0 0 12px; }
+.product-sheet[data-presentation="page"] > .product-sheet-header :is(h1, h2) { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+.product-sheet[data-presentation="page"] > .product-sheet-header .app-button { margin-left: -12px; padding-inline: 12px; color: var(--app-text-muted); }
+.product-sheet[data-presentation="inline"][data-size="form"] { padding: 0 16px; border: 1px solid transparent; background: var(--app-surface-secondary); }
+.product-sheet:is([data-presentation="page"], [data-presentation="inline"]) { scroll-margin-top: calc(var(--app-header-height, 0px) + 20px); }
 .product-sheet-discard { display: grid; gap: 12px; padding-block: 12px 20px; font-size: 14px; }
 .product-sheet-body > .record-form { width: 100%; }
 .product-sheet-body .record-form-panel { padding: 0; border: 0; background: transparent; }
@@ -31,3 +40,9 @@ html[data-modal-open="true"], html[data-modal-open="true"] body { background-col
 .product-detail-list > div { display: flex; justify-content: space-between; align-items: baseline; gap: 16px; padding: 12px 0; border-bottom: 1px solid var(--app-border-subtle); }
 .product-detail-list dt { color: var(--app-text-muted); flex-shrink: 0; max-width: 45%; }
 .product-detail-list dd { min-width: 0; overflow-wrap: anywhere; text-align: right; }
+/* Detail sheets attached to a list row stay flat; standalone ones read as panels like the surfaces around them. */
+.product-sheet[data-presentation="detail"]:not(:is(.product-guest-row, .record-row, .account-row, tr) *) { border: 1px solid transparent; border-radius: var(--app-radius-panel); }
+/* Modal sheets enter only; closing removes them at once so focus and scroll release immediately. */
+@keyframes product-sheet-backdrop-enter { from { background-color: rgb(0 0 0 / 0); } }
+@keyframes product-sheet-rise { from { transform: translateY(100%); } }
+@keyframes product-sheet-settle { from { opacity: 0; transform: scale(0.97); } }

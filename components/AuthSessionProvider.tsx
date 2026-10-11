@@ -10,6 +10,7 @@ import {
   type ReactNode,
 } from "react";
 import { cacheUser, type User } from "@/lib/auth";
+import { watchSessionExpiry } from "@/lib/auth/client-session";
 
 interface AuthSessionContextValue {
   user: User | null;
@@ -36,6 +37,12 @@ export function AuthSessionProvider({
     setUserState(nextUser);
     cacheUser(nextUser);
   }, []);
+
+  // An expired session fails every later request too, so leave for sign-in instead of
+  // reporting network errors on the workspace. The full load also drops polling and drafts.
+  useEffect(() => watchSessionExpiry(window, (href) => {
+    window.location.href = href;
+  }), []);
   const value = useMemo(() => ({ user, setUser }), [setUser, user]);
 
   return (

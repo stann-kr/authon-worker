@@ -2,7 +2,13 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useLocalStorage } from "../../lib/hooks";
+import {
+  restoreOperatingDate,
+  type SavedOperatingDate,
+  type VenueTimeSettings,
+} from "../../lib/date";
 import { isBusinessDate } from "../../lib/events/domain";
+import { confirmWorkspaceNavigation } from "@/components/overlays/navigation-guard";
 import {
   getAdminShortcutTask,
   getAdminTaskSearch,
@@ -17,14 +23,13 @@ type EventScope = {
   venueId: string;
 };
 
-type SavedOperatingDate = { venueId: string; date: string };
-
 type AdminWorkspaceNavigationOptions = {
   businessDate: string;
   hasCurrentVenue: boolean;
   isRouteTransitionActive: boolean;
   isSuperAdmin: boolean;
   venueId: string;
+  venueTime?: VenueTimeSettings | null;
 };
 
 /** Returns an event scope only when it belongs to the active venue and date. */
@@ -80,19 +85,16 @@ export default function useAdminWorkspaceNavigation({
   isRouteTransitionActive,
   isSuperAdmin,
   venueId,
+  venueTime,
 }: AdminWorkspaceNavigationOptions) {
-  const [savedDate, setSavedDate] = useLocalStorage<SavedOperatingDate | string | null>(
+  // A chosen date lasts for the business day it was chosen in; the next business day opens on today.
+  const [savedDate, setSavedDate] = useLocalStorage<SavedOperatingDate | null>(
     "admin:selectedDate",
     null,
   );
-  const selectedDate = isBusinessDate(savedDate)
-    ? savedDate
-    : savedDate && typeof savedDate === "object" &&
-        savedDate.venueId === venueId && isBusinessDate(savedDate.date)
-      ? savedDate.date
-      : businessDate;
+  const selectedDate = restoreOperatingDate(savedDate, venueId, venueTime ?? {}) ?? businessDate;
   const setSelectedDate = useCallback((date: string) => {
-    setSavedDate({ venueId, date });
+    setSavedDate({ venueId, date, selectedAt: Date.now() });
   }, [setSavedDate, venueId]);
   // An unresolved destination is not the legacy guest-list redirect.
   const [activeTask, setActiveTask] = useState<AdminTask | null>(null);
@@ -124,13 +126,8 @@ export default function useAdminWorkspaceNavigation({
   );
 
   useEffect(() => {
-    if (!hasCurrentVenue) return;
-    // Preserve legacy selections and keep future restores within their venue.
-    if (isBusinessDate(savedDate)) {
-      setSavedDate({ venueId, date: savedDate });
-    } else if (savedDate && typeof savedDate === "object" && savedDate.venueId !== venueId) {
-      setSavedDate(null);
-    }
+    // Keep future restores within their venue.
+    if (hasCurrentVenue && savedDate && savedDate.venueId !== venueId) setSavedDate(null);
   }, [hasCurrentVenue, savedDate, setSavedDate, venueId]);
 
   useEffect(() => {
@@ -177,6 +174,7 @@ export default function useAdminWorkspaceNavigation({
       if (task === activeTask || !isAdminTaskAvailable(task, isSuperAdmin)) {
         return;
       }
+      if (!confirmWorkspaceNavigation()) return;
       requestWorkspaceFocusIfOwned();
       setActiveTask(task);
       const nextUrl = `/admin${getAdminTaskSearch(task)}`;
@@ -271,6 +269,7 @@ export default function useAdminWorkspaceNavigation({
       }
 
       const scope = { eventId, businessDate: eventBusinessDate, venueId };
+      if (!confirmWorkspaceNavigation()) return;
       requestWorkspaceFocusIfOwned();
       applyEventScope(scope);
       setActiveTask("event-manage");

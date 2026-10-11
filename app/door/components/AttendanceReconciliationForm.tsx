@@ -27,6 +27,8 @@ interface AttendanceReconciliationFormProps {
   changeReconciliationTarget: (value: string) => void;
   changeAdjustmentReason: (value: string) => void;
   loadSummary: (scope: AttendanceScope) => Promise<void>;
+  /** While false and no summary is available, the form offers a reload instead of a dead end. */
+  isSummaryLoading?: boolean;
   submitAdjustment: (event: FormEvent<HTMLFormElement>) => Promise<void>;
   reconciliationStatusRef: Ref<HTMLParagraphElement>;
   markReconciliationFormFocused: () => void;
@@ -56,12 +58,18 @@ export default function AttendanceReconciliationForm({
   changeReconciliationTarget,
   changeAdjustmentReason,
   loadSummary,
+  isSummaryLoading = false,
   submitAdjustment,
   reconciliationStatusRef,
   markReconciliationFormFocused,
   markReconciliationFormBlurred,
   translate: t,
 }: AttendanceReconciliationFormProps) {
+  const isReasonMissing = adjustmentReason.trim() === "";
+  // Explain the empty reason only once the total itself is ready to confirm.
+  const showReasonRequired = isReasonMissing && Boolean(scopedSummary) &&
+    reconciliationDelta !== null && !isReconciliationTargetInvalid &&
+    !isReconciliationBelowCheckedGuests && !isReconciliationDeltaOutOfRange;
   return (
     <details
       className="app-panel p-4 sm:p-5"
@@ -76,7 +84,7 @@ export default function AttendanceReconciliationForm({
         <p
           ref={reconciliationStatusRef}
           tabIndex={-1}
-          className="mt-3 border-l-2 border-status-checked bg-status-checked/10 px-3 py-2 text-xs leading-relaxed text-text-muted outline-none"
+          className="mt-3 rounded-control border border-transparent bg-status-checked/10 px-3 py-2 text-xs leading-relaxed text-text-muted outline-none"
           role="status"
         >
           {t("adjustment.finalized")}
@@ -85,7 +93,7 @@ export default function AttendanceReconciliationForm({
         <p
           ref={reconciliationStatusRef}
           tabIndex={-1}
-          className="mt-3 border-l-2 border-status-waiting bg-status-waiting/10 px-3 py-2 text-xs leading-relaxed text-text-muted outline-none"
+          className="mt-3 rounded-control border border-transparent bg-status-waiting/10 px-3 py-2 text-xs leading-relaxed text-text-muted outline-none"
           role="status"
         >
           {t("adjustment.eventMustBeClosed")}
@@ -155,7 +163,7 @@ export default function AttendanceReconciliationForm({
             role="status"
           >
             {!scopedSummary
-              ? t("adjustment.currentUnavailable")
+              ? t(isSummaryLoading ? "adjustment.currentLoading" : "adjustment.currentUnavailable")
               : isReconciliationTargetInvalid
                 ? t("adjustment.invalidTarget")
               : isReconciliationBelowCheckedGuests
@@ -174,9 +182,18 @@ export default function AttendanceReconciliationForm({
                       })
                     : t("adjustment.enterTarget")}
           </p>
+          {!scopedSummary && !isSummaryLoading && (
+            <button
+              type="button"
+              onClick={() => void loadSummary(scope)}
+              className="pressable min-h-11 border border-transparent bg-surface-raised px-3 py-2 text-xs font-medium text-text-heading"
+            >
+              {t("adjustment.reload")}
+            </button>
+          )}
           <div>
             <label htmlFor="attendance-adjustment-reason" className="app-label">
-              {t("adjustment.reason")}
+              {t("adjustment.reason")} <span className="font-normal text-text-muted">({t("adjustment.required")})</span>
             </label>
             <input
               id="attendance-adjustment-reason"
@@ -195,6 +212,9 @@ export default function AttendanceReconciliationForm({
               className="mt-1 text-xs text-text-dim"
             >
               {t("adjustment.reasonHelp")}
+              {showReasonRequired && (
+                <span className="mt-1 block text-status-waiting">{t("adjustment.reasonRequired")}</span>
+              )}
             </p>
           </div>
           {hasPendingReconciliationMutations && (
@@ -221,7 +241,8 @@ export default function AttendanceReconciliationForm({
           <button
             ref={adjustmentSubmitRef}
             type="submit"
-            aria-describedby={isAdjustmentConfirmationOpen ? "attendance-reconciliation-confirm" : undefined}
+            aria-describedby={isAdjustmentConfirmationOpen ? "attendance-reconciliation-confirm"
+              : showReasonRequired ? "attendance-adjustment-reason-help" : undefined}
             disabled={
               isAdjusting ||
               !scopedSummary ||
@@ -231,7 +252,7 @@ export default function AttendanceReconciliationForm({
               isReconciliationTargetInvalid ||
               isReconciliationDeltaOutOfRange ||
               isReconciliationBelowCheckedGuests ||
-              adjustmentReason.trim() === ""
+              isReasonMissing
             }
             className="pressable min-h-11 w-full border border-border-strong bg-surface-raised px-4 py-2 text-sm font-semibold text-text-heading disabled:cursor-not-allowed disabled:opacity-50"
           >

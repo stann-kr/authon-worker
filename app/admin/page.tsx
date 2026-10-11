@@ -20,11 +20,11 @@ import type { VenueManagementSection } from "./components/VenueManagement";
 import Skeleton from "@/components/Skeleton";
 import EventScopeSelector from "@/components/EventScopeSelector";
 import OperationsScope from "@/components/operations/OperationsScope";
-import type { AdminTaskOption } from "./components/AdminTaskSwitcher";
+import type { AdminTaskOption } from "@/lib/admin-navigation";
 import AuthGuard from "../../components/AuthGuard";
 import WorkspaceShell from "../../components/WorkspaceShell";
 import VenueLoadNotice from "../../components/VenueLoadNotice";
-import { getBusinessDate } from "../../lib/date";
+import { useBusinessDate } from "../../lib/hooks";
 import { useTranslations } from "next-intl";
 import { useAuthSession } from "../../components/AuthSessionProvider";
 import { useVenueSelector } from "../../components/VenueSelector";
@@ -33,6 +33,7 @@ import {
   useRouteTransition,
 } from "../../components/RouteTransitionProvider";
 import { fetchPendingPasswordResetRequestCount } from "@/lib/api/password-reset-requests";
+import { fetchPendingGuestLimitRequestCount } from "@/lib/api/guest-limits";
 import useAdminWorkspaceNavigation, {
   focusAdminWorkspaceAfterTaskChange,
 } from "./useAdminWorkspaceNavigation";
@@ -86,7 +87,7 @@ function AdminPageContent() {
     venueLoadError,
     refreshVenues,
   } = useVenueSelector();
-  const businessDate = getBusinessDate(currentVenue ?? {});
+  const businessDate = useBusinessDate(currentVenue);
   const [eventRefreshKey, setEventRefreshKey] = useState(0);
   const isSuperAdmin = user?.role === "super_admin";
   const {
@@ -105,6 +106,7 @@ function AdminPageContent() {
     isRouteTransitionActive,
     isSuperAdmin,
     venueId,
+    venueTime: currentVenue,
   });
   useEffect(() => {
     if (!isRoleReady || activeTask !== "guest-list" || !currentVenue) return;
@@ -121,6 +123,7 @@ function AdminPageContent() {
   }, [activeTask, currentVenue, isRoleReady, router, selectedDate, selectedEventId, venueId]);
 
   const [pendingPasswordResetCount, setPendingPasswordResetCount] = useState(0);
+  const [pendingGuestLimitRequestCount, setPendingGuestLimitRequestCount] = useState(0);
   const workspaceRef = useRef<HTMLElement>(null);
   useRouteLoadingTask(!isRoleReady);
 
@@ -147,11 +150,33 @@ function AdminPageContent() {
     };
   }, [activeTask, isRoleReady]);
 
+  // Extra-guest requests belong to the selected venue's inbox, so the badge follows the venue too.
+  useEffect(() => {
+    if (!isRoleReady || activeTask === "guest-list") return;
+    if (!venueId) {
+      setPendingGuestLimitRequestCount(0);
+      return;
+    }
+    let cancelled = false;
+    fetchPendingGuestLimitRequestCount(venueId).then(({ data, error }) => {
+      if (!cancelled && !error) setPendingGuestLimitRequestCount(data ?? 0);
+    }, () => {
+      // A missing badge never blocks the request inbox itself.
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [activeTask, isRoleReady, venueId]);
+
   const taskOptions = useMemo<AdminTaskOption[]>(
     () =>
       [
-        { id: "guest-requests", group: "guests", label: t("requests") },
-        { id: "event-manage", group: "events", label: t("eventManagement") },
+        {
+          id: "guest-requests",
+          group: "guests",
+          label: t("requests"),
+        },
+        { id: "event-manage", group: "events", label: t("events") },
         { id: "link-create", group: "links", label: linkT("createLink") },
         { id: "link-manage", group: "links", label: linkT("manageLinks") },
         { id: "user-create", group: "users", label: userT("createUser") },
@@ -160,9 +185,8 @@ function AdminPageContent() {
           id: "password-requests",
           group: "users",
           label: t("passwordRequests"),
-          badgeCount: pendingPasswordResetCount,
         },
-        { id: "analytics", group: "analytics", label: t("guestAnalytics") },
+        { id: "analytics", group: "analytics", label: t("analytics") },
         ...(isSuperAdmin
           ? [
               {
@@ -178,7 +202,7 @@ function AdminPageContent() {
             ]
           : []),
       ],
-    [isSuperAdmin, linkT, pendingPasswordResetCount, t, userT, venueT],
+    [isSuperAdmin, linkT, t, userT, venueT],
   );
 
 
@@ -199,26 +223,27 @@ function AdminPageContent() {
   );
   const activeTaskLabel =
     taskOptions.find((option) => option.id === activeTask)?.label ?? t("title");
+  const hasPageForm = activeTask === "link-create" || activeTask === "user-create" || activeTask === "venue-create";
   const activeGroup = taskOptions.find((option) => option.id === activeTask)?.group;
-  const contextTasks = ["links", "users", "venues"].includes(activeGroup ?? "")
-    ? taskOptions.filter((option) => option.group === activeGroup && option.id !== "password-requests")
+  // Create pages already return to their list from the form header.
+  const contextTasks = !hasPageForm && ["links", "users", "venues"].includes(activeGroup ?? "")
+    ? taskOptions.filter((option) => option.group === activeGroup && option.id !== activeTask && option.id !== "password-requests")
     : [];
 
-  const eventScopeSelector = (controls: ReactNode, disabled = false) => <EventScopeSelector venueId={venueId} businessDate={selectedDate}
+  // Inline scopes belong to a form that already owns the date field, so they skip the date summary.
+  const eventScopeSelector = (controls: ReactNode, disabled = false, inline = false) => <EventScopeSelector venueId={venueId} businessDate={selectedDate}
     value={selectedEventId} onChange={setSelectedEventId} reloadKey={eventRefreshKey} disabled={disabled}
-    renderScope={(selector, label) => <OperationsScope venueName={currentVenue?.brandName || currentVenue?.name}
-      date={selectedDate} label={label} disabled={disabled}>{controls}{selector}</OperationsScope>} />;
+    renderScope={(selector, label) => inline ? <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">{controls}{selector}</div>
+      : <OperationsScope venueName={currentVenue?.brandName || currentVenue?.name}
+        date={selectedDate} label={label} disabled={disabled}>{controls}{selector}</OperationsScope>} />;
 
   return (
     <WorkspaceShell contentClassName="gap-4 pb-8" title={activeTaskLabel}
       adminNavigation={{ activeTask, onTaskChange: changeTask,
-        disabled: !isRoleReady, pendingPasswordResetCount }}
+        disabled: !isRoleReady, pendingPasswordResetCount, pendingGuestLimitRequestCount }}
       actions={contextTasks.length > 0 && activeTask !== "password-requests" ? contextTasks.map((task) => (
         <WorkspaceAction key={task.id} icon={task.id.endsWith("create") ? "add" : "view"} tone={task.id.endsWith("create") ? "accent" : "muted"}
-          aria-pressed={task.id.endsWith("create") ? undefined : activeTask === task.id} disabled={!isRoleReady || isRouteTransitionActive}
-          aria-haspopup={task.id.endsWith("create") ? "dialog" : undefined}
-          aria-expanded={task.id.endsWith("create") ? activeTask === task.id : undefined}
-          aria-controls={task.id.endsWith("create") && activeTask === task.id ? `${task.id}-panel` : undefined}
+          disabled={!isRoleReady || isRouteTransitionActive}
           onClick={() => changeTask(task.id)}>{task.label}</WorkspaceAction>
       )) : undefined}>
       <h1 id="admin-page-title" className="sr-only">
@@ -242,13 +267,14 @@ function AdminPageContent() {
         <section
           ref={workspaceRef}
           id="admin-workspace"
-          aria-labelledby="admin-active-task-title"
+          aria-label={hasPageForm ? activeTaskLabel : undefined}
+          aria-labelledby={hasPageForm ? undefined : "admin-active-task-title"}
           tabIndex={-1}
           className="min-h-0 outline-none"
         >
-        <h2 id="admin-active-task-title" className="sr-only">
+        {!hasPageForm && <h2 id="admin-active-task-title" className="sr-only">
           {activeTaskLabel}
-        </h2>
+        </h2>}
         {(!isRoleReady || activeTask === "guest-list") && <AdminTaskLoading />}
         {isRoleReady && <>
         {activeTask === "guest-requests" && (
@@ -258,6 +284,7 @@ function AdminPageContent() {
             selectedDate={selectedDate}
             onDateChange={setSelectedDate}
             businessDate={businessDate}
+            onPendingCountChange={setPendingGuestLimitRequestCount}
           />
         )}
         {activeTask === "event-manage" && (

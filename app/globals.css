@@ -5,17 +5,18 @@
 :root {
   color-scheme: dark;
   font-size: 16px;
-  --app-canvas: #000000;
-  --app-surface-secondary: #0c0c0c;
-  --app-surface: #141414;
-  --app-surface-raised: #1c1c1c;
-  --app-surface-hover: #242424;
-  --app-surface-active: #2a2a2a;
-  --app-row-stripe: rgb(255 255 255 / 0.035);
-  --app-border-subtle: rgb(255 255 255 / 0.08);
+  /* One cool-neutral gray family on an off-black canvas; layers differ by tone rather than outlines. */
+  --app-canvas: #0a0a0b;
+  --app-surface-secondary: #111113;
+  --app-surface: #161618;
+  --app-surface-raised: #1c1c1e;
+  --app-surface-hover: #242426;
+  --app-surface-active: #2c2c2e;
+  --app-row-stripe: rgb(255 255 255 / 0.03);
+  --app-border-subtle: rgb(255 255 255 / 0.07);
   --app-border: rgb(255 255 255 / 0.11);
   --app-border-strong: rgb(255 255 255 / 0.22);
-  --app-text: #ffffff;
+  --app-text: #f5f5f7;
   --app-text-body: #e5e5e7;
   --app-text-muted: #8e8e93;
   --app-action-rgb: 255 181 71;
@@ -29,7 +30,19 @@
   --app-action-confirm-active: var(--app-surface-hover);
   --app-focus: #b5b5ba;
   --app-field-focus: #8e8e93;
-  --app-status-waiting: #d5b479;
+  /* Status colors: green for checked-in and success, desaturated amber for waiting, red for errors. */
+  --app-status-checked-rgb: 52 211 153;
+  --app-status-waiting-rgb: 213 180 121;
+  --app-status-danger-rgb: 251 113 133;
+  --app-status-checked: rgb(var(--app-status-checked-rgb));
+  --app-status-waiting: rgb(var(--app-status-waiting-rgb));
+  --app-status-danger: rgb(var(--app-status-danger-rgb));
+  /* Radius scale: controls (buttons, fields, tabs, menu items), segments nested inside a control group,
+     surfaces (panels, cards, popovers, toasts) and bottom sheets. Avatars and status dots stay circular. */
+  --app-radius-control: 10px;
+  --app-radius-inner: 6px;
+  --app-radius-panel: 12px;
+  --app-radius-sheet: 16px;
   --app-header-height: calc(4.5rem + env(safe-area-inset-top));
   --app-safe-area-bottom: env(safe-area-inset-bottom, 0px);
   --app-z-route-overlay: 40;
@@ -60,8 +73,12 @@ button,
 input,
 select,
 textarea {
-  font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, "Apple SD Gothic Neo", sans-serif;
+  font-family: "Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont, system-ui, "Apple SD Gothic Neo",
+    "Noto Sans KR", "Malgun Gothic", "Segoe UI", Roboto, sans-serif;
 }
+
+/* Pretendard sets Hangul slightly loose; a small negative track keeps words compact. */
+body { letter-spacing: -0.01em; }
 
 .route-transition-overlay {
   position: fixed;
@@ -73,9 +90,36 @@ textarea {
   transition: opacity var(--app-duration-fast) var(--app-ease-out);
 }
 
+.route-transition-overlay[data-enter="fade"] {
+  animation: route-overlay-enter var(--app-duration-fast) var(--app-ease-out);
+}
+
 .route-transition-overlay[data-state="leaving"] {
   pointer-events: none;
   opacity: 0;
+}
+
+/* Hard-load spinners sit where the route overlay will later appear: below the
+   workspace header and beside the desktop sidebar. */
+.route-loading-frame {
+  position: fixed;
+  inset: calc(60px + env(safe-area-inset-top)) 0 0 0;
+  background: var(--app-canvas);
+}
+
+@media (min-width: 1000px) {
+  .route-loading-frame {
+    inset: 56px 0 0 224px;
+  }
+}
+
+@keyframes route-overlay-enter {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
 .route-transition-overlay .animate-spin {
@@ -86,7 +130,7 @@ button,
 input,
 select,
 textarea {
-  border-radius: 10px;
+  border-radius: var(--app-radius-control);
 }
 
 button {
@@ -174,11 +218,11 @@ input[type="date"] {
   }
 
   .main-content-panel {
-    @apply flex min-h-0 flex-col overflow-hidden rounded-panel border border-border-subtle bg-surface;
+    @apply flex min-h-0 flex-col overflow-hidden rounded-panel border border-transparent bg-surface;
   }
 
   .app-panel {
-    @apply rounded-panel border border-border-subtle bg-surface;
+    @apply rounded-panel border border-transparent bg-surface;
   }
 
   .context-bar {
@@ -204,7 +248,7 @@ input[type="date"] {
   }
 
   .operational-date-quick > button {
-    border: 1px solid var(--app-border);
+    border: 1px solid transparent;
   }
 
   .context-filter-grid {
@@ -259,7 +303,7 @@ input[type="date"] {
   }
 
   .app-field[aria-invalid="true"],
-  .app-field-frame:has(> [aria-invalid="true"]) > .app-field { border-color: #fb7185; }
+  .app-field-frame:has(> [aria-invalid="true"]) > .app-field { border-color: var(--app-status-danger); }
 
   .app-label {
     @apply mb-1.5 block text-xs font-medium leading-normal text-text-muted;
@@ -334,7 +378,7 @@ input[type="date"] {
   }
 
   .app-button[data-variant="danger"] {
-    --app-press-background: rgb(204 119 112 / 0.26);
+    --app-press-background: rgb(var(--app-status-danger-rgb) / 0.3);
   }
 
   @media (hover: hover) and (pointer: fine) {
@@ -356,7 +400,7 @@ input[type="date"] {
     }
 
     .app-button[data-variant="danger"]:not(:disabled):hover {
-      background-color: rgb(204 119 112 / 0.2);
+      background-color: rgb(var(--app-status-danger-rgb) / 0.22);
     }
 
     .app-button[data-variant="ghost"]:not(:disabled):hover {
@@ -490,6 +534,12 @@ main[tabindex="-1"]:is([data-route-focus="true"], [data-overlay-focus="true"]):f
   button:active:not(:disabled),
   .pressable:active:not(:disabled) {
     transform: none !important;
+  }
+
+  /* Loading must still read as active: keep spinners turning, slowly. */
+  .animate-spin {
+    animation-duration: 1.6s !important;
+    animation-iteration-count: infinite !important;
   }
 
   .skip-link {

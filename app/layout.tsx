@@ -1,6 +1,6 @@
 import { measureServerOperation } from "@/lib/observability/server-performance";
 import type { Metadata, Viewport } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Geist_Mono } from "next/font/google";
 import "./globals.css";
 import "./home.css";
 import "./auth/auth.css";
@@ -15,6 +15,7 @@ import "@/components/records/records.css";
 import "@/components/operations/operations.css";
 import "@/components/dates/date-field.css";
 import "@/components/workspace/workspace.css";
+import "@/components/feedback/toast.css";
 import DesignSystemProvider from "@/components/DesignSystemProvider";
 import ViewportProvider from "@/components/viewport/ViewportProvider";
 import VenueBrandProvider from "@/components/VenueBrandProvider";
@@ -24,18 +25,20 @@ import { getRequestTenantContext } from "@/lib/tenant/server";
 import { getRenderUser } from "@/lib/auth/server";
 import { toClientUser } from "@/lib/auth/user-profile";
 import { AuthSessionProvider } from "@/components/AuthSessionProvider";
+import { ToastProvider } from "@/components/feedback/ToastProvider";
 import { NextIntlClientProvider } from "next-intl";
 import { getLocale, getMessages, getTranslations } from "next-intl/server";
-
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
 
 const geistMono = Geist_Mono({
   variable: "--font-geist-mono",
   subsets: ["latin"],
 });
+
+// Korean UI type. Unicode-range subsets load only the glyphs a page uses; the CSP already allows this CDN.
+const PRETENDARD_STYLESHEET =
+  "https://cdnjs.cloudflare.com/ajax/libs/pretendard/1.3.9/variable/pretendardvariable-dynamic-subset.min.css";
+const PRETENDARD_INTEGRITY =
+  "sha512-VGtW1JoZuvVenEODZQwMQ+8wtlI+W4MZ5rc3x+FLLbchLkNRGiqdBXmWrcygo1eLBwDFkRRWEk2a1l40VkkGLA==";
 
 export async function generateMetadata(): Promise<Metadata> {
   const { brand } = await getRequestTenantContext();
@@ -50,7 +53,7 @@ export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover",
-  themeColor: "#000000",
+  themeColor: "#0a0a0b",
 };
 
 export default async function RootLayout({
@@ -68,8 +71,13 @@ export default async function RootLayout({
 
   return (
     <html lang={locale} suppressHydrationWarning={true}>
+      <head>
+        <link rel="preconnect" href="https://cdnjs.cloudflare.com" crossOrigin="anonymous" />
+        <link rel="stylesheet" href={PRETENDARD_STYLESHEET} integrity={PRETENDARD_INTEGRITY}
+          crossOrigin="anonymous" referrerPolicy="no-referrer" />
+      </head>
       <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased bg-canvas text-text-body`}
+        className={`${geistMono.variable} antialiased bg-canvas text-text-body`}
         style={{ minHeight: "100dvh" }}
       >
         <NextIntlClientProvider messages={messages}>
@@ -81,10 +89,12 @@ export default async function RootLayout({
                 <DesignSystemProvider>
                   <RouteTransitionProvider>
                     <VenueDataProvider>
-                      <a href="#main-content" className="skip-link">
-                        {t("skipToContent")}
-                      </a>
-                      {children}
+                      <ToastProvider>
+                        <a href="#main-content" className="skip-link">
+                          {t("skipToContent")}
+                        </a>
+                        {children}
+                      </ToastProvider>
                     </VenueDataProvider>
                   </RouteTransitionProvider>
                 </DesignSystemProvider>

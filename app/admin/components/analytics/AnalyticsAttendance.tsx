@@ -17,6 +17,7 @@ import type {
   AnalyticsAttendanceView,
   AnalyticsMetricComparison,
 } from "@/lib/analytics/types";
+import { formatBucketDate } from "@/lib/ui/date-format";
 
 function signed(value: number): string {
   return `${value > 0 ? "+" : ""}${value.toFixed(1).replace(/\.0$/, "")}`;
@@ -32,14 +33,7 @@ export default function AnalyticsAttendance({
   const numberFormat = new Intl.NumberFormat(locale, {
     maximumFractionDigits: 1,
   });
-  const formatDate = (value: string) => {
-    const [year, month, day] = value.split("-").map(Number);
-    return new Intl.DateTimeFormat(locale, {
-      month: "short",
-      day: day === 1 ? undefined : "numeric",
-      timeZone: "UTC",
-    }).format(new Date(Date.UTC(year, month - 1, day)));
-  };
+  const formatDate = (value: string) => formatBucketDate(locale, value);
   const items: Array<{
     id: keyof AnalyticsAttendanceSummary;
     metric: AnalyticsMetricComparison;
@@ -143,7 +137,7 @@ export default function AnalyticsAttendance({
                     ]}
                     contentStyle={{
                       border: "1px solid var(--app-border)",
-                      borderRadius: 10,
+                      borderRadius: "var(--app-radius-panel)",
                       background: "var(--app-surface-raised)",
                       color: "var(--app-text)",
                       fontSize: 12,
@@ -181,7 +175,7 @@ export default function AnalyticsAttendance({
             </div>
 
             <DisclosureSection title={t("attendance.tableTitle")}>
-              <div className="overflow-x-auto rounded-control border border-border-subtle">
+              <div className="overflow-x-auto rounded-control">
                 <table className="w-full min-w-[36rem] border-collapse text-left text-xs">
                   <caption className="sr-only">
                     {t("attendance.tableTitle")}

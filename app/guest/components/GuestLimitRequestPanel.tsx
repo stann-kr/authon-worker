@@ -39,10 +39,18 @@ export default function GuestLimitRequestPanel({
 
   if (requestSectionState === "hidden") return null;
 
+  const requestedExtra = Number(requestDraft.requestedExtra);
+  const isRequestedExtraValid =
+    Number.isInteger(requestedExtra) && requestedExtra >= 1 && requestedExtra <= 10;
+  // 입력 도중의 빈 값은 오류로 보이지 않고 제출만 막습니다.
+  const showRequestedExtraError =
+    requestDraft.requestedExtra.trim() !== "" && !isRequestedExtraValid;
+
   return (
     <>
       <DisclosureSection
         key={requestScopeKey}
+        className="guest-request-disclosure"
         title={t("requestExtra")}
         summaryElementRef={(element) =>
           setRequestSummaryElement(requestScopeKey, element)
@@ -70,14 +78,33 @@ export default function GuestLimitRequestPanel({
               type="number"
               min="1"
               max="10"
+              step="1"
+              inputMode="numeric"
               value={requestDraft.requestedExtra}
               onChange={(event) =>
                 updateRequestDraft({ requestedExtra: event.target.value })
               }
               disabled={isRequestDisclosureDisabled}
               autoComplete="off"
+              aria-invalid={showRequestedExtraError || undefined}
+              aria-describedby={
+                showRequestedExtraError
+                  ? "extra-guest-count-error extra-guest-count-help"
+                  : "extra-guest-count-help"
+              }
               className="app-field"
             />
+            {showRequestedExtraError && (
+              <p
+                id="extra-guest-count-error"
+                className="mt-2 text-xs leading-relaxed text-status-danger"
+              >
+                {t("requestCountInvalid")}
+              </p>
+            )}
+            <p id="extra-guest-count-help" className="app-helper">
+              {t("requestCountHelp")}
+            </p>
           </div>
           <div>
             <label htmlFor="extra-guest-reason" className="app-label">
@@ -101,12 +128,7 @@ export default function GuestLimitRequestPanel({
             type="button"
             onClick={handleExtraRequest}
             isLoading={isRequestingExtra}
-            disabled={
-              isRequestSubmissionDisabled ||
-              !Number.isInteger(Number(requestDraft.requestedExtra)) ||
-              Number(requestDraft.requestedExtra) < 1 ||
-              Number(requestDraft.requestedExtra) > 10
-            }
+            disabled={isRequestSubmissionDisabled || !isRequestedExtraValid}
             fullWidth
           >
             {t("submitRequest")}
@@ -123,7 +145,7 @@ export default function GuestLimitRequestPanel({
           aria-live="polite"
           aria-atomic="true"
           tabIndex={-1}
-          className="mt-2 bg-status-waiting/10 px-3 py-3 text-xs leading-relaxed text-status-waiting"
+          className="mt-2 rounded-control bg-status-waiting/10 px-3 py-3 text-xs leading-relaxed text-status-waiting"
         >
           {t("requestPending", { count: pendingRequest.requestedExtra })}
         </div>

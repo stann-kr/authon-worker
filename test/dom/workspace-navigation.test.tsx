@@ -13,6 +13,7 @@ import { RouteTransitionProvider, useRouteLoadingTask, useRouteTransition } from
 import WorkspaceShell from "@/components/WorkspaceShell";
 import RouteLoadingShell from "@/components/RouteLoadingShell";
 import WorkspaceNavigation from "@/components/workspace/WorkspaceNavigation";
+import WorkspaceAction from "@/components/workspace/WorkspaceAction";
 import ViewportProvider from "@/components/viewport/ViewportProvider";
 import OperationsScope from "@/components/operations/OperationsScope";
 import { getWorkspaceActiveId, getWorkspaceItems, getWorkspacePrimaryItems } from "@/components/workspace/navigation";
@@ -205,7 +206,7 @@ test("mobile all-menu traps focus, preserves input and exposes every permitted t
   const close = within(dialog).getByRole("button", { name: "Close" });
   assert.equal(document.activeElement === close, true);
   assert.ok(document.querySelector(".workspace-shell")?.closest("[inert]"));
-  assert.ok(within(dialog).getByRole("link", { name: "Accounts" }));
+  assert.ok(within(dialog).getByRole("link", { name: messages.Workspace.users }));
   assert.equal(within(dialog).queryByRole("link", { name: "Venues" }), null);
   const profile = within(dialog).getByRole("link", { name: "My account" });
   fireEvent.keyDown(close, { key: "Tab", shiftKey: true });
@@ -228,13 +229,13 @@ test("desktop categories remain expanded across task changes and expose pending 
   assert.ok(within(nav).getByRole("heading", { name: "Management" }));
   assert.ok(within(nav).getByRole("heading", { name: "Event preparation" }));
   assert.equal(within(nav).queryByRole("button", { name: "Management" }), null);
-  const accounts = within(nav).getByRole("link", { name: "Accounts" });
+  const accounts = within(nav).getByRole("link", { name: messages.Workspace.users });
   accounts.focus();
   assert.ok(within(nav).getByRole("link", { name: "Analytics" }));
   assert.ok(within(nav).getByLabelText("3 pending"));
   fireEvent.click(within(nav).getByRole("link", { name: "Events" }));
   assert.equal(within(nav).getByRole("link", { name: "Events" }).getAttribute("aria-current"), "page");
-  assert.equal(within(nav).getByRole("link", { name: "Accounts" }), accounts);
+  assert.equal(within(nav).getByRole("link", { name: messages.Workspace.users }), accounts);
   assert.ok(within(nav).getByRole("link", { name: "Analytics" }));
 });
 
@@ -331,7 +332,7 @@ test("sidebar collapse exposes named destinations and preserves the workspace ac
   assert.equal(expand.getAttribute("aria-expanded"), "false");
   assert.equal(document.activeElement === expand, true);
   assert.equal(window.localStorage.getItem("workspace:sidebarCollapsed"), "true");
-  assert.ok(screen.getByRole("link", { name: "Accounts" }));
+  assert.ok(screen.getByRole("link", { name: messages.Workspace.users }));
   assert.ok(screen.getByRole("link", { name: "Venues" }));
   resize(false);
   assert.equal(screen.queryByRole("button", { name: messages.Workspace.expandSidebar }) === null, true);
@@ -382,7 +383,7 @@ test("loading and loaded workspaces share one footer and the same role-filtered 
   assert.equal(within(view.container).getAllByRole("main").length, 1);
   assert.deepEqual(within(screen.getByRole("navigation", { name: "Main navigation" }))
     .getAllByRole("link").map((link) => link.getAttribute("href")), links);
-  assert.equal(screen.queryByRole("link", { name: "Accounts" }) === null, true);
+  assert.equal(screen.queryByRole("link", { name: messages.Workspace.users }) === null, true);
 });
 
 function routerRecorder(destinations: string[]): NextRouter {
@@ -417,7 +418,7 @@ for (const desktop of [true, false]) {
     act(() => { finishOldRoute = transition.registerRouteLoadingTask(); });
 
     fireEvent.click(screen.getByRole("button", { name: messages.Workspace.profile }));
-    const account = screen.getByRole(desktop ? "region" : "dialog", { name: "Operator" });
+    const account = screen.getByRole("dialog", { name: "Operator" });
     assert.equal(account.closest(".product-sheet-layer")?.hasAttribute("inert"), false);
     fireEvent.keyDown(document.activeElement ?? document, { key: "Escape" });
     assert.equal(screen.queryByRole("dialog", { name: "All menus" }) === null, true);
@@ -463,6 +464,51 @@ for (const desktop of [true, false]) {
   });
 }
 
+test("loading that settles as the overlay is revealed drops it before paint, while a painted overlay keeps its minimum", async () => {
+  // Drive animation frames by hand so "revealed but not yet painted" is a real, observable state.
+  const frames = new Map<number, FrameRequestCallback>();
+  let nextFrame = 0;
+  const realFrame = window.requestAnimationFrame;
+  const realCancel = window.cancelAnimationFrame;
+  window.requestAnimationFrame = (callback) => { frames.set(++nextFrame, callback); return nextFrame; };
+  window.cancelAnimationFrame = (id) => { frames.delete(id); };
+  const paint = () => act(() => {
+    const due = [...frames.values()];
+    frames.clear();
+    for (const callback of due) callback(performance.now());
+  });
+  try {
+    viewport(true);
+    let transition!: ReturnType<typeof useRouteTransition>;
+    render(<Providers pathname="/admin"><AdminShellHarness capture={(value) => { transition = value; }} /></Providers>);
+    const overlay = () => document.querySelector(".route-transition-overlay");
+    const pastShowDelay = () => act(async () => { await new Promise((resolve) => setTimeout(resolve, 140)); });
+
+    let release!: () => void;
+    act(() => { release = transition.registerRouteLoadingTask(); });
+    await pastShowDelay();
+    assert.ok(overlay(), "slow work reveals the overlay");
+    // The page became ready before the overlay reached the screen: no flash over it.
+    act(() => release());
+    const coveredReadyPage = overlay() !== null;
+    const settle = () => act(async () => { await new Promise((resolve) => setTimeout(resolve, 400)); });
+    await settle();
+    assert.equal(coveredReadyPage, false);
+
+    act(() => { release = transition.registerRouteLoadingTask(); });
+    await pastShowDelay();
+    paint(); paint();
+    act(() => release());
+    assert.ok(overlay(), "a painted overlay stays for its minimum visible time");
+    // Minimum visible time plus the exit fade.
+    await settle();
+    assert.equal(overlay(), null);
+  } finally {
+    window.requestAnimationFrame = realFrame;
+    window.cancelAnimationFrame = realCancel;
+  }
+});
+
 test("choosing the current admin task cancels a pending route without abandoning its data request", async () => {
   viewport(true);
   window.history.replaceState(null, "", "/admin?tab=events&view=manage");
@@ -478,7 +524,9 @@ test("choosing the current admin task cancels a pending route without abandoning
     fireEvent.click(screen.getByRole("link", { name: messages.Workspace.events }));
     assert.deepEqual(destinations, ["/door", "/admin?tab=events&view=manage"]);
     assert.equal(isLatestRead(), true);
-    await waitFor(() => assert.equal(document.querySelector(".route-transition-overlay")?.getAttribute("data-state"), "leaving"));
+    // Cancelled before the show delay: the page unlocks without ever painting the overlay.
+    assert.equal(document.querySelector(".route-transition-overlay") === null, true);
+    assert.equal(within(view.container).getByRole("main").hasAttribute("inert"), false);
     fireEvent.click(screen.getByRole("link", { name: messages.Workspace.events }));
     await waitFor(() => assert.equal(document.querySelector(".route-transition-overlay") === null, true));
 
@@ -563,6 +611,25 @@ test("Events stays out of the mobile dock even while active and remains in the f
   fireEvent.click(events);
   assert.equal(screen.queryByRole("dialog", { name: "All menus" }) === null, true);
   assert.equal(screen.queryByRole("link", { name: messages.Workspace.events }) === null, true);
+});
+
+test("the mobile menu button announces pending work for items outside the dock", () => {
+  viewport(false);
+  const view = render(<Providers><MenuHarness initial="door" /></Providers>);
+  const trigger = screen.getByRole("button", { name: messages.Workspace.allMenu });
+  const count = document.getElementById(trigger.getAttribute("aria-describedby") ?? "");
+  assert.equal(count?.textContent, "3");
+  assert.equal(count?.getAttribute("aria-label"), messages.Workspace.pendingCount.replace("{count}", "3"));
+  view.unmount();
+  // Once the pending item is active it joins the dock with its own badge, so the menu button stays plain.
+  render(<Providers><MenuHarness initial="password-requests" /></Providers>);
+  assert.equal(screen.getByRole("button", { name: messages.Workspace.allMenu }).hasAttribute("aria-describedby"), false);
+});
+
+test("a compact dock action keeps its full name and pending count for assistive technology", () => {
+  render(<WorkspaceAction icon="refresh" tone="muted" compact badge={3}>{messages.Door.offlineOperations}</WorkspaceAction>);
+  const action = screen.getByRole("button", { name: `${messages.Door.offlineOperations} 3` });
+  assert.equal(action.dataset.compact, "true");
 });
 
 test("mobile menu closes from its own control and restores the dock trigger", async () => {

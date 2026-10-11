@@ -6,7 +6,6 @@ import Alert from "@/components/Alert";
 import Button from "@/components/Button";
 import DisclosureSection from "@/components/DisclosureSection";
 import EmptyState from "@/components/EmptyState";
-import Skeleton from "@/components/Skeleton";
 import VenueSelector, { useVenueSelector } from "@/components/VenueSelector";
 import { fetchAdminAnalytics } from "@/lib/api/analytics";
 import { getBusinessDate } from "@/lib/date";
@@ -21,6 +20,7 @@ import AnalyticsContributors from "./analytics/AnalyticsContributors";
 import AnalyticsAttendance from "./analytics/AnalyticsAttendance";
 import AnalyticsEvents from "./analytics/AnalyticsEvents";
 import AnalyticsPeriodBar from "./analytics/AnalyticsPeriodBar";
+import AnalyticsSkeleton from "./analytics/AnalyticsSkeleton";
 import AnalyticsSummary from "./analytics/AnalyticsSummary";
 import AnalyticsTrend from "./analytics/AnalyticsTrend";
 
@@ -128,8 +128,13 @@ export default function AdminAnalytics({
 
   const scopedView = loadedScope === scope ? view : null;
   const isScopeLoading = isLoading || loadedScope !== scope;
+  // A period refetch keeps the same venue's last result on screen, dimmed, instead of a skeleton.
+  const displayView = scopedView ?? (
+    isScopeLoading && loadedScope.startsWith(`${venueId}:`) ? view : null
+  );
   const hasCloseoutIntegrityWarning =
-    (scopedView?.coverage.driftedEvents ?? 0) > 0;
+    (displayView?.coverage.driftedEvents ?? 0) > 0;
+  const hasNoRegistrations = displayView?.coverage.operatingDays === 0;
   const changeGranularity = (granularity: AnalyticsGranularity) => {
     if (granularity === urlState.granularity) return;
     applyUrlState({ granularity, anchorDate: urlState.anchorDate }, "push");
@@ -166,8 +171,9 @@ export default function AdminAnalytics({
 
       <AnalyticsPeriodBar
         granularity={urlState.granularity}
-        view={scopedView}
+        view={displayView}
         isLoading={isScopeLoading}
+        anchorDate={urlState.anchorDate}
         onGranularityChange={changeGranularity}
         onAnchorDateChange={changeAnchorDate}
         onRefresh={loadAnalytics}
@@ -177,11 +183,9 @@ export default function AdminAnalytics({
         <section className="app-panel">
           <EmptyState icon="store" message={t("selectVenue")} />
         </section>
-      ) : isScopeLoading ? (
-        <section className="app-panel p-4 sm:p-5" aria-label={t("loading")} aria-busy="true">
-          <Skeleton rows={7} />
-        </section>
-      ) : loadError || !scopedView ? (
+      ) : isScopeLoading && !displayView ? (
+        <AnalyticsSkeleton label={t("loading")} />
+      ) : loadError || !displayView ? (
         <section className="app-panel p-4 sm:p-5">
           <Alert type="error" message={errorMessage} />
           <Button variant="secondary" onClick={loadAnalytics} className="mt-3">
@@ -189,24 +193,33 @@ export default function AdminAnalytics({
           </Button>
         </section>
       ) : (
-        <>
+        <div
+          className={`space-y-4 transition-opacity duration-150 ${isScopeLoading ? "opacity-60" : ""}`}
+          aria-busy={isScopeLoading}
+        >
           {hasCloseoutIntegrityWarning && (
-            <aside className="border border-status-waiting/70 bg-status-waiting/10 p-4 text-sm leading-relaxed text-status-waiting" role="status">
+            <aside className="rounded-panel border border-transparent bg-status-waiting/10 p-4 text-sm leading-relaxed text-status-waiting" role="status">
               {t("coverage.partial")}
             </aside>
           )}
-          <AnalyticsSummary summary={scopedView.summary} />
-          <AnalyticsAttendance attendance={scopedView.attendance} />
 
-          {scopedView.coverage.operatingDays === 0 ? (
-            <section className="app-panel">
-              <EmptyState icon="chart-line" message={t("empty.title")} description={t("empty.description")} />
-            </section>
+          {hasNoRegistrations ? (
+            <>
+              {/* One empty state replaces the all-zero registration cards. */}
+              <section className="app-panel">
+                <EmptyState icon="chart-line" message={t("empty.title")} description={t("empty.description")} />
+              </section>
+              {displayView.attendance.trend.length > 0 && (
+                <AnalyticsAttendance attendance={displayView.attendance} />
+              )}
+            </>
           ) : (
             <>
-              <AnalyticsTrend points={scopedView.trend} />
-              {scopedView.contributors.length > 0 ? (
-                <AnalyticsContributors rows={scopedView.contributors} />
+              <AnalyticsSummary summary={displayView.summary} />
+              <AnalyticsAttendance attendance={displayView.attendance} />
+              <AnalyticsTrend points={displayView.trend} />
+              {displayView.contributors.length > 0 ? (
+                <AnalyticsContributors rows={displayView.contributors} />
               ) : (
                 <section className="app-panel">
                   <EmptyState
@@ -216,9 +229,9 @@ export default function AdminAnalytics({
                   />
                 </section>
               )}
-              {scopedView.events.length > 0 && (
+              {displayView.events.length > 0 && (
                 <AnalyticsEvents
-                  rows={scopedView.events}
+                  rows={displayView.events}
                   venueId={venueId}
                   onOpenEvent={onOpenEvent}
                 />
@@ -239,14 +252,14 @@ export default function AdminAnalytics({
             <DisclosureSection title={t("coverage.title")}>
               <dl className="grid grid-cols-2 gap-px bg-border-subtle sm:grid-cols-4">
                 {([
-                  ["confirmed", scopedView.coverage.confirmedEvents],
-                  ["operatingDays", scopedView.coverage.operatingDays],
-                  ["unconfirmed", scopedView.coverage.unconfirmedClosedEvents],
-                  ["open", scopedView.coverage.openEvents],
-                  ["draft", scopedView.coverage.draftEvents],
-                  ["drifted", scopedView.coverage.driftedEvents],
-                  ["legacy", scopedView.coverage.legacyEvents],
-                  ["mapped", scopedView.coverage.mappedContributorPercent],
+                  ["confirmed", displayView.coverage.confirmedEvents],
+                  ["operatingDays", displayView.coverage.operatingDays],
+                  ["unconfirmed", displayView.coverage.unconfirmedClosedEvents],
+                  ["open", displayView.coverage.openEvents],
+                  ["draft", displayView.coverage.draftEvents],
+                  ["drifted", displayView.coverage.driftedEvents],
+                  ["legacy", displayView.coverage.legacyEvents],
+                  ["mapped", displayView.coverage.mappedContributorPercent],
                 ] as const).map(([key, value]) => (
                   <div key={key} className="bg-surface p-4 text-center">
                     <dt className="text-xs leading-tight text-text-muted">{t(`coverage.${key}`)}</dt>
@@ -258,7 +271,7 @@ export default function AdminAnalytics({
               </dl>
             </DisclosureSection>
           </div>
-        </>
+        </div>
       )}
     </div>
   );

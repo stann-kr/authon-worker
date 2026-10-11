@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import Footer from "@/components/Footer";
@@ -28,6 +28,26 @@ interface AuthErrorState {
   target: AuthErrorTarget;
 }
 
+const AUTH_ERROR_FIELD_IDS: Partial<Record<AuthErrorTarget, string>> = {
+  email: "email",
+  password: "password",
+  setupPassword: "setup-password",
+  confirmPassword: "setup-password-confirm",
+};
+
+// 로그인 화면으로 돌아온 이유. 허용된 값만 안내하며 다른 값은 무시합니다.
+const LOGIN_NOTICE_KEYS = {
+  "password-changed": "passwordChangedSignIn",
+  "session-expired": "sessionExpiredSignIn",
+} as const;
+
+function readLoginNoticeKey() {
+  const reason = new URLSearchParams(window.location.search).get("reason");
+  return reason && Object.prototype.hasOwnProperty.call(LOGIN_NOTICE_KEYS, reason)
+    ? LOGIN_NOTICE_KEYS[reason as keyof typeof LOGIN_NOTICE_KEYS]
+    : null;
+}
+
 export default function LoginPage() {
   const { brand } = useVenueBrand();
   const t = useTranslations("Auth");
@@ -42,11 +62,28 @@ export default function LoginPage() {
   const [mode, setMode] = useState<LoginMode>("login");
   const [isLoading, setIsLoading] = useState(false);
   const [authError, setAuthError] = useState<AuthErrorState | null>(null);
+  const [noticeKey, setNoticeKey] = useState<
+    (typeof LOGIN_NOTICE_KEYS)[keyof typeof LOGIN_NOTICE_KEYS] | null
+  >(null);
+  const pendingErrorFocusRef = useRef(false);
   const router = useRouter();
   const { setUser } = useAuthSession();
   const showError = (message: string, target: AuthErrorTarget = "form") => {
+    pendingErrorFocusRef.current = true;
     setAuthError({ message, target });
   };
+
+  useEffect(() => {
+    setNoticeKey(readLoginNoticeKey());
+  }, []);
+
+  // 입력란은 요청 중 disabled이므로 다시 활성화된 뒤 오류 입력란으로 focus를 옮깁니다.
+  useEffect(() => {
+    if (isLoading || !authError || !pendingErrorFocusRef.current) return;
+    pendingErrorFocusRef.current = false;
+    const fieldId = AUTH_ERROR_FIELD_IDS[authError.target];
+    if (fieldId) document.getElementById(fieldId)?.focus();
+  }, [authError, isLoading]);
 
   const getLoginError = (code?: string, fallback?: string) => {
     switch (code) {
@@ -71,6 +108,14 @@ export default function LoginPage() {
       default:
         return fallback || t("loginFailed");
     }
+  };
+
+  const getLoginErrorTarget = (code?: string): AuthErrorTarget => {
+    if (code === "INVALID_CREDENTIALS") return "password";
+    if (code === "MISSING_CREDENTIALS") {
+      return formData.email.trim() ? "password" : "email";
+    }
+    return "form";
   };
 
   const getSetupError = (code?: string) => {
@@ -104,6 +149,7 @@ export default function LoginPage() {
     e.preventDefault();
     setIsLoading(true);
     setAuthError(null);
+    setNoticeKey(null);
 
     try {
       const result = await login(
@@ -121,7 +167,10 @@ export default function LoginPage() {
       } else if (result.requiresSetup) {
         enterSetupMode();
       } else {
-        showError(getLoginError(result.code, result.message));
+        showError(
+          getLoginError(result.code, result.message),
+          getLoginErrorTarget(result.code),
+        );
       }
     } catch {
       showError(t("genericLoginError"));
@@ -208,10 +257,20 @@ export default function LoginPage() {
           </div>
 
           <form
+            method="post"
             onSubmit={mode === "login" ? handleSubmit : handleSetup}
             className="auth-login-form"
             aria-busy={isLoading}
           >
+            {noticeKey && mode === "login" && (noticeKey === "sessionExpiredSignIn" ? (
+              // An expired session is a reason to sign in again, not a completed action.
+              <p className="rounded-control border border-transparent bg-status-waiting/10 px-3 py-2 text-sm leading-relaxed text-text-body" role="status">
+                {t(noticeKey)}
+              </p>
+            ) : (
+              <Alert type="success" message={t(noticeKey)} />
+            ))}
+
             {mode === "setup" && (
               <p className="text-sm text-text-muted" role="note">
                 {t("oneTimeSetupDescription")}
@@ -269,7 +328,6 @@ export default function LoginPage() {
                   value={formData.password}
                   onChange={(e) => setFormData({...formData, password: e.target.value})}
                   inputClassName="app-field pr-12"
-                  placeholder="••••••••"
                   autoComplete="current-password"
                   required
                   disabled={isLoading}

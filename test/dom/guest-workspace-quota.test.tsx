@@ -8,7 +8,11 @@ import * as schema from "@/lib/db/schema";
 
 // Exercise the public snapshot with real quota SQL; only server context is stubbed.
 const runtime = globalThis as typeof globalThis & {
-  workspaceQuotaTest: { db: ReturnType<typeof drizzle>; baseLimit: number | null };
+  workspaceQuotaTest: {
+    db: ReturnType<typeof drizzle>;
+    baseLimit: number | null;
+    admin?: { id: string; role: string; venueId: string | null };
+  };
 };
 registerHooks({
   resolve(specifier, context, nextResolve) {
@@ -24,7 +28,7 @@ registerHooks({
       "db/client": "export const getDb = () => globalThis.workspaceQuotaTest.db;",
       "auth/server": `export const requireAccess = async () => ({id:'staff',role:'staff',accountKind:'personal',venueId:'venue-a',guestLimit:globalThis.workspaceQuotaTest.baseLimit});
         export const requireAuth = requireAccess;
-        export const requireRole = async () => ({id:'admin',role:'venue_admin',venueId:'venue-a'});`,
+        export const requireRole = async () => globalThis.workspaceQuotaTest.admin ?? ({id:'admin',role:'venue_admin',venueId:'venue-a'});`,
       "tenant/active-server": "export const requireActiveVenueId = async venue => venue;",
       "events/server": `const event = {id:'event-a',venueId:'venue-a',businessDate:'2026-09-18',compatibilityKey:'legacy',state:'open'};
         export const findCompatibilityEvent = async () => event;
@@ -38,9 +42,13 @@ registerHooks({
 });
 let fetchSnapshot: typeof import("@/lib/api/guest-snapshots").fetchGuestWorkspaceSnapshot;
 let fetchRequests: typeof import("@/lib/api/guest-limits").fetchGuestLimitRequests;
+let fetchPendingCount: typeof import("@/lib/api/guest-limits").fetchPendingGuestLimitRequestCount;
 before(async () => {
   ({ fetchGuestWorkspaceSnapshot: fetchSnapshot } = await import("@/lib/api/guest-snapshots"));
-  ({ fetchGuestLimitRequests: fetchRequests } = await import("@/lib/api/guest-limits"));
+  ({
+    fetchGuestLimitRequests: fetchRequests,
+    fetchPendingGuestLimitRequestCount: fetchPendingCount,
+  } = await import("@/lib/api/guest-limits"));
 });
 
 function fixture(configured: number | null, baseLimit: number | null) {
@@ -130,5 +138,18 @@ test("a mismatched venue or event cannot produce a verified workspace quota", as
     const result = await fetchSnapshot("2026-09-18", "venue-a", "event-a");
     assert.ok(result.data?.failedSections.includes("quota"));
     assert.equal(result.data?.quota, null);
+  } finally { database.close(); }
+});
+
+test("the pending badge counts only the actor's venue inbox and a super admin's selected venue", async () => {
+  const database = fixture(3, 20);
+  try {
+    database.prepare(`INSERT INTO guest_limit_requests (id,venue_id,user_id,date,event_id,requested_extra,approved_extra,status)
+      VALUES ('a-pending','venue-a','staff','2026-08-01',NULL,1,0,'pending'),('a-later','venue-a','staff','2026-10-01','event-a',2,0,'pending')`).run();
+    // A venue admin cannot widen the badge to another venue by passing its id.
+    assert.deepEqual(await fetchPendingCount("venue-b"), { data: 2, error: null });
+    runtime.workspaceQuotaTest.admin = { id: "root", role: "super_admin", venueId: null };
+    assert.deepEqual(await fetchPendingCount("venue-b"), { data: 1, error: null });
+    assert.equal((await fetchPendingCount(null)).data, null);
   } finally { database.close(); }
 });

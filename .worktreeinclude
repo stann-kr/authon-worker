@@ -1,0 +1,7 @@
+# BEGIN:PROJECTDOCS-CODEX-WORKTREE
+# Copy routing only; create checkout-local WORK_LOG/HANDOFF for each task.
+# Read common docs from the verified primary; preserve explicit repo-owned asset patterns below.
+/.projectdocs.json
+/AGENTS.md
+/CLAUDE.md
+# END:PROJECTDOCS-CODEX-WORKTREE

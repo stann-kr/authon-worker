@@ -80,9 +80,13 @@ export default function WorkspaceNavigation({
     const dock = dockRef.current;
     const scroll = dock?.closest<HTMLElement>(".page-scroll");
     if (!dock || !scroll) return;
+    const root = document.documentElement;
     const measure = () => {
       const height = Math.ceil(dock.getBoundingClientRect().height);
-      if (height > 0) scroll.style.setProperty("--workspace-dock-height", `${height + 16}px`);
+      if (height <= 0) return;
+      scroll.style.setProperty("--workspace-dock-height", `${height + 16}px`);
+      // Page-level overlays such as toasts sit above the mobile dock, which floats above the bottom edge.
+      root.style.setProperty("--app-bottom-chrome", `calc(${height}px + var(--workspace-dock-offset, 0px))`);
     };
     measure();
     const observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(measure);
@@ -90,6 +94,7 @@ export default function WorkspaceNavigation({
     return () => {
       observer?.disconnect();
       scroll.style.removeProperty("--workspace-dock-height");
+      root.style.removeProperty("--app-bottom-chrome");
     };
   }, [desktop, actions]);
 
@@ -127,6 +132,10 @@ export default function WorkspaceNavigation({
   });
   const home = items.find((item) => item.id === "home");
   const profile = items.find((item) => item.id === "profile");
+  const primaryItems = getWorkspacePrimaryItems(items, activeId);
+  // Pending work behind the full menu is announced on its button, so the dock never hides a badge.
+  const menuOnlyCount = items.filter((item) => !primaryItems.includes(item))
+    .reduce((total, item) => total + (counts[item.id] ?? 0), 0);
 
   if (desktop) return <aside className="workspace-sidebar" data-collapsed={collapsed}>
     <div className="workspace-sidebar-heading">
@@ -150,12 +159,16 @@ export default function WorkspaceNavigation({
       inert={keyboardOpen || undefined} aria-hidden={keyboardOpen || undefined}>
       {actions && <div className="workspace-context-actions" role="group" aria-label={t("actions")}>{actions}</div>}
       <nav ref={navRef} className="workspace-primary-nav" aria-label={t("navigation")}>
-        <div className="workspace-primary-scroll">{getWorkspacePrimaryItems(items, activeId).map((item) => link(item))}</div>
+        <div className="workspace-primary-scroll">{primaryItems.map((item) => link(item))}</div>
         <button type="button" className="workspace-nav-link workspace-more"
           aria-label={t("allMenu")} aria-expanded={menuOpen}
           aria-controls={menuOpen ? "workspace-all-menu" : undefined}
+          aria-describedby={menuOnlyCount > 0 ? `${navigationId}-more-count` : undefined}
           disabled={disabled} onClick={() => setMenuOpen((open) => !open)}>
+          <Icon name="menu" size={18} className="workspace-nav-icon" />
           <span className="workspace-nav-label">{t("more")}</span>
+          {menuOnlyCount > 0 && <span id={`${navigationId}-more-count`} className="workspace-nav-count"
+            aria-label={t("pendingCount", { count: menuOnlyCount })}>{menuOnlyCount}</span>}
         </button>
       </nav>
     </div>

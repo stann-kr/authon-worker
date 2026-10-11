@@ -1,22 +1,25 @@
 "use client";
 
-import { useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode } from "react";
-import { useTranslations } from "next-intl";
+import { useId, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { useLocale, useTranslations } from "next-intl";
 import Icon from "@/components/Icon";
 import Sheet from "@/components/overlays/Sheet";
+import { formatCalendarDate } from "@/lib/ui/date-format";
 
 /** The mobile scope sheet and desktop controls share the caller's scope state. */
 export default function OperationsScope({ venueName, date, label, disabled = false, children }: {
   venueName?: string; date: string; label: string; disabled?: boolean; children: ReactNode;
 }) {
   const t = useTranslations("Workspace");
+  const locale = useLocale();
   const summaryId = useId();
   const [desktop, setDesktop] = useState(false);
   const [open, setOpen] = useState(false);
   const controlsRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const restoreDesktopFocus = useRef(false);
-  useEffect(() => {
+  // Decide the layout before paint so desktop never flashes the mobile trigger.
+  useLayoutEffect(() => {
     const media = window.matchMedia("(min-width: 1000px)");
     const update = () => {
       if (media.matches) restoreDesktopFocus.current = document.activeElement === triggerRef.current ||
@@ -40,11 +43,11 @@ export default function OperationsScope({ venueName, date, label, disabled = fal
       <button ref={triggerRef} type="button" className="operations-scope-trigger" disabled={disabled}
         aria-label={t("chooseScope")} aria-describedby={`${summaryId}-date ${summaryId}-event`} aria-expanded={open} aria-controls={open ? `${summaryId}-panel` : undefined} onClick={() => setOpen((current) => !current)}>
         <span className="operations-scope-dot" aria-hidden="true" />
-        <span id={`${summaryId}-date`} className="operations-scope-date">{venueName ? `${venueName} · ` : ""}{date.slice(5).replace("-", ".")}</span>
+        <span id={`${summaryId}-date`} className="operations-scope-date">{venueName ? `${venueName} · ` : ""}{formatCalendarDate(locale, date)}</span>
         <span id={`${summaryId}-event`} className="operations-scope-name">{label}</span>
         <Icon name="chevron-down" size={16} />
       </button>
-      <Sheet id={`${summaryId}-panel`} open={open} title={t("chooseScope")} onClose={() => setOpen(false)} busy={disabled}>
+      <Sheet presentation="modal" id={`${summaryId}-panel`} open={open} title={t("chooseScope")} onClose={() => setOpen(false)} busy={disabled}>
         {controls}
         <button type="button" className="app-button rounded-control bg-surface-raised px-4 py-3 text-sm" disabled={disabled} onClick={() => setOpen(false)}>{t("applyScope")}</button>
       </Sheet>

@@ -18,7 +18,7 @@
 }
 .workspace-shell[data-sidebar-collapsed="true"] { --workspace-sidebar-width: 64px; }
 .workspace-shell > .page-scroll { min-width: 0; padding-top: var(--workspace-content-inset); }
-.workspace-shell--authenticated > .page-scroll { padding-bottom: calc(var(--workspace-dock-height, 140px) + var(--door-mobile-dock-height, 0px)); }
+.workspace-shell--authenticated > .page-scroll { padding-bottom: calc(var(--workspace-dock-height, 140px) + var(--workspace-dock-offset, 0px)); }
 .workspace-shell .page-container { min-width: 0; }
 .workspace-shell :is(#main-content, #admin-workspace) { scroll-margin-top: var(--workspace-content-inset); }
 .workspace-shell .workspace-content-wide { max-width: none; }
@@ -34,37 +34,70 @@
 .workspace-header-account { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
 .workspace-profile-link, .workspace-avatar { display: grid; place-items: center; width: 32px; height: 32px; border-radius: 50%; background: var(--app-surface-raised); flex-shrink: 0; font-size: 13px; }
 .workspace-profile-link { width: 44px; height: 44px; }
-.workspace-header-account button { border-color: transparent; border-radius: 8px; background: transparent; }
+.workspace-header-account button { border-color: transparent; border-radius: var(--app-radius-control); background: transparent; }
 .workspace-header-actions { display: none; }
+/* Mobile chrome: a floating tab bar with optional context actions above it. iOS Safari 26 fills its
+   toolbar with the colour of a wide fixed bar at the bottom edge, so the dock stays clear of that
+   edge and the page remains visible around it and under the browser toolbar. */
 .workspace-dock {
-  position: fixed; bottom: var(--door-mobile-dock-height, 0px); left: calc((100% + env(safe-area-inset-left) - env(safe-area-inset-right)) / 2); transform: translateX(-50%);
-  z-index: var(--app-z-chrome); display: flex; flex-direction: column; align-items: center; gap: 12px;
-  width: max-content; max-width: calc(100% - 24px - env(safe-area-inset-left) - env(safe-area-inset-right)); padding: 12px 0 calc(18px + env(safe-area-inset-bottom)); pointer-events: none;
-  opacity: 1; visibility: visible;
+  position: fixed; z-index: var(--app-z-chrome);
+  left: max(16px, env(safe-area-inset-left)); right: max(16px, env(safe-area-inset-right));
+  bottom: var(--workspace-dock-offset, 12px);
+  max-width: 440px; margin-inline: auto;
+  display: flex; flex-direction: column; align-items: stretch; gap: 8px;
+  pointer-events: none; opacity: 1; visibility: visible;
   transition: opacity 200ms var(--app-ease-out), transform 240ms cubic-bezier(0.32, 0.72, 0, 1);
 }
-.workspace-primary-nav { display: flex; gap: 10px; min-width: 0; max-width: 100%; pointer-events: auto; }
-.workspace-dock[data-keyboard-hidden="true"] { opacity: 0; visibility: hidden; transform: translate(-50%, 12px); transition: none; }
+.workspace-primary-nav {
+  display: flex; justify-content: center; min-width: 0; pointer-events: auto;
+  padding: 4px; border: 1px solid var(--workspace-dock-edge); border-radius: 999px;
+  background: var(--workspace-dock-glass); box-shadow: var(--workspace-dock-shadow);
+  -webkit-backdrop-filter: var(--workspace-dock-filter); backdrop-filter: var(--workspace-dock-filter);
+}
+.workspace-dock[data-keyboard-hidden="true"] { opacity: 0; visibility: hidden; transform: translateY(12px); transition: none; }
 @media (max-width: 999px) {
   :root[data-keyboard-open="true"] .workspace-shell--authenticated > .page-scroll { padding-bottom: 16px; }
 }
-.workspace-primary-scroll { display: flex; gap: 10px; min-width: 0; overflow-x: auto; padding: 4px; margin: -4px 0; scroll-padding-inline: 4px; scrollbar-width: none; }
-.workspace-primary-scroll::-webkit-scrollbar { display: none; }
+.workspace-primary-scroll { display: contents; }
 .workspace-nav-link {
   position: relative; display: flex; align-items: center; justify-content: center; gap: 8px; flex-shrink: 0;
-  min-height: 44px; padding: 10px 14px; border: 1px solid transparent; border-radius: 99px;
+  min-height: 44px; padding: 10px 14px; border: 1px solid transparent; border-radius: var(--app-radius-control);
   background: var(--app-surface-raised); color: var(--workspace-muted); font-size: 14px; font-weight: 500;
   line-height: 1.4; text-decoration: none; white-space: nowrap;
 }
 .workspace-nav-icon { flex-shrink: 0; }
-.workspace-dock .workspace-nav-link { min-width: 44px; }
-.workspace-dock .workspace-nav-icon { display: none; }
-.workspace-nav-link[aria-current="page"] { background: #e7e7e7; border-color: transparent; color: #111111; font-weight: 600; }
+.workspace-dock .workspace-nav-link {
+  flex: 1 1 0; flex-direction: column; gap: 3px; min-width: 0; min-height: 52px; padding: 6px 4px 4px;
+  border: 0; border-radius: 999px; background: transparent; color: var(--workspace-dock-muted); font-size: 11px; font-weight: 500; line-height: 1.2;
+}
+.workspace-dock .workspace-nav-label { max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+/* The current destination sits in a concentric capsule inside the bar. */
+.workspace-dock .workspace-nav-link[aria-current="page"] { background: var(--workspace-dock-current); color: var(--workspace-text); font-weight: 600; }
+.workspace-dock .workspace-nav-link[aria-current="page"] .workspace-nav-icon { color: var(--app-action); }
+.workspace-dock .workspace-nav-count { position: absolute; top: 3px; left: calc(50% + 6px); min-width: 16px; padding: 0 4px; font-size: 10px; line-height: 16px; background: var(--app-action); color: var(--app-action-text); }
+/* Default current state (the full menu); the dock and sidebar refine it below. */
+.workspace-nav-link[aria-current="page"] { background: var(--app-surface-active); border-color: var(--app-border); color: var(--app-text); font-weight: 600; }
 .workspace-nav-link[aria-disabled="true"] { opacity: 0.5; cursor: wait; }
-.workspace-nav-count { display: inline-flex; align-items: center; justify-content: center; min-width: 18px; border-radius: 5px; padding: 1px 5px; color: var(--workspace-text); background: #3a3a3a; font-size: 11px; font-variant-numeric: tabular-nums; }
-.workspace-context-actions { display: flex; max-width: 100%; gap: 12px; padding: 4px; overflow-x: auto; scrollbar-width: none; pointer-events: auto; }
-.workspace-context-actions::-webkit-scrollbar { display: none; }
-.workspace-action { display: inline-flex; align-items: center; justify-content: center; gap: 10px; flex: 0 0 auto; min-height: 44px; padding: 10px 16px 10px 12px; border: 0; border-radius: 99px; background: var(--app-surface-raised); color: var(--workspace-text); font-size: 14px; font-weight: 500; line-height: 1.4; white-space: nowrap; }
+.workspace-nav-count { display: inline-flex; align-items: center; justify-content: center; min-width: 18px; border-radius: var(--app-radius-inner); padding: 1px 5px; color: var(--workspace-text); background: var(--app-border-strong); font-size: 11px; font-variant-numeric: tabular-nums; }
+/* Context actions float as their own controls above the tab bar, with no shared strip behind them. */
+.workspace-context-actions { display: flex; justify-content: center; gap: 8px; min-width: 0; pointer-events: auto; }
+/* Primary actions share the width; secondary ones keep their own size so neither collapses into an ellipsis. */
+.workspace-context-actions .workspace-action { flex: 1 1 0; min-width: 0; }
+.workspace-context-actions .workspace-action[data-tone="muted"] { flex: 0 1 auto; }
+.workspace-context-actions .workspace-action-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+/* Three or more actions drop their icons and tighten so every label still fits a phone width. */
+.workspace-context-actions:has(> :nth-child(3)) { gap: 6px; }
+.workspace-context-actions:has(> :nth-child(3)) .workspace-action:not([data-compact]) .workspace-action-icon { display: none; }
+.workspace-dock .workspace-context-actions:has(> :nth-child(3)) .workspace-action { padding-inline: 10px; font-size: 13px; }
+.workspace-dock .workspace-action[data-compact] { position: relative; flex: 0 0 auto; }
+.workspace-dock .workspace-action[data-compact] .workspace-action-label {
+  position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;
+}
+.workspace-action-badge {
+  min-width: 18px; padding: 0 5px; border-radius: var(--app-radius-inner); background: var(--app-action); color: var(--app-action-text);
+  font-size: 11px; font-weight: 600; line-height: 18px; text-align: center; font-variant-numeric: tabular-nums;
+}
+.workspace-action { display: inline-flex; align-items: center; justify-content: center; gap: 10px; flex: 0 0 auto; min-height: 44px; padding: 10px 16px 10px 12px; border: 0; border-radius: var(--app-radius-control); background: var(--app-surface-raised); color: var(--workspace-text); font-size: 14px; font-weight: 500; line-height: 1.4; white-space: nowrap; }
 .workspace-action[aria-pressed="true"] { background: var(--workspace-active); border-color: var(--app-border-strong); }
 .workspace-action:disabled { opacity: 0.45; cursor: not-allowed; }
 .workspace-sidebar { display: none; }
@@ -74,12 +107,9 @@
 .workspace-nav-group { margin-top: 12px; }
 .workspace-nav-group h2 { margin: 0; padding: 8px 10px; color: var(--workspace-muted); font-size: 12px; font-weight: 400; }
 .workspace-group-links:not([hidden]) { display: grid; gap: 6px; }
-.workspace-menu-panel .workspace-nav-link { justify-content: flex-start; border-radius: 8px; white-space: normal; overflow-wrap: anywhere; }
+.workspace-menu-panel .workspace-nav-link { justify-content: flex-start; border-radius: var(--app-radius-control); white-space: normal; overflow-wrap: anywhere; }
 .workspace-menu-panel .workspace-nav-count { margin-left: auto; }
 .workspace-menu-panel nav > .workspace-nav-link:last-child { margin-top: 12px; }
-@media (min-width: 768px) {
-  .workspace-shell--authenticated > .page-scroll { --door-mobile-dock-height: 0px; }
-}
 @media (min-width: 1000px) {
   .workspace-shell--authenticated { padding-left: var(--workspace-sidebar-width); --app-header-height: 56px; --workspace-content-gap: 24px; }
   .workspace-shell--authenticated .workspace-header { left: var(--workspace-sidebar-width); }
@@ -89,15 +119,15 @@
   .workspace-title { margin: 0; font-size: 15px; line-height: 22px; }
   .workspace-profile-link, .workspace-dock { display: none; }
   .workspace-header-actions { display: flex; flex-wrap: wrap; gap: 8px; padding-right: 16px; margin-right: 4px; border-right: 1px solid var(--workspace-line); }
-  .workspace-header-actions .workspace-action { min-height: var(--workspace-control-height); border: 1px solid transparent; border-radius: 8px; padding: 8px 12px; background: transparent; color: var(--app-text-muted); font-size: 13px; }
+  .workspace-header-actions .workspace-action { min-height: var(--workspace-control-height); border: 1px solid transparent; border-radius: var(--app-radius-control); padding: 8px 12px; background: transparent; color: var(--app-text-muted); font-size: 13px; }
   .workspace-header-actions .workspace-action[aria-pressed="true"] { background: var(--app-surface-raised); border-color: var(--app-border); color: var(--app-text); }
   .workspace-header-actions .workspace-action[data-tone="accent"] { background: var(--app-action); color: var(--app-action-text); font-weight: 600; }
-  .workspace-sidebar { display: flex; position: fixed; inset: 0 auto 0 0; z-index: var(--app-z-chrome); width: var(--workspace-sidebar-width); flex-direction: column; border-right: 1px solid var(--workspace-line); padding: env(safe-area-inset-top) 12px calc(12px + env(safe-area-inset-bottom)); background: var(--workspace-secondary); }
+  .workspace-sidebar { display: flex; position: fixed; inset: 0 auto 0 0; z-index: var(--app-z-chrome); width: var(--workspace-sidebar-width); flex-direction: column; border-right: 1px solid transparent; padding: env(safe-area-inset-top) 12px calc(12px + env(safe-area-inset-bottom)); background: var(--workspace-secondary); }
   .workspace-sidebar-heading { display: flex; min-height: 56px; align-items: center; gap: 4px; }
   .workspace-brand { display: flex; align-items: center; min-width: 0; flex: 1; padding: 8px; color: var(--workspace-text); font-size: 18px; line-height: 1.4; font-weight: 500; letter-spacing: -0.5px; overflow-wrap: anywhere; }
-  .workspace-sidebar-toggle { display: grid; place-items: center; flex-shrink: 0; width: 44px; min-width: 44px; color: var(--workspace-muted); border: 0; background: transparent; border-radius: 6px; }
+  .workspace-sidebar-toggle { display: grid; place-items: center; flex-shrink: 0; width: 44px; min-width: 44px; color: var(--workspace-muted); border: 0; background: transparent; border-radius: var(--app-radius-control); }
   .workspace-sidebar nav { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 2px; overflow-y: auto; padding: 8px 0 2px; scrollbar-width: thin; }
-  .workspace-sidebar .workspace-nav-link { justify-content: flex-start; width: 100%; padding: 8px 10px; border-radius: 7px; background: transparent; white-space: normal; overflow-wrap: anywhere; }
+  .workspace-sidebar .workspace-nav-link { justify-content: flex-start; width: 100%; padding: 8px 10px; border-radius: var(--app-radius-control); background: transparent; white-space: normal; overflow-wrap: anywhere; }
   .workspace-sidebar .workspace-nav-link[aria-current="page"] { background: var(--app-surface-active); border-color: var(--app-border); color: var(--app-text); }
   .workspace-sidebar .workspace-nav-count { margin-left: auto; }
   .workspace-account { position: relative; display: flex; align-items: center; flex-shrink: 0; gap: 10px; min-height: 56px; padding: 12px 8px 0; margin-top: auto; border-top: 1px solid var(--workspace-line); color: var(--workspace-muted); }
@@ -118,7 +148,7 @@
   .workspace-sidebar[data-collapsed="true"] .workspace-nav-count { position: absolute; top: 0; right: 0; font-size: 9px; min-width: 14px; padding: 1px 3px; }
   .workspace-sidebar[data-collapsed="true"] .workspace-account { padding-inline: 8px; }
   .workspace-sidebar[data-collapsed="true"] nav { overflow: visible; overflow-y: auto; }
-  .workspace-sidebar[data-collapsed="true"] :is(a:hover, a:focus-visible) .workspace-nav-tooltip { display: block; position: fixed; left: 60px; z-index: 65; width: max-content; max-width: 240px; padding: 7px 10px; border: 1px solid var(--app-border); border-radius: 6px; background: var(--app-surface-raised); color: var(--app-text); font-size: 12px; line-height: 18px; box-shadow: 0 4px 12px rgb(0 0 0 / 0.18); pointer-events: none; }
+  .workspace-sidebar[data-collapsed="true"] :is(a:hover, a:focus-visible) .workspace-nav-tooltip { display: block; position: fixed; left: 60px; z-index: var(--app-z-chrome); width: max-content; max-width: 240px; padding: 7px 10px; border: 1px solid var(--app-border); border-radius: var(--app-radius-inner); background: var(--app-surface-raised); color: var(--app-text); font-size: 12px; line-height: 18px; box-shadow: 0 4px 12px rgb(0 0 0 / 0.18); pointer-events: none; }
 }
 @media (min-width: 1600px) {
   .workspace-shell .page-container, .workspace-header { padding-inline: 32px; }
@@ -135,6 +165,10 @@
   .workspace-sidebar :is(.workspace-nav-link, .workspace-sidebar-toggle) { min-height: 40px; }
   .workspace-sidebar-toggle { width: 36px; min-width: 36px; }
   .workspace-header :is(.workspace-action, .app-button), .workspace-header-account button { min-height: 40px; }
+  /* The dock keeps its translucent material under the pointer. */
+  .workspace-dock .workspace-nav-link:not([aria-current="page"]):hover { background: var(--workspace-dock-current); }
+  .workspace-dock .workspace-action:not(:disabled):not([data-tone="accent"]):hover { background-color: var(--workspace-dock-glass); border-color: var(--app-border-strong); }
+  .workspace-dock .workspace-action[data-tone="accent"]:not(:disabled):hover { background-color: var(--app-action-hover); }
 }
 @media (prefers-reduced-motion: reduce) {
   .workspace-dock { transition: none; }
@@ -142,18 +176,28 @@
 }
 
 .workspace-action-icon { display: grid; place-items: center; width: 24px; height: 24px; flex-shrink: 0; border-radius: 50%; background: var(--app-action); color: var(--app-action-text); }
-.workspace-action-icon[data-tone="muted"] { background: #444444; color: var(--app-text); }
+.workspace-action-icon[data-tone="muted"] { background: var(--app-border-strong); color: var(--app-text); }
 .workspace-shell .font-mono, .product-sheet .font-mono { font-family: inherit; font-variant-numeric: tabular-nums; }
 .workspace-desktop-logout { display: none; }
-/* Mobile materials stay on the header and individual controls, never behind both pill rows. */
+/* Signed-in work surfaces keep the full height for tasks; the public pages keep the footer. */
+.workspace-shell--authenticated .page-scroll > footer { display: none; }
+/* Mobile materials sit on the header and on each floating dock control; nothing spans the bottom edge. */
 @media (max-width: 999px) {
+  /* On :root because toasts outside the shell also clear the dock. Home-indicator phones keep it lower. */
+  :root { --workspace-dock-offset: max(12px, calc(env(safe-area-inset-bottom) - 12px)); }
   .workspace-shell {
     --workspace-header-edge: 14px; --workspace-content-gap: 12px;
-    --workspace-glass-surface: #1c1c20;
-    --workspace-glass-selected: #e7e7eb;
-    --workspace-glass-header: #0c0c0e;
+    --workspace-glass-header: #0a0a0b;
     --workspace-glass-filter: none;
     --workspace-glass-edge: rgb(255 255 255 / 0.09);
+    /* Near-opaque until backdrop blur is available, so list text never reads through the dock. */
+    --workspace-dock-glass: rgb(28 28 30 / 0.96);
+    --workspace-dock-filter: none;
+    --workspace-dock-edge: rgb(255 255 255 / 0.12);
+    --workspace-dock-current: rgb(255 255 255 / 0.12);
+    /* Lighter than text-muted: dock labels sit over moving, blurred content. */
+    --workspace-dock-muted: #aeaeb2;
+    --workspace-dock-shadow: 0 8px 24px rgb(0 0 0 / 0.4), inset 0 1px 0 rgb(255 255 255 / 0.06);
   }
   .workspace-shell .page-container { padding-left: max(20px, env(safe-area-inset-left)); padding-right: max(20px, env(safe-area-inset-right)); }
   .workspace-header {
@@ -170,7 +214,7 @@
     mask-image: linear-gradient(#000 calc(100% - var(--workspace-header-edge)), transparent);
   }
   .workspace-heading { flex: 1; }
-  .workspace-title { font-size: 18px; line-height: 1.35; letter-spacing: -0.25px; }
+  .workspace-title { font-size: 20px; line-height: 1.3; font-weight: 700; letter-spacing: -0.02em; }
   .workspace-header-account .workspace-profile-link {
     width: 44px; height: 44px; min-height: 44px; border: 1px solid var(--workspace-glass-edge);
     border-radius: 50%; background: rgb(255 255 255 / 0.06); color: var(--workspace-text);
@@ -178,47 +222,48 @@
   .workspace-shell .operations-layout { gap: 0; }
   .workspace-shell .page-scroll > footer { display: none; }
 
-  .workspace-primary-scroll { padding: 6px; margin-block: -6px; scroll-padding-inline: 6px; }
-  .workspace-context-actions { padding: 6px; }
-  .workspace-dock :is(.workspace-nav-link, .workspace-action) {
-    border: 1px solid var(--workspace-glass-edge);
-    background-color: var(--workspace-glass-surface);
-    color: #ededf0;
-    -webkit-backdrop-filter: var(--workspace-glass-filter);
-    backdrop-filter: var(--workspace-glass-filter);
-    box-shadow: 0 2px 8px rgb(0 0 0 / 0.12);
+
+  .workspace-dock .workspace-action {
+    gap: 8px; padding: 10px 16px;
+    border: 1px solid var(--workspace-dock-edge); border-radius: 999px;
+    background-color: var(--workspace-dock-glass); color: var(--app-text); box-shadow: var(--workspace-dock-shadow);
+    -webkit-backdrop-filter: var(--workspace-dock-filter); backdrop-filter: var(--workspace-dock-filter);
   }
-  .workspace-dock :is(.workspace-nav-link[aria-current="page"], .workspace-action[aria-pressed="true"]) {
-    background-color: var(--workspace-glass-selected); color: #17171b;
-    border-color: transparent; font-weight: 600;
-    box-shadow: none;
+  .workspace-dock .workspace-action .workspace-action-icon { width: 18px; height: 18px; background: none; color: inherit; }
+  .workspace-dock .workspace-action[data-tone="accent"] {
+    border-color: transparent; background-color: var(--app-action); color: var(--app-action-text); font-weight: 600;
+    -webkit-backdrop-filter: none; backdrop-filter: none;
   }
-  .workspace-dock :is(.workspace-nav-link, .workspace-action):focus-visible {
-    outline: 2px solid var(--app-focus); outline-offset: 3px;
+  .workspace-dock .workspace-action[aria-pressed="true"] {
+    border-color: var(--app-border-strong); background-color: var(--app-surface-active); color: var(--app-text);
   }
-  .workspace-dock :is(.workspace-nav-link, .workspace-action):where(:not([aria-disabled="true"]):not(:disabled)):active {
+  .workspace-dock .workspace-action:focus-visible { outline: 2px solid var(--app-focus); outline-offset: 3px; }
+  .workspace-dock .workspace-nav-link:focus-visible { outline: 2px solid var(--app-focus); outline-offset: -2px; }
+  .workspace-dock .workspace-action:where(:not([aria-disabled="true"]):not(:disabled)):active {
     border-color: rgb(255 255 255 / 0.22);
   }
+  .workspace-dock .workspace-nav-link:where(:not([aria-disabled="true"])):active { background: var(--workspace-dock-current); }
 }
 @supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
   @media (max-width: 999px) {
     .workspace-shell {
-      --workspace-glass-surface: rgb(24 24 28 / 0.88);
-      --workspace-glass-selected: rgb(231 231 235 / 0.94);
-      --workspace-glass-header: rgb(12 12 14 / 0.88);
+      --workspace-glass-header: rgb(10 10 11 / 0.88);
       --workspace-glass-filter: blur(16px) saturate(110%);
+      --workspace-dock-glass: rgb(28 28 30 / 0.74);
+      --workspace-dock-filter: blur(20px) saturate(160%);
     }
   }
 }
 @media (max-width: 999px) and (prefers-reduced-transparency: reduce),
        (max-width: 999px) and (prefers-contrast: more) {
   .workspace-shell {
-    --workspace-glass-surface: #1c1c20;
-    --workspace-glass-selected: #e7e7eb;
-    --workspace-glass-header: #0c0c0e;
+    --workspace-glass-header: #0a0a0b;
     --workspace-glass-filter: none;
     --workspace-header-edge: 0px;
     --workspace-glass-edge: #8e8e93;
+    --workspace-dock-glass: #1c1c1e;
+    --workspace-dock-filter: none;
+    --workspace-dock-edge: #8e8e93;
   }
   .workspace-header::before { inset-block-end: 0; -webkit-mask-image: none; mask-image: none; }
   .workspace-dock :is(.workspace-nav-link, .workspace-action),
@@ -231,6 +276,9 @@
   .workspace-header::before {
     inset-block-end: 0; background: Canvas; -webkit-backdrop-filter: none; backdrop-filter: none;
     -webkit-mask-image: none; mask-image: none;
+  }
+  .workspace-primary-nav {
+    background: Canvas; border-color: CanvasText; box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none;
   }
   .workspace-dock :is(.workspace-nav-link, .workspace-action),
   .workspace-header-account .workspace-profile-link {
@@ -250,6 +298,7 @@
 }
 @media (min-width: 1000px) and (hover: hover) and (pointer: fine) {
   .workspace-shell { --workspace-control-height: 40px; }
+  .workspace-header-actions .workspace-action[data-tone="accent"]:not(:disabled):hover { background: var(--app-action-hover); color: var(--app-action-text); }
 }
 @media (max-width: 359px) { .workspace-shell .page-container { padding-left: max(16px, env(safe-area-inset-left)); padding-right: max(16px, env(safe-area-inset-right)); } }
 

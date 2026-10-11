@@ -5,10 +5,11 @@ import { createPortal } from "react-dom";
 import { useTranslations } from "next-intl";
 import Button from "../Button";
 import Icon from "../Icon";
-import { useIsRouteTransitionActive } from "../RouteTransitionProvider";
+import { useIsRouteOverlayVisible, useIsRouteTransitionActive } from "../RouteTransitionProvider";
 import { lockModalBackground } from "./modal-lock";
 import { restoreOverlayFocus } from "./restore-focus";
 import { useKeyboardOpen } from "../viewport/ViewportProvider";
+import { registerNavigationGuard, withConfirmedClose } from "./navigation-guard";
 
 interface SheetProps {
   id?: string;
@@ -16,9 +17,12 @@ interface SheetProps {
   title: string;
   children: ReactNode;
   onClose: () => void;
-  presentation?: "detail" | "modal" | "inline";
+  presentation?: "detail" | "modal" | "inline" | "page";
+  headingLevel?: 1 | 2;
+  labelledBy?: string;
+  revealOnOpen?: boolean;
   wide?: boolean;
-  size?: "default" | "record";
+  size?: "default" | "record" | "form";
   busy?: boolean;
   dirty?: boolean;
   closeWarning?: string;
@@ -49,20 +53,32 @@ function canRestoreFocus(target: HTMLElement | null, allowInert = false): target
   return true;
 }
 
-export function requestSheetClose(id: string, onClosed?: () => void) {
-  document.getElementById(id)?.dispatchEvent(new window.CustomEvent("sheet-close", { detail: onClosed }));
+interface CloseRequest {
+  onClosed?: () => void;
+  onCanceled?: () => void;
 }
 
-// Mobile navigation/details use bottom sheets. Desktop row details stay inline.
+export function requestSheetClose(id: string, onClosed?: () => void, onCanceled?: () => void) {
+  const panel = document.getElementById(id);
+  panel?.dispatchEvent(new window.CustomEvent<CloseRequest>("sheet-close", { detail: { onClosed, onCanceled } }));
+  return Boolean(panel);
+}
+
+// Record details and forms stay in the page; only auxiliary selectors are modal.
 export default function Sheet({ id, open = true, title, children, onClose, presentation = "detail",
+  labelledBy, headingLevel, revealOnOpen = presentation === "page",
   wide = false, size = "default", busy = false, dirty = false, closeWarning, protectEdits = false,
   blockDuringRouteTransition = true }: SheetProps) {
   const t = useTranslations("Sheet");
   const keyboardOpen = useKeyboardOpen();
   const routeTransitionActive = useIsRouteTransitionActive();
+  const routeOverlayVisible = useIsRouteOverlayVisible();
   const transitioning = blockDuringRouteTransition && routeTransitionActive;
-  const [mobile, setMobile] = useState(false);
-  const modal = presentation === "modal" || (presentation === "detail" && mobile);
+  const modal = presentation === "modal";
+  // Modals leave at once; in-page panels stay painted (but locked) until the overlay covers them,
+  // so a fast route never blinks the page layout.
+  const hiddenByRoute = transitioning && (modal || routeOverlayVisible);
+  const Heading = (headingLevel ?? (presentation === "page" ? 1 : 2)) === 1 ? "h1" : "h2";
   const [host] = useState(() => typeof document === "undefined" ? null : document.createElement("div"));
   const anchorRef = useRef<HTMLDivElement>(null);
   const movingFocus = useRef<HTMLElement | null>(null);
@@ -73,31 +89,39 @@ export default function Sheet({ id, open = true, title, children, onClose, prese
   const closeRef = useRef<HTMLButtonElement>(null);
   const continueRef = useRef<HTMLButtonElement>(null);
   const editFocus = useRef<HTMLElement | null>(null);
-  const afterClose = useRef<(() => void) | undefined>(undefined);
+  const afterClose = useRef<CloseRequest | undefined>(undefined);
   const backdropDismissedKeyboard = useRef(false);
   const baseline = useRef(new Map<Element, string>());
   const [discard, setDiscard] = useState(false);
-  const latest = useRef({ busy, dirty, discard, onClose });
-  useLayoutEffect(() => { latest.current = { busy, dirty, discard, onClose }; });
+  const latest = useRef({ busy, dirty, discard, onClose, closeWarning, protectEdits });
+  useLayoutEffect(() => { latest.current = { busy, dirty, discard, onClose, closeWarning, protectEdits }; });
+
+  const hasUnsavedChanges = () => latest.current.dirty || Boolean(latest.current.closeWarning) ||
+    (latest.current.protectEdits && [...(panelRef.current?.querySelectorAll<Control>(draftControls) ?? [])]
+      .some((field) => controlValue(field) !== (baseline.current.get(field) ?? controlDefaultValue(field))));
+  const hasUnsavedChangesRef = useRef(hasUnsavedChanges);
+  useLayoutEffect(() => { hasUnsavedChangesRef.current = hasUnsavedChanges; });
 
   const keepEditing = () => {
+    const request = afterClose.current;
     afterClose.current = undefined;
     setDiscard(false);
+    request?.onCanceled?.();
     requestAnimationFrame(() => editFocus.current?.isConnected && editFocus.current.focus({ preventScroll: true }));
   };
   const completeClose = () => {
     const followup = afterClose.current;
     afterClose.current = undefined;
-    latest.current.onClose();
-    followup?.();
+    withConfirmedClose(() => {
+      latest.current.onClose();
+      followup?.onClosed?.();
+    });
   };
   const requestClose = () => {
     const state = latest.current;
     if (state.busy) return;
     if (state.discard) { keepEditing(); return; }
-    const hasChangedFields = protectEdits && [...(panelRef.current?.querySelectorAll<Control>(draftControls) ?? [])]
-      .some((field) => controlValue(field) !== (baseline.current.get(field) ?? controlDefaultValue(field)));
-    if (state.dirty || hasChangedFields || closeWarning) {
+    if (hasUnsavedChangesRef.current()) {
       editFocus.current = document.activeElement as HTMLElement;
       setDiscard(true);
     } else completeClose();
@@ -106,12 +130,13 @@ export default function Sheet({ id, open = true, title, children, onClose, prese
   useLayoutEffect(() => { requestCloseRef.current = requestClose; });
 
   useLayoutEffect(() => {
-    const media = window.matchMedia("(max-width: 999px)");
-    const update = () => setMobile(media.matches);
-    update();
-    media.addEventListener("change", update);
-    return () => media.removeEventListener("change", update);
-  }, []);
+    if (!open) return;
+    return registerNavigationGuard({
+      hasPendingWork: () => latest.current.busy || hasUnsavedChangesRef.current(),
+      confirmLeave: () => !latest.current.busy && (!hasUnsavedChangesRef.current() ||
+        window.confirm(latest.current.closeWarning ?? t("unsaved"))),
+    });
+  }, [open, t]);
 
   useLayoutEffect(() => {
     if (!open || !host) return;
@@ -157,7 +182,8 @@ export default function Sheet({ id, open = true, title, children, onClose, prese
     if (open && !transitioning && !host?.contains(document.activeElement)) {
       closeRef.current?.focus({ preventScroll: true });
     }
-  }, [open, transitioning, host]);
+    if (open && !transitioning && revealOnOpen) panelRef.current?.scrollIntoView?.({ block: "start" });
+  }, [open, transitioning, host, revealOnOpen]);
 
   useLayoutEffect(() => {
     if (open) return;
@@ -172,12 +198,20 @@ export default function Sheet({ id, open = true, title, children, onClose, prese
     if (!open) return;
     const panel = panelRef.current;
     const close = (event: Event) => {
-      if (latest.current.busy) return;
-      afterClose.current = (event as CustomEvent<(() => void) | undefined>).detail;
-      requestCloseRef.current();
+      const request = (event as CustomEvent<CloseRequest>).detail;
+      if (latest.current.busy) { request.onCanceled?.(); return; }
+      afterClose.current?.onCanceled?.();
+      afterClose.current = request;
+      // A new external intent replaces the pending one, without dismissing
+      // the existing confirmation or losing the original editing focus.
+      if (!latest.current.discard) requestCloseRef.current();
     };
     panel?.addEventListener("sheet-close", close);
-    return () => panel?.removeEventListener("sheet-close", close);
+    return () => {
+      panel?.removeEventListener("sheet-close", close);
+      afterClose.current?.onCanceled?.();
+      afterClose.current = undefined;
+    };
   }, [open]);
 
   useLayoutEffect(() => {
@@ -250,7 +284,7 @@ export default function Sheet({ id, open = true, title, children, onClose, prese
   if (!open || !host) return null;
   const isBackdrop = (target: EventTarget) => target === layerRef.current || target === layerRef.current?.firstElementChild;
   const content = (
-    <div ref={layerRef} className="product-sheet-layer" data-modal={modal} data-transitioning={transitioning} inert={transitioning || undefined} hidden={transitioning}
+    <div ref={layerRef} className="product-sheet-layer" data-modal={modal} data-transitioning={transitioning} inert={transitioning || undefined} hidden={hiddenByRoute}
       onPointerDown={(event) => {
         backdropDismissedKeyboard.current = modal && keyboardOpen && isBackdrop(event.target);
         if (!backdropDismissedKeyboard.current) return;
@@ -271,7 +305,7 @@ export default function Sheet({ id, open = true, title, children, onClose, prese
       }}>
       <div className="product-sheet-viewport">
       <div id={id} ref={panelRef} className="product-sheet" data-wide={wide} data-size={size} role={modal ? "dialog" : "region"} aria-modal={modal || undefined} data-presentation={presentation}
-        aria-labelledby={titleId} aria-busy={busy} tabIndex={-1}
+        aria-labelledby={labelledBy && !modal ? labelledBy : titleId} aria-busy={busy} tabIndex={-1}
         onKeyDown={(event) => {
           if (event.nativeEvent.isComposing || event.nativeEvent.keyCode === 229) return;
           if (event.key !== "Escape" || event.defaultPrevented || transitioning) return;
@@ -291,10 +325,15 @@ export default function Sheet({ id, open = true, title, children, onClose, prese
             if (!baseline.current.has(field)) baseline.current.set(field, controlDefaultValue(field));
           });
         }}>
-        <header className="product-sheet-header">
-          <h2 id={titleId}>{title}</h2>
-          <Button ref={closeRef} variant="ghost" onClick={requestClose} disabled={busy} aria-label={t("close")} aria-expanded={modal ? undefined : true} aria-controls={`${titleId}-body`}><Icon name={modal ? "close" : "chevron-down"} className={modal ? undefined : "rotate-180"} size={20} /></Button>
-        </header>
+        {(!labelledBy || modal) && <header className="product-sheet-header">
+          <Heading id={titleId}>{title}</Heading>
+          <Button ref={closeRef} variant="ghost" onClick={requestClose} disabled={busy}
+            leftIcon={presentation === "page" ? <Icon name="arrow-left" size={16} /> : undefined}
+            aria-label={presentation === "page" ? t("backToList") : t("close")}
+            aria-expanded={modal || presentation === "page" ? undefined : true} aria-controls={`${titleId}-body`}>
+            {presentation === "page" ? t("backToList") : <Icon name={modal ? "close" : "chevron-down"} className={modal ? undefined : "rotate-180"} size={20} />}
+          </Button>
+        </header>}
         {discard && <div className="product-sheet-discard" role="group" aria-label={closeWarning ?? t("unsaved")}>
           <p>{closeWarning ?? t("unsaved")}</p>
           <Button ref={continueRef} onClick={keepEditing}>{t("continue")}</Button>

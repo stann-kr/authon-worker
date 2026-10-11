@@ -5,6 +5,7 @@ import { NextIntlClientProvider } from "next-intl";
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import type { GuestLimitRequestView } from "@/lib/guest-limits/types";
 import messages from "@/messages/en.json";
+import { ToastProvider } from "@/components/feedback/ToastProvider";
 
 type Result = { data: GuestLimitRequestView[]; error: null };
 const runtime = globalThis as typeof globalThis & {
@@ -34,9 +35,12 @@ const request: GuestLimitRequestView = {
   status: "pending", decidedByUserId: null, decidedAt: null, decisionNote: null,
   createdAt: "2026-09-18T00:00:00Z", updatedAt: "2026-09-18T00:00:00Z",
 };
-function view(date = request.date) {
+function view(date = request.date, onPendingCountChange?: (count: number) => void) {
   return <NextIntlClientProvider locale="en" messages={messages}>
-    <GuestLimitRequestManagement eventId={null} selectedDate={date} onDateChange={() => {}} businessDate={request.date} />
+    <ToastProvider>
+      <GuestLimitRequestManagement eventId={null} selectedDate={date} onDateChange={() => {}} businessDate={request.date}
+        onPendingCountChange={onPendingCountChange} />
+    </ToastProvider>
   </NextIntlClientProvider>;
 }
 beforeEach(() => {
@@ -46,18 +50,41 @@ beforeEach(() => {
   };
 });
 afterEach(cleanup);
+const approvedCountLabel = messages.GuestLimitAdmin.approvedCount.replace("{max}", String(request.requestedExtra));
 
-test("approval preserves raw input and accepts only whole counts within the request", async () => {
+test("approval preserves raw input and explains counts outside the request", async () => {
   render(view());
-  const input = await screen.findByRole("spinbutton", { name: messages.GuestLimitAdmin.approvedCount }) as HTMLInputElement;
+  const input = await screen.findByRole("spinbutton", { name: approvedCountLabel }) as HTMLInputElement;
   const approve = screen.getByRole("button", { name: messages.GuestLimitAdmin.approve }) as HTMLButtonElement;
+  const rangeError = messages.GuestLimitAdmin.approvedCountInvalid.replace("{max}", String(request.requestedExtra));
   for (const value of ["", "1.5", "0", "4"]) {
     fireEvent.change(input, { target: { value } });
     assert.equal(input.value, value);
     assert.equal(approve.disabled, true);
+    const describedBy = input.getAttribute("aria-describedby");
+    assert.equal(describedBy ? document.getElementById(describedBy)?.textContent : null, value === "" ? null : rangeError);
   }
   fireEvent.change(input, { target: { value: "2" } });
   assert.equal(approve.disabled, false);
+  assert.equal(input.hasAttribute("aria-invalid"), false);
+});
+
+test("rejection waits for confirmation before deciding", async () => {
+  const decisions: string[] = [];
+  runtime.guestLimitAdminActions.decide = async ({ decision }) => { decisions.push(decision); return { error: null }; };
+  render(view());
+  fireEvent.click(await screen.findByRole("button", { name: messages.GuestLimitAdmin.reject }));
+  assert.deepEqual(decisions, []);
+  const confirmation = screen.getByRole("group", { name: messages.GuestLimitAdmin.rejectTitle.replace("{name}", request.userName) });
+  fireEvent.click(within(confirmation).getByRole("button", { name: messages.Common.cancel }));
+  assert.equal(screen.queryByRole("group", { name: /Reject/ }), null);
+  assert.deepEqual(decisions, []);
+
+  fireEvent.click(screen.getByRole("button", { name: messages.GuestLimitAdmin.reject }));
+  const reopened = screen.getByRole("group", { name: messages.GuestLimitAdmin.rejectTitle.replace("{name}", request.userName) });
+  await act(async () => fireEvent.click(within(reopened).getByRole("button", { name: messages.GuestLimitAdmin.reject })));
+  assert.deepEqual(decisions, ["reject"]);
+  assert.ok(screen.getByText(messages.GuestLimitAdmin.rejected).closest('[role="status"]'));
 });
 
 test("a decision holds all request controls and recovers after a transport failure", async () => {
@@ -102,7 +129,7 @@ test("a date switch hides old requests and does not publish the previous decisio
 test("background refresh receives incoming work without replacing an approval draft or losing rows on failure", async () => {
   Object.defineProperty(document, "visibilityState", { configurable: true, value: "visible" });
   render(view());
-  const input = await screen.findByRole("spinbutton", { name: messages.GuestLimitAdmin.approvedCount }) as HTMLInputElement;
+  const input = await screen.findByRole("spinbutton", { name: approvedCountLabel }) as HTMLInputElement;
   fireEvent.change(input, { target: { value: "2" } });
   runtime.guestLimitAdminActions.fetch = async () => ({ data: [request, { ...request, id: "incoming", userName: "Incoming staff" }], error: null });
   await act(async () => { window.dispatchEvent(new Event("online")); });
@@ -113,4 +140,18 @@ test("background refresh receives incoming work without replacing an approval dr
   assert.ok(screen.getByText(messages.GuestLimitAdmin.loadFailed));
   assert.ok(screen.getByText("Incoming staff"));
   assert.equal(input.value, "2");
+});
+
+test("the navigation badge follows the inbox after each successful load and decision", async () => {
+  const counts: number[] = [];
+  runtime.guestLimitAdminActions.fetch = async () => ({ data: [request, { ...request, id: "approved", status: "approved" }], error: null });
+  runtime.guestLimitAdminActions.decide = async () => {
+    runtime.guestLimitAdminActions.fetch = async () => ({ data: [{ ...request, status: "approved" }], error: null });
+    return { error: null };
+  };
+  render(view(request.date, (count) => counts.push(count)));
+  const approve = await screen.findByRole("button", { name: messages.GuestLimitAdmin.approve });
+  await act(async () => fireEvent.click(approve));
+  await waitFor(() => assert.equal(counts.at(-1), 0));
+  assert.equal(counts[0], 1);
 });

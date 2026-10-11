@@ -569,7 +569,7 @@ test("walk-in and undo publish only after their durable queue writes", async () 
   });
   await waitFor(() => {
     assert.equal(screen.getByTestId("walk-ins").textContent, "3");
-    assert.equal(screen.getByTestId("announcement").textContent, "recordedAnnouncement");
+    assert.equal(screen.getByTestId("announcement").textContent, "recordedAnnouncement totalShort:8");
   });
   assert.deepEqual(events.slice(0, 2), ["enqueue:walk_in", "list"]);
 
@@ -583,7 +583,7 @@ test("walk-in and undo publish only after their durable queue writes", async () 
   });
   await waitFor(() => {
     assert.equal(screen.getByTestId("walk-ins").textContent, "2");
-    assert.equal(screen.getByTestId("announcement").textContent, "undoneAnnouncement");
+    assert.equal(screen.getByTestId("announcement").textContent, "undoneAnnouncement totalShort:7");
   });
   assert.equal(
     enqueueParams[1]?.reversesIdempotencyKey,

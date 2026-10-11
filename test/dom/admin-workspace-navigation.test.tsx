@@ -3,6 +3,8 @@ import { afterEach, test } from "node:test";
 import { useLayoutEffect, useRef } from "react";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 
+import { registerNavigationGuard } from "@/components/overlays/navigation-guard";
+
 import useAdminWorkspaceNavigation, {
   focusAdminWorkspaceAfterTaskChange,
   getAdminEventScope,
@@ -85,7 +87,7 @@ afterEach(() => {
   setLocation("");
 });
 
-test("an explicitly selected operating date survives leaving and reopening Admin", () => {
+test("an explicitly selected operating date survives leaving and reopening Admin within its business day", () => {
   const view = render(<NavigationHarness />);
   fireEvent.change(screen.getByLabelText("Operating date"), {
     target: { value: "2026-08-12" },
@@ -102,12 +104,19 @@ test("an explicitly selected operating date survives leaving and reopening Admin
   assert.equal(screen.getByTestId("selected-date").textContent, "2026-08-21");
 });
 
-test("legacy saved dates restore while invalid values use the current venue business date", () => {
-  for (const saved of ["2026-08-12", "2026-02-30", 42]) {
+test("a saved operating date restores only within its business day while earlier, legacy and invalid values use today", () => {
+  const earlierDay = Date.now() - 3 * 24 * 60 * 60 * 1000;
+  for (const [saved, expected] of [
+    [{ venueId: "venue-a", date: "2026-08-12", selectedAt: Date.now() }, "2026-08-12"],
+    [{ venueId: "venue-a", date: "2026-08-12", selectedAt: earlierDay }, "2026-08-20"],
+    [{ venueId: "venue-a", date: "2026-08-12" }, "2026-08-20"],
+    ["2026-08-12", "2026-08-20"],
+    ["2026-02-30", "2026-08-20"],
+    [42, "2026-08-20"],
+  ] as const) {
     window.localStorage.setItem("admin:selectedDate", JSON.stringify(saved));
     const view = render(<NavigationHarness />);
-    assert.equal(screen.getByTestId("selected-date").textContent,
-      saved === "2026-08-12" ? saved : "2026-08-20");
+    assert.equal(screen.getByTestId("selected-date").textContent, expected);
     view.unmount();
   }
 });
@@ -348,4 +357,21 @@ test("role changes replace an unavailable task with the guest list", async () =>
     assert.equal(screen.getByTestId("active-task").textContent, "guest-list");
   });
   assert.equal(window.location.search, "?tab=guests&view=list");
+});
+
+
+test("an unsaved form can cancel an admin destination before either the URL or task changes", () => {
+  setLocation("?tab=links&view=create");
+  let allow = false;
+  const remove = registerNavigationGuard({ hasPendingWork: () => true, confirmLeave: () => allow });
+  try {
+    render(<NavigationHarness />);
+    fireEvent.click(screen.getByRole("button", { name: "Open analytics" }));
+    assert.equal(screen.getByTestId("active-task").textContent, "link-create");
+    assert.equal(window.location.search, "?tab=links&view=create");
+    allow = true;
+    fireEvent.click(screen.getByRole("button", { name: "Open analytics" }));
+    assert.equal(screen.getByTestId("active-task").textContent, "analytics");
+    assert.equal(window.location.search, "?tab=analytics");
+  } finally { remove(); }
 });

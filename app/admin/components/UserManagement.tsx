@@ -1,11 +1,14 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { confirmWorkspaceNavigation } from "@/components/overlays/navigation-guard";
+
+import type { FormEvent, ReactNode } from "react";
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useLocalStorage } from "../../../lib/hooks";
 import Sheet, { requestSheetClose } from "@/components/overlays/Sheet";
-import RecordList, { useRecordDetail } from "@/components/records/RecordList";
+import RecordList, { RecordStatus, useRecordDetail, type RecordStatusTone } from "@/components/records/RecordList";
+import { useToast } from "@/components/feedback/ToastProvider";
 import InviteUser from "./InviteUser";
 import VenueSelector, {
   useVenueSelector,
@@ -33,7 +36,9 @@ import { formatVenueDateTime } from "@/lib/date";
 import { shouldShowEmptyState } from "@/lib/ui/async-list-state";
 import {
   useUserDirectoryController,
+  matchesUserDirectoryFilters,
   type StatusFilter,
+  type UserDirectoryFilters,
   type UserDirectoryControllerActions,
 } from "./useUserDirectoryController";
 
@@ -61,6 +66,7 @@ export default function UserManagement({
   const t = useTranslations("UserAdmin");
   const commonT = useTranslations("Common");
   const locale = useLocale();
+  const showToast = useToast();
   const [internalActiveSection, setInternalActiveSection] =
     useLocalStorage<UserManagementSection>(
     "usermgmt:activeTab",
@@ -73,7 +79,7 @@ export default function UserManagement({
         onActiveSectionChange(section);
         return;
       }
-      setInternalActiveSection(section);
+      if (confirmWorkspaceNavigation()) setInternalActiveSection(section);
     },
     [onActiveSectionChange, setInternalActiveSection],
   );
@@ -119,6 +125,7 @@ export default function UserManagement({
     scopedFeedback,
     scopedPasswordLink,
     scopedUsers,
+    scopeIdentity,
     searchQuery,
     setPendingUserAction,
     setRoleFilter,
@@ -132,6 +139,41 @@ export default function UserManagement({
     isActive: activeTab === "users",
     isSuperAdmin,
   });
+
+  const [selection, setSelection] = useState<{ scope: typeof scopeIdentity; id: string | null } | null>(null);
+  const selectedUserId = selection?.scope === scopeIdentity ? selection.id : null;
+
+  // Success is a transient toast; an error is shown once, in the surface where the action started.
+  const announcedFeedbackRef = useRef<typeof scopedFeedback>(null);
+  useEffect(() => {
+    if (scopedFeedback?.type !== "success" || announcedFeedbackRef.current === scopedFeedback) return;
+    announcedFeedbackRef.current = scopedFeedback;
+    showToast({ message: scopedFeedback.message });
+  }, [scopedFeedback, showToast]);
+  const actionError = scopedFeedback?.type === "error" ? scopedFeedback : null;
+  const errorInDetail = Boolean(selectedUserId && filteredUsers.some((user) => user.id === selectedUserId));
+  const [filterRequest, setFilterRequest] = useState<{ scope: typeof scopeIdentity } | null>(null);
+  const awaitingFilterConfirmation = filterRequest?.scope === scopeIdentity;
+  const [searchComposition, setSearchComposition] = useState<{ scope: typeof scopeIdentity; value: string } | null>(null);
+  const composingSearch = useRef<typeof scopeIdentity | null>(null);
+
+  const changeFilters = (patch: Partial<UserDirectoryFilters>) => {
+    const next = { searchQuery, roleFilter, statusFilter, ...patch };
+    const apply = () => {
+      setSearchQuery(next.searchQuery);
+      setRoleFilter(next.roleFilter);
+      setStatusFilter(next.statusFilter);
+    };
+    const selected = scopedUsers.find((user) => user.id === selectedUserId);
+    if (!selected || matchesUserDirectoryFilters(selected, next)) { apply(); return; }
+    const request = { scope: scopeIdentity };
+    const settle = () => setFilterRequest((current) => current === request ? null : current);
+    setFilterRequest(request);
+    if (!requestSheetClose(`account-detail-${selected.id}`, () => { settle(); apply(); }, settle)) {
+      settle();
+      apply();
+    }
+  };
 
   const formatActivityDate = (
     value: string,
@@ -273,14 +315,14 @@ export default function UserManagement({
           <div className="account-directory">
             <div className="account-directory-body">
               {loadError && <Alert type="error" message={loadError} className="mb-4" />}
-              {scopedFeedback && (
-                <Alert type={scopedFeedback.type} message={scopedFeedback.message} className="mb-4" />
+              {actionError && !scopedPasswordLink && !errorInDetail && (
+                <Alert type="error" message={actionError.message} className="mb-4" />
               )}
-              {scopedPasswordLink && <Sheet title={scopedPasswordLink.userName} onClose={closePasswordLink} busy={isSharingPasswordLink}>
-                {scopedFeedback && <Alert type={scopedFeedback.type} message={scopedFeedback.message} />}
+              {scopedPasswordLink && <Sheet id="account-credential-result" title={scopedPasswordLink.userName} onClose={closePasswordLink} busy={isSharingPasswordLink} closeWarning={t("invitationLinkCreatedHelp")}>
+                {actionError && <Alert type="error" message={actionError.message} />}
                 <div
                   ref={passwordLinkPanelRef}
-                  className="mb-4 rounded-panel border border-status-waiting/70 bg-status-waiting/10 p-4 outline-none"
+                  className="mb-4 rounded-panel border border-transparent bg-status-waiting/10 p-4 outline-none"
                   role="region"
                   aria-labelledby="managed-password-link-title"
                   tabIndex={-1}
@@ -331,7 +373,7 @@ export default function UserManagement({
                       </button>
                       <button
                         type="button"
-                        onClick={closePasswordLink}
+                        onClick={() => requestSheetClose("account-credential-result")}
                         className="min-h-11 border border-border-default px-3 py-2 text-xs text-text-muted hover:text-text-heading"
                       >
                         {t("closeCredential")}
@@ -341,18 +383,38 @@ export default function UserManagement({
                 </div>
               </Sheet>}
 
+              <PanelHeader
+                title={t("userList")}
+                count={filteredUsers.length}
+                onRefresh={loadUsers}
+                isLoading={isCurrentScopeLoading}
+              />
               <div className="account-filters">
                 <div>
                   <label htmlFor="user-search" className="sr-only">
                     {t("searchUsers")}
                   </label>
                   <input
+                    key={`${isSuperAdmin}:${effectiveVenueId}`}
                     ref={directoryFocusFallbackRef}
                     id="user-search"
                     name="user-search"
                     type="search"
-                    value={searchQuery}
-                    onChange={(event) => setSearchQuery(event.target.value)}
+                    value={searchComposition?.scope === scopeIdentity ? searchComposition.value : searchQuery}
+                    disabled={awaitingFilterConfirmation}
+                    onCompositionStart={(event) => {
+                      composingSearch.current = scopeIdentity;
+                      setSearchComposition({ scope: scopeIdentity, value: event.currentTarget.value });
+                    }}
+                    onCompositionEnd={(event) => {
+                      composingSearch.current = null;
+                      setSearchComposition(null);
+                      changeFilters({ searchQuery: event.currentTarget.value });
+                    }}
+                    onChange={(event) => {
+                      if (composingSearch.current === scopeIdentity) setSearchComposition({ scope: scopeIdentity, value: event.target.value });
+                      else changeFilters({ searchQuery: event.target.value });
+                    }}
                     className="app-field"
                     placeholder={t("searchPlaceholder")}
                     autoComplete="off"
@@ -367,8 +429,9 @@ export default function UserManagement({
                     id="user-role-filter"
                     name="user-role-filter"
                     value={roleFilter}
+                    disabled={awaitingFilterConfirmation}
                     autoComplete="off"
-                    onChange={(event) => setRoleFilter(event.target.value as typeof roleFilter)}
+                    onChange={(event) => changeFilters({ roleFilter: event.target.value as typeof roleFilter })}
                     className="app-field"
                   >
                     <option value="all">{t("allRoles")}</option>
@@ -390,8 +453,9 @@ export default function UserManagement({
                     id="user-status-filter"
                     name="user-status-filter"
                     value={statusFilter}
+                    disabled={awaitingFilterConfirmation}
                     autoComplete="off"
-                    onChange={(event) => setStatusFilter(event.target.value as StatusFilter)}
+                    onChange={(event) => changeFilters({ statusFilter: event.target.value as StatusFilter })}
                     className="app-field"
                   >
                     <option value="current">{t("currentAccounts")}</option>
@@ -401,12 +465,6 @@ export default function UserManagement({
                     <option value="deleted">{t("deletedAccounts")}</option>
                   </select>
                 </div>
-                <PanelHeader
-                  title={t("userList")}
-                  count={filteredUsers.length}
-                  onRefresh={loadUsers}
-                  isLoading={isCurrentScopeLoading}
-                />
               </div>
 
               {listState === "loading" ? (
@@ -422,7 +480,8 @@ export default function UserManagement({
                 />
               ) : (
                 <RecordList
-                  key={`${effectiveVenueId}:${searchQuery}:${statusFilter}:${roleFilter}`}
+                  key={`${isSuperAdmin}:${effectiveVenueId}`}
+                  selection={{ id: selectedUserId, onChange: (id) => setSelection({ scope: scopeIdentity, id }) }}
                   aria-busy={isCurrentScopeLoading}
                   className={`${
                     isCurrentScopeLoading ? "pointer-events-none" : ""
@@ -453,7 +512,7 @@ export default function UserManagement({
                         createdAt: event.createdAt, displayTime: formatActivityDate(event.createdAt, event.venueId),
                       })) : undefined}
                       activityUnavailable={listState === "partial"}
-                      feedback={scopedFeedback}
+                      feedback={!scopedPasswordLink && user.id === selectedUserId ? actionError : null}
                       confirmation={pendingUserAction?.user.id === user.id && (
                         <ConfirmDialog
                           open
@@ -579,8 +638,10 @@ export function UserCard({
   const detail = useRecordDetail(user.id);
   const [isEditing, setIsEditing] = useState(false);
   const editButtonRef = useRef<HTMLButtonElement>(null);
-  const editRegionRef = useRef<HTMLDivElement>(null);
+  const editRegionRef = useRef<HTMLFormElement>(null);
   const nameInputRef = useRef<HTMLInputElement>(null);
+  const guestLimitInputRef = useRef<HTMLInputElement>(null);
+  const [fieldError, setFieldError] = useState<{ field: "name" | "guestLimit"; message: string } | null>(null);
   const shouldFocusEditorRef = useRef(false);
   const shouldRestoreEditButtonRef = useRef(false);
   const isSetupPending =
@@ -651,6 +712,7 @@ export function UserCard({
       editRegionRef.current?.contains(document.activeElement),
     );
     setIsEditing(false);
+    setFieldError(null);
     setEditData({
       name: user.name,
       role: user.role,
@@ -660,9 +722,22 @@ export function UserCard({
     });
   };
 
-  const handleSave = async () => {
+  const handleSave = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (actionsDisabled || !dirty) return;
+    if (!editData.name.trim()) {
+      setFieldError({ field: "name", message: t("nameRequired") });
+      nameInputRef.current?.focus();
+      return;
+    }
+    if (editData.guestLimit !== null && (!Number.isInteger(editData.guestLimit) || editData.guestLimit < 0)) {
+      setFieldError({ field: "guestLimit", message: t("guestLimitInvalid") });
+      guestLimitInputRef.current?.focus();
+      return;
+    }
+    setFieldError(null);
     const saved = await onUpdate(user.id, {
-      name: editData.name,
+      name: editData.name.trim(),
       guestLimit: editData.guestLimit,
       ...(canEditRole
         ? {
@@ -698,6 +773,14 @@ export function UserCard({
         ? t("setupPending")
         : t("active")
       : t("inactive");
+  const statusTone: RecordStatusTone = isDeleted
+    ? "danger"
+    : !user.active
+      ? "inactive"
+      : isSetupPending
+        ? "waiting"
+        : "ok";
+  const resetUnavailableId = `account-reset-unavailable-${user.id}`;
 
   const dirty = isEditing && (editData.name !== user.name || editData.role !== user.role ||
     editData.accountKind !== user.accountKind || editData.doorAccessEnabled !== user.doorAccessEnabled || editData.guestLimit !== user.guestLimit);
@@ -708,26 +791,26 @@ export function UserCard({
     <tr className="account-row" aria-busy={isBusy} data-selected={detail.open}>
       <td className="account-name-cell">
         <button type="button" className="account-open" onClick={() => detail.open ? requestSheetClose(`account-detail-${user.id}`) : detail.show()} disabled={actionsDisabled} aria-expanded={detail.open} aria-controls={detail.open ? `account-detail-${user.id}` : undefined}>
-          <strong>{user.name}</strong><small>{isDeleted ? t("deletedAccount") : user.email}</small>
+          <strong id={`account-label-${user.id}`}>{user.name}</strong><small>{isDeleted ? t("deletedAccount") : user.email}</small>
           <span className="account-mobile-role"><RoleLabel role={role} /></span>
         </button>
       </td>
       <td className="account-role-cell"><RoleLabel role={role} /></td>
       <td className="account-limit-cell">{user.guestLimit ?? "—"}</td>
       <td className="account-door-cell">{doorAllowed ? t("enabled") : t("disabled")}</td>
-      <td className="account-status-cell"><span className="record-status" data-tone={isSetupPending ? "waiting" : !user.active || isDeleted ? "inactive" : "neutral"}>{statusLabel}</span></td>
+      <td className="account-status-cell"><RecordStatus tone={statusTone}>{statusLabel}</RecordStatus></td>
       <td className="account-login-cell">{user.lastLoginAt ? <time dateTime={user.lastLoginAt}>{formatDate(user.lastLoginAt)}</time> : t("never")}</td>
     </tr>
-    {detail.open && <tr className="account-detail-row"><td colSpan={6}><Sheet id={`account-detail-${user.id}`} title={user.name} presentation="detail" size="record" onClose={() => { closeEditor(); detail.close(); }} busy={actionsDisabled} dirty={dirty}>
+    {detail.open && <tr className="account-detail-row"><td colSpan={6}><Sheet labelledBy={`account-label-${user.id}`} id={`account-detail-${user.id}`} title={user.name} presentation="detail" size="record" onClose={() => { closeEditor(); detail.close(); }} busy={actionsDisabled} dirty={dirty}>
       {feedback && <Alert type={feedback.type} message={feedback.message} />}
       {!isEditing ? (
         <>
           <div className="account-detail-top">
-            <div className="account-detail-status"><RoleLabel role={role} /><span className="record-status">{statusLabel}</span></div>
+            <div className="account-detail-status"><RoleLabel role={role} /><RecordStatus tone={statusTone}>{statusLabel}</RecordStatus></div>
             {canManage && <div className="account-detail-actions">
               {canEditDetails && <Button ref={editButtonRef} onClick={beginEditing} disabled={actionsDisabled} size="sm">{t("edit")}</Button>}
               <Button onClick={() => onResetPassword(user)} disabled={actionsDisabled || !user.active}
-                title={!user.active ? t("inactiveResetUnavailable") : undefined} variant="outline" size="sm">
+                aria-describedby={!user.active ? resetUnavailableId : undefined} variant="outline" size="sm">
                 {isSetupPending ? t("reissueInvitation") : t("issuePasswordResetLink")}
               </Button>
               <details className="account-more-actions" onKeyDown={(event) => {
@@ -744,6 +827,7 @@ export function UserCard({
                   {!user.active && <Button onClick={() => onDelete(user)} disabled={actionsDisabled} variant="danger" size="sm" fullWidth>{t("delete")}</Button>}
                 </div>
               </details>
+              {!user.active && <p id={resetUnavailableId} className="app-helper account-action-help">{t("inactiveResetUnavailable")}</p>}
             </div>}
           </div>
           <div className="account-detail-columns">
@@ -786,7 +870,7 @@ export function UserCard({
           </div>
         </>
       ) : (
-        <div ref={editRegionRef} className="account-editor">
+        <form ref={editRegionRef} className="account-editor" onSubmit={(event) => void handleSave(event)} noValidate>
           <div>
             <label htmlFor={`user-name-${user.id}`} className="app-label">
               {t("name")}
@@ -797,12 +881,23 @@ export function UserCard({
               name={`user-name-${user.id}`}
               type="text"
               value={editData.name}
-              onChange={(event) => setEditData({ ...editData, name: event.target.value })}
+              onChange={(event) => {
+                setEditData({ ...editData, name: event.target.value });
+                if (fieldError?.field === "name") setFieldError(null);
+              }}
               className="app-field"
               maxLength={100}
               disabled={actionsDisabled}
               autoComplete="off"
+              required
+              aria-invalid={fieldError?.field === "name" || undefined}
+              aria-describedby={fieldError?.field === "name" ? `user-name-error-${user.id}` : undefined}
             />
+            {fieldError?.field === "name" && (
+              <p id={`user-name-error-${user.id}`} className="mt-1 text-xs text-status-danger" role="alert">
+                {fieldError.message}
+              </p>
+            )}
           </div>
           {canEditRole && (
             <fieldset>
@@ -865,7 +960,7 @@ export function UserCard({
           )}
 
           {canEditRole && editData.accountKind === "shared" && (
-            <label className="flex min-h-11 items-start gap-3 rounded-control border border-border-default bg-surface-raised p-3">
+            <label className="flex min-h-11 items-start gap-3 rounded-control border border-transparent bg-surface-raised p-3">
               <input
                 name={`user-door-access-${user.id}`}
                 type="checkbox"
@@ -886,29 +981,41 @@ export function UserCard({
               {t("guestLimit")}
             </label>
             <input
+              ref={guestLimitInputRef}
               id={`user-guest-limit-${user.id}`}
               name={`user-guest-limit-${user.id}`}
               type="number"
+              inputMode="numeric"
               value={editData.guestLimit ?? ""}
-              onChange={(e) =>
+              onChange={(e) => {
+                const parsed = e.target.value === "" ? null : Number(e.target.value);
                 setEditData({
                   ...editData,
-                  guestLimit: e.target.value ? parseInt(e.target.value) : null,
-                })
-              }
+                  guestLimit: parsed === null || Number.isNaN(parsed) ? null : parsed,
+                });
+                if (fieldError?.field === "guestLimit") setFieldError(null);
+              }}
               className="app-field font-mono tabular-nums"
               min="0"
               max="999"
+              step="1"
               disabled={actionsDisabled}
               autoComplete="off"
+              aria-invalid={fieldError?.field === "guestLimit" || undefined}
+              aria-describedby={fieldError?.field === "guestLimit" ? `user-guest-limit-error-${user.id}` : undefined}
             />
+            {fieldError?.field === "guestLimit" && (
+              <p id={`user-guest-limit-error-${user.id}`} className="mt-1 text-xs text-status-danger" role="alert">
+                {fieldError.message}
+              </p>
+            )}
           </div>
 
           <div className="grid grid-cols-2 gap-3">
             <Button
-              type="button"
-              onClick={handleSave}
-              disabled={actionsDisabled}
+              type="submit"
+              disabled={actionsDisabled || !dirty}
+              isLoading={isBusy}
               size="sm"
               fullWidth
             >
@@ -925,7 +1032,7 @@ export function UserCard({
               {commonT("cancel")}
             </Button>
           </div>
-        </div>
+        </form>
       )}
       {confirmation}
       </Sheet></td></tr>}

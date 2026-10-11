@@ -3,10 +3,12 @@
 import { useCallback, useEffect, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import Alert from "@/components/Alert";
+import Button from "@/components/Button";
 import ConfirmDialog from "@/components/ConfirmDialog";
 import EmptyState from "@/components/EmptyState";
 import PanelHeader from "@/components/PanelHeader";
 import Skeleton from "@/components/Skeleton";
+import { useToast } from "@/components/feedback/ToastProvider";
 import {
   confirmEventCloseout,
   fetchEventCloseout,
@@ -23,25 +25,27 @@ interface EventCloseoutProps {
   timeZone?: string | null;
 }
 
-function formatDuration(seconds: number | null): string {
-  if (seconds === null) return "—";
-  if (seconds < 60) return `${seconds}s`;
-  const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) return `${minutes}m`;
-  const hours = Math.floor(minutes / 60);
-  const remainingMinutes = minutes % 60;
-  return remainingMinutes > 0 ? `${hours}h ${remainingMinutes}m` : `${hours}h`;
-}
-
 export default function EventCloseout({ eventId, eventState, timeZone }: EventCloseoutProps) {
   const t = useTranslations("EventCloseout");
   const locale = useLocale();
+  const showToast = useToast();
+  const formatDuration = (seconds: number | null): string => {
+    if (seconds === null) return "—";
+    if (seconds < 60) return t("durationSeconds", { seconds });
+    const minutes = Math.floor(seconds / 60);
+    if (minutes < 60) return t("durationMinutes", { minutes });
+    const hours = Math.floor(minutes / 60);
+    const remainingMinutes = minutes % 60;
+    return remainingMinutes > 0
+      ? t("durationHoursMinutes", { hours, minutes: remainingMinutes })
+      : t("durationHours", { hours });
+  };
   const [view, setView] = useState<EventCloseoutView | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isConfirming, setIsConfirming] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [feedback, setFeedback] = useState<string | null>(null);
+  const [confirmError, setConfirmError] = useState<string | null>(null);
   const requestGuard = useLatestRequestGuard();
 
   const load = useCallback(async () => {
@@ -61,23 +65,28 @@ export default function EventCloseout({ eventId, eventState, timeZone }: EventCl
 
   useEffect(() => {
     setView(null);
-    setFeedback(null);
+    setConfirmError(null);
     void load();
   }, [load, eventState]);
 
   const confirm = async () => {
     if (isConfirming) return;
     setIsConfirming(true);
-    setFeedback(null);
-    const response = await confirmEventCloseout(eventId);
-    if (response.error || !response.data) {
-      setFeedback(t("confirmFailed"));
-    } else {
-      setView(response.data);
-      setFeedback(t("confirmed"));
-      setConfirmOpen(false);
+    setConfirmError(null);
+    try {
+      const response = await confirmEventCloseout(eventId);
+      if (response.error || !response.data) {
+        setConfirmError(t("confirmFailed"));
+      } else {
+        setView(response.data);
+        showToast({ message: t("confirmed") });
+        setConfirmOpen(false);
+      }
+    } catch {
+      setConfirmError(t("confirmFailed"));
+    } finally {
+      setIsConfirming(false);
     }
-    setIsConfirming(false);
   };
 
   const downloadCsv = () => {
@@ -111,22 +120,22 @@ export default function EventCloseout({ eventId, eventState, timeZone }: EventCl
         actions={
           report ? (
             <>
-              <button
-                type="button"
+              <Button
+                size="sm"
+                variant="outline"
                 onClick={downloadCsv}
                 disabled={isLoading}
-                className="min-h-11 border border-border-default bg-surface-raised px-3 py-2 text-xs font-semibold text-text-body disabled:opacity-50"
               >
                 {t("downloadCsv")}
-              </button>
-              <button
-                type="button"
-                onClick={() => setConfirmOpen(true)}
-                disabled={!canConfirm || isConfirming}
-                className="min-h-11 bg-action-primary px-3 py-2 text-xs font-semibold text-action-text disabled:opacity-50"
+              </Button>
+              <Button
+                size="sm"
+                onClick={() => { setConfirmError(null); setConfirmOpen(true); }}
+                isLoading={isConfirming}
+                disabled={!canConfirm}
               >
                 {report.status === "confirmed" ? t("confirmedLabel") : t("confirm")}
-              </button>
+              </Button>
             </>
           ) : null
         }
@@ -134,15 +143,6 @@ export default function EventCloseout({ eventId, eventState, timeZone }: EventCl
 
       <div className="p-4 sm:p-5">
         {error && <Alert type="error" message={error} />}
-        {feedback && (
-          <p
-            role="status"
-            aria-live="polite"
-            className="mb-4 border-l-2 border-action-primary bg-surface-raised px-3 py-2 text-sm text-text-body"
-          >
-            {feedback}
-          </p>
-        )}
         {isLoading ? (
           <Skeleton rows={5} />
         ) : !report ? (
@@ -164,7 +164,7 @@ export default function EventCloseout({ eventId, eventState, timeZone }: EventCl
             {report.ledger.untrackedGuestCount > 0 && (
               <p
                 role="alert"
-                className="border-l-2 border-status-waiting bg-status-waiting/10 px-3 py-2 text-sm text-status-waiting"
+                className="rounded-control border border-transparent bg-status-waiting/10 px-3 py-2 text-sm text-status-waiting"
               >
                 {t("untracked", { count: report.ledger.untrackedGuestCount })}
               </p>
@@ -268,9 +268,11 @@ export default function EventCloseout({ eventId, eventState, timeZone }: EventCl
         confirmLabel={t("confirm")}
         cancelLabel={t("cancel")}
         onConfirm={() => void confirm()}
-        onCancel={() => setConfirmOpen(false)}
+        onCancel={() => { setConfirmError(null); setConfirmOpen(false); }}
         isLoading={isConfirming}
-      />
+      >
+        {confirmError && <Alert type="error" message={confirmError} />}
+      </ConfirmDialog>
     </section>
   );
 }

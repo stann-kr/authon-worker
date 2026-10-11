@@ -30,6 +30,7 @@ interface WorkspaceShellProps {
     onTaskChange: (task: AdminTask) => void;
     disabled?: boolean;
     pendingPasswordResetCount?: number;
+    pendingGuestLimitRequestCount?: number;
   };
 }
 
@@ -47,8 +48,8 @@ export default function WorkspaceShell(props: WorkspaceShellProps) {
   // The authenticated frame needs viewport and saved navigation preferences.
   // Keep the server output and first client render on the same loading screen.
   if (user && !hydrated) {
-    return <main id="main-content" tabIndex={-1} aria-busy="true">
-      <Spinner mode="fullscreen" text={t("loading")} />
+    return <main id="main-content" tabIndex={-1} aria-busy="true" className="route-loading-frame">
+      <Spinner mode="content" text={t("loading")} />
     </main>;
   }
   return <ReadyWorkspaceShell {...props} />;
@@ -134,7 +135,7 @@ function ReadyWorkspaceShell({
       </header>
       <div className={`page-scroll ${bottomInsetClassName}`}>
         <div className={`page-container workspace-disclosures ${widthClasses[width]}`}>
-          {user && <Sheet id="workspace-account-panel" open={accountOpen} title={user.name} onClose={() => setAccountOpen(false)} blockDuringRouteTransition={false}>
+          {user && <Sheet presentation="modal" id="workspace-account-panel" open={accountOpen} title={user.name} onClose={() => setAccountOpen(false)} blockDuringRouteTransition={false}>
             <p className="text-sm text-text-muted"><RoleLabel role={user.account_kind === "shared" ? "shared" : user.role} /></p>
             <TransitionLink href="/profile" className="app-button rounded-control bg-surface-raised px-4 py-3 text-center text-sm" onClick={() => setAccountOpen(false)}>{t("profile")}</TransitionLink>
             <LogoutControl expanded />
@@ -153,7 +154,10 @@ function ReadyWorkspaceShell({
           accountName={user.name} accountRole={<RoleLabel role={user.account_kind === "shared" ? "shared" : user.role} />}
           collapsed={sidebarCollapsed} onToggleSidebar={toggleSidebar}
           disabled={adminNavigation?.disabled}
-          counts={{ "password-requests": adminNavigation?.pendingPasswordResetCount ?? 0 }}
+          counts={{
+            "password-requests": adminNavigation?.pendingPasswordResetCount ?? 0,
+            requests: adminNavigation?.pendingGuestLimitRequestCount ?? 0,
+          }}
           actions={actions} onSelect={selectItem} />}
       </div>
 

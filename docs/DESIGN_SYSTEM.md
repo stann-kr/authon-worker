@@ -1,13 +1,13 @@
 # 디자인 시스템
 
-Authon UI는 베뉴 현장에서 반복적으로 사용하는 운영 도구다. 직선 중심의 산업적 구조를 사용하되 장식적 터미널 효과는 배제하고, 빠른 탐색과 저조도 환경의 가독성을 우선한다.
+Authon UI는 베뉴 현장에서 반복적으로 사용하는 운영 도구다. 평면적이고 절제된 구조를 사용해 선과 장식보다 면의 톤, 간격, 글자 위계로 구분하고, 빠른 탐색과 저조도 환경의 가독성을 우선한다.
 
 ## 디자인 방향
 
-- neutral black 계열의 단일 dark substrate를 사용한다.
-- 주요 action과 선택은 밝은 무채색으로 표현한다.
-- green은 check-in 완료와 성공, amber는 대기, red는 오류와 위험에만 제한한다.
-- 일반 UI는 Geist Sans, 숫자와 짧은 운영 상태는 Geist Mono를 사용한다.
+- off-black canvas와 한 계열의 차가운 중성 회색으로 된 단일 dark substrate를 사용한다. 순수 검정과 다른 계열의 회색을 섞지 않는다.
+- 주요 실행 action(게스트 추가, 입장 확인, 기본 제출)은 앰버 accent로, 선택·현재 상태는 밝은 무채색 surface로 표현한다.
+- green은 입장 완료와 성공, 채도를 낮춘 amber는 대기와 주의, red는 오류와 위험에만 쓴다. 대기색은 실행 action의 앰버와 구분되도록 채도를 낮춘다.
+- 일반 UI와 숫자는 Pretendard Variable을 쓰고 숫자·count·시각은 `tabular-nums`로 자릿수를 맞춘다. 글꼴은 cdnjs의 unicode-range subset stylesheet를 무결성 hash로 고정해 불러오고, 불러오지 못하면 시스템 sans-serif로 표시한다.
 - route, role, 권한, form field 순서는 시각 개편과 분리해 유지한다.
 
 ## 기반 기술
@@ -16,55 +16,60 @@ Authon UI는 베뉴 현장에서 반복적으로 사용하는 운영 도구다. 
 - 아이콘은 `@carbon/icons-react` 한 계열로 통일한다.
 - Tailwind CSS는 layout과 Authon semantic token 적용에 사용한다.
 - Carbon 전체 stylesheet는 불러오지 않는다. 실제 사용하는 token과 component style만 앱 CSS에 정의해 번들 크기를 제한한다.
-- gradient, soft shadow, 반투명 glass surface, scanline과 noise texture는 사용하지 않는다.
+- panel, card, 보조 버튼과 상태 표시는 테두리 없이 면의 톤 차이로 계층을 나눈다. 테두리는 입력 field, outline 버튼, 목록 행 구분선처럼 경계가 정보인 곳에만 쓴다. 테두리를 없앤 요소는 투명 테두리를 남겨 forced-colors에서 경계가 보이게 한다. toast, popover, 접힌 sidebar tooltip, 모바일 하단 dock처럼 떠 있는 요소만 짧은 그림자를 쓴다.
+- 반투명 재질은 1000px 미만의 header와 하단 dock의 내비게이션·action에만 쓰고 backdrop blur를 지원할 때만 적용한다. blur를 지원하지 않으면 거의 불투명한 surface를 쓰고, 투명도 감소, 고대비, forced-colors 환경에서는 불투명 surface로 되돌린다.
+- 장식용 gradient, scanline과 noise texture는 사용하지 않는다. header 하단의 짧은 mask fade만 예외다.
 
 ## 색상 토큰
 
 | 토큰 | 값 | 용도 |
 |---|---|---|
-| `canvas` | `#0A0B0C` | 페이지 배경 |
-| `surface` | `#111315` | 기본 패널 |
-| `surface-raised` | `#181B1E` | 입력, 선택된 영역, 보조 패널 |
-| `surface-hover` | `#202428` | hover와 약한 강조 |
-| `border-default` | `#42484E` | control과 구획 경계 |
-| `border-strong` | `#626B73` | 선택과 상호작용 경계 |
-| `text-heading` | `#F4F5F5` | 제목과 핵심 값 |
-| `text-body` | `#D4D7D9` | 본문 |
-| `text-muted` | `#AAB0B5` | 보조 정보 |
-| `action-primary` | `#E7EAEC` | primary action과 선택 |
-| `action-confirm` | `#D4D7D9` | 목록에서 반복되는 확인 action |
-| `action-primary-text` | `#111315` | primary action 텍스트 |
-| `status-checked` | `#86A98D` | check-in 완료와 성공 |
-| `status-waiting` | `#C2A56C` | 대기 상태 |
-| `status-danger` | `#CC7770` | 오류, 삭제, 비활성 위험 상태 |
-| `focus` | `#F4F5F5` | 키보드 focus |
+| `canvas` | `#0A0A0B` | 페이지 배경 |
+| `surface-secondary` | `#111113` | sidebar, sheet, 입력 배경과 보조 영역 |
+| `surface` | `#161618` | 기본 패널과 범위 요약 |
+| `surface-raised` | `#1C1C1E` | 보조 control, 보조 버튼, 반복 확인 action |
+| `surface-hover` | `#242426` | hover와 약한 강조 |
+| `surface-active` | `#2C2C2E` | 선택·현재 상태 |
+| `border-subtle` | `rgb(255 255 255 / 0.07)` | 목록 행과 panel 내부 구획선 |
+| `border-default` | `rgb(255 255 255 / 0.11)` | control과 panel 경계 |
+| `border-strong` | `rgb(255 255 255 / 0.22)` | 입력·선택 경계 |
+| `text-heading` | `#F5F5F7` | 제목과 핵심 값 |
+| `text-body` | `#E5E5E7` | 본문 |
+| `text-muted` | `#8E8E93` | 보조 정보 |
+| `action-primary` | `#FFB547` | 주요 실행 action. hover `#FFC66B`, active `#E8A236` |
+| `action-primary-text` | `#241906` | 주요 action 위 텍스트 |
+| `status-checked` | `#34D399` | 입장 완료와 성공 |
+| `status-waiting` | `#D5B479` | 대기와 주의 |
+| `status-danger` | `#FB7185` | 오류, 삭제, 비활성 위험 상태 |
+| `focus` | `#B5B5BA` | 키보드 focus. 입력 focus 경계는 `#8E8E93` |
 
 ## 형태와 간격
 
-- panel, input, button, badge는 예외 없이 `0px` radius를 사용한다.
-- panel은 shadow 없이 `1px` 구획선으로만 계층을 구분한다.
-- spinner와 작은 상태 점처럼 원형 자체가 의미인 요소만 원형을 허용한다.
-- desktop content 폭은 최대 `1440px`다. 홈을 포함한 모든 작업 화면은 header의 브랜드와 우측 action 사이 콘텐츠 축을 공유한다.
-- multi-column 화면은 `768px` 미만에서 단일 column으로 축소한다.
+- radius는 control(button, field, tab, 메뉴 항목) `10px`, control group 안의 segment와 작은 badge `6px`, surface(panel, card, popover, toast) `12px`, bottom sheet `16px` 네 단계만 사용한다.
+- spinner, avatar와 작은 상태 점처럼 원형 자체가 의미인 요소만 원형을 허용한다. 1000px 미만의 떠 있는 하단 dock은 예외로 내비게이션과 action을 capsule로 만들고, 현재 메뉴 표시도 같은 중심의 capsule로 맞춘다.
+- 로그인한 작업 화면의 콘텐츠는 sidebar를 뺀 전체 폭을 쓰고, 공개 화면 콘텐츠는 최대 `1440px`다.
+- multi-column 화면은 좁은 container에서 단일 column으로 축소한다.
 - interactive control은 최소 `44px × 44px` touch target을 제공한다.
-- 공통 버튼은 기본적으로 `44–48px` 높이를 사용한다. Door의 모바일 즉시 입장 action만 `56px`로 두고, 되돌리기와 보조 action은 `44px`을 유지한다. 더 큰 고정 버튼 규격은 사용하지 않는다.
+- 공통 버튼은 `44–48px` 높이를 사용한다. guest 목록 행은 최소 `56px`이고, 행 안의 입장 확인과 되돌리기는 같은 공통 버튼 규격을 쓴다. 더 큰 고정 버튼 규격은 사용하지 않는다.
 - form field와 선택 control은 `border-strong`을 사용해 인접 surface와 3:1 이상의 비텍스트 대비를 확보하고, panel 구획선은 `border-default` 또는 `border-subtle`을 사용한다.
-- Guest와 Door는 모바일에서 dashboard와 list를 한 열로 쌓고, `768px` 이상에서는 좌측 운영 dashboard와 우측 guest list의 master-detail 구조를 사용한다.
-- 인증 화면은 공통 workspace shell을 사용한다. 상단 header는 기존의 brand·현재 맥락·계정 action만 유지하고 brand를 홈 진입점으로 사용한다. Admin에서는 desktop 좌측 업무 navigation을 제공하며 모바일에는 별도 고정 하단 전역 navigation을 두지 않는다.
-- Admin 업무 navigation은 desktop에서 항상 보이는 grouped sidebar를 사용한다. 모바일에서는 전체 업무를 3열 바로가기 목록으로 압축해 선택형 control 없이 항상 노출한다. 업무 전환은 선택 link와 현재 scroll 위치를 보존하고 작업 영역으로 강제 이동하지 않는다.
+- Guest, Door와 Admin 하위 작업은 모든 폭에서 조회 범위(베뉴·운영일·행사)를 위에, 목록을 아래에 두는 stacked 배치를 사용한다. `1000px` 이상은 범위 control을 한 줄로 펼치고, 미만은 범위 요약 버튼이 범위 선택 sheet를 연다.
+- 로그인한 화면은 공통 workspace shell을 사용한다. header는 현재 화면 제목, 화면별 action과 계정 action만 둔다.
+- `1000px` 이상은 업무 그룹별 좌측 sidebar를 항상 보이고, 접으면 `64px` 아이콘 열로 줄인다. 미만은 홈과 운영 화면, 현재 메뉴를 담은 하단 dock과 전체 메뉴 sheet를 쓰며, 화면별 주요 action은 dock 위에 각각 떠 있는 action으로 둔다. 주요 action은 남은 폭을 나눠 쓰고 보조 action은 내용 폭만 쓴다. action이 3개 이상이면 아이콘을 빼고, 드물게 쓰는 action은 아이콘과 건수 배지로 줄이되 이름은 보조기기에 남긴다. software keyboard가 열린 동안에는 dock을 숨긴다.
+- 하단 dock은 화면 좌우와 하단 가장자리에서 띄우고 폭을 최대 `440px`로 제한한다. 페이지는 dock 주변과 브라우저 툴바 아래까지 이어 보인다. iOS Safari 26은 하단 가장자리에 닿은 넓은 고정 요소의 색으로 툴바 영역을 채우므로, 하단 가장자리에 닿는 고정 막대를 두지 않는다. dock의 비선택 항목은 움직이는 콘텐츠 위에서도 읽히도록 `text-muted`보다 밝은 `#AEAEB2`를 쓴다.
+- 업무 전환은 선택 link와 현재 scroll 위치를 보존하고 작업 영역으로 강제 이동하지 않는다.
 - 날짜 입력은 viewport가 아니라 component container 폭을 기준으로 배치한다. 좁은 container에서는 날짜와 quick control을 두 줄로 표시한다.
-- 고정 또는 sticky 영역은 목록의 첫 행을 가리지 않아야 하며, 페이지 안에 불필요한 중첩 scroll container를 만들지 않는다. Door의 모바일 하단 도크는 실제 높이를 scroll 영역의 inset으로 반영하고 Footer·마지막 콘텐츠가 그 아래에 가려지지 않게 한다.
+- 고정 또는 sticky 영역은 목록의 첫 행을 가리지 않아야 하며, 페이지 안에 불필요한 중첩 scroll container를 만들지 않는다. 모바일 하단 dock은 실제 높이와 하단 간격을 scroll 영역의 inset과 toast 위치에 반영해 마지막 콘텐츠와 toast가 dock 아래에 가려지지 않게 한다.
 
 ## 타이포그래피
 
-- 페이지 제목은 sans-serif, semibold, 좁은 letter spacing을 사용한다.
+- 본문은 `-0.01em`, 제목은 `-0.02em`~`-0.03em`으로 자간을 좁힌다. 페이지·화면 제목은 600–700으로 무게를 분명히 한다. 모바일 화면 제목은 `20px`·700이다.
 - label은 sentence case를 기본으로 한다.
-- mono uppercase는 짧은 상태, 키보드 shortcut, 날짜, 숫자에만 사용한다.
+- tabular 숫자와 uppercase는 짧은 상태, 키보드 shortcut, 날짜, 숫자에만 사용한다. 로그인한 작업 화면과 sheet의 `font-mono`는 같은 sans-serif의 `tabular-nums`로 렌더링하고, Geist Mono는 작업 화면 밖의 `font-mono`와 code·kbd에만 남긴다.
 - 운영 label, helper, error 문장은 최소 `12px`로 유지하고 배경 대비 WCAG AA를 만족해야 한다.
 
 | 역할 | 크기 | 굵기 | semantic class | 용도 |
 |---|---:|---:|---|---|
-| Page title | 24–30px | 600 | route별 heading | 로그인·오류처럼 독립된 화면의 제목 |
+| Page title | 24–32px | 600–700 | route별 heading | 홈·로그인·오류처럼 독립된 화면의 제목 |
 | Section title | 18px | 600 | `type-section-title` | Admin의 독립 form·migration section |
 | Panel title | 16px | 600 | `type-panel-title` | Door check-in, Guest list, Add guest 같은 panel heading |
 | Context title | 14px | 600 | `type-context-title` | Operational date, Guest owner, User filter, Section처럼 dashboard card의 맥락을 정의하는 제목 |
@@ -89,15 +94,19 @@ Authon UI는 베뉴 현장에서 반복적으로 사용하는 운영 도구다. 
 - empty state는 원인과 다음 행동을 함께 제시할 수 있어야 한다.
 - error는 영향받는 section 가까이에 표시하고 재시도가 가능한 경우 action을 제공한다.
 - 공개 게스트 쓰기 뒤 서버 명단과 재동기화하지 못한 상태는 기존 입력과 명단을 유지하는 대기색 banner로 표시하고, 최신 명단 조회가 성공할 때까지 등록·삭제 control만 잠근다.
+- 다른 기기가 먼저 바꾼 게스트 상태처럼 다시 시도해도 반영될 수 없는 실패는 경고 톤으로 알리고, 재시도 대신 최신 명단을 다시 읽는다. 해당 행은 알림이 닫힐 때까지 자리를 유지한다.
+- Door와 Admin에서 고른 운영일은 고른 영업일 동안만 유지한다. 다음 영업일에는 오늘로 열고, 열어 둔 화면도 마감 시각이 지난 뒤 다시 보이면 오늘로 돌아간다.
+- Door는 오늘이 아닌 운영일을 보는 동안 명단 위에 해당 날짜와 오늘 명단으로 돌아가는 action을 표시한다.
+- 중복 확인, 정원 초과, 요청 제한처럼 화면이 설명하는 예상 응답은 오류 로그로 남기지 않는다.
 - destructive action은 red semantic tone과 확인 단계를 함께 사용한다.
-- 상태는 색상만으로 전달하지 않는다. 목록 행은 2px 상태선을 기본 신호로 사용하고, 상태별로 가능한 행동이나 아이콘·텍스트를 함께 제공한다.
-- 입장 행동은 `CHECK IN`, 완료 상태는 `CHECKED IN`으로 구분한다. 모든 대기 행은 왼쪽 상태선과 현재 가능한 행동으로 표현하고 행 안에 `WAITING` label을 반복하지 않는다.
+- 상태는 색상만으로 전달하지 않는다. 목록 행은 상태별로 가능한 행동, 완료 표시 아이콘, 흐려진 이름과 상태 열의 텍스트를 함께 제공한다.
+- 입장 행동(입장 확인·Check in)과 완료 상태(입장 완료·Checked in)는 다른 문구로 구분한다. 대기 행은 현재 가능한 행동으로 표현하고 행 안에 대기 label을 반복하지 않는다.
 - 통계는 바깥 panel이 구획을 한 번만 담당하고, 개별 수치는 선 없는 quiet tile과 간격으로 묶는다. 목록 안에서는 `embedded` variant의 하단 구획선 하나만 추가한다.
 
 ## 모션
 
 - 일반 UI 전환은 `140-200ms` 범위로 제한한다.
-- route loading overlay는 header 아래 콘텐츠 영역에서 최소 `160ms` 동안 상태를 명확히 전달하고, 실제 준비 작업이 모두 끝나면 별도의 고정 유예 없이 `140ms` ease-out으로 종료한다.
+- route loading overlay는 `120ms` 안에 준비가 끝나면 표시하지 않고, 첫 paint 전에 준비가 끝난 전환도 즉시 취소한다. 일단 표시하면 header 아래 콘텐츠 영역에서 최소 `160ms` 유지한 뒤 별도의 고정 유예 없이 `140ms` ease-out으로 종료한다.
 - enter와 직접 피드백은 강한 ease-out 곡선을 사용한다.
 - 버튼과 직접 선택 가능한 navigation은 누르는 동안 `0.985` scale과 substrate 변화로 짧은 물리적 피드백을 제공한다.
 - disclosure는 chevron 회전과 짧은 내용 진입, 확인 dialog는 진입과 취소 종료를 모두 제공하며 종료 중에는 추가 action을 받지 않는다.
@@ -112,7 +121,7 @@ Authon UI는 베뉴 현장에서 반복적으로 사용하는 운영 도구다. 
 - `ButtonLink`: route 이동에 사용하는 링크를 `Button`과 같은 variant·크기·icon 규칙으로 표현한다. 화면 이동을 `button` click handler로 흉내 내지 않는다.
 - `ConfirmDialog`: 확인이 필요한 작업의 제목·설명·action, focus trap, Escape 닫기, 취소 종료 motion과 trigger focus 복귀를 통일한다. 종료 중에는 action을 잠그며 native confirm dialog는 사용하지 않는다.
 - `WorkspaceShell`: 인증 화면의 header, 본문 폭, footer와 공통 scroll 여백을 통일한다.
-- `AdminTaskSwitcher`: 권한에 맞는 Admin 업무를 direct link로 제공하고 desktop grouped sidebar와 mobile 바로가기 grid의 선택 상태를 통일한다.
+- `WorkspaceNavigation`: 권한에 맞는 업무를 direct link로 제공하고 desktop sidebar, mobile 하단 dock과 전체 메뉴의 선택 상태를 통일한다. 비밀번호 요청과 추가 인원 요청의 대기 건수를 해당 메뉴의 badge로 표시하고, 하단 dock에 없는 메뉴의 건수는 더보기 버튼에 합산한다.
 - `OperationalSectionNav`: 독립적으로 표시되는 관리 component의 내부 section 선택 상태를 통일한다. 상위 Admin task navigation과 함께 사용할 때는 중복 표시하지 않는다.
 - `PanelHeader`: count, sort, 화면별 context action, refresh의 위치를 통일하며 refresh는 작업 묶음의 가장 오른쪽에 둔다. 최초 조회에서 count가 아직 확정되지 않았으면 `0` 대신 `-`를 표시한다.
 - `StatGrid`: 통계 수치와 label을 선 없는 quiet tile 중앙에 정렬하고, 독립 영역과 목록 안의 `embedded` 배치를 구분하며 현재 조회 범위의 loading 상태를 함께 표현한다.
@@ -120,21 +129,22 @@ Authon UI는 베뉴 현장에서 반복적으로 사용하는 운영 도구다. 
 - `GuestBulkEntry`: 선택형 disclosure 안에서 줄바꿈 입력, 요약, 최대 25행 미리보기, 행별 중복 확인, 정원 보류와 제출 결과를 한 흐름으로 제공한다. 정상 행은 이름만 표시하고 수정·확인이 필요한 예외 행에만 보조 문구와 control을 둔다.
 - `DisclosureSection`: 대량 입력과 추가 게스트 요청처럼 패널 안의 보조 작업을 같은 summary·meta·chevron·상단 구획선으로 단계적으로 노출한다. 날짜별 상태를 다시 읽는 동안에는 같은 summary 높이를 유지하고, 최신 한도 상태를 확인하기 전까지 제출만 잠근다.
 - `GuestCapacityIndicator`: 별도 카드 surface를 만들지 않고 게스트 추가 panel header 안에서 남은 인원과 전체 한도를 한 축으로 묶는다. header 하단 구획선 일부를 정원 사용률 상태선으로 공유하며, 잔여 비율이 25% 이하면 대기색, 정원 도달은 위험색을 사용한다. 숫자와 선 길이도 함께 바꿔 색상에만 의존하지 않는다.
-- `StatusLabel`: 상태별 아이콘, 텍스트, 색상 규칙을 통일한다.
-- `Alert`: error와 success를 live region으로 전달한다.
+- `StatusLabel`: 상태별 텍스트와 색상 규칙을 통일한다. action 옆 inline 상태는 아이콘을, 단독 상태는 작은 점을 함께 쓴다.
+- `Alert`와 상태 알림: error와 success를 live region으로 전달한다. 알림은 색 테두리나 왼쪽 막대 없이 상태색을 옅게 깐 둥근 면으로 표시한다.
 - `Skeleton`: list loading 중 레이아웃 공간을 예약한다.
 - `EmptyState`: icon, message, description, action을 조합한다.
 - `DatePicker`, `VenueSelector`, `GuestSearchInput`: 공통 field와 focus token을 사용한다.
 - 운영 날짜는 Guest, Door, Admin에서 같은 `DatePicker`와 날짜 이동 control을 사용한다. container가 좁으면 날짜 입력과 quick control을 두 줄로 배치한다.
-- Guest와 Door는 태블릿 이상에서 공통 `OperationsLayout`의 split variant를 사용한다. Admin 하위 작업은 상위 CRM navigation 옆에서 stacked variant를 사용해 중첩 sidebar를 만들지 않는다.
-- 추가 게스트 요청처럼 게스트 한도에 속하는 운영 승인은 사용자 계정 관리가 아니라 Admin의 게스트 하위 작업으로 제공한다. 미처리 요청이 있는 Venue Admin 홈에는 단축키와 혼동되지 않는 상태 문구, 건수와 요청함 직접 이동 action을 함께 표시한다.
-- 홈 작업 카드는 모바일에서 아이콘과 제목을 같은 행에 두고 설명은 두 column 전체 폭을 사용한다. 설명은 핵심 행동 한 문장으로 제한하고 `text-wrap: pretty`를 적용해 좁은 화면의 불균형한 줄바꿈을 줄인다.
+- Guest, Door와 Admin 하위 작업은 공통 `OperationsLayout`의 stacked variant를 사용해 중첩 sidebar를 만들지 않는다.
+- 추가 게스트 요청처럼 게스트 한도에 속하는 운영 승인은 사용자 계정 관리가 아니라 Admin의 게스트 하위 작업으로 제공한다. 대기 건수는 Admin navigation badge로만 알리고 홈에서는 조회하지 않는다.
+- 행사 상세는 보관 전까지 이름, 수용 인원과 게스트 목표를 수정할 수 있다. 목표가 수용 인원을 넘는 입력은 요청 전에, 그 밖의 검증 실패는 서버 응답으로 해당 입력란에 연결해 알린다.
+- 홈 작업 카드와 바로가기는 장식 아이콘 없이 분류, 메뉴명, 설명과 진입 표시만 둔다. 설명은 핵심 행동 한 문장으로 제한하고 `text-wrap: pretty`를 적용해 좁은 화면의 불균형한 줄바꿈을 줄인다.
 - Links 관리는 기본 상태와 예외 상태를 한 번씩만 표시한다. 목록 범위는 날짜별 보기와 최근 생성 5개·10개 보기로 구분한다.
 - Links의 긴 URL은 기본 목록에 상시 노출하지 않는다. `VIEW` disclosure 안에서 읽기 전용 URL 선택과 새 탭 열기를 제공해 clipboard 실패 시에도 접근할 수 있게 한다.
 - Links의 `템플릿으로 사용`은 업무 설정만 생성 form에 채우고 credential은 복사하지 않는다. 공유 action은 Web Share 지원 여부에 따라 공유 또는 URL 복사 중 하나만 표시해 행의 action 밀도를 유지한다.
-- 반복되는 guest row는 안정적인 단일 neutral surface를 사용한다. waiting과 checked-in 상태는 각 행의 왼쪽 2px indicator를 공유하되, 모든 waiting 행은 중복 status label을 표시하지 않는다.
+- 반복되는 guest row는 단일 neutral surface와 은은한 교차 배경을 사용하고, 대기 행에는 중복 status label을 표시하지 않는다. 왼쪽 강조선은 방금 찾은 행처럼 일시적으로 강조할 때만 쓴다.
 - 되돌리기처럼 특정 guest 상태에 종속된 control은 전역 banner가 아니라 해당 guest 행 안에 표시한다.
-- guest row의 상태는 왼쪽 indicator와 metadata가 전달하고, 우측에는 현재 수행 가능한 action만 둔다. mobile에서도 action은 행 우측의 내용 폭 button으로 유지하며, `CHECK IN`과 `UNDO`는 동일한 위치와 최소 폭을 사용한다.
+- guest row의 상태는 완료 표시와 metadata가 전달하고, 우측에는 현재 수행 가능한 action만 둔다. mobile에서도 action은 행 우측의 내용 폭 button으로 유지하며, 입장 확인과 되돌리기는 동일한 위치와 최소 폭을 사용한다.
 - 등록자처럼 선택적인 metadata는 값이 없을 때 공간을 예약하지 않는다. 행 본문과 우측 action은 전체 행 높이를 기준으로 수직 중앙 정렬한다.
 - 추가 게스트 요청은 요청 수량을 주요 control로 두고 선택 사유임을 label과 helper text에서 명확히 표시한다. 승인 목록은 요청값, 승인값과 처리 상태를 함께 보여준다.
 - Door 목록의 `입장 대기 우선`은 기본 활성화하며 사용자가 끄면 입장 확인 뒤에도 등록 순서를 유지한다. 선택은 같은 브라우저에 보존한다.
@@ -143,7 +153,7 @@ Authon UI는 베뉴 현장에서 반복적으로 사용하는 운영 도구다. 
 - panel과 tab group의 외곽선은 가장 바깥 container가 한 번만 그리며, 자식은 내부 구획선만 담당한다.
 - 검색 초기화는 공통 clear button 하나만 제공하고 브라우저 native search cancel control은 숨긴다.
 - 권한에 따라 개수가 달라지는 보조 panel은 빈 grid column을 예약하지 않고 실제 항목 수에 맞춰 폭을 자동 분배한다.
-- 홈 작업 메뉴는 Guest, Door, Admin의 고정 순서와 `1`, `2`, `3` 단축키를 일치시킨다. 각 카드는 업무 분류, 구체적인 메뉴명, 한 줄 설명과 진입 action을 한 번씩 제공하고 아이콘은 메뉴명의 식별 보조로 사용한다. 메뉴 3개는 `768px`부터 한 줄 3열로 배치하고 메뉴가 1~2개면 동일한 카드 폭 감각을 유지하도록 grid 최대 폭을 줄인다. 권한이 없는 항목만 제거한다.
+- 홈은 Door 권한이 있으면 Door, 없으면 Guest를 첫 작업 카드로 두고 화면 순서와 `1`, `2` 단축키를 일치시킨다. 각 카드는 업무 분류, 구체적인 메뉴명, 한 줄 설명과 진입 action을 한 번씩 제공한다. 계정 정보 panel을 함께 두고, 관리자에게만 행사·등록 링크·사용자·통계 바로가기를 추가한다. 권한이 없는 항목만 제거한다.
 
 ## 접근성 기준
 

@@ -133,6 +133,7 @@ function ExternalGuestControllerHarness({
           <h1 ref={controller.contentHeadingRef} tabIndex={-1}>Content</h1>
           <label htmlFor="external-test-name">Guest name</label>
           <input
+            ref={controller.guestNameInputRef}
             id="external-test-name"
             value={controller.guestName}
             onChange={(event) =>
@@ -151,6 +152,11 @@ function ExternalGuestControllerHarness({
         {String(controller.showReconciliationBanner)}
       </output>
       <output data-testid="error">{controller.error ?? ""}</output>
+      <output data-testid="notice">
+        {controller.notice
+          ? `${controller.notice.key}:${controller.notice.name}`
+          : ""}
+      </output>
       <output data-testid="loading">{String(controller.isLoading)}</output>
       <output data-testid="name">{controller.guestName}</output>
       <output data-testid="guests">{controller.guests.map((guest) => guest.name).join(",")}</output>
@@ -937,4 +943,146 @@ test("self RSVP update preserves its owner payload, locks checked entries, and s
   });
 
   assert.equal(screen.getByTestId("guests").textContent, "LATEST NAME");
+});
+
+test("a successful add announces the guest and returns focus to the name field", async () => {
+  const createdGuest = { ...GUEST, id: "guest-created", name: "GUEST B" };
+  let controller: ReturnType<typeof useExternalGuestController> | undefined;
+  renderHarness({
+    dependencies: createDependencies({
+      validateExternalToken: async () => ({
+        data: validationData({ guests: [] }),
+        error: null,
+      }),
+      createGuestViaExternalLink: async () => ({ data: createdGuest, error: null }),
+    }),
+    onController: (next) => {
+      controller = next;
+    },
+  });
+
+  await waitFor(() => {
+    assert.equal(screen.getByTestId("validating").textContent, "false");
+  });
+  await act(async () => {
+    controller?.handleGuestNameChange("guest b");
+  });
+  // A click moves focus to the save button, which is disabled while saving.
+  screen.getByRole("button", { name: "Save guest" }).focus();
+  await act(async () => {
+    await controller?.handleSave();
+  });
+
+  assert.equal(screen.getByTestId("notice").textContent, "guestAdded:GUEST B");
+  assert.equal(screen.getByTestId("name").textContent, "");
+  await waitFor(() => {
+    assert.equal(
+      document.activeElement === screen.getByLabelText("Guest name"),
+      true,
+    );
+  });
+});
+
+test("a full DJ link reports the link limit instead of RSVP capacity", async () => {
+  let controller: ReturnType<typeof useExternalGuestController> | undefined;
+  renderHarness({
+    dependencies: createDependencies({
+      validateExternalToken: async () => ({
+        data: validationData({ guests: [] }),
+        error: null,
+      }),
+      createGuestViaExternalLink: async () => ({
+        data: null,
+        error: "Guest limit reached for this link.",
+      }),
+    }),
+    onController: (next) => {
+      controller = next;
+    },
+  });
+
+  await waitFor(() => {
+    assert.equal(screen.getByTestId("validating").textContent, "false");
+  });
+  await act(async () => {
+    controller?.handleGuestNameChange("Guest B");
+  });
+  await act(async () => {
+    await controller?.handleSave();
+  });
+  assert.equal(screen.getByTestId("error").textContent, "linkFull");
+});
+
+test("a confirmed duplicate resubmits only the reviewed name with an explicit override", async () => {
+  const createdGuest = { ...GUEST, id: "guest-duplicate", name: "GUEST A" };
+  const bulkPayloads: Array<
+    Parameters<ExternalGuestControllerDependencies["createGuestsViaExternalLink"]>[0]
+  > = [];
+  let controller: ReturnType<typeof useExternalGuestController> | undefined;
+  renderHarness({
+    dependencies: createDependencies({
+      createGuestViaExternalLink: async () => ({
+        data: null,
+        error: "DUPLICATE_REQUIRES_CONFIRMATION",
+      }),
+      createGuestsViaExternalLink: async (payload) => {
+        bulkPayloads.push(payload);
+        return {
+          data: { items: [{ index: 0, status: "created", guest: createdGuest }] },
+          error: null,
+        };
+      },
+    }),
+    onController: (next) => {
+      controller = next;
+    },
+  });
+
+  await waitFor(() => {
+    assert.equal(screen.getByTestId("validating").textContent, "false");
+  });
+  await act(async () => {
+    controller?.handleGuestNameChange("guest a");
+  });
+  // A duplicate is an expected answer that the screen explains, so it is not logged as a failure.
+  const loggedErrors: unknown[] = [];
+  const originalError = console.error;
+  console.error = (...args: unknown[]) => { loggedErrors.push(args); };
+  try {
+    await act(async () => {
+      await controller?.handleSave();
+    });
+  } finally {
+    console.error = originalError;
+  }
+  assert.deepEqual(loggedErrors, []);
+  assert.equal(
+    screen.getByTestId("error").textContent,
+    "duplicateRequiresConfirmation",
+  );
+
+  // Editing the name withdraws the confirmation for the previously reviewed name.
+  await act(async () => {
+    controller?.handleGuestNameChange("guest a2");
+  });
+  assert.equal(screen.getByTestId("error").textContent, "");
+  await act(async () => {
+    controller?.handleGuestNameChange("guest a");
+  });
+  await act(async () => {
+    await controller?.handleSave();
+  });
+  await act(async () => {
+    await controller?.handleConfirmDuplicate();
+  });
+
+  assert.deepEqual(bulkPayloads, [
+    {
+      token: TOKEN,
+      date: LINK.date,
+      items: [{ name: "GUEST A", allowDuplicate: true }],
+    },
+  ]);
+  assert.equal(screen.getByTestId("error").textContent, "");
+  assert.equal(screen.getByTestId("notice").textContent, "guestAdded:GUEST A");
 });

@@ -185,6 +185,8 @@ export const logout = async (): Promise<LogoutResult> => {
     } catch {
       // Server revocation already succeeded; stale client cache is best-effort.
     }
+    // Full reload intentionally drops in-memory client state after logout.
+    // eslint-disable-next-line @next/next/no-location-assign-relative-destination
     window.location.href = "/auth/login";
   }
 

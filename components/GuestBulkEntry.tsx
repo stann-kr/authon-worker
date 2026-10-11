@@ -31,6 +31,8 @@ interface GuestBulkEntryProps {
   ) => Promise<ApiResponse<GuestBulkSubmissionResult>>;
   onSubmissionComplete?: () => Promise<void> | void;
   onSubmittingChange?: (isSubmitting: boolean) => void;
+  /** 제출 직전 상위 입력(예: 공용 계정 입력자)을 확인합니다. false면 제출하지 않습니다. */
+  validateBeforeSubmit?: () => boolean;
 }
 
 interface GuestBulkSubmissionResult {
@@ -51,12 +53,12 @@ interface FeedbackState {
 
 function feedbackClasses(tone: FeedbackTone): string {
   if (tone === "success") {
-    return "border-status-checked/70 bg-status-checked/10 text-status-checked";
+    return "border-transparent bg-status-checked/10 text-status-checked";
   }
   if (tone === "warning") {
-    return "border-status-waiting/70 bg-status-waiting/10 text-status-waiting";
+    return "border-transparent bg-status-waiting/10 text-status-waiting";
   }
-  return "border-status-danger/70 bg-status-danger/10 text-status-danger";
+  return "border-transparent bg-status-danger/10 text-status-danger";
 }
 
 export default function GuestBulkEntry({
@@ -66,6 +68,7 @@ export default function GuestBulkEntry({
   onSubmitChunk,
   onSubmissionComplete,
   onSubmittingChange,
+  validateBeforeSubmit,
 }: GuestBulkEntryProps) {
   const t = useTranslations("BulkGuestEntry");
   const fieldId = useId();
@@ -220,6 +223,7 @@ export default function GuestBulkEntry({
 
   const handleSubmit = async () => {
     if (submittableLines.length === 0 || isSubmittingRef.current || disabled) return;
+    if (validateBeforeSubmit && !validateBeforeSubmit()) return;
 
     isSubmittingRef.current = true;
     textareaRef.current?.focus();
@@ -447,7 +451,7 @@ export default function GuestBulkEntry({
             {preview.overflowCount > 0 && (
               <div
                 id={overflowWarningId}
-                className="mb-2 border-l-2 border-status-waiting bg-status-waiting/10 px-3 py-2 text-xs leading-relaxed text-status-waiting"
+                className="mb-2 rounded-control border border-transparent bg-status-waiting/10 px-3 py-2 text-xs leading-relaxed text-status-waiting"
               >
                 {t("pasteLimit", { count: preview.overflowCount })}
               </div>
@@ -455,13 +459,13 @@ export default function GuestBulkEntry({
             {heldForCapacity > 0 && (
               <div
                 id={capacityWarningId}
-                className="mb-2 border-l-2 border-status-waiting bg-status-waiting/10 px-3 py-2 text-xs leading-relaxed text-status-waiting"
+                className="mb-2 rounded-control border border-transparent bg-status-waiting/10 px-3 py-2 text-xs leading-relaxed text-status-waiting"
               >
                 {t("capacityHold", { count: heldForCapacity })}
               </div>
             )}
 
-            <ol className="divide-y divide-border-subtle border-y border-border-default lg:max-h-56 lg:overflow-y-auto">
+            <ol className="max-h-48 divide-y divide-border-subtle overflow-y-auto overscroll-contain border-y border-border-default lg:max-h-56">
               {preview.lines.filter((line) => line.inPasteLimit).map((line) => {
                 const isDuplicate =
                   line.isDuplicateExisting || line.isDuplicateInInput;
@@ -539,7 +543,7 @@ export default function GuestBulkEntry({
         {feedback && (
           <div
             id={feedbackId}
-            className={`mt-3 border px-3 py-2 text-sm leading-relaxed ${feedbackClasses(feedback.tone)}`}
+            className={`mt-3 rounded-control border px-3 py-2 text-sm leading-relaxed ${feedbackClasses(feedback.tone)}`}
             role={feedback.tone === "error" ? "alert" : "status"}
             aria-live={feedback.tone === "error" ? "assertive" : "polite"}
             aria-atomic="true"

@@ -15,7 +15,7 @@ import {
   within,
 } from "@testing-library/react";
 
-import AdminTaskSwitcher from "@/app/admin/components/AdminTaskSwitcher";
+import RouteError from "@/app/error";
 import AnalyticsAttendance from "@/app/admin/components/analytics/AnalyticsAttendance";
 import AnalyticsContributors from "@/app/admin/components/analytics/AnalyticsContributors";
 import AnalyticsPeriodBar from "@/app/admin/components/analytics/AnalyticsPeriodBar";
@@ -23,7 +23,7 @@ import ExternalDjCombobox from "@/app/admin/components/ExternalDjCombobox";
 import ExternalEventCombobox from "@/app/admin/components/ExternalEventCombobox";
 import AsyncListContent from "@/components/AsyncListContent";
 import ConfirmDialog from "@/components/ConfirmDialog";
-import Sheet from "@/components/overlays/Sheet";
+import Sheet, { requestSheetClose } from "@/components/overlays/Sheet";
 import ViewportProvider from "@/components/viewport/ViewportProvider";
 import RecordList, { useRecordDetail } from "@/components/records/RecordList";
 import DateField from "@/components/dates/DateField";
@@ -37,7 +37,6 @@ import {
   RouteTransitionProvider,
   useRouteTransition,
 } from "@/components/RouteTransitionProvider";
-import useMobileDockInset from "@/app/door/components/useMobileDockInset";
 import { EMPTY_ANALYTICS_DTO_FIXTURE } from "@/lib/analytics/test-fixtures";
 import { useLatestRef, useLocalStorage } from "@/lib/hooks";
 import messages from "@/messages/en.json";
@@ -240,86 +239,6 @@ test("latest ref keeps a loader stable while reading the latest translator", () 
   assert.equal(loader?.(), "게스트를 불러올 수 없습니다");
 });
 
-test("mobile Door dock measures its rendered height and clears the page inset", async () => {
-  const originalMatchMedia = window.matchMedia;
-  const originalResizeObserver = globalThis.ResizeObserver;
-  const observerState: { callback: ResizeObserverCallback | null } = {
-    callback: null,
-  };
-  let isDisconnected = false;
-
-  class ResizeObserverMock {
-    constructor(callback: ResizeObserverCallback) {
-      observerState.callback = callback;
-    }
-
-    observe() {}
-
-    unobserve() {}
-
-    disconnect() {
-      isDisconnected = true;
-    }
-  }
-
-  Object.defineProperty(globalThis, "ResizeObserver", {
-    configurable: true,
-    writable: true,
-    value: ResizeObserverMock,
-  });
-  window.matchMedia = () => ({
-    matches: true,
-    media: "(max-width: 767px)",
-    onchange: null,
-    addListener() {},
-    removeListener() {},
-    addEventListener() {},
-    removeEventListener() {},
-    dispatchEvent() {
-      return false;
-    },
-  });
-
-  function DockHarness() {
-    const dockRef = useRef<HTMLElement>(null);
-    useMobileDockInset(dockRef);
-    return (
-      <div className="page-scroll">
-        <section ref={dockRef} data-testid="door-dock" />
-      </div>
-    );
-  }
-
-  const { unmount } = render(<DockHarness />);
-  const dock = screen.getByTestId("door-dock");
-  Object.defineProperty(dock, "getBoundingClientRect", {
-    configurable: true,
-    value: () => ({ height: 173 }),
-  });
-  observerState.callback?.([], {} as ResizeObserver);
-
-  const pageScroll = dock.closest<HTMLElement>(".page-scroll");
-  await waitFor(() => {
-    assert.equal(
-      pageScroll?.style.getPropertyValue("--door-mobile-dock-height"),
-      "173px",
-    );
-  });
-
-  unmount();
-  assert.equal(isDisconnected, true);
-  assert.equal(
-    pageScroll?.style.getPropertyValue("--door-mobile-dock-height"),
-    "",
-  );
-  window.matchMedia = originalMatchMedia;
-  Object.defineProperty(globalThis, "ResizeObserver", {
-    configurable: true,
-    writable: true,
-    value: originalResizeObserver,
-  });
-});
-
 test("full error hides empty copy and retry success restores it", () => {
   const { rerender } = render(
     <AsyncListContent
@@ -346,62 +265,7 @@ test("full error hides empty copy and retry success restores it", () => {
   assert.ok(screen.getByText("EMPTY"));
 });
 
-test("task and section controls expose current state and respect busy locks", () => {
-  let nextTask = "";
-  const { rerender } = render(
-    <AdminTaskSwitcher
-      label="Admin sections"
-      groupLabels={{
-        guests: "Guests",
-        events: "Events",
-        links: "Links",
-        users: "Users",
-        analytics: "Analytics",
-        venues: "Venues",
-      }}
-      options={[
-        { id: "guest-list", group: "guests", label: "Guest list" },
-        { id: "link-create", group: "links", label: "Create link" },
-      ]}
-      value="guest-list"
-      onChange={(task) => {
-        nextTask = task;
-      }}
-    />,
-  );
-
-  const activeLinks = screen.getAllByRole("link", { name: /Guest list/i });
-  assert.ok(activeLinks.every((link) => link.getAttribute("aria-current") === "page"));
-  fireEvent.click(screen.getAllByRole("link", { name: /Create link/i })[0]);
-  assert.equal(nextTask, "link-create");
-
-  rerender(
-    <AdminTaskSwitcher
-      label="Admin sections"
-      groupLabels={{
-        guests: "Guests",
-        events: "Events",
-        links: "Links",
-        users: "Users",
-        analytics: "Analytics",
-        venues: "Venues",
-      }}
-      options={[
-        { id: "guest-list", group: "guests", label: "Guest list" },
-        { id: "link-create", group: "links", label: "Create link" },
-      ]}
-      value="guest-list"
-      onChange={() => {}}
-      disabled
-    />,
-  );
-  assert.ok(
-    screen
-      .getAllByRole("link")
-      .every((link) => link.getAttribute("aria-disabled") === "true"),
-  );
-
-  cleanup();
+test("section controls expose current state and respect busy locks", () => {
   render(
     <OperationalSectionNav
       label="Link section"
@@ -415,8 +279,8 @@ test("task and section controls expose current state and respect busy locks", ()
     />,
   );
   assert.equal(
-    screen.getByRole("button", { name: "Create" }).getAttribute("aria-pressed"),
-    "true",
+    screen.getByRole("button", { name: "Create" }).getAttribute("aria-current"),
+    "page",
   );
   assert.equal(screen.getByRole("button", { name: "Manage" }).hasAttribute("disabled"), true);
 });
@@ -424,7 +288,7 @@ test("task and section controls expose current state and respect busy locks", ()
 test("analytics period controls expose selection and keyboard-native navigation", () => {
   let previousAnchor = "";
   let nextGranularity = "";
-  render(
+  const periodBar = (isLoading: boolean) => (
     <NextIntlClientProvider
       locale="en"
       messages={{
@@ -451,7 +315,8 @@ test("analytics period controls expose selection and keyboard-native navigation"
       <AnalyticsPeriodBar
         granularity="month"
         view={EMPTY_ANALYTICS_DTO_FIXTURE}
-        isLoading={false}
+        isLoading={isLoading}
+        anchorDate="2026-09-01"
         onGranularityChange={(value) => {
           nextGranularity = value;
         }}
@@ -460,8 +325,9 @@ test("analytics period controls expose selection and keyboard-native navigation"
         }}
         onRefresh={() => {}}
       />
-    </NextIntlClientProvider>,
+    </NextIntlClientProvider>
   );
+  const { rerender } = render(periodBar(false));
 
   assert.equal(
     screen.getByRole("button", { name: "Month" }).getAttribute("aria-pressed"),
@@ -471,7 +337,13 @@ test("analytics period controls expose selection and keyboard-native navigation"
   assert.equal(nextGranularity, "quarter");
   fireEvent.click(screen.getByRole("button", { name: "Previous period" }));
   assert.equal(previousAnchor, "2026-07-01");
-  assert.ok(screen.getByText(/Compared with 2026-07-01-2026-07-31/));
+  assert.ok(screen.getByText(/Compared with Jul 1, 2026-Jul 31, 2026/));
+
+  // While another period loads, the old comparison range would contradict the new label.
+  rerender(periodBar(true));
+  assert.ok(screen.getByText("September 2026"));
+  assert.equal(screen.queryByText(/Compared with/), null);
+  assert.ok(screen.getByText("Preparing period"));
 });
 
 test("attendance analytics keeps KPIs and its empty state visible", () => {
@@ -1234,6 +1106,49 @@ test("bulk submit reports completion after unmount while its request is pending"
   assert.deepEqual(submittingStates, [true, false]);
 });
 
+test("route loading locks the page at once but paints its overlay only after the show delay", async () => {
+  let transition!: ReturnType<typeof useRouteTransition>;
+  function Harness() {
+    transition = useRouteTransition();
+    return <main id="main-content" tabIndex={-1}>Current page</main>;
+  }
+  const view = render(<NextIntlClientProvider locale="en" messages={messages}><RouteTransitionProvider><Harness /></RouteTransitionProvider></NextIntlClientProvider>);
+  const main = within(view.container).getByRole("main");
+  const overlay = () => document.querySelector(".route-transition-overlay");
+
+  let release!: () => void;
+  act(() => { release = transition.registerRouteLoadingTask(); });
+  assert.equal(transition.isRouteTransitionActive, true);
+  assert.equal(main.hasAttribute("inert"), true);
+  assert.equal(overlay() === null, true, "fast work never flashes the spinner");
+  act(() => release());
+  assert.equal(transition.isRouteTransitionActive, false);
+  assert.equal(main.hasAttribute("inert"), false);
+  await act(async () => { await new Promise((resolve) => window.setTimeout(resolve, 200)); });
+  assert.equal(overlay() === null, true);
+
+  act(() => { release = transition.registerRouteLoadingTask(); });
+  await waitFor(() => assert.equal(overlay()?.getAttribute("data-state"), "visible"));
+  assert.equal(overlay()?.getAttribute("data-enter"), "fade");
+  act(() => release());
+  await waitFor(() => assert.equal(overlay() === null, true));
+  assert.equal(main.hasAttribute("inert"), false);
+});
+
+test("the route error screen focuses its explanation and retries through reset", async () => {
+  let resets = 0;
+  // next/link reads the browser global `self`.
+  Object.defineProperty(globalThis, "self", { configurable: true, value: window });
+  render(<NextIntlClientProvider locale="en" messages={messages}><RouteTransitionProvider>
+    <RouteError error={new Error("Render failed")} reset={() => { resets += 1; }} />
+  </RouteTransitionProvider></NextIntlClientProvider>);
+  const heading = screen.getByRole("heading", { name: messages.Common.errorTitle });
+  await waitFor(() => assert.equal(document.activeElement === heading, true));
+  fireEvent.click(screen.getByRole("button", { name: messages.Common.retry }));
+  assert.equal(resets, 1);
+  assert.equal(screen.getByRole("link", { name: messages.Common.goHome }).getAttribute("href"), "/");
+});
+
 test("a cancelled route-owned target restore falls back to main after overlay removal", async () => {
   const originalRequestAnimationFrame = window.requestAnimationFrame;
   const originalCancelAnimationFrame = window.cancelAnimationFrame;
@@ -1466,7 +1381,22 @@ test("a one-time result stays available until the user confirms closing it", () 
   assert.equal(screen.queryByRole("dialog"), null);
 });
 
-test("detail moves between desktop accordion and mobile modal without losing its draft or focus", () => {
+test("page forms can sit below the workspace heading without adding another top-level heading", () => {
+  const frame = (nested: boolean) => <NextIntlClientProvider locale="en" messages={messages}>
+    {nested && <h1>Create link</h1>}
+    <Sheet title="Create access link" presentation="page" headingLevel={nested ? 2 : undefined} onClose={() => {}}>
+      <label>DJ name<input /></label>
+    </Sheet>
+  </NextIntlClientProvider>;
+  const view = render(frame(false));
+  assert.ok(screen.getByRole("heading", { level: 1, name: "Create access link" }));
+  view.rerender(frame(true));
+  assert.equal(screen.getAllByRole("heading", { level: 1 }).length, 1);
+  assert.ok(within(screen.getByRole("region", { name: "Create access link" }))
+    .getByRole("heading", { level: 2, name: "Create access link" }));
+});
+
+test("detail stays inline across mobile and desktop without losing its draft or focus", () => {
   let mobile = false;
   let closeCount = 0;
   const originalMedia = window.matchMedia;
@@ -1491,18 +1421,18 @@ test("detail moves between desktop accordion and mobile modal without losing its
     fireEvent.change(input, { target: { value: "Unsubmitted guest note" } });
     input.focus(); input.setSelectionRange(2, 5);
     resize(true);
-    assert.equal(screen.getByRole("dialog", { name: "Guest detail" }), panel);
-    assert.equal(panel.getAttribute("aria-modal"), "true");
-    assert.ok(document.querySelector(".workspace-shell")?.closest("[inert]"));
-    assert.equal(document.body.style.overflow, "hidden");
-    assert.equal(document.documentElement.style.overflow, "hidden");
+    assert.equal(screen.getByRole("region", { name: "Guest detail" }), panel);
+    assert.equal(panel.hasAttribute("aria-modal"), false);
+    assert.equal(document.querySelector(".workspace-shell")?.closest("[inert]"), null);
+    assert.notEqual(document.body.style.overflow, "hidden");
+    assert.notEqual(document.documentElement.style.overflow, "hidden");
     assert.equal(screen.getByLabelText("Note") === input, true);
     assert.equal(document.activeElement === input, true);
     assert.equal(input.selectionStart, 2);
     assert.equal(input.selectionEnd, 5);
     assert.equal(input.value, "Unsubmitted guest note");
     fireEvent.keyDown(input, { key: "Escape", isComposing: true });
-    assert.equal(screen.getByRole("dialog", { name: "Guest detail" }), panel);
+    assert.equal(screen.getByRole("region", { name: "Guest detail" }), panel);
     assert.equal(closeCount, 0);
     fireEvent.keyDown(input, { key: "Escape" });
     assert.equal(closeCount, 1);
@@ -1521,7 +1451,7 @@ test("detail moves between desktop accordion and mobile modal without losing its
   } finally { cleanup(); window.matchMedia = originalMedia; }
 });
 
-test("mobile guest detail keeps delete confirmation inside its modal and restores the row on close", async () => {
+test("mobile guest detail confirms inline without locking the list and restores the row on close", async () => {
   const originalMedia = window.matchMedia;
   window.matchMedia = (query) => ({ ...originalMedia(query), matches: query === "(max-width: 999px)" });
   try {
@@ -1531,9 +1461,10 @@ test("mobile guest detail keeps delete confirmation inside its modal and restore
     </NextIntlClientProvider>);
     const row = screen.getByRole("button", { name: "Mobile guest" });
     row.focus(); fireEvent.click(row);
-    const dialog = screen.getByRole("dialog", { name: "Mobile guest" });
+    const dialog = screen.getByRole("region", { name: "Mobile guest" });
     assert.equal(dialog.closest("[inert]"), null);
-    assert.ok(row.closest("[inert]"));
+    assert.equal(row.closest("[inert]"), null);
+    assert.equal(within(dialog).queryByRole("heading"), null);
     fireEvent.click(within(dialog).getByRole("button", { name: messages.Common.deleteGuest }));
     const confirmation = within(dialog).getByRole("group");
     fireEvent.click(within(confirmation).getByRole("button", { name: messages.Common.cancel }));
@@ -1623,13 +1554,13 @@ test("mobile roster expands search with two-step Escape and keeps owner filterin
   assert.equal(document.activeElement === searchToggle, true);
   const filters = screen.getByRole("button", { name: messages.Roster.filters });
   filters.focus(); fireEvent.click(filters);
-  let dialog = screen.getByRole("region", { name: messages.Roster.filters });
+  let dialog = screen.getByRole("dialog", { name: messages.Roster.filters });
   fireEvent.change(within(dialog).getByRole("combobox"), { target: { value: "dj" } });
   fireEvent.click(within(dialog).getByRole("button", { name: messages.Sheet.close }));
   await waitFor(() => assert.equal(document.activeElement === filters, true));
   assert.equal(screen.getByRole("button", { name: messages.Roster.filtersApplied }) === filters, true);
   fireEvent.click(filters);
-  dialog = screen.getByRole("region", { name: messages.Roster.filters });
+  dialog = screen.getByRole("dialog", { name: messages.Roster.filters });
   assert.equal((within(dialog).getByRole("combobox") as HTMLSelectElement).value, "dj");
   assert.ok(within(dialog).getByRole("button", { name: "Sort names" }));
   within(dialog).getByRole("combobox").focus();
@@ -1641,11 +1572,11 @@ test("mobile roster expands search with two-step Escape and keeps owner filterin
   };
   try {
     fireEvent(window, new Event("resize"));
-    assert.equal(screen.queryByRole("region") === null, true);
+    assert.equal(screen.queryByRole("dialog") === null, true);
     assert.equal((screen.getByRole("combobox") as HTMLSelectElement).value, "dj");
     assert.equal(document.activeElement === screen.getByRole("searchbox"), true);
     width = 500; fireEvent(window, new Event("resize"));
-    assert.equal(screen.queryByRole("region") === null, true);
+    assert.equal(screen.queryByRole("dialog") === null, true);
     assert.equal(document.activeElement === screen.getByRole("searchbox"), true);
     assert.ok(screen.getByRole("button", { name: messages.Roster.filtersApplied }));
   } finally { HTMLElement.prototype.getBoundingClientRect = originalRect; }
@@ -1696,7 +1627,7 @@ test("check-in stays immediate while undo requires confirmation for the current 
   assert.equal(undoCalls, 1);
 });
 
-test("event details hand off a template to a guarded create sheet and retain failed input", async () => {
+test("event details hand off a template to a guarded inline form and retain failed input", async () => {
   const hooks = registerHooks({
     resolve(specifier, context, nextResolve) {
       const suffix = ["lib/events/client", "lib/api/events", "lib/api/closeout", "components/VenueSelector"].find((value) => specifier.endsWith(value));
@@ -1726,7 +1657,7 @@ test("event details hand off a template to a guarded create sheet and retain fai
     await waitFor(() => assert.ok(within(details).getByText(messages.EventAdmin.transitionFailed)));
     assert.equal(open.hasAttribute("disabled"), false);
     fireEvent.click(screen.getByRole("button", { name: messages.EventAdmin.useTemplate }));
-    const dialog = screen.getByRole("dialog", { name: messages.EventAdmin.createTitle });
+    const dialog = screen.getByRole("region", { name: messages.EventAdmin.createTitle });
     const name = within(dialog).getByLabelText(messages.EventAdmin.name) as HTMLInputElement;
     assert.match(name.value, /Test night/);
     fireEvent.change(name, { target: { value: "New night" } });
@@ -1849,7 +1780,7 @@ test("a directly opened modal receives focus after its route loading overlay rel
   });
 });
 
-test("route loading locks an inline panel without replacing its draft", () => {
+test("route loading locks an inline panel without replacing its draft", async () => {
   let start: ((href: string) => boolean) | undefined;
   function Harness() {
     start = useRouteTransition().startRouteTransition;
@@ -1861,7 +1792,9 @@ test("route loading locks an inline panel without replacing its draft", () => {
   act(() => { start?.("/other"); });
   const layer = input.closest(".product-sheet-layer");
   assert.equal(layer?.hasAttribute("inert"), true);
-  assert.equal(layer?.hasAttribute("hidden"), true);
+  // Still painted until the overlay is due, so a fast route does not blink the layout.
+  assert.equal(layer?.hasAttribute("hidden"), false);
+  await waitFor(() => assert.equal(layer?.hasAttribute("hidden"), true));
   assert.equal(input.value, "Retained");
   assert.equal(input.isConnected, true);
 });
@@ -1978,6 +1911,35 @@ test("switching record accordions protects an unsaved draft and resumes only aft
   fireEvent.click(screen.getByRole("button", { name: messages.Sheet.discard }));
   assert.equal(screen.queryByRole("region", { name: "A" }) === null, true);
   assert.ok(screen.getByRole("region", { name: "B" }));
+});
+
+test("a pending close request settles only the latest intent and cancels each replaced intent once", () => {
+  const closed: string[] = [];
+  const canceled: string[] = [];
+  function Harness() {
+    const [open, setOpen] = useState(true);
+    return <>
+      {["A", "B"].map((id) => <button key={id} onClick={() => requestSheetClose(
+        "pending-close-form", () => closed.push(id), () => canceled.push(id),
+      )}>Request {id}</button>)}
+      <Sheet id="pending-close-form" open={open} title="Draft" onClose={() => setOpen(false)} protectEdits>
+        <label>Pending note<input defaultValue="" /></label>
+      </Sheet>
+    </>;
+  }
+  render(<NextIntlClientProvider locale="en" messages={messages}><Harness /></NextIntlClientProvider>);
+  fireEvent.change(screen.getByLabelText("Pending note"), { target: { value: "Keep draft" } });
+  const request = (id: string) => fireEvent.click(screen.getByRole("button", { name: `Request ${id}` }));
+  request("A"); request("B");
+  assert.deepEqual(canceled, ["A"]);
+  fireEvent.click(screen.getByRole("button", { name: messages.Sheet.continue }));
+  assert.deepEqual(closed, []);
+  assert.deepEqual(canceled, ["A", "B"]);
+  request("A"); request("B");
+  fireEvent.click(screen.getByRole("button", { name: messages.Sheet.discard }));
+  assert.deepEqual(closed, ["B"]);
+  assert.deepEqual(canceled, ["A", "B", "A"]);
+  assert.equal(screen.queryByRole("region", { name: "Draft" }), null);
 });
 
 test("roster timestamps keep machine-readable values and use the venue timezone", () => {

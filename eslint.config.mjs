@@ -195,6 +195,8 @@ const capabilityBoundaryPlugin = {
 const eslintConfig = [
   {
     ignores: [
+      "**/.worktrees/**",
+      ".docs/**",
       ".next/**",
       ".open-next/**",
       ".wrangler/**",

@@ -20,6 +20,10 @@ const securityHeaders = [
 ];
 
 const nextConfig: NextConfig = {
+  // Allow the explicitly configured local preview host for dev assets/HMR.
+  allowedDevOrigins: process.env.NODE_ENV === "development" && process.env.NEXT_PUBLIC_APP_URL
+    ? [new URL(process.env.NEXT_PUBLIC_APP_URL).hostname]
+    : undefined,
   reactStrictMode: false,
   images: {
     unoptimized: true,
