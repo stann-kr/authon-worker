@@ -50,13 +50,13 @@ Client
 | Framework | Next.js App Router |
 | Runtime | Cloudflare Workers / OpenNext |
 | Language | TypeScript |
-| Styling | Carbon theme/icons + Tailwind CSS semantic tokens |
+| Styling | Carbon theme/icons + Tailwind CSS semantic tokens, Pretendard Variable |
 | Localization | next-intl (`en`, `ko`) |
 | Database | Cloudflare D1 / SQLite |
 | ORM | Drizzle ORM |
 | Session | Cloudflare KV |
 | Auth | JWT + password hash verification |
-| Email | AWS SES |
+| Email | AWS SES client. 현재 화면에서 호출하는 발송 경로는 없고, 비밀번호 복구는 관리자 승인·설정 코드로 처리한다 |
 
 ## 주요 도메인
 
@@ -65,10 +65,12 @@ Client
 | Venue | 베뉴 단위 운영 경계와 현지 시간대·운영시간·영업일 기준 |
 | Venue Domain | 요청 host와 베뉴 브랜드·대표 URL의 연결 |
 | User | 운영자, 스태프, DJ 계정과 role, 개인·공용 계정 유형, scope |
+| Event | 베뉴·영업일 단위 행사, `draft → open → closed → archived` 상태, 수용 인원·게스트 목표와 행사별 기여자 한도 |
+| Event Closeout | 마감한 행사의 등록·입장 수와 기여자별 수치를 report hash로 고정한 관리자 확인 리포트 |
 | Guest | 날짜별 단건·25명 단위 게스트 등록, 공용 계정 실제 입력자와 상태 관리 |
 | Guest Limit Request | Staff·DJ의 날짜별 추가 게스트 한도 요청과 관리자 승인 기록 |
-| External Link | 외부 DJ가 계정 없이 게스트를 등록하고 설정을 새 credential로 재사용하는 공개 링크와 베뉴별 DJ 디렉터리 연결 |
-| Check-in | 도어 운영자의 입장 확인 기록 |
+| External Link | 담당자형(DJ가 게스트 명단 관리)과 Self-RSVP형(방문자가 직접 등록) 공개 링크. 설정을 새 credential로 재사용하며 담당자형은 베뉴별 DJ 디렉터리에 연결 |
+| Check-in | 도어 운영자의 입장 확인 기록과 체크인·취소의 idempotent 활동 원장 |
 | Attendance | 등록 게스트 체크인과 비식별 워크인 원장을 결합한 영업일·Event 단위 누적 입장 기록 |
 | Password Reset | 사용자 관리자 요청, 관리자 결정, 기존 재설정 token의 일회성 소비 |
 | Account Setup | `pending_reset` 계정의 1회용 설정 코드 또는 요청 브라우저에 결속된 관리자 승인 기반 비밀번호 설정 |
@@ -92,18 +94,21 @@ Client
 
 | 경로 | 공개 여부 | 역할 |
 |---|---|---|
-| `/auth/login` | 공개 | 로그인 |
+| `/auth/login` | 공개 | 로그인. 세션이 만료된 조회는 `reason=session-expired`로 이 화면에 안내 |
+| `/auth/register` | 공개 | 가입 종료 안내 후 로그인으로 이동. 계정은 관리자가 만든다 |
 | `/auth/reset-password` | 공개 | 관리자 재설정 요청, 승인 확인, 기존 token 기반 비밀번호 재설정 |
 | `/auth/setup-password` | 공개 | 관리자에게 받은 1회용 설정 코드로 새 비밀번호 설정 |
 | `/api/auth/password-reset-requests` | 공개 API | 계정 존재 여부를 노출하지 않는 관리자 재설정 요청 등록 |
 | `/api/auth/password-reset-requests/status` | 공개 API | 서명된 브라우저 영수증에 결속된 승인 상태 확인 |
 | `/api/auth/claim-account` | 공개 API | 검증된 1회용 설정 코드 또는 요청 브라우저의 유효한 관리자 승인으로 비밀번호 설정 |
+| `/api/guests/list`, `/api/door/roster`, `/api/guest-snapshots/*`, `/api/attendance/summary`, `/api/events/list`, `/api/venues/list` | 인증 API | 화면 조회 전용 POST 경로. Server Action 대기열과 분리해 메뉴 이동·체크인 중 조회가 막히지 않게 하며, 쓰기는 Server Action이 담당 |
+| `/api/locale` | 공개 API | 언어 선택 저장. 요청 출처를 검사하고 저장 실패를 응답으로 구분 |
 | `/api/internal/sync-guest` | 내부 API | shared secret과 필수 `terminalRequestId`를 검증하는 terminal 게스트 동기화 |
 | `/guest?token=...` | 공개 링크 | 외부 DJ 게스트 등록 |
 | `/` | 인증 필요 | 역할별 작업 카드, 계정 정보와 관리자 바로가기 |
 | `/guest` | 인증 필요 | 게스트 등록/관리 |
 | `/door` | 인증 필요 | 게스트 체크인, 워크인 기록과 관리자 마감 수기 합계 반영 |
-| `/admin` | 관리자 | 행사, 추가 한도 요청, 링크·사용자·비밀번호 요청·베뉴 관리와 통계. 미처리 요청 건수는 navigation badge로 표시 |
+| `/admin` | 관리자 | 행사, 추가 인원 요청, 등록 링크·사용자·비밀번호 요청·베뉴 관리와 통계. 미처리 요청 건수는 navigation badge로 표시 |
 | `/profile` | 인증 필요 | 프로필과 비밀번호 변경 |
 
 ## 인증과 세션 원칙
@@ -147,6 +152,16 @@ Client
 - 기존 링크를 템플릿으로 사용할 때는 DJ·이벤트·정원·언어만 복사하며, ID·token·URL·사용량·생성자·수명주기는 새로 만든다.
 - terminal 동기화는 베뉴 단위 `terminalRequestId`를 필수 idempotency key로 사용한다. 같은 key와 정규화된 payload의 retry는 최초 guest ID를 반환하고, 다른 payload 재사용은 `409`로 거부한다.
 
+## 행사(Event) 수명주기
+
+- 행사는 베뉴·영업일에 속하며 상태는 `draft → open → closed → archived` 순서로만 바뀐다. `draft`는 `open` 또는 `archived`, `open`은 `closed`, `closed`는 `archived`로만 이동하고 `archived`는 최종 상태다.
+- 게스트 등록은 `draft`·`open` 행사에서만, Door 입장 확인은 `open` 행사에서만 허용한다.
+- 이름은 NFKC 정규화·공백 정리 후 최대 120자다. 수용 인원은 1–100,000, 게스트 목표는 0–100,000 범위의 선택 정수이며 목표는 수용 인원을 넘을 수 없다. 게스트 마감 시각은 도어 오픈보다 앞설 수 없다.
+- 보관 전까지 이름·수용 인원·게스트 목표를 수정할 수 있다. 수정은 읽었던 상태와 `updated_at`이 그대로이고 보관되지 않았을 때만 쓰는 조건부 UPDATE로 처리한다. 그 사이 보관되면 `EVENT_LOCKED`, 다른 저장이 먼저면 `EVENT_CHANGED`를 반환해 나중 저장이 먼저 저장을 덮어쓰지 않는다.
+- 기존 행사를 템플릿으로 새 행사를 만들면 기여자별 한도와 등록 링크 설정을 복사한다. 링크는 새 ID·token으로 비활성 상태로 만들고 만료는 새 영업일 다음 날로 정하며, 원본 token과 사용량은 가져오지 않는다.
+- 행사를 고르지 않은 일반 명단은 베뉴·영업일별 호환용 행사(`legacy:<venue>:<date>` key)로 묶어 추가 인원 요청과 입장 기록의 범위를 정한다. 같은 key의 행사는 한 번만 생성된다.
+- 행사 마감 리포트는 관리자가 확인할 때 등록·입장 수와 기여자별 수치를 report hash와 함께 저장한다. 이후 현재 데이터로 다시 계산한 hash가 다르면 `drifted`로 표시하고 리포트 상태를 불일치로 바꾼다.
+
 ## Door 입장 기록 일관성
 
 - 등록 게스트는 기존 Guest 체크인으로 집계하고 명단에 없는 첫 입장만 비식별 워크인 원장에 `+1`로 기록한다. Door 화면은 두 수치를 분리해 표시하며 현재 재실 인원이나 재입장 횟수로 해석하지 않는다.
@@ -161,6 +176,8 @@ Client
 - setup code와 외부 링크 token 같은 일회성 결과는 저장된 scope가 현재 화면과 다르면 render 단계에서 숨기며, 전환 effect에만 삭제를 의존하지 않는다.
 - Guest roster polling은 한 번에 하나만 실행하고 숨김 탭·offline·mutation 중에는 중단한다. 체크인·취소 성공 뒤에는 기존 poll을 무효화하고 권위 있는 roster를 다시 조회한다.
 - route 전환, scope 변경, reject와 abort는 진행 중 작업의 소유권을 폐기하고 현재 작업이 소유한 busy 상태만 해제한다.
+- 조회가 세션 검사로 redirect되면 같은 화면의 재시도로는 복구할 수 없으므로 네트워크 오류 대신 `/auth/login?reason=session-expired`로 이동한다. 여러 조회가 동시에 만료돼도 5초 안에는 한 번만 이동하고, 저장하지 않은 작업 확인으로 화면이 남으면 이후 조회가 다시 이동을 시도한다.
+- Door와 Admin에서 고른 운영일은 고른 영업일 동안만 유지한다. 다음 영업일이나 마감 시각이 지난 뒤 다시 보인 화면은 베뉴 기준 오늘로 연다.
 
 ## 데이터 모델 요약
 
@@ -172,11 +189,18 @@ Client
 | `user_audit_events` | 사용자 계정 관리 작업의 actor, 대상, 작업 종류와 시각 |
 | `venue_contributors` | 베뉴별 canonical DJ와 표시 이름; 외부 DJ 디렉터리 항목만 정규화된 고유 이름 key 보유 |
 | `contributor_audit_events` | Contributor 생성과 user·외부 링크 mapping 변경 감사 기록 |
-| `external_dj_links` | 외부 DJ 등록 링크, canonical Contributor 연결, 정원/사용량, 생성 시각과 언어 모드 |
-| `guests` | 게스트 등록 정보, 공용 계정 실제 입력자와 체크인 전 상태 |
+| `events` | 베뉴·영업일 행사, 상태, 도어 오픈·게스트 마감 시각, 수용 인원·목표, 템플릿 원본과 호환용 key |
+| `event_contributor_limits` | 행사별 기여자 게스트 한도와 복사한 원본 행사 |
+| `event_closeouts` | 행사 마감 리포트의 확인자, 시각, report hash와 등록·입장 수 |
+| `event_closeout_contributor_metrics` | 행사 마감 리포트에 고정한 기여자별 수치 |
+| `external_dj_links` | 담당자형·Self-RSVP형 등록 링크, canonical Contributor·행사 연결, 정원/사용량, 생성 시각과 언어 모드 |
+| `guests` | 게스트 등록 정보, 행사 연결, 공용 계정 실제 입력자와 체크인 전 상태 |
+| `external_guest_owners` | Self-RSVP 방문자 브라우저의 owner key hash와 본인 등록 게스트 연결 |
 | `terminal_guest_sync_requests` | terminal 요청의 베뉴별 idempotency key, payload hash와 최초 guest 결과 |
 | `guest_limit_requests` | 사용자·날짜별 추가 한도 요청, 선택 사유, 승인 수량과 결정 기록 |
 | `check_ins` | 체크인 기록 |
+| `guest_activity_ledger` | 게스트 체크인·취소·재입장의 actor, channel, 이전·다음 상태와 결과 원장 |
+| `guest_activity_requests` | 게스트 활동 요청의 베뉴별 idempotency key, payload hash와 처리 결과 |
 | `attendance_activity_ledger` | 이름·연락처를 저장하지 않는 워크인, 취소와 관리자 수기 보정 불변 원장 |
 | `attendance_closeouts` | Guest·워크인 기준값과 최종 누적 합계를 exact scope로 동결하는 변경 불가 입장 마감 snapshot |
 | `password_reset_tokens` | 비밀번호 재설정 token hash와 만료/사용 상태 |
@@ -190,6 +214,7 @@ Client
 | 권한/role | route guard, Server Action guard, 계정 유형 capability, venue scoping, session 무효화, 자기 계정·권한 상승 방지 |
 | 도메인/브랜드 | host resolver, venue domain mapping, metadata, email/link canonical URL |
 | 게스트 등록 | external link flow, 공용 계정 입력자, 기본·승인 추가 한도의 원자적 적용, date/status 계산 |
+| 행사 | 상태 전이와 등록·입장 허용 조건, 상세 수정의 조건부 UPDATE, 템플릿 복사의 credential 재발급, 마감 리포트 hash |
 | Door 입장 기록 | Guest 체크인 포함 범위, attendance queue·idempotency·device sequence, 관리자 target reconciliation CAS |
 | 베뉴 시간 기준 | IANA timezone 검증, 자정 통과 운영시간, Guest·Door·Admin 기본 영업일 계산, Door·Admin 선택 운영일의 영업일 단위 만료 |
 | D1 schema | Drizzle schema, migration files, affected queries |
