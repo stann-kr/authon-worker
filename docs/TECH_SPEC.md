@@ -146,6 +146,8 @@ Client
 - 공개 등록·삭제 뒤 최신 명단 재조회가 실패하면 입력은 유지하고 추가 쓰기를 잠근 뒤 명시적 재시도로만 해제한다.
 - 기존 링크를 템플릿으로 사용할 때는 DJ·이벤트·정원·언어만 복사하며, ID·token·URL·사용량·생성자·수명주기는 새로 만든다.
 - terminal 동기화는 베뉴 단위 `terminalRequestId`를 필수 idempotency key로 사용한다. 같은 key와 정규화된 payload의 retry는 최초 guest ID를 반환하고, 다른 payload 재사용은 `409`로 거부한다.
+- terminal payload에 `artistName`이 있으면 게스트를 그 영업일의 베뉴 이벤트(호환용 아님, `draft`·`open`)에 넣고, 이벤트·아티스트별 담당자형 외부 링크에 연결한다. 아티스트는 베뉴 안의 이름 key로 기존 DJ를 찾고 없으면 생성하며, 링크는 결정적 ID라 동시 첫 등록도 링크 하나를 공유한다. 해당 이벤트가 없거나 둘 이상이면 아무것도 쓰지 않고 `503`(`EVENT_NOT_READY`·`EVENT_AMBIGUOUS`)으로 재전송을 기다린다.
+- 정원 권위는 terminal에 있다. sync는 링크 정원으로 게스트를 거부하지 않고 사용량을 올리며, 정원은 사용량과 terminal `guestLimit` 중 큰 값까지만 늘린다. 비활성 DJ나 삭제·비활성 링크는 게스트를 링크 없이 이벤트에만 넣는다. `artistName`이 없는 payload는 기존 호환용 이벤트 경로와 hash를 그대로 쓴다.
 
 ## Door 입장 기록 일관성
 
