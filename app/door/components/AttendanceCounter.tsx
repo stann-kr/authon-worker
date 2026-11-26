@@ -36,6 +36,8 @@ interface AttendanceCounterProps {
   hasPendingGuestMutations: boolean;
   children: (actions: ReactNode, details: ReactNode, entryLocked: boolean, deletionLocked: boolean) => ReactNode;
   dependencies?: AttendanceCounterDependencies;
+  /** The view spans several Events, so walk-ins wait for one to be picked. */
+  requiresEvent?: boolean;
 }
 
 const ATTENDANCE_COUNTER_DEPENDENCIES: AttendanceCounterDependencies =
@@ -60,6 +62,7 @@ export default function AttendanceCounter({
   hasPendingGuestMutations,
   children,
   dependencies = ATTENDANCE_COUNTER_DEPENDENCIES,
+  requiresEvent = false,
 }: AttendanceCounterProps) {
   const t = useTranslations("Door.attendance");
   const commonT = useTranslations("Common");
@@ -101,7 +104,7 @@ export default function AttendanceCounter({
     serverWalkIns,
     statusText,
     submitAdjustment,
-    unavailableText,
+    unavailableText: scopeUnavailableText,
     undoableKey,
     walkIns,
   } = useAttendanceCounterController({
@@ -113,6 +116,7 @@ export default function AttendanceCounter({
     translate: t,
     dependencies,
   });
+  const unavailableText = !scope && requiresEvent ? t("pickEvent") : scopeUnavailableText;
 
 
   useLayoutEffect(() => {

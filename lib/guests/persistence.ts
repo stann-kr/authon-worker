@@ -3,6 +3,7 @@ import { getD1Database } from "@/lib/db/client";
 import { and, desc, eq, inArray, isNull, ne, or } from "drizzle-orm";
 
 import { getDb } from "../db/client";
+import { dayGuestScope } from "../events/day-scope";
 import {
   guestActivityLedger,
   guestActivityRequests,
@@ -58,6 +59,8 @@ export interface GuestPersistence {
     venueId?: string;
     eventId: string | null;
     includeLegacyDateRows: boolean;
+    /** Every Event of the venue's business date; needs venueId and ignores eventId. */
+    allEvents?: boolean;
   }): Promise<Guest[]>;
   listAll(venueId?: string): Promise<Guest[]>;
   loadGuest(guestId: string): Promise<AccessibleGuestRecord | null>;
@@ -180,7 +183,21 @@ export function createGuestPersistence(): GuestPersistence {
       venueId,
       eventId,
       includeLegacyDateRows,
+      allEvents,
     }) {
+      if (allEvents) {
+        if (!venueId) throw new Error("VENUE_REQUIRED");
+        const rows = await db
+          .select()
+          .from(guests)
+          .where(and(
+            eq(guests.venueId, venueId),
+            ne(guests.status, "deleted"),
+            dayGuestScope(db, venueId, date),
+          ))
+          .orderBy(desc(guests.createdAt));
+        return rows.map(toGuest);
+      }
       const conditions = [eq(guests.date, date), ne(guests.status, "deleted")];
       if (eventId) {
         conditions.push(
