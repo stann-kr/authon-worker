@@ -62,7 +62,7 @@ Authon UI는 베뉴 현장에서 반복적으로 사용하는 운영 도구다. 
 
 ## 타이포그래피
 
-- 본문은 `-0.01em`, 제목은 `-0.02em`~`-0.03em`으로 자간을 좁힌다. 페이지·화면 제목은 600–700으로 무게를 분명히 한다. 모바일 화면 제목은 `20px`·700이다.
+- 본문은 `-0.01em`, 제목은 `-0.02em`~`-0.03em`으로 자간을 좁힌다. 페이지·화면 제목은 600–700으로 무게를 분명히 한다. 1000px 미만의 작업 화면 제목과 공개 등록 화면 제목은 `20px`·700, 1000px 이상의 header 화면 제목은 `15px`·600이다.
 - label은 sentence case를 기본으로 한다.
 - tabular 숫자와 uppercase는 짧은 상태, 키보드 shortcut, 날짜, 숫자에만 사용한다. 로그인한 작업 화면과 sheet의 `font-mono`는 같은 sans-serif의 `tabular-nums`로 렌더링하고, Geist Mono는 작업 화면 밖의 `font-mono`와 code·kbd에만 남긴다.
 - 운영 label, helper, error 문장은 최소 `12px`로 유지하고 배경 대비 WCAG AA를 만족해야 한다.
@@ -75,13 +75,14 @@ Authon UI는 베뉴 현장에서 반복적으로 사용하는 운영 도구다. 
 | Context title | 14px | 600 | `type-context-title` | Operational date, Guest owner, User filter, Section처럼 dashboard card의 맥락을 정의하는 제목 |
 | Field label | 14px | 500 | `app-label` | Guest name, Email, Sort처럼 개별 control을 설명하는 label |
 | Body / Control value | 14px | 400–500 | `type-body`, `app-field` | 본문 설명과 입력값 |
-| Row title | 14–16px | 600 | `type-row-title` | guest·link·user·venue 목록의 주 식별자 |
+| Row title | 14px | 600 | `type-row-title` | 요청·리포트 목록의 주 식별자 |
+| Guest name | 15–16px | 600 | roster 전용 | 게스트 명단 행의 이름 |
 | Status / Metadata | 12px | 400–600 | `type-meta` | count, timestamp, helper, 짧은 상태 |
 
-- 같은 semantic role은 viewport가 달라도 임의로 크기를 바꾸지 않는다. row title만 넓은 화면에서 14px에서 16px로 한 단계 확장한다.
+- 같은 semantic role은 viewport가 달라도 임의로 크기를 바꾸지 않는다. 게스트 명단 이름만 명단 container가 `700px` 미만일 때 터치 환경의 가독성을 위해 15px에서 16px로 한 단계 키운다. 입장 완료 행의 이름은 `text-muted`로 흐리게 표시한다.
 - context title과 panel title은 모두 600 weight를 사용하고, 14px와 16px의 크기 차이로 dashboard context와 작업 section의 위계를 표현한다.
 - 개별 form control의 field label은 500 weight를 유지해 context title보다 한 단계 낮게 표시한다.
-- 700 bold는 운영 UI에서 사용하지 않는다. 제목·주요 action·상태는 600, label·보조 action은 500, 본문·숫자·metadata는 400을 기본으로 한다.
+- 700 bold는 홈·로그인·공개 등록 화면 제목과 1000px 미만의 작업 화면 제목에만 쓴다. 그 밖의 운영 UI는 제목·주요 action·상태 600, label·보조 action 500, 본문·숫자·metadata 400을 기본으로 한다.
 
 ## 상태 표현
 
