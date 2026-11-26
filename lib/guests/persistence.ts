@@ -3,7 +3,7 @@ import { getD1Database } from "@/lib/db/client";
 import { and, desc, eq, inArray, isNull, ne, or } from "drizzle-orm";
 
 import { getDb } from "../db/client";
-import { dayGuestScope } from "../events/day-scope";
+import { loadDayGuests } from "../events/day-scope";
 import {
   guestActivityLedger,
   guestActivityRequests,
@@ -187,16 +187,7 @@ export function createGuestPersistence(): GuestPersistence {
     }) {
       if (allEvents) {
         if (!venueId) throw new Error("VENUE_REQUIRED");
-        const rows = await db
-          .select()
-          .from(guests)
-          .where(and(
-            eq(guests.venueId, venueId),
-            ne(guests.status, "deleted"),
-            dayGuestScope(db, venueId, date),
-          ))
-          .orderBy(desc(guests.createdAt));
-        return rows.map(toGuest);
+        return loadDayGuests(db, venueId, date);
       }
       const conditions = [eq(guests.date, date), ne(guests.status, "deleted")];
       if (eventId) {

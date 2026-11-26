@@ -423,6 +423,7 @@
     "loadFailed": "Operational data could not be loaded. Check your network connection.",
     "updateFailed": "The guest status could not be changed. Please try again.",
     "deleteNeedsEvent": "Select an Event to remove a guest.",
+    "closedEventRows": "Guests of an Event that is not open cannot be checked in. Check the Event state.",
     "eventNotActive": "This guest's Event is not open, so the check-in cannot be recorded.",
     "attendanceScopeClosed": "Attendance for this scope is already finalized. Guest check-ins cannot be changed.",
     "statusChangedElsewhere": "This guest's status had already changed, so nothing was applied. Refreshing the list.",

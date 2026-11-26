@@ -283,6 +283,14 @@ test("the whole-day list names each row's Event and leaves rows of a closed Even
     .getByRole("button", { name: messages.Common.checkIn });
   await waitFor(() => assert.equal(rowCheckIn(closed).hasAttribute("disabled"), true));
   assert.equal(rowCheckIn(open).hasAttribute("disabled"), false);
+  assert.ok(screen.getByText(messages.Door.closedEventRows));
+});
+
+test("a link to an Event the date no longer has falls back to the whole day", async () => {
+  location("missing");
+  render(frame());
+  await waitFor(() => assert.deepEqual(runtime.__doorPageTest.reads.at(-1),
+    { date: "2026-09-15", venueId: "venue-1", eventId: null, allEvents: true }));
 });
 
 test("deletion fails closed without an attendance summary", async () => {

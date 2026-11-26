@@ -1,6 +1,7 @@
-import { and, eq, inArray, isNull, or, type SQL } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, ne, or, type SQL } from "drizzle-orm";
 import type { getDb } from "../db/client";
 import { events, externalDjLinks, guests } from "../db/schema";
+import type { Guest } from "../guests/types";
 
 type Db = ReturnType<typeof getDb>;
 
@@ -14,12 +15,21 @@ function dayEventIds(db: Db, venueId: string, businessDate: string) {
     .where(and(eq(events.venueId, venueId), eq(events.businessDate, businessDate)));
 }
 
-/** Guests on any of the day's Events, or dated that day without an Event. Callers add the venue and status filters. */
-export function dayGuestScope(db: Db, venueId: string, businessDate: string): SQL {
-  return or(
-    inArray(guests.eventId, dayEventIds(db, venueId, businessDate)),
-    and(isNull(guests.eventId), eq(guests.date, businessDate)),
-  )!;
+/**
+ * Active guests on any of the day's Events, or dated that day without an Event, newest first.
+ * The two sets are disjoint; UNION ALL lets each branch use its own event or venue/date index.
+ */
+export async function loadDayGuests(db: Db, venueId: string, businessDate: string): Promise<Guest[]> {
+  const select = (scope: SQL) => db
+    .select()
+    .from(guests)
+    .where(and(ne(guests.status, "deleted"), scope));
+  // The Event ids already belong to this venue, so that branch skips the venue filter;
+  // with it, SQLite reads the venue's whole history instead of the (event_id, status) index.
+  const rows = await select(inArray(guests.eventId, dayEventIds(db, venueId, businessDate)))
+    .unionAll(select(and(eq(guests.venueId, venueId), isNull(guests.eventId), eq(guests.date, businessDate))!))
+    .orderBy(desc(guests.createdAt));
+  return rows.map((guest) => ({ ...guest, status: guest.status as Guest["status"] }));
 }
 
 /** External links of any of the day's Events, or dated that day without an Event. Callers add the venue filter. */

@@ -579,6 +579,11 @@ function DoorPageContent() {
                     </Button>
                   </div>
                 )}
+                {displayData.guests.some(isRowEventClosed) && (
+                  <p className="rounded-control border border-transparent bg-status-waiting/10 px-3 py-2 text-xs leading-relaxed text-text-muted" role="status">
+                    {t("closedEventRows")}
+                  </p>
+                )}
                 {!isOnline && (
                   <p className="rounded-control border border-transparent bg-status-waiting/10 px-3 py-2 text-xs leading-relaxed text-text-muted" role="status">
                     {t(offlineScope ? "offlineEventScope" : "offlineGeneralScope")}

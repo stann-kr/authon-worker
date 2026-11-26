@@ -45,6 +45,7 @@ export default function EventScopeSelector({
   const valueRef = useLatestRef(value);
   const onChangeRef = useLatestRef(onChange);
   const onEventsLoadedRef = useLatestRef(onEventsLoaded);
+  const allEventsOptionRef = useLatestRef(allEventsOption);
 
   const loadEvents = useCallback(async () => {
     const isLatest = requestGuard.beginRequest();
@@ -68,7 +69,9 @@ export default function EventScopeSelector({
       setEvents(explicitEvents);
       onEventsLoadedRef.current?.(explicitEvents);
       if (valueRef.current && !explicitEvents.some((event) => event.id === valueRef.current)) {
-        onChangeRef.current(null);
+        // A vanished Event falls back to the widest view the caller offers.
+        if (allEventsOptionRef.current) allEventsOptionRef.current.onSelect();
+        else onChangeRef.current(null);
       }
     } catch {
       if (!isLatest()) return;
@@ -77,7 +80,7 @@ export default function EventScopeSelector({
     } finally {
       if (isLatest()) setIsLoading(false);
     }
-  }, [businessDate, onChangeRef, onEventsLoadedRef, requestGuard, valueRef, venueId]);
+  }, [allEventsOptionRef, businessDate, onChangeRef, onEventsLoadedRef, requestGuard, valueRef, venueId]);
 
   useEffect(() => {
     void loadEvents();

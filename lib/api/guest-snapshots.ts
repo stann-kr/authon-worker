@@ -5,8 +5,8 @@ import { measureServerOperation } from "@/lib/observability/server-performance";
 import { reportServerError } from "@/lib/observability/structured-log";
 
 import { and, asc, desc, eq, isNull, ne, or } from "drizzle-orm";
-import { externalDjLinks, guests, users } from "../db/schema";
-import { dayExternalLinkScope, dayGuestScope } from "../events/day-scope";
+import { externalDjLinks, users } from "../db/schema";
+import { dayExternalLinkScope, loadDayGuests } from "../events/day-scope";
 import { getDb } from "../db/client";
 import { requireAccess, type SessionUser } from "../auth/server";
 import { requireActiveVenueId } from "../tenant/active-server";
@@ -194,16 +194,7 @@ async function loadDayOperationsSnapshot(
   date: string,
 ): Promise<ApiResponse<GuestOperationsSnapshot>> {
   const results = await Promise.allSettled([
-    db
-      .select()
-      .from(guests)
-      .where(and(
-        eq(guests.venueId, venueId),
-        ne(guests.status, "deleted"),
-        dayGuestScope(db, venueId, date),
-      ))
-      .orderBy(desc(guests.createdAt))
-      .then((rows) => rows.map((guest) => ({ ...guest, status: guest.status as Guest["status"] }))),
+    loadDayGuests(db, venueId, date),
     loadUserDirectory(db, actor, venueId),
     db
       .select({ id: externalDjLinks.id, djName: externalDjLinks.djName })
