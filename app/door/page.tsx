@@ -13,7 +13,7 @@ import { useState, useEffect, useMemo, useRef, useCallback, useSyncExternalStore
 import { useBusinessDate, useLocalStorage } from "../../lib/hooks";
 import { useAuthSession } from "@/components/AuthSessionProvider";
 import { hasAccess } from "@/lib/auth";
-import { isBusinessDate } from "@/lib/events/domain";
+import { canCheckInToEvent, isBusinessDate } from "@/lib/events/domain";
 import AuthGuard from "../../components/AuthGuard";
 import GuestListCard from "../../components/GuestListCard";
 
@@ -64,6 +64,7 @@ import {
   saveOfflineDoorRoster,
 } from "../../lib/door/offline-store";
 import type { Guest } from "@/lib/guests/types";
+import type { Event } from "@/lib/events/types";
 import { useLocale, useTranslations } from "next-intl";
 import { useToast, type ToastOptions } from "@/components/feedback/ToastProvider";
 
@@ -111,6 +112,7 @@ function DoorPageContent() {
   const initializedVenue = useRef<string | null>(null);
   const t = useTranslations("Door");
   const commonT = useTranslations("Common");
+  const eventScopeT = useTranslations("EventScope");
   const locale = useLocale() as "en" | "ko";
   const {
     venueId,
@@ -134,6 +136,17 @@ function DoorPageContent() {
   const [tool, setTool] = useState<"code" | "offline" | null>(null);
   const [selectedDJ, setSelectedDJ] = useState<string>("all");
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
+  // The Door opens on every Event of the date; picking one narrows the list and enables per-Event tools.
+  const [isAllEvents, setIsAllEvents] = useState(true);
+  const [dayEvents, setDayEvents] = useState<Event[]>([]);
+  const showWholeDay = useCallback(() => {
+    setSelectedEventId(null);
+    setIsAllEvents(true);
+  }, []);
+  const selectEvent = useCallback((eventId: string | null) => {
+    setSelectedEventId(eventId);
+    setIsAllEvents(false);
+  }, []);
   const [rosterStatus, setRosterStatus] = useState<RosterStatus>("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [sortMode, setSortMode] = useLocalStorage<"default" | "alpha">(
@@ -180,20 +193,21 @@ function DoorPageContent() {
     venueId,
     selectedDate,
     selectedEventId,
+    allEvents: isAllEvents,
     translate: t,
     dependencies: DOOR_ROSTER_DEPENDENCIES,
     canDeleteGuests: canManageGuests,
   });
   const attendanceScope = useMemo(
     () =>
-      venueId
+      venueId && !isAllEvents
         ? {
             venueId,
             businessDate: selectedDate,
             eventId: selectedEventId,
           }
         : null,
-    [selectedDate, selectedEventId, venueId],
+    [isAllEvents, selectedDate, selectedEventId, venueId],
   );
 
   useEffect(() => {
@@ -203,8 +217,10 @@ function DoorPageContent() {
     const date = search.get("date");
     const matchesVenue = search.get("venue") === venueId && isBusinessDate(date);
     if (matchesVenue) setSelectedDate(date!);
-    setSelectedEventId(matchesVenue ? search.get("eventId") : null);
-  }, [currentVenue, setSelectedDate, venueId]);
+    const linkedEventId = matchesVenue ? search.get("eventId") : null;
+    if (linkedEventId) selectEvent(linkedEventId);
+    else showWholeDay();
+  }, [currentVenue, selectEvent, setSelectedDate, showWholeDay, venueId]);
 
   useEffect(() => {
     setSelectedDJ("all");
@@ -282,6 +298,20 @@ function DoorPageContent() {
       return { name: link ? `${link.djName} (${t("external")})` : undefined, accountKind: "personal" };
     }
     return { accountKind: "personal" };
+  };
+
+  // Rows name their Event only when the whole-day list really mixes several.
+  const eventNames = new Map(dayEvents.map((event) => [event.id, event.name]));
+  const rowEventName = (guest: Guest) =>
+    (guest.eventId && eventNames.get(guest.eventId)) || eventScopeT("generalRoster");
+  const showsEventNames = isAllEvents &&
+    new Set(displayData.guests.map(rowEventName)).size > 1;
+  const eventNameOf = (guest: Guest) => showsEventNames ? rowEventName(guest) : undefined;
+  // Check-in needs an open Event; rows of the date's other Events stay readable but inert.
+  const eventStates = new Map(dayEvents.map((event) => [event.id, event.state]));
+  const isRowEventClosed = (guest: Guest) => {
+    const state = guest.eventId ? eventStates.get(guest.eventId) : undefined;
+    return isAllEvents && state !== undefined && !canCheckInToEvent(state);
   };
 
   const filteredGuests =
@@ -396,6 +426,7 @@ function DoorPageContent() {
               currentBusinessDate={businessDate}
               checkedInGuests={scopeCheckedInGuests}
               hasPendingGuestMutations={hasPendingGuestMutations}
+              requiresEvent={isAllEvents}
             >
       {(attendanceActions, attendanceDetails, entryLocked, deletionLocked) => <WorkspaceShell
       contentClassName="gap-4 md:pb-8 lg:gap-6"
@@ -527,9 +558,11 @@ function DoorPageContent() {
           <>
 
             <EventScopeSelector venueId={venueId} businessDate={selectedDate}
-              value={selectedEventId} onChange={setSelectedEventId}
+              value={selectedEventId} onChange={selectEvent}
+              allEventsOption={{ selected: isAllEvents, onSelect: showWholeDay }}
+              onEventsLoaded={setDayEvents}
               renderScope={(selector, label) => <OperationsScope venueName={currentVenue?.brandName || currentVenue?.name} date={selectedDate} label={label}>
-                <DatePicker compact value={selectedDate} onChange={(date) => { setSelectedDate(date); setSelectedEventId(null); }} businessDate={businessDate} />
+                <DatePicker compact value={selectedDate} onChange={(date) => { setSelectedDate(date); showWholeDay(); }} businessDate={businessDate} />
                 {isSuperAdmin && <VenueSelector venues={venues} selectedVenueId={selectedVenueId} onVenueChange={setSelectedVenueId} />}
                 {selector}
               </OperationsScope>} />
@@ -541,10 +574,15 @@ function DoorPageContent() {
                       {t("viewingOtherDate", { date: formatCalendarDate(locale, selectedDate, FULL_CALENDAR_DATE) })}
                     </p>
                     <Button variant="outline" size="sm" className="shrink-0"
-                      onClick={() => { setSelectedDate(businessDate); setSelectedEventId(null); }}>
+                      onClick={() => { setSelectedDate(businessDate); showWholeDay(); }}>
                       {t("goToToday")}
                     </Button>
                   </div>
+                )}
+                {displayData.guests.some(isRowEventClosed) && (
+                  <p className="rounded-control border border-transparent bg-status-waiting/10 px-3 py-2 text-xs leading-relaxed text-text-muted" role="status">
+                    {t("closedEventRows")}
+                  </p>
                 )}
                 {!isOnline && (
                   <p className="rounded-control border border-transparent bg-status-waiting/10 px-3 py-2 text-xs leading-relaxed text-text-muted" role="status">
@@ -674,17 +712,19 @@ function DoorPageContent() {
                       djName={contributor.name}
                       accountKind={contributor.accountKind}
                       registeredByName={guest.registeredByName}
+                      eventName={eventNameOf(guest)}
                       showRegisteredAt
                       onDelete={canManageGuests ? () => void handleStatusChange(guest.id, "deleted", "remove") : undefined}
                       isDeleteLoading={loadingStates[`${guest.id}_remove`]}
                       deleteError={deleteFailure?.guestId === guest.id ? deleteFailure.message : undefined}
-                      deleteDisabledReason={isOfflineMode || isOfflineSyncing || offlineQueueCounts.queued > 0 ? t("deleteRequiresOnline") : undefined}
+                      deleteDisabledReason={isOfflineMode || isOfflineSyncing || offlineQueueCounts.queued > 0 ? t("deleteRequiresOnline")
+                        : isAllEvents ? t("deleteNeedsEvent") : undefined}
                       isDeleteDisabled={deletionLocked || isCurrentScopeFetching || isOfflineMode || isOfflineSyncing || hasPendingGuestMutations}
                       onCheck={() => void checkInGuest(guest)}
                       onUndo={() => void undoCheckIn(guest)}
                       isCheckLoading={loadingStates[`${guest.id}_check`]}
                       isUndoLoading={loadingStates[`${guest.id}_undo`]}
-                      isEntryDisabled={entryLocked}
+                      isEntryDisabled={entryLocked || isRowEventClosed(guest)}
                       highlighted={guest.id === highlightedGuestId}
                     />;
                   })}

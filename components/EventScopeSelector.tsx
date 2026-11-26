@@ -16,7 +16,13 @@ interface EventScopeSelectorProps {
   reloadKey?: number;
   className?: string;
   renderScope?: (control: ReactNode, label: string) => ReactNode;
+  /** Adds a whole-day choice above the Events; `value` is ignored while it is selected. */
+  allEventsOption?: { selected: boolean; onSelect: () => void };
+  /** Receives the date's explicit Events whenever they load. */
+  onEventsLoaded?: (events: Event[]) => void;
 }
+
+const ALL_EVENTS_VALUE = "__all_events__";
 
 export default function EventScopeSelector({
   venueId,
@@ -27,6 +33,8 @@ export default function EventScopeSelector({
   reloadKey = 0,
   className = "",
   renderScope,
+  allEventsOption,
+  onEventsLoaded,
 }: EventScopeSelectorProps) {
   const t = useTranslations("EventScope");
   const commonT = useTranslations("Common");
@@ -36,6 +44,8 @@ export default function EventScopeSelector({
   const requestGuard = useLatestRequestGuard();
   const valueRef = useLatestRef(value);
   const onChangeRef = useLatestRef(onChange);
+  const onEventsLoadedRef = useLatestRef(onEventsLoaded);
+  const allEventsOptionRef = useLatestRef(allEventsOption);
 
   const loadEvents = useCallback(async () => {
     const isLatest = requestGuard.beginRequest();
@@ -43,7 +53,8 @@ export default function EventScopeSelector({
       setEvents([]);
       setHasError(false);
       setIsLoading(false);
-      onChangeRef.current(null);
+      onEventsLoadedRef.current?.([]);
+      if (valueRef.current) onChangeRef.current(null);
       return;
     }
     setIsLoading(true);
@@ -56,8 +67,11 @@ export default function EventScopeSelector({
         (event) => event.compatibilityKey === null,
       );
       setEvents(explicitEvents);
+      onEventsLoadedRef.current?.(explicitEvents);
       if (valueRef.current && !explicitEvents.some((event) => event.id === valueRef.current)) {
-        onChangeRef.current(null);
+        // A vanished Event falls back to the widest view the caller offers.
+        if (allEventsOptionRef.current) allEventsOptionRef.current.onSelect();
+        else onChangeRef.current(null);
       }
     } catch {
       if (!isLatest()) return;
@@ -66,7 +80,7 @@ export default function EventScopeSelector({
     } finally {
       if (isLatest()) setIsLoading(false);
     }
-  }, [businessDate, onChangeRef, requestGuard, valueRef, venueId]);
+  }, [allEventsOptionRef, businessDate, onChangeRef, onEventsLoadedRef, requestGuard, valueRef, venueId]);
 
   useEffect(() => {
     void loadEvents();
@@ -90,13 +104,17 @@ export default function EventScopeSelector({
         <select
           id="event-scope-selector"
           name="event-scope"
-          value={value ?? ""}
-          onChange={(event) => onChange(event.target.value || null)}
+          value={allEventsOption?.selected ? ALL_EVENTS_VALUE : value ?? ""}
+          onChange={(event) => {
+            if (allEventsOption && event.target.value === ALL_EVENTS_VALUE) allEventsOption.onSelect();
+            else onChange(event.target.value || null);
+          }}
           disabled={disabled || !venueId || isLoading}
           aria-invalid={hasError || undefined}
           aria-describedby={hasError ? "event-scope-error" : undefined}
           className="app-field min-h-11 appearance-none pr-10"
         >
+          {allEventsOption && <option value={ALL_EVENTS_VALUE}>{t("allEvents")}</option>}
           <option value="">{t("generalRoster")}</option>
           {options.map((event) => (
             <option key={event.id} value={event.id}>
@@ -127,7 +145,7 @@ export default function EventScopeSelector({
       )}
     </div>
   );
-  const label = hasError ? t("loadFailed") : events.find((event) => event.id === value)?.name ??
+  const label = hasError ? t("loadFailed") : allEventsOption?.selected ? t("allEvents") : events.find((event) => event.id === value)?.name ??
     (value ? commonT("loading") : t("generalRoster"));
   return renderScope ? renderScope(control, label) : control;
 }

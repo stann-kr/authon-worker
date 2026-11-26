@@ -6,6 +6,7 @@ import { reportServerError } from "@/lib/observability/structured-log";
 
 import { and, asc, desc, eq, isNull, ne, or } from "drizzle-orm";
 import { externalDjLinks, users } from "../db/schema";
+import { dayExternalLinkScope, loadDayGuests } from "../events/day-scope";
 import { getDb } from "../db/client";
 import { requireAccess, type SessionUser } from "../auth/server";
 import { requireActiveVenueId } from "../tenant/active-server";
@@ -154,10 +155,61 @@ async function loadGuestQuota(
   };
 }
 
+async function operationsSnapshotResult(
+  results: [
+    PromiseSettledResult<Guest[]>,
+    PromiseSettledResult<UserDirectoryEntry[]>,
+    PromiseSettledResult<ExternalLinkDirectoryEntry[]>,
+  ],
+  offlineRosterStatus: "available" | "unavailable",
+): Promise<ApiResponse<GuestOperationsSnapshot>> {
+  const [guestResult, userResult, linkResult] = results;
+  if (guestResult.status === "rejected") await logRejectedSection("guests", guestResult);
+  if (userResult.status === "rejected") await logRejectedSection("users", userResult);
+  if (linkResult.status === "rejected") await logRejectedSection("external links", linkResult);
+  const failedSections: GuestOperationsSnapshot["failedSections"] = [];
+  if (guestResult.status === "rejected") failedSections.push("guests");
+  if (userResult.status === "rejected") failedSections.push("users");
+  if (linkResult.status === "rejected") failedSections.push("externalLinks");
+  return {
+    data: {
+      guests: guestResult.status === "fulfilled" ? guestResult.value : [],
+      users: userResult.status === "fulfilled" ? userResult.value : [],
+      externalLinks: linkResult.status === "fulfilled" ? linkResult.value : [],
+      failedSections,
+      offlineRosterStatus,
+    },
+    error: failedSections.length > 0
+      ? "Unable to load some guest operations data right now."
+      : null,
+  };
+}
+
+// The whole-day Door view reads every Event of the date. The offline roster and
+// attendance stay per Event, so this view never offers the offline roster.
+async function loadDayOperationsSnapshot(
+  db: Db,
+  actor: SessionUser,
+  venueId: string,
+  date: string,
+): Promise<ApiResponse<GuestOperationsSnapshot>> {
+  const results = await Promise.allSettled([
+    loadDayGuests(db, venueId, date),
+    loadUserDirectory(db, actor, venueId),
+    db
+      .select({ id: externalDjLinks.id, djName: externalDjLinks.djName })
+      .from(externalDjLinks)
+      .where(and(eq(externalDjLinks.venueId, venueId), dayExternalLinkScope(db, venueId, date)))
+      .orderBy(desc(externalDjLinks.createdAt)),
+  ]);
+  return operationsSnapshotResult(results, "unavailable");
+}
+
 export async function fetchGuestOperationsSnapshot(
   date: string,
   venueId: string,
   eventId?: string | null,
+  allEvents = false,
 ): Promise<ApiResponse<GuestOperationsSnapshot>> {
   return measureServerOperation("server.door_snapshot", async (): Promise<ApiResponse<GuestOperationsSnapshot>> => {
     try {
@@ -166,6 +218,9 @@ export async function fetchGuestOperationsSnapshot(
       const effectiveVenueId = resolveSnapshotVenueId(actor, venueId);
       await requireActiveVenueId(effectiveVenueId);
       const db = getDb();
+      if (allEvents && !eventId) {
+        return await loadDayOperationsSnapshot(db, actor, effectiveVenueId, date);
+      }
       const event = eventId
         ? await loadEventById(db, eventId)
         : await findCompatibilityEvent(effectiveVenueId, date);
@@ -178,33 +233,15 @@ export async function fetchGuestOperationsSnapshot(
         throw new Error("EVENT_NOT_FOUND");
       }
 
-      const [guestResult, userResult, linkResult] = await Promise.allSettled([
+      const results = await Promise.allSettled([
         loadGuestsByDate(db, effectiveVenueId, date, undefined, event),
         loadUserDirectory(db, actor, effectiveVenueId),
         loadExternalLinksByDate(db, effectiveVenueId, date, event),
       ]);
-
-      if (guestResult.status === "rejected") await logRejectedSection("guests", guestResult);
-      if (userResult.status === "rejected") await logRejectedSection("users", userResult);
-      if (linkResult.status === "rejected") await logRejectedSection("external links", linkResult);
-      const failedSections: GuestOperationsSnapshot["failedSections"] = [];
-      if (guestResult.status === "rejected") failedSections.push("guests");
-      if (userResult.status === "rejected") failedSections.push("users");
-      if (linkResult.status === "rejected") failedSections.push("externalLinks");
-
-      return {
-        data: {
-          guests: guestResult.status === "fulfilled" ? guestResult.value : [],
-          users: userResult.status === "fulfilled" ? userResult.value : [],
-          externalLinks: linkResult.status === "fulfilled" ? linkResult.value : [],
-          failedSections,
-          offlineRosterStatus: eventId && event?.compatibilityKey === null && event.state === "open"
-            ? "available" : "unavailable",
-        },
-        error: failedSections.length > 0
-          ? "Unable to load some guest operations data right now."
-          : null,
-      };
+      return await operationsSnapshotResult(
+        results,
+        eventId && event?.compatibilityKey === null && event.state === "open" ? "available" : "unavailable",
+      );
     } catch (error: unknown) {
       await reportServerError("guest_snapshot.operations", error);
       return {

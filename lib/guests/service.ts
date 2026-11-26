@@ -172,6 +172,8 @@ export async function listGuestsByDate(
     date: string;
     requestedVenueId?: string;
     eventId?: string | null;
+    /** The Door's whole-day view: every Event of the venue's date. An eventId wins over it. */
+    allEvents?: boolean;
   },
   dependencies: GuestServiceDependencies,
 ): Promise<Guest[]> {
@@ -181,6 +183,16 @@ export async function listGuestsByDate(
     input.requestedVenueId,
     dependencies.requireActiveVenueId,
   );
+  if (input.allEvents && !input.eventId) {
+    if (!venueId) throw new Error("VENUE_REQUIRED");
+    return dependencies.persistence.listByDate({
+      date: input.date,
+      venueId,
+      eventId: null,
+      includeLegacyDateRows: true,
+      allEvents: true,
+    });
+  }
   let event: Event | null = null;
   let includeLegacyDateRows = false;
   if (input.eventId) {
