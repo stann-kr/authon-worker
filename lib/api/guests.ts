@@ -70,6 +70,7 @@ export async function fetchGuestsByDate(
   date: string,
   venueId?: string,
   eventId?: string | null,
+  allEvents = false,
 ): Promise<ApiResponse<Guest[]>> {
   return measureServerOperation("server.guest_list", async (): Promise<ApiResponse<Guest[]>> => {
     try {
@@ -81,6 +82,7 @@ export async function fetchGuestsByDate(
             date,
             requestedVenueId: venueId,
             eventId,
+            allEvents,
           },
           getGuestServiceDependencies(),
         ),
@@ -185,6 +187,10 @@ export async function updateGuestStatus(
         getGuestServiceDependencies(),
       );
     } catch (error) {
+      // The whole-day Door list can show guests of an Event that is not open; say so instead of a generic failure.
+      if (error instanceof Error && error.message === "EVENT_NOT_ACTIVE") {
+        return { data: null, error: "EVENT_NOT_ACTIVE" };
+      }
       await reportServerError("guest.status_update", error);
       return { data: null, error: "Unable to update guest status right now." };
     }

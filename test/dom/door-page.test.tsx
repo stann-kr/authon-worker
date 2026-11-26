@@ -17,7 +17,7 @@ const runtime = globalThis as typeof globalThis & {
   __doorPageTest: {
     venueReady: boolean; deleted: boolean; deleteCalls: number; deleteError: boolean; summaryError: boolean;
     reads: Array<{ date: string; venueId: string; eventId: string | null }>;
-    statuses: Record<string, string> | null; statusCalls: string[]; statusFailures: number; statusRejections: number; loadError: boolean;
+    statuses: Record<string, string> | null; statusCalls: string[]; statusFailures: number; statusRejections: number; loadError: boolean; eventRows?: boolean;
   };
 };
 const reset = () => { runtime.__doorPageTest = { venueReady: true, deleted: false, deleteCalls: 0, deleteError: false, summaryError: false, reads: [], statuses: null, statusCalls: [], statusFailures: 0, statusRejections: 0, loadError: false }; };
@@ -27,10 +27,14 @@ Object.defineProperty(globalThis, "localStorage", { configurable: true, value: w
 document.getElementById("main-content")?.remove();
 
 const sources: Record<string, string> = {
-  "lib/guest-snapshots/client": `export const fetchGuestOperationsSnapshot = async (date, venueId, eventId) => {
+  "lib/guest-snapshots/client": `export const fetchGuestOperationsSnapshot = async (date, venueId, eventId, allEvents) => {
     const state = globalThis.__doorPageTest;
-    state.reads.push({ date, venueId, eventId });
+    state.reads.push(allEvents ? { date, venueId, eventId, allEvents } : { date, venueId, eventId });
     if (state.loadError) return { data: null, error: 'UNAVAILABLE' };
+    if (state.eventRows) return { data: { guests: [
+      { id: 'g1', name: 'Open guest', status: 'pending', eventId: 'active', createdAt: '2026-09-15T10:00:00Z' },
+      { id: 'g2', name: 'Closed guest', status: 'pending', eventId: 'closed', createdAt: '2026-09-15T10:05:00Z' }],
+      users: [], externalLinks: [], failedSections: [], offlineRosterStatus: 'unavailable' }, error: null };
     if (state.statuses) return { data: { guests: [['g1', 'Roster guest', '10:00'], ['g2', 'Second guest', '10:05'], ['g3', 'Third guest', '10:10']]
       .filter(([id]) => id in state.statuses).map(([id, name, time]) =>
       ({ id, name, status: state.statuses[id], createdAt: '2026-09-15T' + time + ':00Z' })),
@@ -106,6 +110,14 @@ function frame(account: User = user, admin = false) {
 function location(eventId: string | null = null) {
   window.history.replaceState(null, "", `/door?venue=venue-1&date=2026-09-15${eventId ? `&eventId=${eventId}` : ""}`);
 }
+async function chooseGeneralRoster() {
+  fireEvent.click(await screen.findByRole("button", { name: messages.Workspace.chooseScope }));
+  const scope = await screen.findByLabelText(messages.EventScope.label);
+  await waitFor(() => assert.equal(scope.hasAttribute("disabled"), false));
+  fireEvent.change(scope, { target: { value: "" } });
+  fireEvent.click(screen.getByRole("button", { name: messages.Workspace.applyScope }));
+  await waitFor(() => assert.deepEqual(runtime.__doorPageTest.reads.at(-1), { date: "2026-09-15", venueId: "venue-1", eventId: null }));
+}
 async function openGuest() {
   const row = await screen.findByRole("button", { name: "Roster guest" });
   await act(async () => {});
@@ -130,6 +142,7 @@ test("unified details retain finalized locks, draft deletion, and past-date corr
   for (const [eventId, entryLocked, deletionLocked] of [["finalized", true, true], ["closed", true, true], ["draft", true, false], [null, false, false]] as const) {
     location(eventId);
     render(frame());
+    if (!eventId) await chooseGeneralRoster();
     const detail = await openGuest();
     await waitFor(() => {
       assert.equal(screen.getByRole("button", { name: messages.Common.checkIn }).hasAttribute("disabled"), entryLocked);
@@ -247,15 +260,50 @@ test("an empty status tab names its cause and offers a way back to every guest",
   await screen.findByRole("button", { name: "Second guest" });
 });
 
+test("the Door opens on every Event of the date and keeps per-Event tools behind a chosen Event", async () => {
+  location(); render(frame());
+  const trigger = await screen.findByRole("button", { name: messages.Workspace.chooseScope });
+  await waitFor(() => assert.equal(trigger.textContent?.includes(messages.EventScope.allEvents), true));
+  assert.deepEqual(runtime.__doorPageTest.reads.at(-1), { date: "2026-09-15", venueId: "venue-1", eventId: null, allEvents: true });
+  const detail = await openGuest();
+  assert.equal(screen.getByRole("button", { name: messages.Common.checkIn }).hasAttribute("disabled"), false);
+  assert.equal(within(detail).getByRole("button", { name: messages.Common.deleteGuest }).hasAttribute("disabled"), true);
+  assert.equal(within(detail).getByText(messages.Door.deleteNeedsEvent) !== null, true);
+  assert.equal(screen.getAllByText(messages.Door.attendance.pickEvent).length > 0, true);
+  assert.equal(screen.queryByRole("button", { name: messages.Door.guestCodeLookup }), null);
+});
+
+test("the whole-day list names each row's Event and leaves rows of a closed Event inert", async () => {
+  runtime.__doorPageTest.eventRows = true;
+  location(); render(frame());
+  const open = await screen.findByRole("button", { name: "Open guest active" });
+  const closed = await screen.findByRole("button", { name: "Closed guest closed" });
+  await act(async () => {});
+  const rowCheckIn = (row: HTMLElement) => within(row.closest(".product-guest-row") as HTMLElement)
+    .getByRole("button", { name: messages.Common.checkIn });
+  await waitFor(() => assert.equal(rowCheckIn(closed).hasAttribute("disabled"), true));
+  assert.equal(rowCheckIn(open).hasAttribute("disabled"), false);
+  assert.ok(screen.getByText(messages.Door.closedEventRows));
+});
+
+test("a link to an Event the date no longer has falls back to the whole day", async () => {
+  location("missing");
+  render(frame());
+  await waitFor(() => assert.deepEqual(runtime.__doorPageTest.reads.at(-1),
+    { date: "2026-09-15", venueId: "venue-1", eventId: null, allEvents: true }));
+});
+
 test("deletion fails closed without an attendance summary", async () => {
   runtime.__doorPageTest.summaryError = true;
   location(); render(frame());
+  await chooseGeneralRoster();
   const detail = await openGuest();
   assert.equal(within(detail).getByRole("button", { name: messages.Common.deleteGuest }).hasAttribute("disabled"), true);
 });
 
 test("a failed deletion keeps the detail available and a confirmed retry removes the guest", async () => {
   location(); render(frame());
+  await chooseGeneralRoster();
   const detail = await openGuest();
   runtime.__doorPageTest.deleteError = true;
   for (const succeeds of [false, true]) {
@@ -306,7 +354,7 @@ test("the unified roster retains its operating date after returning home and rej
   window.history.replaceState(null, "", "/door?venue=other-venue&date=2026-09-10&eventId=closed");
   render(frame());
   await openGuest();
-  assert.deepEqual(runtime.__doorPageTest.reads.at(-1), { date: "2026-09-15", venueId: "venue-1", eventId: null });
+  assert.deepEqual(runtime.__doorPageTest.reads.at(-1), { date: "2026-09-15", venueId: "venue-1", eventId: null, allEvents: true });
 });
 
 

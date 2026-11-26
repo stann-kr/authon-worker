@@ -66,6 +66,7 @@ export interface DoorRosterDependencies {
     date: string,
     venueId?: string,
     eventId?: string | null,
+    allEvents?: boolean,
   ) => Promise<ApiResponse<Guest[]>>;
   updateGuestStatus: (
     guestId: string,
@@ -77,6 +78,7 @@ export interface DoorRosterDependencies {
     date: string,
     venueId: string,
     eventId?: string | null,
+    allEvents?: boolean,
   ) => Promise<ApiResponse<GuestOperationsSnapshot>>;
   fetchOfflineDoorRoster: (
     scope: OfflineDoorScope,
@@ -128,6 +130,8 @@ interface UseDoorRosterControllerOptions {
   venueId: string;
   selectedDate: string;
   selectedEventId: string | null;
+  /** Whole-day view: every Event of the date. Offline tools stay per Event, so it has no offline scope. */
+  allEvents?: boolean;
   translate: (key: string) => string;
   dependencies: DoorRosterDependencies;
 }
@@ -136,10 +140,12 @@ export default function useDoorRosterController({
   canDeleteGuests = false,
   venueId,
   selectedDate,
-  selectedEventId,
+  selectedEventId: requestedEventId,
+  allEvents = false,
   translate,
   dependencies,
 }: UseDoorRosterControllerOptions) {
+  const selectedEventId = allEvents ? null : requestedEventId;
   const translateRef = useLatestRef(translate);
   const [loadingStates, setLoadingStates] = useState<{
     [key: string]: boolean;
@@ -183,7 +189,7 @@ export default function useDoorRosterController({
     externalLinks: [],
   });
 
-  const requestScopeKey = `${venueId}:${selectedDate}:${selectedEventId ?? "general"}`;
+  const requestScopeKey = `${venueId}:${selectedDate}:${allEvents ? "all" : selectedEventId ?? "general"}`;
   const offlineScope = useMemo<OfflineDoorScope | null>(
     () =>
       venueId && selectedEventId
@@ -581,6 +587,7 @@ export default function useDoorRosterController({
           selectedDate,
           venueId,
           selectedEventId,
+          allEvents,
         );
       const { data, error } = operationsResponse;
       if (!isCurrent()) return;
@@ -676,6 +683,7 @@ export default function useDoorRosterController({
       if (ownsRequest() && !background) setIsFetching(false);
     }
   }, [
+    allEvents,
     currentScopeToken,
     dependencies,
     loadCachedOfflineRoster,
@@ -757,11 +765,13 @@ export default function useDoorRosterController({
       selectedDate,
       venueId,
       selectedEventId,
+      allEvents,
     );
     if (isLatestRequest() && loadedScopeKey === requestScopeKey && data) {
       setGuests(data);
     }
   }, [
+    allEvents,
     dependencies,
     loadOutcome,
     loadedScopeKey,
@@ -912,6 +922,9 @@ export default function useDoorRosterController({
       }
       if (error === "ATTENDANCE_SCOPE_CLOSED") {
         return reportFailure(translate("attendanceScopeClosed"), false);
+      }
+      if (error === "EVENT_NOT_ACTIVE") {
+        return reportFailure(translate("eventNotActive"), false);
       }
       if (error === "GUEST_ACTIVITY_REJECTED" && newStatus !== "deleted") {
         // Another device changed this guest first; a retry cannot apply, so read the current roster.

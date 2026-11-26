@@ -26,6 +26,8 @@ interface GuestListCardProps {
   djName?: string;
   accountKind?: "personal" | "shared";
   registeredByName?: string | null;
+  /** The guest's Event, shown when one list mixes several. */
+  eventName?: string;
   showRegisteredAt?: boolean;
   timeZone?: string | null;
   onCheck?: () => void;
@@ -49,6 +51,7 @@ const GuestListCard: React.FC<GuestListCardProps> = ({
   djName,
   accountKind = "personal",
   registeredByName,
+  eventName,
   showRegisteredAt = false,
   timeZone,
   onCheck,
@@ -65,6 +68,7 @@ const GuestListCard: React.FC<GuestListCardProps> = ({
 }) => {
   const t = useTranslations("Common");
   const rosterT = useTranslations("Roster");
+  const eventT = useTranslations("EventScope");
   const formatTime = (value: string) => formatVenueTime(value, timeZone) ?? "—";
   const timestamp = (value?: string | null) => value ? <time dateTime={value}>{formatTime(value)}</time> : "—";
   const selection = useContext(RosterSelection);
@@ -92,7 +96,7 @@ const GuestListCard: React.FC<GuestListCardProps> = ({
       deleteConfirmation === confirmationKey,
   );
   const canDelete = onDelete && (mode === "operations" ? guest.status !== "deleted" : guest.status === "pending");
-  const hasDetailInformation = Boolean(djName || accountKind === "shared" || registeredByName ||
+  const hasDetailInformation = Boolean(eventName || djName || accountKind === "shared" || registeredByName ||
     (showRegisteredAt && guest.createdAt) || guest.checkInTime);
 
   useEffect(() => {
@@ -145,7 +149,7 @@ const GuestListCard: React.FC<GuestListCardProps> = ({
       <div className="product-guest-line">
         {/* A stretched disclosure and separate raised actions avoid nested buttons. */}
         <button type="button" ref={disclosureRef} className="product-guest-disclosure" onClick={toggleDetail}
-          aria-label={[guest.name, djName, registeredByName !== djName ? registeredByName : null].filter(Boolean).join(" ")}
+          aria-label={[guest.name, djName, registeredByName !== djName ? registeredByName : null, eventName].filter(Boolean).join(" ")}
           aria-controls={detailId} aria-expanded={isDetailOpen} aria-disabled={isDeleteLoading} />
         <div className="product-guest-identity">
           <span className="product-guest-index" aria-hidden="true">{String(index + 1).padStart(2, "0")}</span>
@@ -153,7 +157,8 @@ const GuestListCard: React.FC<GuestListCardProps> = ({
             <span className="product-guest-checked-mark text-status-checked" aria-hidden="true"><Icon name="check" size={14} /></span>}
           <span className="product-guest-name">
             <strong id={`${detailId}-label`}>{guest.name}</strong>
-            {(djName || registeredByName) && <small>{djName || registeredByName}</small>}
+            {(djName || registeredByName || eventName) &&
+              <small>{[djName || registeredByName, eventName].filter(Boolean).join(" · ")}</small>}
           </span>
         </div>
 
@@ -240,6 +245,7 @@ const GuestListCard: React.FC<GuestListCardProps> = ({
           {guest.status === "checked" ? t("checkedIn") : guest.status === "pending" ? t("waitingStatus") : t("removed")}
         </StatusLabel>
         {hasDetailInformation && <dl className="product-detail-list" aria-label={rosterT("detail")}>
+          {eventName && <div><dt>{eventT("label")}</dt><dd>{eventName}</dd></div>}
           {djName && <div><dt>{rosterT("owner")}</dt><dd>{djName}</dd></div>}
           {(accountKind === "shared" || registeredByName) && <div><dt>{rosterT("operator")}</dt><dd>{registeredByName || "—"}</dd></div>}
           {showRegisteredAt && guest.createdAt && <div><dt>{t("registered")}</dt><dd><time dateTime={guest.createdAt}>{formatTime(guest.createdAt)}</time></dd></div>}
